@@ -23,3 +23,4 @@ Docker Compose로 컨테이너 4개(`api`, `postgres`, `clickhouse`, `redis`)를
 | [tech_stack.md](tech_stack.md) | 기술 선정 근거, 버전 고정, 로컬 실행 환경, 학습 로드맵 |
 | [architecture.md](architecture.md) | 실행 구성, 스키마, Redis 키 설계, 수집 파이프라인, 장애 시나리오 |
 | [data_flow.md](data_flow.md) | 데이터 흐름 10종, 지연 예산, 데이터 계약, 수명 주기 |
+| [implementation_plan.md](implementation_plan.md) | 구현 실행 계획, Redis 역할 스위치, 단계별 합격 판정, 설계서 보정 항목 |
