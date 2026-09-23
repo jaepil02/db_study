@@ -1,9 +1,40 @@
 # docs/ 설계 문서군 구축 계획
 
-> **상태**: W0 착수 직전 (2026-09-20 중단 · 다음 세션에서 재개)
-> **완료된 것**: docs/ 하위 12개 폴더 생성 (전부 비어 있음)
-> **다음 작업**: W0 — docs/README.md · docs/CLAUDE.md · 폴더 README 12본 (총 14본)
+> **상태**: W0 완료 · **사용자 승인 게이트 대기** (2026-09-23)
+> **완료된 것**: 실행 계획 확정(아래 "실행 계획 보정" 절) · docs/ 12폴더 재생성 · W0 14본(docs/README.md · docs/CLAUDE.md · 폴더 README 12본 골격판) · 린트 .omc/docs_lint.py 오류 0건
+> **다음 작업**: 사용자가 W0(고정 기준 · 전역 불변식 · ID 규약 · 파일명)을 승인하면 W1 착수 — 팀원 2명(w1-glossary: 11_glossary 01~05 · w1-overview: 01_overview 01~06)
 > **참고**: 기존 루트 4본(architecture.md · data_flow.md · tech_stack.md · implementation_plan.md)은 **W7까지 삭제하지 않는다** — 이관 누락을 검증할 원본이 필요하다
+
+## 실행 계획 보정 (2026-09-23 확정)
+
+본문 계획을 집행하기 전에 닫은 불일치·누락이다. 본문과 어긋나면 이 절이 우선한다.
+
+| # | 결함 | 처리 |
+|---|---|---|
+| 1 | docs/ 폴더 소실 — 빈 폴더는 git이 추적하지 않는다 | W0 첫 단계에서 재생성 |
+| 2 | SW 목록 불일치 — implementation_plan §4.1의 COLLECTOR_DEADBAND 누락 | **SW-10 COLLECTOR_DEADBAND 유지 → 스위치 10종**(Redis 역할 9 + 수집 1). 검산: 백프레셔 1 + 캐시 4 + 팬아웃 2 + 멱등 1 + 대조군 1 + 수집 1 = **10**. 근거 — 데드밴드가 ClickHouse 행 수·압축률(신호 프로파일 × 코덱)과 Stream 유입량을 바꾸므로, 스위치에서 빼면 스위치 상태가 기록되지 않는 측정이 된다 |
+| 3 | 측정 기록 경로 충돌 | **사용자 결정: docs/measurements/ 유지.** 번호 없는 예외 폴더 · 설계 정본 아님 · 골격 검사와 파일 수 122 집계에서 제외. 기록 템플릿 정본은 10_observability/04 |
+| 4 | 흡수 매핑 누락 | implementation_plan §3 · §9 → 01_overview/05 · §6 → 04_architecture/02 + 09_tech_stack/05 · §1 · §10 → 메타 서술이라 흡수 불요 · data_flow §8.2 → 04_architecture/04 · 06_pipeline/04 |
+| 5 | 보정 5건 행선지 | 7.1 → ADR + 06_pipeline/03 · 7.2 → 04_architecture/06 + 06_pipeline/11 · 7.3 → 06_pipeline/08 · 7.4 → 06_pipeline/07 · 7.5 → 05_data_stores/05 봉인 표 |
+| 6 | 흐름 ID 표기 혼재 | **F-01~F-10으로 통일.** 구 표기 F1 = F-01 대응은 11_glossary/04에 둔다 |
+| 7 | 웨이브 파일 합 134 ≠ 122 | 폴더 README 12본은 W0이 골격판, 소속 웨이브가 완성판. 신규 파일 기준 합 122 |
+| 8 | docs_ref 파일 수 표기 | 실측 **123** |
+| 9 | task docs:lint와 코드 금지 충돌 | 린트는 리드가 셸 스크립트로 돌리고, Taskfile 편입은 코드 착수 항목으로 01_overview/05에 등재 |
+| 10 | 루트 README.md가 루트 4본을 링크 | W7 삭제 커밋에서 docs/README.md 링크로 교체 |
+| 11 | /api/v1/ingest/bulk가 있는데 "ING은 표면 없음" | 부하 주입 표면이라 **GEN이 소유**(07_api/09_datagen). ING 표면 없음 유지 |
+| 12 | /api/v1/health · /metrics의 소속 | **OBS 소유**(07_api/10_metrics) |
+| 13 | 로그인 · 작업지시 화면 자리가 08_screen에 없다 | 08_screen/06_master_admin이 로그인 · 마스터 · 작업지시 관리 화면을 함께 소유 |
+| 14 | 스위치는 환경변수 + DI 초기화 선택이라 런타임 토글이 안 되는데 08_screen/07은 "스위치 제어" | 07_experiment_console은 **스위치 상태 표시 · 실험 실행 기록 · 비교** 화면이다. 전환은 재기동 절차로 안내한다(W5) |
+| 15 | 태그 변경 이력 테이블 — architecture §12가 요구하고 §6 ERD에 없다 | **tag_master_history 신설** → PostgreSQL 업무 테이블 13 + 1 = **14** · 대조군 1 별도 |
+| 16 | tag_raw.ts가 DateTime64(3, 'Asia/Seoul')인데 "모든 시각 UTC 저장" | ClickHouse 컬럼 시간대는 표시·파싱 속성이고 저장값은 epoch다. 정본 11_glossary/05(W1). ingested_at · alarm_eval.ts 시간대 표기 통일은 W3 |
+| 17 | observability 프로파일 구성원 불일치 — prometheus · grafana(tech §10) · alertmanager(arch §14) · tempo(tech §2) | W6(09_tech_stack/03 · 10_observability/03)이 판정 |
+| 18 | k6 시나리오 "5종"과 tech_stack §8 표 6행 | 부하 시나리오 5 + 장애 주입 1(k6 아님)로 가른다(W6) |
+| 19 | 원본의 sequenceDiagram 다수 | mermaid 3종 한정 규약에 따라 plain 펜스로 변환 |
+| 20 | 알람 상태 머신 5상태(NORMAL · PENDING · ACTIVE · CLEARING · ACKED)와 alarm_event.state 값(ACTIVE · CLEARED) 대응 미정 | 11_glossary/03(W1)이 대응표를 소유 |
+| 21 | 루트 4본 삭제 후 원천 인용이 끊긴다 | 원천 표기를 "원본 architecture.md §N(커밋 ff66a37)"으로 고정 — 삭제 후에도 git으로 추적된다 |
+| 22 | 도메인 파일명 미정 | W0이 폴더 README 파일 목차로 확정. 린트 스크립트(.omc/docs_lint.py)의 예정 파일 목록이 같은 목록이다 |
+
+**병렬 분담**(tmux 네이티브 팀메이트 · 포그라운드 · 누적 14명): W0 리드 단독 · W1 2(glossary · overview) · W2a 1(features) · W2b 2(requirements 분할) · W3 2(architecture · data_stores) · W4 1(pipeline) · W5 2(api · screen) · W6 2(tech_stack · observability) · W7 2(security · 전수 검수). 공용 파일(루트 README · CLAUDE.md · 폴더 README · 03_requirements/15 · 16)은 리드 소유. 웨이브마다 린트 통과 후 커밋.
 
 ## Context
 
@@ -14,7 +45,7 @@
 
 현재 루트에는 설계 문서 4본(architecture.md · data_flow.md · tech_stack.md · implementation_plan.md, 3,500여 줄)이 있다. 내용 품질은 높지만 **평면 파일 4개**라 위 두 학습 목표가 문서 구조에 드러나지 않는다. 분기(routing)는 알람 흐름 한 절에 묻혀 있고, RDB 대조 실험은 아예 없다.
 
-`docs_ref`(122파일 · 32,131줄의 HR SaaS 설계 문서군)를 분석해 그 **파일 구조 · 형식 · 품질 규율**을 이식한다. 주제는 완전히 다르므로 내용은 전부 새로 쓰고, 가져오는 것은 조직 원리와 서술 규율이다.
+docs_ref(123파일 · 32,131줄의 HR SaaS 설계 문서군)를 분석해 그 **파일 구조 · 형식 · 품질 규율**을 이식한다. 주제는 완전히 다르므로 내용은 전부 새로 쓰고, 가져오는 것은 조직 원리와 서술 규율이다.
 
 **사용자 확정 사항 3건**
 - 기존 루트 4본은 docs/에 흡수하고 삭제한다.
