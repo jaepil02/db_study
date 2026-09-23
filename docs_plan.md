@@ -1,6 +1,6 @@
 # docs/ 설계 문서군 구축 계획
 
-> **상태**: W1 완료(2026-09-24) · W2a 착수 대기 — D-11 · D-12 사용자 확인 대상
+> **상태**: W1 완료(2026-09-24) · W2a 착수 대기 — D-11 · D-12 사용자 확정(2026-09-24)
 > **완료된 것**: 실행 계획 확정(아래 "실행 계획 보정" 절) · docs/ 12폴더 재생성 · W0 14본(docs/README.md · docs/CLAUDE.md · 폴더 README 12본 골격판) · 린트 .omc/docs_lint.py 오류 0건 · W1 11본(11_glossary 5 · 01_overview 6) — 에러 코드 14 · D-01~D-12
 > **다음 작업**: W2a — 팀원 1명(w2-features: 02_features 01~13 · 기능 ID · SW-01~10 채번). "웨이브 인계" 표의 W2 행을 지시문에 포함 → 이어서 W2b(03_requirements 2명)
 > **참고**: 기존 루트 4본(architecture.md · data_flow.md · tech_stack.md · implementation_plan.md)은 **W7까지 삭제하지 않는다** — 이관 누락을 검증할 원본이 필요하다
