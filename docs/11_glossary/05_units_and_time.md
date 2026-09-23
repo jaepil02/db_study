@@ -2,6 +2,7 @@
 
 > **대상**: db_study의 시각 의미론(ts · ingested_at) · 시각 인코딩 · 저장 시간대와 표시 시간대 · 버킷 경계 · 공학 단위 · 부동소수 비교 · 수치 단위 표기 — 시각 의미론 정본
 > **작성일**: 2026-09-24
+> **개정일**: 2026-09-24 — W2 판정 반영 — 롤업 대 원시 허용 오차 미확인 → avg 상계식 · count · min · max · last 정확 일치 · p95만 미확인(정본 03_requirements/14)
 > **원천**: 원본 architecture.md §6 · §7.1 · §7.2 · §7.3 · §8.2 · §10.2 · §12(커밋 ff66a37) · 원본 data_flow.md §3 · §5 · §6.2 · §14 · §14.1 · §15 · §17(커밋 ff66a37) · 원본 tech_stack.md §6(커밋 ff66a37) · docs_plan.md 실행 계획 보정 #16 · [../README.md](../README.md) 전역 불변식 시각 의미론
 
 시계열 시스템의 가장 흔한 버그는 시간대 혼동이다. 이 문서는 **어느 시각이 무엇을 재는가 · 어떤 형태로 저장되는가 · 어디서 사람이 읽는 시각으로 바뀌는가** 세 가지를 고정한다. 값의 컬럼 타입은 [../05_data_stores](../05_data_stores/README.md)가, 직렬화 형식은 [../07_api/01_conventions.md](../07_api/01_conventions.md)가 갖고, 이 문서는 그 둘이 따라야 할 의미만 갖는다.
@@ -161,7 +162,7 @@
 | p95 원시 분위수 vs quantilesTDigestMerge | **근사 허용 범위** — 부동소수 오차로 비교하지 않는다 | TDigest 근사 오차가 부동소수 오차보다 훨씬 크다. 부동소수 허용치로 비교하면 늘 불일치다 |
 | last(argMax) | 정확 일치 — 같은 ts 중복이 없을 때 | 같은 ts가 둘이면 어느 값이 남을지 정하지 않는다 |
 
-- **허용 오차 값은 미확인이다 — 확정 전 임의 값 고정 금지.** 원본은 "부동소수 오차 범위 내"(원본 data_flow.md §17)만 적었다. 상대 · 절대 오차의 기준과 값은 [../03_requirements/14_acceptance_criteria.md](../03_requirements/14_acceptance_criteria.md)(W2)가 정하고, 측정 절차는 [../10_observability/04_experiment_protocol.md](../10_observability/04_experiment_protocol.md)가 인용한다.
+- **허용 오차는 W2가 판정했다.** avg는 |avg(원시) − avgMerge(롤업)| ≤ 2·γ(n)·S/n(γ(n) = nu/(1 − nu) · u = 2^−53 · S = 버킷의 원시 |value| 합)으로 합산 순서와 무관한 Float64 상계라 1계층 구조값이다. count · min · max · last는 정확 일치다. **p95만 미확인**이며 확정 수단은 원시 안 순위 오차의 3회 측정이다. 정본 [../03_requirements/14_acceptance_criteria.md](../03_requirements/14_acceptance_criteria.md).
 - **COUNTER · 정수형 원천도 Float64로 저장된다.** UInt32 랩어라운드 값은 2^53 미만이라 Float64에서 정확하다. 랩어라운드 보정(증분 계산)은 저장 후 조회 시점의 해석이다.
 - **Gorilla 코덱은 무손실이다.** 압축이 값을 바꾸지 않으므로 압축률 실험이 정합성 비교를 오염시키지 않는다.
 

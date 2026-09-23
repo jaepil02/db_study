@@ -75,11 +75,12 @@ db_study는 배포하지 않는 **로컬 전용 학습 시스템**이다. 목적
 | 실험 축 | 주입 모드 **4**(A Modbus 경유 · B Stream 직결 · C HTTP · D ClickHouse 직접) · 조회 해상도 **4**(raw · 1m · 1h · 1d) · 용량 티어 **4**(S · M · M+ · L) · 메모리 프로파일 **2**(부하 실험 · 개발 — 중간 프로파일은 조건부 대안) · 부하 시나리오 **5**(Baseline · Ramp-up · Spike · Soak · Breakpoint) + 장애 주입 **1**(k6 밖) |
 | 조정값 | TTL · 배치 크기 · 플러시 주기 · 보존일 · MAXLEN · 백프레셔 임계는 **2계층 조정값**이다 — 본문에 값을 박지 않고 조회 계약(키 모양 · 기준 시점 · 금지된 대체 동작)으로 서술하며 현행 값은 소유처를 밝혀 참고로 적는다. 보존의 정본 [05_data_stores/08_retention_lifecycle.md](./05_data_stores/08_retention_lifecycle.md) · 백프레셔 임계의 정본 [04_architecture/06_backpressure_failure.md](./04_architecture/06_backpressure_failure.md) |
 | 성능 수치 | 실측 전 성능 수치는 **3계층 미확인**이다 — "미확인 — 확정 전 임의 값 고정 금지"로 등재하고 생략하지 않는다. 확정은 EXP-NN 실측 결과로만 한다. 목표치의 정본 [03_requirements/13_nonfunctional.md](./03_requirements/13_nonfunctional.md) |
-| 에러 코드 | **14종** — 네임스페이스 정의 **9**(표면 도메인 8 + common 1) · 코드 보유 **5**(common 5 · auth 5 · timeseries 1 · realtime 1 · datagen 2). 검산: 5 + 5 + 1 + 1 + 2 = **14**. 네임스페이스는 URL 경로가 아니라 **표면을 소유한 도메인**을 따른다. 채번 정본 [11_glossary/02_error_codes.md](./11_glossary/02_error_codes.md) · 미러 [07_api/02_errors.md](./07_api/02_errors.md) · W2 · W5가 채번 보류분을 정본에서 추가한다 |
+| 에러 코드 | **19종** — 네임스페이스 정의 **9**(표면 도메인 8 + common 1) · 코드 보유 **8**(common 5 · auth 6 · master 1 · timeseries 2 · realtime 1 · alarms 1 · work_orders 1 · datagen 2 — metrics만 0). 검산: 5 + 6 + 1 + 2 + 1 + 1 + 1 + 2 = **19**. 네임스페이스는 URL 경로가 아니라 **표면을 소유한 도메인**을 따른다. 채번 정본 [11_glossary/02_error_codes.md](./11_glossary/02_error_codes.md) · 미러 [07_api/02_errors.md](./07_api/02_errors.md) |
 | 제품·학습 결정 | **12** — D-01~D-12(결번 없음). 확정 주체: 사용자 5 + 원본 4 + 리드 판정 1 + W1 판정 후 사용자 확정 2 = **12**. 정본 [01_overview/06_design_decisions.md](./01_overview/06_design_decisions.md) |
 | 기능 ID | **91** — AUT 7 · MST 9 · COL 9 · SIM 5 · GEN 10 · ING 13 · TSQ 9 · RLT 9 · ALM 9 · WRK 5 · OBS 6. 검산: 7 + 9 + 9 + 5 + 10 + 13 + 9 + 9 + 9 + 5 + 6 = **91**. 정본 [02_features](./02_features/README.md) 도메인 파일 11본 · 세는 자리는 [02_features/12_permission_matrix.md](./02_features/12_permission_matrix.md) §검산 |
 | 역할 | **3** — OPERATOR · ENGINEER · ADMIN. 누적 관계가 아니며 다중 역할은 합집합으로 판정한다. 실험 수행자는 역할이 아니다(머신 접근). 정본 [02_features/12_permission_matrix.md](./02_features/12_permission_matrix.md) |
-| 채번 진행 중인 축 | REQ · AC(W2) · ADR-NN · 테이블 컬럼(W3) · API 표면 · 화면 코드(W5) · EXP-NN(W6). **수치는 정본이 채번한 같은 변경 단위에서 본 표에 행으로 올린다** — 정본보다 먼저 쓰지 않는다 |
+| 요구사항 · 인수 기준 | REQ **228** — GLB 23 · AUT 17 · MST 15 · COL 16 · SIM 12 · GEN 15 · ING 18 · TSQ 17 · RLT 18 · ALM 20 · WRK 12 · OBS 12 · NFR 18 · TEC 15. 검산: 23 + 17 + 15 + 16 + 12 + 15 + 18 + 17 + 18 + 20 + 12 + 12 + 18 + 15 = **228**. AC **45**(흐름 검증 13 + 단계 판정 25 + 학습 목표 산출 7). 정본 [03_requirements](./03_requirements/README.md) 각 파일 · [03_requirements/14_acceptance_criteria.md](./03_requirements/14_acceptance_criteria.md) |
+| 채번 진행 중인 축 | ADR-NN · 테이블 컬럼(W3) · API 표면 · 화면 코드(W5) · EXP-NN(W6). **수치는 정본이 채번한 같은 변경 단위에서 본 표에 행으로 올린다** — 정본보다 먼저 쓰지 않는다 |
 | 스택 표기 | **Next.js · NestJS · PostgreSQL 18 · ClickHouse 25.8 · Redis 8 · Docker Compose**로 통일한다. 정확 버전은 09_tech_stack에만 적는다 |
 | 단위와 시각 | ts = 측정 시각(모드 A는 Collector 폴링 시점 · 생성 모드는 생성기 시점) · ingested_at = 적재 시각 · 저장은 epoch 기준 · 표시 시점에만 Asia/Seoul로 변환 · 측정값 Float64. 정본 [11_glossary/05_units_and_time.md](./11_glossary/05_units_and_time.md) |
 
@@ -106,7 +107,7 @@ F-NN · SW-NN · EXP-NN 셋이 이 프로젝트 고유 축이다. 원본의 흐�
 
 ## 전역 불변식
 
-전 도메인이 전제하는 규칙이다. 상세 계약의 정본은 [03_requirements/01_global_rules.md](./03_requirements/01_global_rules.md)(REQ-GLB)다.
+전 도메인이 전제하는 규칙이다. 상세 계약의 정본은 [03_requirements/01_global_rules.md](./03_requirements/01_global_rules.md)(REQ-GLB-01~23)다.
 
 | 항목 | 규칙 |
 |------|------|

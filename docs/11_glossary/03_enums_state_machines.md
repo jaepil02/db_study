@@ -2,6 +2,7 @@
 
 > **대상**: db_study가 저장 · 전송 · 설정에 쓰는 닫힌 값 집합(enum) 전수와 상태 머신 3종(배치 재시도 · 알람 · 백프레셔) — enum 값 정본
 > **작성일**: 2026-09-24
+> **개정일**: 2026-09-24 — W2 판정 반영 — CLEARING · CLEARED 이벤트 ACK 허용 조건 링크
 > **개정일**: 2026-09-24 — W2 확정 반영 — role.role_code 미설계 → **확정 3값**(OPERATOR · ENGINEER · ADMIN) · 전수 검산 14 + 4 → **15 + 3** · 모드 A SIMULATED 표지 미확인 → 판정 완료(정본 02_features/03)
 > **원천**: 원본 data_flow.md §3.2 · §4 · §8 · §8.1 · §8.2 · §11 · §11.1(커밋 ff66a37) · 원본 architecture.md §6 · §7.1 · §7.2 · §7.3 · §9.2 · §9.3 · §11.1(커밋 ff66a37) · 원본 tech_stack.md §6 · §7 · §10.1(커밋 ff66a37) · docs_plan.md 실행 계획 보정 #20
 
@@ -221,7 +222,7 @@ stateDiagram-v2
 - **ACKED를 state 값으로 두지 않는 이유** — state에 ACKED를 쓰면 "확인 후 해제"와 "확인 없이 해제"가 둘 다 CLEARED로 덮이는 순간 확인 여부가 state에서 사라지고, 반대로 확인된 열린 알람과 확인 안 된 열린 알람을 가르려고 state와 acked_at을 함께 읽어야 한다. 축을 가르면 "열린 알람"은 state = ACTIVE 하나로, "미확인 알람"은 acked_at IS NULL 하나로 조회된다.
 - **불일치 판정 — 해제 경로.** 원본 data_flow.md §8 시퀀스는 "정상이고 이전 상태 ACTIVE → CLEARED UPDATE · 상태 NORMAL"로 CLEARING을 건너뛰고, 원본 §8.1 상태도는 CLEARING 디바운스를 둔다. 이 문서는 **§8.1을 따른다** — CLEARING이 없으면 경계값 근처 노이즈마다 이벤트가 닫히고 다시 열려 alarm_event 행이 폭증한다. 시퀀스가 ACKED 상태의 해소를 다루지 않는 누락도 위 표의 마지막 행으로 닫는다.
 - **미확인 — ACK가 Redis 상태를 바꾸는 주체.** ACK는 API가 PostgreSQL에 쓴다(/api/v1/alarms/events/{id}/ack). 상태 머신이 ACKED를 알려면 alarm:state도 바뀌어야 하는데, 원본은 누가 쓰는지 적지 않았다. Redis가 ACTIVE로 남으면 ACK된 알람도 CLEARING 디바운스를 타서 상태도의 ACKED → NORMAL 전이가 실행되지 않는다. 확정 자리는 [../06_pipeline/08_alarm.md](../06_pipeline/08_alarm.md)(W4)다.
-- **원본 사실 — 해제 디바운스의 비대칭.** ACKED → NORMAL은 디바운스 없이 첫 해소에서 전이하고 ACTIVE → NORMAL은 CLEARING을 거친다. CLEARING · CLEARED 상태 이벤트의 ACK 허용 여부는 원본에 없다([02_error_codes.md](./02_error_codes.md) 채번 보류).
+- **원본 사실 — 해제 디바운스의 비대칭.** ACKED → NORMAL은 디바운스 없이 첫 해소에서 전이하고 ACTIVE → NORMAL은 CLEARING을 거친다. CLEARING · CLEARED 상태 이벤트의 ACK 허용 여부는 원본에 없어 W2가 판정했다 — 행 state ACTIVE · acked_at NULL일 때만 허용(CLEARING 허용 · CLEARED 거절 alarms.ack_not_allowed/409). 정본 [../03_requirements/10_alarms.md](../03_requirements/10_alarms.md).
 - **PostgreSQL 쓰기 실패 시 alarm:state를 되돌린다.** INSERT가 실패하면 상태를 PENDING으로 두고 다음 판정 주기에 다시 시도한다 — 진실은 alarm_event다(원본 data_flow.md §8.2). alarm_eval 삽입 실패는 알람 기능을 막지 않는다.
 
 ## 상태 머신 3 — 백프레셔 5단계

@@ -2,6 +2,7 @@
 
 > **대상**: 알람(ALM · NestJS alarms 모듈) 기능 목록 · 목적이 다른 세 쓰기 · 기능별 경계 · 의존 도메인 · 실패 시 보이는 것 — 기능 ID ALM-NN 채번 정본
 > **작성일**: 2026-09-24
+> **개정일**: 2026-09-24 — W2 요구사항 판정 반영 — ACK 허용 조건(state ACTIVE · acked_at NULL) · alarms.ack_not_allowed/409 · 규칙 변경과 확인은 감사 대상(REQ-WRK-07)
 > **원천**: 원본 data_flow.md §8 · §8.1 · §8.2 · §6.3 · §15 · §17(커밋 ff66a37) · 원본 architecture.md §4 · §5 · §6 · §7.3 · §8.1 · §8.2 · §10.1 · §11(커밋 ff66a37) · 원본 implementation_plan.md §5 S7 · §7.3(커밋 ff66a37) · 저장소 루트 docs_plan.md 보정 #20 · D-04 · D-11 · [../11_glossary/03_enums_state_machines.md](../11_glossary/03_enums_state_machines.md) 상태 머신 2
 
 ALM은 **분기 ②계층이 실제로 실행되는 자리**다. 한 스트림에서 나온 판정 한 건이 성격에 따라 Redis alarm:state(다음 판정에 필요한 핫 상태) · ClickHouse alarm_eval(갱신하지 않는 판정 전수) · PostgreSQL alarm_event(확인 · 해제로 갱신되는 확정 이벤트)로 동시에 흩어진다(원본 data_flow.md §8.2). 이것은 dual-write가 아니라 **목적이 다른 세 쓰기**이며, 학습 목표 ②의 핵심 계층을 한 자리에서 보여 주는 도메인이다(D-04).
@@ -21,7 +22,7 @@ ALM은 **분기 ②계층이 실제로 실행되는 자리**다. 한 스트림�
 | **ALM-05** | 판정 전수 기록 | 매 판정 결과(시각 · 규칙 · 태그 · 값 · 위반 여부 · 심각도)를 alarm_eval에 쌓는다. 재시도 · DLQ는 Ingest 배치와 같은 정책이다. **끝내 실패해도 알람 발생 · 해제 · 통지는 정상 동작**하고 임계값 튜닝용 분석 데이터만 빈다 | S7 | F-06 | 해당 없음 | 표면 없음 — ALM-03의 후속 | ClickHouse alarm_eval |
 | **ALM-06** | 발생 · 해제 발행 | 이벤트가 열리거나 닫히면 ch:alarm에 발행한다. WebSocket 게이트웨이가 받아 브로드캐스트한다(RLT-08). SW-06 off면 게이트웨이를 직접 부른다 | S7 | F-06 · F-07 | SW-06 | 표면 없음 — RLT-08이 전달 | Redis ch:alarm |
 | **ALM-07** | 알람 이벤트 조회 | 확정 이벤트 목록을 돌려준다(캐시 현행 30초). "열린 알람"은 state = ACTIVE 하나로, "미확인 알람"은 acked_at IS NULL 하나로 조회된다 — 생애 축과 확인 축을 가른 결과다(W1 판정) | S7 | F-06 | 해당 없음 | 07_api/07_alarms | PostgreSQL alarm_event(읽기) |
-| **ALM-08** | 알람 확인 | 운영자가 열린 이벤트를 확인하면 acked_by · acked_at을 채우고 이벤트 목록 캐시를 무효화한다. 확인은 생애 값이 아니라 컬럼이 기록한다. 확인 전이는 ACTIVE에서만 정의된다 — CLEARING · CLEARED 이벤트의 확인은 채번 보류다. 확인이 alarm:state를 ACKED로 바꾸는 주체는 미확인이다 | S7 | F-06 | 해당 없음 | 07_api/07_alarms | PostgreSQL alarm_event |
+| **ALM-08** | 알람 확인 | 운영자가 열린 이벤트를 확인하면 acked_by · acked_at을 채우고 이벤트 목록 캐시를 무효화한다. 확인은 생애 값이 아니라 컬럼이 기록한다. 확인은 **행이 state = ACTIVE이고 acked_at이 NULL일 때만** 허용한다 — CLEARING 중인 열린 행은 확인되고 CLEARED · 이미 확인된 행은 alarms.ack_not_allowed/409로 거절한다(REQ-ALM-14). 확인이 alarm:state를 ACKED로 바꾸는 주체는 미확인이다 | S7 | F-06 | 해당 없음 | 07_api/07_alarms | PostgreSQL alarm_event |
 | **ALM-09** | 판정 이력 분석 | 엔지니어가 alarm_eval 판정 전수를 범위로 읽어 임계값 튜닝 · 오탐을 분석한다. 극값을 보존하는 min · max 쌍 차트를 쓴다(원본 data_flow.md §6.3). **원본 API 표에 이 조회 표면이 없다** | S7 | F-06 | 해당 없음 | 07_api/07_alarms(W5 신설 판정) | ClickHouse alarm_eval(읽기) |
 
 - 검산: ALM-01~09 = **9**. 단계 S7 9 = **9**(D-11 — 후순위 · 생략 불가)
@@ -61,7 +62,7 @@ ALM은 **분기 ②계층이 실제로 실행되는 자리**다. 한 스트림�
 | RLT | ALM → RLT | Pub/Sub | ch:alarm |
 | MST | MST → ALM | 저장소 경유 | 규칙이 tag_id를 참조한다 |
 | AUT | AUT → ALM | 인가 | 규칙 쓰기는 엔지니어 · 확인은 운영자([12_permission_matrix.md](./12_permission_matrix.md)) |
-| WRK | 해당 없음 | 해당 없음 | 규칙 변경의 감사 기록 여부는 원본에 없다(업무 데이터 변경은 감사 대상 — WRK-04) |
+| WRK | 해당 없음 | 해당 없음 | 규칙 변경 · 확인은 audit_log 감사 대상이다(같은 트랜잭션 · 기준 [../03_requirements/11_work_orders.md](../03_requirements/11_work_orders.md) REQ-WRK-07) |
 
 ## 실패 시 보이는 것
 
@@ -70,7 +71,7 @@ ALM은 **분기 ②계층이 실제로 실행되는 자리**다. 한 스트림�
 | 상황 | 드러나는 형태 | 코드 또는 지표 | 기능 |
 |------|------|------|------|
 | 없는 이벤트 확인 | 거절 | common.not_found/404 | ALM-08 |
-| CLEARING · CLEARED 이벤트 확인 | **채번 보류** — 허용 여부 미정 | 11_glossary/02 채번 보류 · 결정 자리 [../03_requirements/10_alarms.md](../03_requirements/10_alarms.md) | ALM-08 |
+| CLEARED · 이미 확인된 이벤트 확인 | **alarms.ack_not_allowed/409** — CLEARING 중인 열린 행은 허용 | [../03_requirements/10_alarms.md](../03_requirements/10_alarms.md) REQ-ALM-14 | ALM-08 |
 | 규칙 형식 위반 | 거절 | common.validation_failed/400 | ALM-01 |
 | 역할 밖 쓰기(S7 이후) | 거절 | auth.forbidden/403 | ALM-01 · 08 |
 | PostgreSQL 접속 불가 | 규칙 쓰기 · 이벤트 조회 · 확인 실패 · **판정은 PENDING에 머물며 재시도** | common.postgres_unavailable/503 · PostgreSQL 이벤트 기록 지연 | ALM-01 · 04 · 07 · 08 |
@@ -98,7 +99,7 @@ ALM은 **분기 ②계층이 실제로 실행되는 자리**다. 한 스트림�
 | 담당자 배정 | "확인 · 해제 · 담당자 배정 등 상태 갱신이 필요"(원본 data_flow.md §8.2) | **신규 불일치** — alarm_event에 담당자 컬럼이 없다(원본 architecture.md §6). 기능을 두지 않았다 | [../05_data_stores/01_postgresql_schema.md](../05_data_stores/01_postgresql_schema.md)(W3) |
 | 규칙 관리 · 판정 이력 분석 표면 | API 표에 알람은 이벤트 목록 · 확인 둘뿐이다 | **신규 — 표면 미설계** | [../07_api/07_alarms.md](../07_api/07_alarms.md)(W5) |
 | 판정 구간 지연 예산 | 원본 지연 예산표에 알람 판정 구간이 없다(보정 7.3) | 미확인 — 확정 전 임의 값 고정 금지 | [../04_architecture/05_latency_budget.md](../04_architecture/05_latency_budget.md)(W3) |
-| 규칙 변경의 감사 기록 | 업무 데이터 변경은 감사 대상이다(원본 architecture.md §18) | 알람 규칙이 대상인지 원본에 없다 | [../03_requirements/10_alarms.md](../03_requirements/10_alarms.md) |
+| 규칙 변경의 감사 기록 | 업무 데이터 변경은 감사 대상이다(원본 architecture.md §18) | **W2 판정 완료** — 규칙 변경 · 확인은 대상 · 판정 경로의 시스템 쓰기는 대상 아님 | [../03_requirements/10_alarms.md](../03_requirements/10_alarms.md) |
 
 ## 관련 문서
 

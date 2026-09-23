@@ -1,8 +1,9 @@
 # docs/ 설계 문서군 구축 계획
 
-> **상태**: W2a 완료(2026-09-24) · W2b 착수
-> **완료된 것**: 실행 계획 확정(아래 "실행 계획 보정" 절) · docs/ 12폴더 재생성 · W0 14본(docs/README.md · docs/CLAUDE.md · 폴더 README 12본 골격판) · 린트 .omc/docs_lint.py 오류 0건 · W1 11본(11_glossary 5 · 01_overview 6) — 에러 코드 14 · D-01~D-12 · W2a 13본(02_features) — 기능 91 · SW 10 · 역할 3
-> **다음 작업**: W2b — 팀원 2명(w2-req-a: 03_requirements 01~07 · 13 / w2-req-b: 08~12 · 14). 웨이브 인계 표의 W2 · W2b 행 포함. 15 · 16은 W7 리드
+> **상태**: W2b 완료(2026-09-24) · W3 착수
+> **완료된 것**: 실행 계획 확정(아래 "실행 계획 보정" 절) · docs/ 12폴더 재생성 · W0 14본(docs/README.md · docs/CLAUDE.md · 폴더 README 12본 골격판) · 린트 .omc/docs_lint.py 오류 0건 · W1 11본(11_glossary 5 · 01_overview 6) — 에러 코드 14 · D-01~D-12 · W2a 13본(02_features) — 기능 91 · SW 10 · 역할 3 · W2b 14본(03_requirements 01~14) — REQ 228 · AC 45 · 에러 코드 19
+> **다음 작업**: W3 — 팀원 2명(w3-arch: 04_architecture 01~09 / w3-stores: 05_data_stores 01~10 · erd). 착수 전 리드가 ADR 번호 대역 · 테이블 목록 선점. 웨이브 인계 표의 W3 행 전부 포함
+> **팀원 누적**: 5 / 15 — w1-glossary · w1-overview · w2-features · w2-req-a · w2-req-b(전원 종료)
 > **참고**: 기존 루트 4본(architecture.md · data_flow.md · tech_stack.md · implementation_plan.md)은 **W7까지 삭제하지 않는다** — 이관 누락을 검증할 원본이 필요하다
 
 ## 실행 계획 보정 (2026-09-23 확정)
@@ -60,11 +61,19 @@ W1 w1-glossary 판정 · 미확인 — 행선지 웨이브가 확정한다.
 | W3 05/10 · W4 06/04 | SW-09 대조군 삽입 실패 의미론과 PostgreSQL 쪽 멱등 수단 |
 | W4 06_pipeline | SW-01 off의 토큰 재료(06/03) · 모드 B 길이 검사와 모드 D 대조군 동일 행 절차(06/10) · Collector 실행 중 마스터 변경 반영(06/02) · FC01 · FC02 BOOL 응답 영역(SIM) · 비활성 태그 알람 규칙(06/08) · SIM 지연·오류 주입 제어 수단(W4 · W5) |
 | W5 07_api | WebSocket 구독 방식(쿼리 파라미터 vs subscribe 메시지, 07_api/11) · 원본에 없는 표면 판정 |
+| W3 04_architecture/05 | 알람 판정 구간 지연 예산 신설(미확인) |
+| W3 05_data_stores/01 · 09 | S4~S6 무인증 기간 audit_log 행위자(user_id NULL vs 시드 계정) |
+| W3 05_data_stores/05 | lock:rebuild 식별자 공간 충돌(쿼리 해시 vs 설비) · 작업지시 BFF 캐시 키 |
+| W4 06_pipeline | rt:latest 덮어쓰기 순서 역전(06/05) · fan-in 배치 토큰 재료(06/03) · 스탬피드 대기 소진 후 원천 직접 조회(06/06) · 복원 창에 행 없는 신규 설비 응답 · tagmeta 미스 + PG 불가 시 최신값 응답(06/05) · CLEARING 중 ACK의 alarm:state 전이(06/08) · FC01 · FC02 시드 금지 해제 조건 |
+| W5 07_api | 내보내기 스트림 중단 종료 표지(05) · 알람 목록 범위 기본값(07) · health 본문 필드 이름 · 저장소별 타임아웃(10) |
+| W6 10_observability/01 | 컨슈머 랙 산출식 불일치(tech §9 vs arch §16) · 신규 메트릭 이름(레이트 리밋 통과 · 캐시 삭제 실패 · 품질 코드별 · Modbus 왕복 · SIM 기동 실패 포트 · 모드 B 중단 · ING 계층별 쓰기 · 대조군 실패 · 설계 거절 제외 오류율) · 메모리 샘플 수 · Pub/Sub 출력 버퍼 한도 |
 | W6 | 스위치 상태 레이블 이름 · 스위치별 EXP 번호 · 모드 C 인증 비용은 S7 이후만 측정 가능 |
 | W2 02_features/12 | role_code 값 · 역할 수 · 알람 규칙 변경 권한 주체 · 실험 콘솔 접근 권한 · GEN · OBS 표면 인가 |
 | W3 04_architecture/02 · 09 | SIM · OBS의 APP_ROLE 배정 · 보정 7.2 결정 시점(S3 전 잠정안 + 교체 가능한 포트 · S6 실측으로 최종) |
 | W3 05_data_stores | 롤업 테이블 · MV 도메인 귀속(잠정 ING) · audit_log 소유(WRK) vs MST 트랜잭션 쓰기 — 한계 등재(05/02) |
 | W4 06_pipeline/04 | ②계층 "생산 카운터"(스트림 유래)와 production_log(WRK CRUD)의 구분과 분기 기전 |
+
+W2b 처리: 에러 코드 19종(신설 5) · 채번 보류 8건 전부 닫음 · ACK 허용 조건(ACTIVE · acked_at NULL) · 규칙 변경과 확인은 감사 대상 · health 부분 실패 503 + 본문 · 롤업 avg 허용 오차 상계식(p95만 미확인) · Redis 불가 시 로그인 거절 · 레이트 리밋 통과 · 스케일 PATCH 거절 · 비활성 태그 200 — W2 · W2b 행의 03_requirements 항목은 닫혔다.
 
 W2 처리: 모드 A SIMULATED 판정(02_features/03 — 루프백 host 규칙) · 역할 3(OPERATOR · ENGINEER · ADMIN) · 알람 규칙 변경 ENGINEER · ACK OPERATOR · 실험 콘솔 인증 사용자 전원 표시 전용 · health · metrics 공개 · bulk 게이트 + 인증 — W2 행의 02_features 항목은 닫혔다.
 

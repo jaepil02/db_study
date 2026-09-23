@@ -2,6 +2,7 @@
 
 > **대상**: 업무 데이터(WRK · NestJS work-orders 모듈) 기능 목록 · 감사 로그의 소유와 쓰기 · 기능별 경계 · 의존 도메인 · 실패 시 보이는 것 — 기능 ID WRK-NN 채번 정본
 > **작성일**: 2026-09-24
+> **개정일**: 2026-09-24 — W2 요구사항 판정 반영 — 알람 규칙 변경 · 확인을 감사 대상으로 확정(REQ-WRK-07) · 상태 전이 위반 코드 invalid_status_transition/409
 > **원천**: 원본 architecture.md §5 · §6 · §11 · §18(커밋 ff66a37) · 원본 data_flow.md §7 · §7.1 · §7.2(커밋 ff66a37) · 원본 tech_stack.md §5.1(커밋 ff66a37) · 원본 implementation_plan.md §5 S7(커밋 ff66a37) · D-04 · D-11 · [../01_overview/04_domain_map.md](../01_overview/04_domain_map.md) 트랜잭션 공유 경계 · [../11_glossary/03_enums_state_machines.md](../11_glossary/03_enums_state_machines.md) 미설계 enum
 
 WRK는 **분기 ③계층 — 경로를 고르지 않는 분기 — 의 시연 자리**다. 작업지시 · 생산 실적 · 감사 로그는 API에서 PostgreSQL로 곧장 가고 Redis Stream을 타지 않는다. 업무 쓰기를 비동기 at-least-once 경로에 올리면 커밋 응답 직후의 재조회가 아직 적재되지 않은 값을 보고, 재시도가 트랜잭션 경계 밖에서 중복을 만든다(D-04). 분기가 "전부 큐를 태운다"가 아니라 "성격을 보고 경로를 고른다"라는 명제의 **반례 쪽**이 이 도메인이다.
@@ -32,9 +33,9 @@ WRK는 **분기 ③계층 — 경로를 고르지 않는 분기 — 의 시연 �
 |------|------|------|------|------|
 | MST | 태그 · 설비 등 마스터 변경 | 마스터 변경과 같은 트랜잭션 | before · after | 원본 data_flow.md §7 시퀀스(UPDATE tag_master → INSERT audit_log → COMMIT) |
 | WRK | 작업지시 · 실적 변경 | 업무 변경과 같은 트랜잭션 | before · after | "업무 데이터 변경은 AUDIT_LOG에 before/after 기록"(원본 architecture.md §18) |
-| ALM | 규칙 변경 | **미확인** | 미확인 | 알람 규칙이 감사 대상인지 원본에 없다 — [09_alarms.md](./09_alarms.md) |
+| ALM | 규칙 변경 · 확인(ACK) | 감사 대상 | 같은 트랜잭션 | 판정 경로의 시스템 쓰기는 대상이 아니다 — 기준 [../03_requirements/11_work_orders.md](../03_requirements/11_work_orders.md) REQ-WRK-07 |
 
-- 검산: 쓰는 도메인 후보 = MST · WRK · ALM(미확인) = **3**
+- 검산: 쓰는 도메인 = MST · WRK · ALM = **3**
 - **소유와 쓰기가 갈린 결과로 아무 계층도 강제하지 않는 것이 있다** — 새 쓰기 표면이 감사 기록을 빠뜨려도 DB 제약은 막지 못한다. 이것이 한계 등재 대상이다([../05_data_stores/02_postgresql_constraints.md](../05_data_stores/02_postgresql_constraints.md) W3).
 - 감사 로그는 캐시 무효화 체인의 대상이 아니다 — 체인은 커밋 뒤의 **사본**을 지우고, 감사는 커밋 **안**의 원본이다.
 
@@ -79,7 +80,7 @@ WRK는 **분기 ③계층 — 경로를 고르지 않는 분기 — 의 시연 �
 | order_no 중복 | 쓰기 거절 | common.duplicate_key/409 | WRK-01 |
 | 없는 작업지시 | 거절 | common.not_found/404 | WRK-01 · 02 · 03 |
 | 형식 위반 | 거절 | common.validation_failed/400 | WRK-01 · 03 |
-| 작업지시 상태 전이 위반 | **채번 보류** — 값 집합 자체가 미설계 | 11_glossary/02 채번 보류 | WRK-02 |
+| 작업지시 상태 전이 위반 | **work_orders.invalid_status_transition/409** — 조건은 허용 전이 표에 대해 정의되므로 값 집합(W3)과 무관하게 성립 | [../03_requirements/11_work_orders.md](../03_requirements/11_work_orders.md) REQ-WRK-04 | WRK-02 |
 | 감사 쓰기 실패 | 변경 전체가 롤백된다 — 같은 트랜잭션이다 | common.postgres_unavailable/503(접속 불가일 때) | WRK-04 |
 | PostgreSQL 접속 불가 | 업무 CRUD만 실패 · 시계열 조회는 계속 | common.postgres_unavailable/503 | WRK-01~05 |
 

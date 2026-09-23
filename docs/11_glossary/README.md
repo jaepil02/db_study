@@ -30,7 +30,7 @@
 | 신호 프로파일 | **8** — SINE · RANDOM_WALK · RAMP · STEP · BINARY · COUNTER · SPIKE · DROPOUT |
 | 알람 상태 | **5** — NORMAL · PENDING · ACTIVE · CLEARING · ACKED |
 | 백프레셔 단계 | **5** — 정상 · 주의 · 경고 · 위험 · 복구 |
-| 에러 코드 | **14종** · 네임스페이스 정의 9 · 코드 보유 5 — 정본 [02_error_codes.md](./02_error_codes.md) |
+| 에러 코드 | **19종** · 네임스페이스 정의 9 · 코드 보유 8 — 정본 [02_error_codes.md](./02_error_codes.md) |
 | 시각 | ts = 측정 시각 · ingested_at = 적재 시각 · 저장 epoch · 표시 Asia/Seoul |
 
 ## 관련 문서

@@ -2,6 +2,7 @@
 
 > **대상**: 인증·인가(AUT · NestJS auth 모듈) 기능 목록 · 기능별 경계 · 의존 도메인 · 실패 시 보이는 것 — 기능 ID AUT-NN 채번 정본
 > **작성일**: 2026-09-24
+> **개정일**: 2026-09-24 — W2 요구사항 판정 반영 — Redis 불가 시 거동 · 비활성 계정 로그인의 채번 보류를 판정 결과(token_store_unavailable/503 · invalid_credentials 재사용)로 닫는다
 > **원천**: 원본 architecture.md §2 · §6 · §8.2 · §10.1 · §11 · §11.2 · §18(커밋 ff66a37) · 원본 data_flow.md §5 · §7.2 · §9(커밋 ff66a37) · 원본 implementation_plan.md §5 S2 · S7 · §7.5(커밋 ff66a37) · D-07 · D-11 · [../01_overview/03_personas_roles.md](../01_overview/03_personas_roles.md) · [../11_glossary/02_error_codes.md](../11_glossary/02_error_codes.md) auth 네임스페이스
 
 AUT는 **신원을 확인하고 표면마다 역할을 대조하는 도메인**이다. 로그인 · 토큰 갱신 · 로그아웃 세 표면을 소유하고, 나머지 전 표면에는 Guard로 끼어든다. 앞단 프록시가 없으므로 CORS · 레이트 리밋 · WebSocket Origin 검증도 전부 이 모듈이 수행한다 — 이 계층을 대신할 곳이 없다(원본 architecture.md §11.2 · §18).
@@ -77,8 +78,8 @@ AUT는 **신원을 확인하고 표면마다 역할을 대조하는 도메인**�
 | 분당 한도 초과 | 다음 분 창까지 대기 | common.rate_limited/429 | AUT-06 |
 | 요청 형식 위반 | 요청 수정 | common.validation_failed/400 | AUT-01 |
 | PostgreSQL 접속 불가 중 로그인 | 백오프 후 재요청 | common.postgres_unavailable/503 | AUT-01 |
-| Redis 접속 불가 중 로그인 · 갱신 · 레이트 리밋 | **채번 보류** — 거절인지 우회인지 미정 | 11_glossary/02 채번 보류 · 결정 자리 [../03_requirements/02_auth.md](../03_requirements/02_auth.md) | AUT-01 · 02 · 06 |
-| 비활성 계정(is_active false) 로그인 | **채번 보류** — 자격 불일치와 같은 코드인지 미정 | 상동 | AUT-01 |
+| Redis 접속 불가 중 로그인 · 갱신 · 레이트 리밋 | 로그인 · 갱신 · 로그아웃은 **auth.token_store_unavailable/503** · 레이트 리밋은 세지 않고 통과(계측) | 11_glossary/02 · [../03_requirements/02_auth.md](../03_requirements/02_auth.md) REQ-AUT-14 | AUT-01 · 02 · 06 |
+| 비활성 계정(is_active false) 로그인 | **auth.invalid_credentials/401 재사용** — 계정 존재를 드러내지 않는다 | [../03_requirements/02_auth.md](../03_requirements/02_auth.md) REQ-AUT-02 | AUT-01 |
 | WebSocket 첫 메시지 인증 실패 · Origin 불일치 | HTTP 응답이 아니라 **연결 종료** | 종료 코드 정본 [../07_api/11_websocket.md](../07_api/11_websocket.md) | AUT-04 · 07 |
 | CORS 거절 | 브라우저가 응답을 막는다 — 서버 코드가 도달하지 않는다 | 브라우저 콘솔 | AUT-07 |
 
@@ -89,7 +90,7 @@ AUT는 **신원을 확인하고 표면마다 역할을 대조하는 도메인**�
 | 원본 항목 | 이 문서의 반영 | 정본 |
 |------|------|------|
 | 리프레시 토큰 키 개명(rt: → auth:refresh:) — 원본 architecture.md §8.2 | AUT-01~03이 auth:refresh:{refresh_token_id}만 쓴다. 최신값 계열 rt:(TTL 금지)와 접두를 공유하지 않는다 | [../05_data_stores/05_redis_keyspace.md](../05_data_stores/05_redis_keyspace.md) |
-| 보정 7.5 TTL 강제 수단 — 원본 implementation_plan.md §7.5 | auth · rl 계열 쓰기는 TTL 필수 래퍼(캐시 계열)로만 한다. 캐시 계열 호출 실패의 degrade 여부는 AUT에서는 채번 보류와 같은 미정 항목이다 | 상동 · [../03_requirements/02_auth.md](../03_requirements/02_auth.md) |
+| 보정 7.5 TTL 강제 수단 — 원본 implementation_plan.md §7.5 | auth · rl 계열 쓰기는 TTL 필수 래퍼(캐시 계열)로만 한다. 캐시 계열 호출 실패 시 레이트 리밋은 degrade(통과 · 계측)하고 인증 저장소 쓰기는 거절한다(REQ-AUT-14) | 상동 · [../03_requirements/02_auth.md](../03_requirements/02_auth.md) |
 | 보정 7.1~7.4 | 해당 없음 — 수집 · 적재 · 알람 · 무효화 체인 항목이다 | 해당 없음 |
 
 ## 미확인 · 미설계 등재
@@ -100,7 +101,7 @@ AUT는 **신원을 확인하고 표면마다 역할을 대조하는 도메인**�
 | sess:{session_id} 키의 소비 기능 | 키 계열 표에 세션 JSON · TTL 1800초가 있다(원본 architecture.md §8.2) | **미확인 — 소비 기능 없음.** 인증은 JWT + 리프레시 키로 닫혀 세션 키를 읽는 기능이 원본 어디에도 없다 | [../05_data_stores/05_redis_keyspace.md](../05_data_stores/05_redis_keyspace.md)(W3) |
 | 레이트 리밋의 엔드포인트 차원 | "사용자별 + 엔드포인트별"(원본 architecture.md §18) · 키는 rl:{user_id}:{unix_minute}(원본 architecture.md §8.2) | **불일치** — 키에 엔드포인트 자리가 없어 "엔드포인트별로 엄격히"를 표현할 수 없다 | 상동 · [../12_security/03_api_surface_defense.md](../12_security/03_api_surface_defense.md) |
 | 권한 캐시 키 모양 | cache-aside 300초 · 변경 시 즉시 DEL(원본 architecture.md §10.1) | 키 이름 없음 | [../05_data_stores/05_redis_keyspace.md](../05_data_stores/05_redis_keyspace.md)(W3) |
-| Redis 불가 시 로그인 · 갱신 · 레이트 리밋 | 세 기능의 상태가 Redis에 있다 | 거절 · 우회 미정 — 채번 보류 | [../03_requirements/02_auth.md](../03_requirements/02_auth.md) |
+| Redis 불가 시 로그인 · 갱신 · 레이트 리밋 | 세 기능의 상태가 Redis에 있다 | **W2 판정 완료** — 인증 저장소 쓰기 거절 · 레이트 리밋 통과 | [../03_requirements/02_auth.md](../03_requirements/02_auth.md) |
 
 ## 관련 문서
 

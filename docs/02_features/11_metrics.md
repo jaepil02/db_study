@@ -2,6 +2,7 @@
 
 > **대상**: 관측(OBS · NestJS metrics 모듈) 기능 목록 · 기능별 경계 · 의존 도메인 · 실패 시 보이는 것 — 기능 ID OBS-NN 채번 정본
 > **작성일**: 2026-09-24
+> **개정일**: 2026-09-24 — W2 요구사항 판정 반영 — 헬스 부분 실패는 503 + 저장소별 상태 본문 · 코드 없음(REQ-OBS-09)
 > **원천**: 원본 architecture.md §3 · §4 · §11 · §14 · §16(커밋 ff66a37) · 원본 tech_stack.md §9(커밋 ff66a37) · 원본 data_flow.md §15 · §16(커밋 ff66a37) · 원본 implementation_plan.md §4.1 · §5 S2 · S5 · S6 · §8(커밋 ff66a37) · 저장소 루트 docs_plan.md 보정 #12 · D-06 · D-10 · [13_switch_matrix.md](./13_switch_matrix.md)
 
 OBS는 **측정 대상과 측정 도구를 가르는 별도 평면의 도메인**이다. 전 도메인의 카운터와 세 저장소의 통계를 주기적으로 모아 api 컨테이너의 /metrics **하나**로 노출한다 — exporter 컨테이너를 두지 않는 이유는 로컬 메모리 예산과, 관측 도구가 측정 대상의 CPU를 덜 잡아먹게 하려는 것이다(원본 tech_stack.md §9). 헬스체크 /api/v1/health도 OBS가 소유한다(docs_plan 보정 #12).
@@ -62,7 +63,7 @@ OBS에는 유효 에러 코드가 없다(metrics 네임스페이스는 정의만
 
 | 상황 | 드러나는 형태 | 코드 또는 지표 | 기능 |
 |------|------|------|------|
-| 일부 저장소가 응답하지 않음 | 헬스 응답의 저장소별 상태 · **응답 HTTP 상태는 채번 보류** | 11_glossary/02 채번 보류 · 결정 자리 [../03_requirements/12_metrics.md](../03_requirements/12_metrics.md) | OBS-05 |
+| 일부 저장소가 응답하지 않음 | 헬스 응답 **503** + 저장소별 상태 본문 · 에러 봉투와 코드를 쓰지 않는다 | [../03_requirements/12_metrics.md](../03_requirements/12_metrics.md) REQ-OBS-09 | OBS-05 |
 | 저장소 통계 수집 실패 | 그 계열 메트릭만 빈다 — /metrics 자체는 응답한다 | 수집 오류 메트릭 | OBS-02 |
 | 메트릭 카디널리티 폭증 | 스크레이프 지연 · 메모리 증가 | /metrics 응답 크기 | OBS-01 |
 | 주기 쿼리의 ClickHouse 부하 | E2E 게이지 쿼리가 측정 대상에 부하를 더한다 | 쿼리 로그 | OBS-04 |
@@ -80,7 +81,7 @@ OBS에는 유효 에러 코드가 없다(metrics 네임스페이스는 정의만
 | 항목 | 상태 | 확정 자리 |
 |------|------|------|
 | OBS의 APP_ROLE | 원본 미지정(W1 등재) — 역할 분리 시 각 컨테이너가 자기 /metrics를 내는지 한 곳이 모으는지 없다 | [../04_architecture/02_module_boundaries.md](../04_architecture/02_module_boundaries.md)(W3) |
-| 헬스 부분 실패 응답 | 채번 보류(W1 등재) | [../03_requirements/12_metrics.md](../03_requirements/12_metrics.md) |
+| 헬스 부분 실패 응답 | **W2 판정 완료** — 503 + 저장소별 상태 · 코드 없음 | [../03_requirements/12_metrics.md](../03_requirements/12_metrics.md) |
 | 스위치 상태 레이블 이름 · 메트릭 이름 규약 | 미정 | [../10_observability/01_metrics_catalog.md](../10_observability/01_metrics_catalog.md)(W6) |
 | 수집 주기 · E2E 게이지 창 | 2계층 조정값 — 현행 15초 · 5분(원본) | 상동 |
 | observability 프로파일 구성원 | W6 판정(docs_plan 보정 #17) | [../09_tech_stack/03_data_infra.md](../09_tech_stack/03_data_infra.md)(W6) |

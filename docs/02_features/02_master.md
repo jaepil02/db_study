@@ -2,6 +2,7 @@
 
 > **대상**: 마스터 데이터(MST · NestJS master 모듈) 기능 목록 · 기능별 경계 · 의존 도메인 · 실패 시 보이는 것 — 기능 ID MST-NN 채번 정본
 > **작성일**: 2026-09-24
+> **개정일**: 2026-09-24 — W2 요구사항 판정 반영 — 스케일 변경 PATCH(scale_change_forbidden/409) · 비활성 태그(코드 없음)의 채번 보류를 닫는다
 > **원천**: 원본 architecture.md §5 · §6 · §7.4 · §8.2 · §10.1 · §11 · §12(커밋 ff66a37) · 원본 data_flow.md §3 · §5 · §7 · §7.1 · §17(커밋 ff66a37) · 원본 implementation_plan.md §5 S2 · S4 · S7 · §7.4(커밋 ff66a37) · 저장소 루트 docs_plan.md 보정 #15 · D-04 · D-11 · [../01_overview/04_domain_map.md](../01_overview/04_domain_map.md)
 
 MST는 **시스템 전체의 메타 원천**이다. 사이트 · 라인 · 설비 · Modbus 접속 설정 · 태그 마스터를 PostgreSQL에 두고, 그 사본이 Redis 캐시(cache:tagmeta · cache:devlist)와 ClickHouse Dictionary(dict_tag)로 흩어진다. 마스터 한 번의 저장이 네 저장소 층을 건드리므로 **무효화 체인이 이 도메인의 핵심 기능**이다(원본 data_flow.md §7.1).
@@ -81,8 +82,8 @@ BEGIN → UPDATE tag_master → INSERT audit_log(before · after) → COMMIT
 | 없는 설비 · 태그 식별자 | 조회 · 쓰기 거절 | common.not_found/404 | MST-02 · 04 |
 | 형식 위반(data_type · word_order가 허용값 밖 등) | 쓰기 거절 | common.validation_failed/400 | MST-03 · 04 |
 | PostgreSQL 접속 불가 | 업무 CRUD만 실패 · **시계열 조회는 계속**(Dictionary가 마지막 값 유지) | common.postgres_unavailable/503 | MST-01~06 |
-| 기존 태그 PATCH로 스케일 변경 | **채번 보류** — 거절인지 서버가 새 태그를 만드는지 미정 | 11_glossary/02 채번 보류 · 결정 자리 [../03_requirements/03_master.md](../03_requirements/03_master.md) | MST-06 |
-| 비활성 태그 조회 · 수정 | **채번 보류** — 404인지 정상 응답인지 미정 | 상동 | MST-05 |
+| 기존 태그 PATCH로 스케일 변경 | **master.scale_change_forbidden/409** — 거절하고 새 태그 발급은 별도 동작 | [../03_requirements/03_master.md](../03_requirements/03_master.md) REQ-MST-07 | MST-06 |
+| 비활성 태그 조회 · 수정 | 코드 없음 — 200 + is_active false · 404는 마스터에 없는 식별자만 | [../03_requirements/03_master.md](../03_requirements/03_master.md) REQ-MST-08 | MST-05 |
 | 캐시 삭제 실패(Redis 일시 불가) | 코드 없음 — 캐시 계열은 조용히 degrade한다. **TTL이 끝날 때까지 옛 사본이 남는다** | 캐시 히트율 · Redis 오류 메트릭 | MST-08 |
 | Dictionary 재적재 실패 | 코드 없음 — LIFETIME 자동 재적재까지 옛 이름 | ClickHouse 오류 메트릭 | MST-08 · 09 |
 

@@ -2,6 +2,7 @@
 
 > **대상**: db_study api 컨테이너의 REST 표면이 반환하는 에러 코드 전수 — 채번 정본
 > **작성일**: 2026-09-24
+> **개정일**: 2026-09-24 — W2 요구사항 판정으로 채번 보류 8건을 닫는다 — 에러 코드 14 → **19종**(auth.token_store_unavailable/503 · master.scale_change_forbidden/409 · timeseries.clickhouse_unavailable/503 · alarms.ack_not_allowed/409 · work_orders.invalid_status_transition/409 신설) · 코드 보유 네임스페이스 5 → **8** · 재사용 1 · 코드 없음 2
 > **원천**: 원본 architecture.md §9.3 · §11 · §11.1 · §11.2 · §17(커밋 ff66a37) · 원본 data_flow.md §5 · §7.2 · §12.1 · §12.2(커밋 ff66a37) · 원본 architecture.md §6 ERD 유일 제약 · docs_plan.md 실행 계획 보정 #11 · #12 · [04_id_conventions.md](./04_id_conventions.md) 에러 코드 형식
 
 에러는 **{domain}.{snake_case} 코드 + HTTP 상태**로 반환하며 문서에서는 {domain}.{snake_case}/{HTTP}로 적는다. 본 문서는 문서군 전체에서 에러 코드를 **새로 만들 수 있는 유일한 자리**다. [../07_api/02_errors.md](../07_api/02_errors.md)는 미러이며 코드를 신설 · 개명 · 폐기하지 않는다 — 미러가 정본보다 먼저 바뀌면 W5 표면 문서가 존재하지 않는 코드를 인용하게 된다.
@@ -74,15 +75,23 @@
 | auth.unauthenticated | 401 | Authorization 헤더가 없거나 액세스 토큰(JWT)의 형식 · 서명이 틀렸다 | 인증이 필요한 전 표면 | 로그인한다 |
 | auth.token_expired | 401 | 액세스 토큰의 수명이 지났다(현행 15분 — 원본 architecture.md §11.2) | 인증이 필요한 전 표면 | BFF를 거쳐 리프레시로 새 액세스 토큰을 받고 원요청을 1회 다시 보낸다 |
 | auth.refresh_invalid | 401 | 리프레시 토큰이 auth:refresh:{refresh_token_id}에 없다 — 로그아웃으로 폐기 · 수명(현행 14일) 경과 · **메모리 압박으로 축출**. auth 계열은 TTL을 가진 캐시 계열이라 volatile-lru의 축출 후보다 | [../07_api/03_auth.md](../07_api/03_auth.md) | 다시 로그인한다 |
+| **auth.token_store_unavailable** | 503 | Redis에 접속할 수 없어 로그인 · 토큰 갱신 · 로그아웃이 리프레시 토큰 저장소에 닿지 못한다. **레이트 리밋은 이 코드를 내지 않는다** — 세지 않고 통과시키며 통과 수를 계측한다(REQ-AUT-14) | [../07_api/03_auth.md](../07_api/03_auth.md) | 백오프 후 다시 요청한다. 재로그인하지 않는다 — refresh_invalid와 대응이 달라 가른다 |
 | auth.forbidden | 403 | 인증은 됐으나 역할이 표면 권한 밖이다(원본 data_flow.md §6의 권한 검사). 역할 × 표면 대응의 정본은 [../02_features/12_permission_matrix.md](../02_features/12_permission_matrix.md) | 권한 검사가 있는 전 표면 | 요청을 멈춘다 |
 
 - **token_expired와 unauthenticated를 가르는 이유는 대응이 다르기 때문이다.** 만료는 조용한 갱신 1회로 복구되고, 서명 불량은 갱신해도 복구되지 않는다. 하나로 묶으면 클라이언트가 서명 불량에도 갱신 루프를 돈다.
 - **refresh_invalid의 세 번째 원인은 반직관적이다.** Stream이 적체돼 Redis 메모리가 압박받으면 사용자가 로그아웃된다. 이것이 Stream MAXLEN이 maxmemory보다 먼저 걸리도록 산정한 이유이며(원본 data_flow.md §12.1), maxmemory를 낮춘 축출 실험 중에는 이 코드가 정상 관측값이다.
 
+### master — 마스터 데이터
+
+| 코드 | HTTP | 발생 조건 | 발생 표면 | 클라이언트 대응 |
+|------|:----:|----------|----------|---------------|
+| **master.scale_change_forbidden** | 409 | 기존 태그의 scale · offset_value를 바꾸는 PATCH다. 스케일 변경은 새 tag_id 발급이므로 기존 행 수정으로 받지 않는다(원본 architecture.md §12 · REQ-MST-07) | [../07_api/04_master.md](../07_api/04_master.md) | 새 태그 발급 동작으로 다시 요청한다 |
+
 ### timeseries — 시계열 조회
 
 | 코드 | HTTP | 발생 조건 | 발생 표면 | 클라이언트 대응 |
 |------|:----:|----------|----------|---------------|
+| **timeseries.clickhouse_unavailable** | 503 | 캐시 미스 조회 또는 내보내기 응답 시작 전에 ClickHouse 접속 불가 · 타임아웃이다. **캐시 히트는 200이고, 대조군 PostgreSQL이나 Redis 최신값으로 우회하지 않는다**(REQ-TSQ-16) | [../07_api/05_timeseries.md](../07_api/05_timeseries.md) | 백오프 후 다시 요청한다 |
 | timeseries.too_many_tags | 400 | 조회 요청 tagIds 배열 길이가 상한을 넘었다(현행 50 — 원본 architecture.md §11.1) | [../07_api/05_timeseries.md](../07_api/05_timeseries.md) | 태그를 상한 이하 묶음으로 나눠 여러 번 요청한다 |
 
 - **common.validation_failed와 따로 두는 이유는 대응이 "고친다"가 아니라 "나눈다"이기 때문이다.** 같은 코드로 묶으면 클라이언트가 형식 오류로 읽고 요청을 포기한다.
@@ -94,6 +103,18 @@
 | realtime.latest_unavailable | 503 | Redis에 접속할 수 없다. **키가 비어 있는 것과 다르다** — 키만 비면 ClickHouse 복원으로 200을 낸다(원본 data_flow.md §5 · §12.2 · 원본 architecture.md §17) | [../07_api/06_realtime.md](../07_api/06_realtime.md) | 백오프 후 다시 요청한다. 대신 시계열 조회 표면을 호출하지 않는다 |
 
 - **B형 — 최신값 API는 Redis가 죽으면 ClickHouse로 우회하지 않고 실패한다.** 우회하면 대시보드의 초당 수백 회 점조회가 전부 ClickHouse로 쏟아져, 대량 스캔용 엔진이 점조회로 과부하에 걸리고 적재 삽입까지 밀린다. 따라서 이 503은 결함이 아니라 적재 경로를 지키는 차단기이며, 클라이언트도 같은 이유로 시계열 조회로 대체 호출하지 않는다.
+
+### alarms — 알람
+
+| 코드 | HTTP | 발생 조건 | 발생 표면 | 클라이언트 대응 |
+|------|:----:|----------|----------|---------------|
+| **alarms.ack_not_allowed** | 409 | 확인 대상 행이 state CLEARED이거나 acked_at이 이미 채워져 있다. 두 경우는 대응이 같아 한 코드로 묶는다. CLEARING 중인 열린 행은 확인할 수 있다(REQ-ALM-14) | [../07_api/07_alarms.md](../07_api/07_alarms.md) | 목록을 다시 읽는다. 같은 요청의 재시도 금지 |
+
+### work_orders — 작업지시
+
+| 코드 | HTTP | 발생 조건 | 발생 표면 | 클라이언트 대응 |
+|------|:----:|----------|----------|---------------|
+| **work_orders.invalid_status_transition** | 409 | 현재 status에서 허용 전이 표 밖의 status로 바꾸려 한다(REQ-WRK-04). 조건은 전이 표에 대해 정의되므로 status 값 집합(W3 확정)과 무관하게 코드가 성립한다 | [../07_api/08_work_orders.md](../07_api/08_work_orders.md) | 현재 상태를 다시 읽고 허용 전이로 요청한다 |
 
 ### datagen — 부하 주입
 
@@ -107,14 +128,14 @@
 
 ## 종수 산정 기준
 
-**전수는 14종 · 네임스페이스 9(정의) · 5(코드 보유)**다. 세는 자리는 이 절 하나이며 다른 절은 이 수를 다시 세지 않는다.
+**전수는 19종 · 네임스페이스 9(정의) · 8(코드 보유)**다. 세는 자리는 이 절 하나이며 다른 절은 이 수를 다시 세지 않는다.
 
 | 산출 축 | 내역 | 합 |
 |--------|------|:--:|
-| 네임스페이스별 | common 5 · auth 5 · timeseries 1 · realtime 1 · datagen 2 · master 0 · alarms 0 · work_orders 0 · metrics 0 | 5 + 5 + 1 + 1 + 2 = **14** |
-| HTTP 상태별 | 400 2(validation_failed · too_many_tags) · 401 4 · 403 1 · 404 2(not_found · bulk_disabled) · 409 1 · 429 1 · 503 3(postgres_unavailable · latest_unavailable · stream_full) | 2 + 4 + 1 + 2 + 1 + 1 + 3 = **14** |
+| 네임스페이스별 | common 5 · auth 6 · master 1 · timeseries 2 · realtime 1 · alarms 1 · work_orders 1 · datagen 2 · metrics 0 | 5 + 6 + 1 + 2 + 1 + 1 + 1 + 2 = **19** |
+| HTTP 상태별 | 400 2(validation_failed · too_many_tags) · 401 4 · 403 1 · 404 2(not_found · bulk_disabled) · 409 4(duplicate_key · scale_change_forbidden · ack_not_allowed · invalid_status_transition) · 429 1 · 503 5(postgres_unavailable · token_store_unavailable · clickhouse_unavailable · latest_unavailable · stream_full) | 2 + 4 + 1 + 2 + 4 + 1 + 5 = **19** |
 | 네임스페이스 정의 | 표면 있는 도메인 8(auth · master · timeseries · realtime · alarms · work_orders · datagen · metrics) + common 1 | 8 + 1 = **9** |
-| 코드 보유 네임스페이스 | common · auth · timeseries · realtime · datagen | **5** |
+| 코드 보유 네임스페이스 | common · auth · master · timeseries · realtime · alarms · work_orders · datagen — metrics만 0 | **8** |
 
 - **세는 대상은 유효 코드뿐이다.** 폐기 코드는 생기면 별도 절에 폐지 행으로 두고 전수에서 빼며, 채번 보류 후보는 코드가 아니므로 세지 않는다.
 - 두 축의 합이 같아야 한다. 한쪽만 고치면 이 표에서 즉시 어긋난다 — 코드를 신설하면 네임스페이스 열과 HTTP 열을 같은 변경 단위에서 고친다.
@@ -136,20 +157,22 @@
 | WebSocket 인증 · Origin 거절 | HTTP 응답 봉투가 아니라 연결 종료로 표현한다. 종료 코드의 정본은 [../07_api/11_websocket.md](../07_api/11_websocket.md) | 연결 종료 |
 | 설계 밖 예외(500) | 결함이다. 코드를 주지 않는다 | 로그 · 에러율 메트릭 |
 
-## 채번 보류 — 원본에 실패가 확인되지 않은 후보
+## 채번 보류의 처리 결과
 
-원본이 실패 동작을 적지 않아 코드를 만들지 않은 후보다. **"미확인 — W2 · W5가 요구사항과 표면을 확정할 때 본 문서에서 채번"**으로 등재한다. 확정 전 구현이 임시 코드를 만들지 않는다.
+W1이 원본에 실패 동작이 없어 보류한 후보 8건은 W2 요구사항이 전부 판정했다. **보류 중인 후보는 없다.** 새 후보가 생기면 이 절에 행을 더하고 결정 자리를 적는다.
 
-| 후보 | 원본에서 확인되는 것 | 빠진 것 | 결정 자리 |
-|------|------------------|--------|----------|
-| ClickHouse 접속 불가 시 시계열 조회 | ClickHouse 중단 시 적재가 XACK를 보류한다(원본 architecture.md §17) | 조회 표면의 응답 상태 | [../03_requirements/08_timeseries.md](../03_requirements/08_timeseries.md) |
-| Redis 접속 불가 시 로그인 · 리프레시 · 레이트 리밋 | 리프레시 토큰 · 레이트 리밋 카운터가 Redis에 있다(원본 architecture.md §8.2) | 거절인지 우회인지 | [../03_requirements/02_auth.md](../03_requirements/02_auth.md) |
-| 알람 ACK 불가 상태 | ACK 전이는 ACTIVE에서만 정의된다(원본 data_flow.md §8.1) | CLEARING · CLEARED 이벤트 ACK의 응답 | [../03_requirements/10_alarms.md](../03_requirements/10_alarms.md) — 상태 대응은 [03_enums_state_machines.md](./03_enums_state_machines.md) |
-| 태그 스케일 변경 PATCH | 스케일 변경은 새 tag_id 발급이다(원본 architecture.md §12) | 기존 태그 PATCH를 거절하는지, 서버가 새 태그를 만드는지 | [../03_requirements/03_master.md](../03_requirements/03_master.md) |
-| 비활성 계정 로그인 | user_account.is_active가 있다(원본 architecture.md §6) | 자격 증명 실패와 같은 코드인지 | [../03_requirements/02_auth.md](../03_requirements/02_auth.md) |
-| 비활성 태그(is_active false) 조회 · 수정 | 태그는 물리 삭제하지 않는다 | 404인지 정상 응답인지 | [../03_requirements/03_master.md](../03_requirements/03_master.md) |
-| 헬스체크 실패 | /api/v1/health가 저장소별 상태를 낸다 | 일부 저장소 실패 시 응답 상태 | [../03_requirements/12_metrics.md](../03_requirements/12_metrics.md) |
-| 작업지시 상태 전이 위반 | work_order.status 컬럼이 있다 | 값 집합 자체가 미설계 | [../05_data_stores/01_postgresql_schema.md](../05_data_stores/01_postgresql_schema.md) |
+| 후보 | 판정 | 결과 | 근거 |
+|------|------|------|------|
+| ClickHouse 접속 불가 시 시계열 조회 | 캐시 미스 거절 | **timeseries.clickhouse_unavailable/503 신설** | [../03_requirements/08_timeseries.md](../03_requirements/08_timeseries.md) REQ-TSQ-16 |
+| Redis 접속 불가 시 로그인 · 리프레시 · 레이트 리밋 | 인증 저장소 쓰기는 거절 · 레이트 리밋은 통과 | **auth.token_store_unavailable/503 신설** | [../03_requirements/02_auth.md](../03_requirements/02_auth.md) REQ-AUT-14 |
+| 알람 ACK 불가 상태 | CLEARED · 이미 확인됨은 거절 · CLEARING은 허용 | **alarms.ack_not_allowed/409 신설** | [../03_requirements/10_alarms.md](../03_requirements/10_alarms.md) REQ-ALM-14 |
+| 태그 스케일 변경 PATCH | 거절 · 새 태그 발급은 별도 동작 | **master.scale_change_forbidden/409 신설** | [../03_requirements/03_master.md](../03_requirements/03_master.md) REQ-MST-07 |
+| 비활성 계정 로그인 | 계정 존재 노출 방지 | auth.invalid_credentials 재사용 · 신설 없음 | [../03_requirements/02_auth.md](../03_requirements/02_auth.md) REQ-AUT-02 |
+| 비활성 태그 조회 · 수정 | 200 + is_active false · 404는 마스터에 없는 식별자만 | 코드 없음 | [../03_requirements/03_master.md](../03_requirements/03_master.md) REQ-MST-08 |
+| 헬스체크 실패 | 503 + 저장소별 상태 본문 · 에러 봉투를 쓰지 않는다 | 코드 없음 | [../03_requirements/12_metrics.md](../03_requirements/12_metrics.md) REQ-OBS-09 |
+| 작업지시 상태 전이 위반 | 허용 전이 표 밖 거절 | **work_orders.invalid_status_transition/409 신설** | [../03_requirements/11_work_orders.md](../03_requirements/11_work_orders.md) REQ-WRK-04 |
+
+검산: 신설 5 + 재사용 1 + 코드 없음 2 = **8**
 
 ## 관련 문서
 
