@@ -17,7 +17,7 @@
 | [03_personas_roles.md](./03_personas_roles.md) | 페르소나 — 현장 운영자 · 관리자 · 엔지니어 · 실험 수행자 · 역할과 화면의 대응 | architecture §2 | W1 |
 | [04_domain_map.md](./04_domain_map.md) | **11도메인 ↔ NestJS 모듈 ↔ 평면 매핑의 정본** · 도메인 간 의존 그래프 · 폴더별 도메인 공백 | architecture §4 · tech_stack §3.1 | W1 |
 | [05_priorities_roadmap.md](./05_priorities_roadmap.md) | 학습 단계 S0~S7과 완성 Phase 0~5의 대응 · 단계별 진입 조건과 합격 판정 · 착수 체크리스트 · 코드 착수 항목(Taskfile · 린트 편입) · 미확인 등재 | tech_stack §14 · implementation_plan §3 · §5 · §9 | W1 |
-| [06_design_decisions.md](./06_design_decisions.md) | **제품·학습 결정 D-NN 채번 정본** — 결정 원문 · 버린 대안 · 파급 | docs_plan 확정 사항 3건 · 실행 계획 보정 · implementation_plan §3.2 | W1 |
+| [06_design_decisions.md](./06_design_decisions.md) | **제품·학습 결정 D-NN 채번 정본** — 결정 원문 · 버린 대안 · 파급 | docs_plan 확정 사항 3건 · 실행 계획 보정 · implementation_plan §3.2 · W1 판정 D-11 · D-12 | W1 |
 
 검산: 본문 6 + README 1 = **7**
 
@@ -32,7 +32,7 @@
 | 분기 계층 | **3계층** — ① 원시값 ② 알람 · 실적 ③ 업무 CRUD |
 | 역할 스위치 | **10종** — SW-01~SW-10(Redis 역할 9 + 수집 1). 정본 [../02_features/13_switch_matrix.md](../02_features/13_switch_matrix.md) |
 | 학습 단계 | S0~S7 — 완성 순서(Phase 0~5)와 학습 순서는 다르다. 학습 순서의 정본은 [05_priorities_roadmap.md](./05_priorities_roadmap.md) |
-| 제품·학습 결정 | D-NN — 채번 정본 [06_design_decisions.md](./06_design_decisions.md). 수치는 채번 후 루트 README 고정 기준에 올린다 |
+| 제품·학습 결정 | **12** — D-01~D-12 · 채번 정본 [06_design_decisions.md](./06_design_decisions.md) |
 | 실행 환경 | 로컬 머신 1대 · Docker Compose 컨테이너 4개 + 호스트 웹 · 127.0.0.1 바인드 · 배포 없음 |
 
 ## 관련 문서

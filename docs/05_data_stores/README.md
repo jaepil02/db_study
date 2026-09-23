@@ -36,7 +36,7 @@
 | ClickHouse | 테이블 **5** · MV **3** · Dictionary **1** |
 | Redis | 단일 인스턴스 · volatile-lru · 영역 접두 **9**(봉인 3 + 캐시 5 + 채널 1) |
 | 보존 · TTL · MAXLEN | 2계층 조정값 — 보존 정본 [08_retention_lifecycle.md](./08_retention_lifecycle.md) · 키별 TTL 정본 [05_redis_keyspace.md](./05_redis_keyspace.md) · MAXLEN과 메모리 정본 [06_redis_memory.md](./06_redis_memory.md) |
-| 도메인 공백 | **SIM · GEN은 테이블이 없다** — 시뮬레이터 레지스터와 생성 벡터는 메모리 상태이며 산출물은 수집 경로를 거쳐 tag_raw에 앉는다. 시드 고정 설정은 테이블이 아니라 실행 인자다 |
+| 도메인 공백 | 세는 기준은 **소유 테이블**이다. 소유 테이블 없음 **6** — COL · SIM · GEN · TSQ · RLT · OBS. SIM의 레지스터와 GEN의 생성 벡터는 메모리 상태이고 시드는 실행 인자다. **GEN은 모드 D로 tag_raw에 직접 쓰지만 소유하지 않는다.** TSQ · RLT는 읽기만 하고 COL은 Stream까지만 쓰며 OBS는 저장소 카탈로그를 읽는다. 롤업 테이블 · MV의 귀속은 잠정 ING이며 W3이 확정한다 |
 
 ## 관련 문서
 

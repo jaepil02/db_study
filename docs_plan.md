@@ -1,8 +1,8 @@
 # docs/ 설계 문서군 구축 계획
 
-> **상태**: W0 완료 · **사용자 승인 게이트 대기** (2026-09-23)
-> **완료된 것**: 실행 계획 확정(아래 "실행 계획 보정" 절) · docs/ 12폴더 재생성 · W0 14본(docs/README.md · docs/CLAUDE.md · 폴더 README 12본 골격판) · 린트 .omc/docs_lint.py 오류 0건
-> **다음 작업**: 사용자가 W0(고정 기준 · 전역 불변식 · ID 규약 · 파일명)을 승인하면 W1 착수 — 팀원 2명(w1-glossary: 11_glossary 01~05 · w1-overview: 01_overview 01~06)
+> **상태**: W1 완료(2026-09-24) · W2a 착수 대기 — D-11 · D-12 사용자 확인 대상
+> **완료된 것**: 실행 계획 확정(아래 "실행 계획 보정" 절) · docs/ 12폴더 재생성 · W0 14본(docs/README.md · docs/CLAUDE.md · 폴더 README 12본 골격판) · 린트 .omc/docs_lint.py 오류 0건 · W1 11본(11_glossary 5 · 01_overview 6) — 에러 코드 14 · D-01~D-12
+> **다음 작업**: W2a — 팀원 1명(w2-features: 02_features 01~13 · 기능 ID · SW-01~10 채번). "웨이브 인계" 표의 W2 행을 지시문에 포함 → 이어서 W2b(03_requirements 2명)
 > **참고**: 기존 루트 4본(architecture.md · data_flow.md · tech_stack.md · implementation_plan.md)은 **W7까지 삭제하지 않는다** — 이관 누락을 검증할 원본이 필요하다
 
 ## 실행 계획 보정 (2026-09-23 확정)
@@ -33,6 +33,32 @@
 | 20 | 알람 상태 머신 5상태(NORMAL · PENDING · ACTIVE · CLEARING · ACKED)와 alarm_event.state 값(ACTIVE · CLEARED) 대응 미정 | 11_glossary/03(W1)이 대응표를 소유 |
 | 21 | 루트 4본 삭제 후 원천 인용이 끊긴다 | 원천 표기를 "원본 architecture.md §N(커밋 ff66a37)"으로 고정 — 삭제 후에도 git으로 추적된다 |
 | 22 | 도메인 파일명 미정 | W0이 폴더 README 파일 목차로 확정. 린트 스크립트(.omc/docs_lint.py)의 예정 파일 목록이 같은 목록이다 |
+
+## 웨이브 인계 (다음 웨이브 팀원 지시문에 반드시 포함)
+
+W1 w1-glossary 판정 · 미확인 — 행선지 웨이브가 확정한다.
+
+| 행선지 | 항목 |
+|---|---|
+| W2 02_features/03 · 05 | 모드 A에서 SIMULATED(9)를 붙이는 방법(레지스터에 품질 필드 없음) |
+| W2 03_requirements/10 | CLEARING · CLEARED 이벤트의 ACK 허용 여부 |
+| W2 03_requirements/14 | 롤업 대 원시 부동소수 비교 허용 오차 값 |
+| W2 · W5 11_glossary/02 | 에러 코드 채번 보류 8건(CH 중단 시 시계열 응답 · Redis 중단 시 로그인·갱신·레이트 리밋 · 부적합 상태 ACK · 태그 스케일 변경 PATCH · 비활성 계정 로그인 · 비활성 태그 요청 · 헬스체크 실패 · 작업지시 상태 전이 위반). 채번은 11_glossary/02에서만 |
+| W2 · W3 | condition_type · severity · work_order.status · role_code 값 미설계 |
+| W3 05_data_stores/01 | site.timezone 용도 vs 표시 Asia/Seoul 고정 |
+| W3 05_data_stores/04 | bad_cnt 조건식(판정: 2 · 4만 센다) · mv_tag_1d 정의 부재 · 일 경계 시간대 · tag_1m · alarm_eval 파티션 시간대 |
+| W3 05_data_stores/05 | cache:tagmeta 단일 Hash(F1 · F3) vs 태그별 키(arch §8.2) |
+| W3 04_architecture/06 | 백프레셔 하강 히스테리시스 |
+| W4 06_pipeline/02 | FLOAT64 4워드 순서 표기 · 레지스터 비트 BOOL · 모드 A ts 채취 시점(요청 직전/응답 직후) · BAD_TIMEOUT "기록"의 자리(판정: 저장하지 않음) |
+| W4 06_pipeline/08 | ACK 시 Redis alarm:state 갱신 주체 |
+| W5 07_api/01 | API 응답 points의 시각 형식 |
+| W6 09_tech_stack/03 | ClickHouse 서버 시간대 설정 |
+| W2 02_features/12 | role_code 값 · 역할 수 · 알람 규칙 변경 권한 주체 · 실험 콘솔 접근 권한 · GEN · OBS 표면 인가 |
+| W3 04_architecture/02 · 09 | SIM · OBS의 APP_ROLE 배정 · 보정 7.2 결정 시점(S3 전 잠정안 + 교체 가능한 포트 · S6 실측으로 최종) |
+| W3 05_data_stores | 롤업 테이블 · MV 도메인 귀속(잠정 ING) · audit_log 소유(WRK) vs MST 트랜잭션 쓰기 — 한계 등재(05/02) |
+| W4 06_pipeline/04 | ②계층 "생산 카운터"(스트림 유래)와 production_log(WRK CRUD)의 구분과 분기 기전 |
+
+W1 판정(정본 11_glossary): 알람 state 값은 ACTIVE · CLEARED 둘, ACK는 acked_by · acked_at · 해제는 §8.1의 CLEARING 디바운스를 따른다 · DROPOUT은 생성 모드에서 행 누락 · 데드밴드 컬럼은 공학 단위 절대값 · XAUTOCLAIM 회수는 30초 주기 타이머 · 에러 네임스페이스는 표면 소유 도메인을 따른다(datagen.stream_full/503) · API 표면 표기 "{문서} #N".
 
 **병렬 분담**(tmux 네이티브 팀메이트 · 포그라운드 · 누적 14명): W0 리드 단독 · W1 2(glossary · overview) · W2a 1(features) · W2b 2(requirements 분할) · W3 2(architecture · data_stores) · W4 1(pipeline) · W5 2(api · screen) · W6 2(tech_stack · observability) · W7 2(security · 전수 검수). 공용 파일(루트 README · CLAUDE.md · 폴더 README · 03_requirements/15 · 16)은 리드 소유. 웨이브마다 린트 통과 후 커밋.
 
@@ -197,7 +223,7 @@ docs/
 ├─ 02_features/          [기능ID]       무슨 기능이 있는가
 │    01~11 도메인 11본                   AUT · MST · COL · SIM · GEN · ING · TSQ · RLT · ALM · WRK · OBS
 │    12_permission_matrix.md             횡단
-│    13_switch_matrix.md ★               SW-NN 채번 정본 — Redis 역할 스위치 9종
+│    13_switch_matrix.md ★               SW-NN 채번 정본 — 역할 스위치 10종(보정 #2)
 │                                        (파일 번호 14 이상 쓰지 않는다)
 │
 ├─ 03_requirements/      [REQ · AC]     어떤 계약으로 동작하는가
@@ -309,7 +335,7 @@ docs/
 - 비교 축 6가지: 저장 용량 · 압축률 · 삽입 처리량 · 쿼리 시간(행 수별) · VACUUM/WAL 증폭 · 인덱스 크기.
 - **꺾이는 지점을 찾는 것이 목표다.** 100만 행에서는 PostgreSQL이 이길 수도 있다. 몇 행부터 역전되는지가 이 실험의 산출물이다.
 
-측정 실행은 **10_observability/06_experiment_catalog.md**의 EXP-01~EXP-05가 소유한다. 설계(왜·무엇을)와 실행(어떻게·결과)을 갈라 두는 것은 docs_ref의 04_architecture ↔ 08_tech_stack 분업 원리와 같다.
+측정 실행은 **10_observability/06_experiment_catalog.md**의 EXP-01~EXP-05 대역에 예약한다(채번은 W6). 설계(왜·무엇을)와 실행(어떻게·결과)을 갈라 두는 것은 docs_ref의 04_architecture ↔ 08_tech_stack 분업 원리와 같다.
 
 ### 목표 2 — Redis에서의 3계층 분기
 
@@ -341,7 +367,7 @@ docs/
 | SW-08 | INGEST_IDEMPOTENCY | dedup 토큰 미전달 | 재시도 중복 |
 | SW-09 | CONTROL_TABLE_ENABLED | PostgreSQL 대조군 미적재 | 목표 1의 실행 스위치 |
 
-검산: 백프레셔 1 + 캐시 4 + 팬아웃 2 + 멱등 1 + 대조군 1 = **9**
+검산: 백프레셔 1 + 캐시 4 + 팬아웃 2 + 멱등 1 + 대조군 1 = **9** → 보정 #2로 SW-10 COLLECTOR_DEADBAND 추가 = **10**
 
 구현 제약은 04_architecture/02가 소유한다 — 스위치는 런타임 분기가 아니라 **DI로 주입되는 구현체**다. 조회 경로에 if를 흩뿌리면 분기 자체가 측정 대상 코드에 섞이고 스위치가 늘수록 경로가 조합 폭발한다.
 

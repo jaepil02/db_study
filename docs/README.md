@@ -60,7 +60,7 @@ db_study는 배포하지 않는 **로컬 전용 학습 시스템**이다. 목적
 | 문서 폴더 | **12개** + 예외 폴더 docs/measurements 1(번호 없음 · 설계 정본 아님) |
 | 문서 파일 | **122** — 루트 2(README · CLAUDE) + 폴더 120. 폴더별(README 포함) 01 **7** · 02 **14** · 03 **17** · 04 **10** · 05 **12** · 06 **13** · 07 **12** · 08 **8** · 09 **7** · 10 **8** · 11 **6** · 12 **6**. 검산: 7 + 14 + 17 + 10 + 12 + 13 + 12 + 8 + 7 + 8 + 6 + 6 = **120** · 120 + 2 = **122**. 파일명 정본은 각 폴더 README의 파일 목차다 |
 | 도메인 | **11개** — AUT · MST · COL · SIM · GEN · ING · TSQ · RLT · ALM · WRK · OBS. NestJS 모듈과 1:1이다. 평면별 제어 6(AUT · MST · TSQ · RLT · ALM · WRK) · 데이터 4(COL · SIM · GEN · ING) · 관측 1(OBS). 검산: 6 + 4 + 1 = **11**. 정본 [01_overview/04_domain_map.md](./01_overview/04_domain_map.md) |
-| 도메인 공백 | **도메인이 특정 폴더에서 비는 것은 설계 진술이다.** COL · SIM · ING은 07_api에 표면이 없다(내부 모듈 — 부하 주입 표면 /api/v1/ingest/bulk는 GEN 소유). SIM · GEN은 05_data_stores에 테이블이 없다. 각 폴더 README가 공백을 명시한다 |
+| 도메인 공백 | **도메인이 특정 폴더에서 비는 것은 설계 진술이다.** 세는 기준은 **소유**다(읽기·쓰기 참여가 아니다). 07_api 표면 없음 **3** — COL · SIM · ING(내부 모듈 — 부하 주입 표면 /api/v1/ingest/bulk는 GEN 소유). 05_data_stores 소유 테이블 없음 **6** — COL · SIM · GEN · TSQ · RLT · OBS(GEN은 모드 D로 tag_raw에 쓰지만 소유하지 않는다 · 롤업 객체는 잠정 ING 귀속, W3 확정). 06_pipeline 흐름 불참 **1** — OBS. 매트릭스 정본 [01_overview/04_domain_map.md](./01_overview/04_domain_map.md) · 각 폴더 README가 공백을 명시한다 |
 | 학습 목표 | **2축** — ① 컬럼형 vs RDB(측정) ② Redis 중간 계층의 성격별 분기. 정본 [01_overview/01_purpose_learning_goals.md](./01_overview/01_purpose_learning_goals.md) |
 | 분기 계층 | **3계층** — ① 태그 원시값 → ClickHouse 전용 ② 알람 판정 · 생산 카운터 → 확정 이벤트 PostgreSQL · 판정 전수 ClickHouse · 핫 상태 Redis Hash로 갈라짐 ③ 회원 · 작업지시 · 감사 → PostgreSQL 전용(Redis는 캐시 · Stream을 타지 않음). 정책 정본 [04_architecture/04_storage_split.md](./04_architecture/04_storage_split.md) · 기전 정본 [06_pipeline/04_routing.md](./06_pipeline/04_routing.md) |
 | 데이터 흐름 | **10종** — F-01~F-10(수집 · 배치 적재 · 최신값 조회 · 시계열 조회 · 업무 CRUD · 알람 판정 · 실시간 푸시 · 롤업 · 테스트 데이터 주입 · 백프레셔와 장애). 정본 [06_pipeline/01_flow_inventory.md](./06_pipeline/01_flow_inventory.md) |
@@ -75,9 +75,11 @@ db_study는 배포하지 않는 **로컬 전용 학습 시스템**이다. 목적
 | 실험 축 | 주입 모드 **4**(A Modbus 경유 · B Stream 직결 · C HTTP · D ClickHouse 직접) · 조회 해상도 **4**(raw · 1m · 1h · 1d) · 용량 티어 **4**(S · M · M+ · L) · 메모리 프로파일 **2**(부하 실험 · 개발 — 중간 프로파일은 조건부 대안) · 부하 시나리오 **5**(Baseline · Ramp-up · Spike · Soak · Breakpoint) + 장애 주입 **1**(k6 밖) |
 | 조정값 | TTL · 배치 크기 · 플러시 주기 · 보존일 · MAXLEN · 백프레셔 임계는 **2계층 조정값**이다 — 본문에 값을 박지 않고 조회 계약(키 모양 · 기준 시점 · 금지된 대체 동작)으로 서술하며 현행 값은 소유처를 밝혀 참고로 적는다. 보존의 정본 [05_data_stores/08_retention_lifecycle.md](./05_data_stores/08_retention_lifecycle.md) · 백프레셔 임계의 정본 [04_architecture/06_backpressure_failure.md](./04_architecture/06_backpressure_failure.md) |
 | 성능 수치 | 실측 전 성능 수치는 **3계층 미확인**이다 — "미확인 — 확정 전 임의 값 고정 금지"로 등재하고 생략하지 않는다. 확정은 EXP-NN 실측 결과로만 한다. 목표치의 정본 [03_requirements/13_nonfunctional.md](./03_requirements/13_nonfunctional.md) |
-| 채번 진행 중인 축 | D-NN(W1) · 기능 ID · REQ · AC(W2) · ADR-NN · 테이블 컬럼(W3) · API 표면 · 화면 코드(W5) · EXP-NN(W6) · 에러 코드(W1 신설 · W5 보강). **수치는 정본이 채번한 같은 변경 단위에서 본 표에 행으로 올린다** — 정본보다 먼저 쓰지 않는다 |
+| 에러 코드 | **14종** — 네임스페이스 정의 **9**(표면 도메인 8 + common 1) · 코드 보유 **5**(common 5 · auth 5 · timeseries 1 · realtime 1 · datagen 2). 검산: 5 + 5 + 1 + 1 + 2 = **14**. 네임스페이스는 URL 경로가 아니라 **표면을 소유한 도메인**을 따른다. 채번 정본 [11_glossary/02_error_codes.md](./11_glossary/02_error_codes.md) · 미러 [07_api/02_errors.md](./07_api/02_errors.md) · W2 · W5가 채번 보류분을 정본에서 추가한다 |
+| 제품·학습 결정 | **12** — D-01~D-12(결번 없음). 확정 주체: 사용자 5 + 원본 4 + 리드 판정 1 + W1 판정 2 = **12**. 정본 [01_overview/06_design_decisions.md](./01_overview/06_design_decisions.md) |
+| 채번 진행 중인 축 | 기능 ID · REQ · AC(W2) · ADR-NN · 테이블 컬럼(W3) · API 표면 · 화면 코드(W5) · EXP-NN(W6). **수치는 정본이 채번한 같은 변경 단위에서 본 표에 행으로 올린다** — 정본보다 먼저 쓰지 않는다 |
 | 스택 표기 | **Next.js · NestJS · PostgreSQL 18 · ClickHouse 25.8 · Redis 8 · Docker Compose**로 통일한다. 정확 버전은 09_tech_stack에만 적는다 |
-| 단위와 시각 | ts = 측정 시각(PLC 또는 생성기 시점) · ingested_at = 적재 시각 · 저장은 epoch 기준 · 표시 시점에만 Asia/Seoul로 변환 · 측정값 Float64. 정본 [11_glossary/05_units_and_time.md](./11_glossary/05_units_and_time.md) |
+| 단위와 시각 | ts = 측정 시각(모드 A는 Collector 폴링 시점 · 생성 모드는 생성기 시점) · ingested_at = 적재 시각 · 저장은 epoch 기준 · 표시 시점에만 Asia/Seoul로 변환 · 측정값 Float64. 정본 [11_glossary/05_units_and_time.md](./11_glossary/05_units_and_time.md) |
 
 ## ID·표기 규약
 
@@ -92,8 +94,8 @@ db_study는 배포하지 않는 **로컬 전용 학습 시스템**이다. 목적
 | **역할 스위치** | **SW-NN** | SW-01 | [02_features/13_switch_matrix.md](./02_features/13_switch_matrix.md) |
 | **실험** | **EXP-NN** | EXP-01 | [10_observability/06_experiment_catalog.md](./10_observability/06_experiment_catalog.md) |
 | 화면 코드 | {표면}-{의미} | DSH-REALTIME | [08_screen/README.md](./08_screen/README.md) |
-| 에러 코드 | {domain}.{snake_case} + HTTP 상태 | ingest.stream_full/503 | [11_glossary/02_error_codes.md](./11_glossary/02_error_codes.md) — [07_api/02_errors.md](./07_api/02_errors.md)는 미러 |
-| API 표면 | {문서}-#N (문서 지역 번호) | 05_timeseries #3 | 각 [07_api](./07_api/README.md) 도메인 파일 |
+| 에러 코드 | {domain}.{snake_case} + HTTP 상태 | datagen.stream_full/503 | [11_glossary/02_error_codes.md](./11_glossary/02_error_codes.md) — [07_api/02_errors.md](./07_api/02_errors.md)는 미러 |
+| API 표면 | {문서} #N (문서 지역 번호) | 05_timeseries #3 | 각 [07_api](./07_api/README.md) 도메인 파일 |
 | 테이블 · 컬럼 | snake_case | tag_raw · tag_master.tag_id | [05_data_stores](./05_data_stores/README.md) |
 | Redis 키 | 영역:용도:식별자 | rt:latest:{device_id} | [05_data_stores/05_redis_keyspace.md](./05_data_stores/05_redis_keyspace.md) |
 | 메트릭 | 정본 문서가 정한 이름 규약 | consumer_lag | [10_observability/01_metrics_catalog.md](./10_observability/01_metrics_catalog.md) |
