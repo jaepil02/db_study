@@ -24,6 +24,36 @@
 
 검산: 본문 9 + README 1 = **10**
 
+## ADR 선점표
+
+W3 착수 전 리드가 번호를 선점한다. 05_data_stores를 쓰는 팀원이 04_architecture와 동시에 이 번호를 인용하기 때문이다. 결정 본문의 정본은 [09_decision_records.md](./09_decision_records.md)이며, 제목은 본문 작성 때 다듬을 수 있지만 **번호와 주제는 바꾸지 않는다.** 새 결정은 ADR-22부터 말미에 채번한다.
+
+| ADR | 주제 | 원천 | 주 인용처 |
+|-----|------|------|----------|
+| ADR-01 | 백엔드 NestJS 단일 런타임(Python 데이터 평면 미채택) | tech_stack §3 · §13 | 04/02 · 09_tech_stack/06 |
+| ADR-02 | 프론트엔드 Next.js + Route Handler BFF · 고빈도는 api 직결 | tech_stack §4.1 · data_flow §7.2 | 04/01 · 07_api/01 |
+| ADR-03 | 시계열 엔진 ClickHouse(TimescaleDB · InfluxDB 미채택) | tech_stack §5.2 · §13 | 04/04 · 05/03 |
+| ADR-04 | 수집 버퍼 Redis Streams(Kafka · RabbitMQ 보류) | tech_stack §5.3 · §13 | 04/02 · 04/08 |
+| ADR-05 | Redis 단일 인스턴스 · volatile-lru · TTL 유무로 축출 대상 구분 | architecture §8 · tech_stack §5.3 | 05/05 · 05/06 |
+| ADR-06 | 모듈 경계는 Redis Stream — 같은 프로세스여도 예외 없음 | architecture §1 · §9 | 04/02 |
+| ADR-07 | 실시간 팬아웃은 Redis Pub/Sub 경계 유지 | architecture §8.2 · data_flow §9 | 04/02 · 06/05 |
+| ADR-08 | 역할 스위치는 DI 포트 · 구현 둘(런타임 분기 금지) | implementation_plan §4.3 | 04/02 · 02_features/13 |
+| ADR-09 | 배치 적재 읽기 · 삽입 분리(단일 flusher fan-in) — 보정 7.1 | implementation_plan §7.1 | 06/03 · 04/05 |
+| ADR-10 | 최신값 갱신 주체 — 잠정안 + 교체 가능한 포트 · 최종은 S6 실측 — 보정 7.2 | implementation_plan §7.2 | 04/06 · 06/05 |
+| ADR-11 | 알람 판정은 배치 단위 상태 조회 · Ingest 직접 호출은 경계 예외 — 보정 7.3 | implementation_plan §7.3 | 04/02 · 06/08 |
+| ADR-12 | 캐시 무효화 체인 6단(BFF · 브라우저 포함) — 보정 7.4 | implementation_plan §7.4 | 06/07 |
+| ADR-13 | TTL 강제는 린트가 아니라 키 계열별 래퍼 — 보정 7.5 | implementation_plan §7.5 | 05/05 |
+| ADR-14 | 적재 멱등은 insert_deduplication_token(ReplacingMergeTree 미채택) | architecture §7.1 | 05/03 · 06/03 |
+| ADR-15 | tag_raw 롱 포맷 · 일자 파티션 · 정렬 키(device_id · tag_id · ts) | architecture §7.1 | 05/03 |
+| ADR-16 | 마스터 연동은 ClickHouse Dictionary(PostgreSQL 소스) · 두 DB를 트랜잭션으로 묶지 않는다 | architecture §7.4 · §12 | 05/07 |
+| ADR-17 | PostgreSQL 대조군 동형 테이블 · SW-09 동시 적재 | docs_plan 학습 목표 1 · D-05 | 05/10 · 06/04 |
+| ADR-18 | named volume · 호스트 포트 127.0.0.1 바인드 | architecture §3 · tech_stack §10.3 · §10.4 | 04/03 · 12_security/05 |
+| ADR-19 | PostgreSQL 커넥션은 api in-process 풀 · PgBouncer 유예 | architecture §6 · tech_stack §5.1 · §13 | 05/02 · 04/08 |
+| ADR-20 | 관측 스택은 선택 프로파일 · 스크레이프 창구는 /metrics 하나 | architecture §14 · tech_stack §9 · §13 | 10_observability/01 · 09_tech_stack/03 |
+| ADR-21 | 백프레셔 1차 신호는 애플리케이션 XLEN 검사 · MAXLEN을 maxmemory보다 먼저 건다 | architecture §9.3 · data_flow §12.1 | 04/06 · 05/06 |
+
+검산: 선점 ADR-01~ADR-21 = **21**(결번 없음). 주제별 분류는 [09_decision_records.md](./09_decision_records.md)가 정한다
+
 ## 고정 기준 (축약)
 
 **전 문서 공통 고정 기준의 정본은 [../README.md](../README.md)다.**
