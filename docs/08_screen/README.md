@@ -31,6 +31,7 @@
 | 화면 코드 | {표면}-{의미}(예: DSH-REALTIME). 표면 접두 목록과 화면 수는 W5 인벤토리 채번 후 이 표와 루트 README에 올린다 |
 | 도메인 공백 | COL · SIM · ING은 전용 화면이 없다 — 산출물은 대시보드 · 실험 콘솔의 메트릭으로만 보인다. AUT의 로그인과 WRK의 작업지시는 06_master_admin이 담는다. GEN(생성기 실행)과 OBS(메트릭)는 잠정 07_experiment_console 귀속이며 W5가 명시한다 |
 | 경로 분리 | 저빈도 조회는 BFF 경유, 최신값 · 시계열 · WebSocket은 api 직결 — 정본 [../07_api/01_conventions.md](../07_api/01_conventions.md) |
+| 실험 콘솔 접근 | 인증 사용자 전원 · **표시 전용** — 정본 [../02_features/12_permission_matrix.md](../02_features/12_permission_matrix.md) |
 | 차트 | uPlot 주력 · ECharts 보조. 서버 다운샘플이 1차 방어선이고 차트는 2차 방어선이다 |
 
 ## 관련 문서

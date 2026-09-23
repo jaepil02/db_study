@@ -1,8 +1,8 @@
 # docs/ 설계 문서군 구축 계획
 
-> **상태**: W1 완료(2026-09-24) · W2a 착수 대기 — D-11 · D-12 사용자 확정(2026-09-24)
-> **완료된 것**: 실행 계획 확정(아래 "실행 계획 보정" 절) · docs/ 12폴더 재생성 · W0 14본(docs/README.md · docs/CLAUDE.md · 폴더 README 12본 골격판) · 린트 .omc/docs_lint.py 오류 0건 · W1 11본(11_glossary 5 · 01_overview 6) — 에러 코드 14 · D-01~D-12
-> **다음 작업**: W2a — 팀원 1명(w2-features: 02_features 01~13 · 기능 ID · SW-01~10 채번). "웨이브 인계" 표의 W2 행을 지시문에 포함 → 이어서 W2b(03_requirements 2명)
+> **상태**: W2a 완료(2026-09-24) · W2b 착수
+> **완료된 것**: 실행 계획 확정(아래 "실행 계획 보정" 절) · docs/ 12폴더 재생성 · W0 14본(docs/README.md · docs/CLAUDE.md · 폴더 README 12본 골격판) · 린트 .omc/docs_lint.py 오류 0건 · W1 11본(11_glossary 5 · 01_overview 6) — 에러 코드 14 · D-01~D-12 · W2a 13본(02_features) — 기능 91 · SW 10 · 역할 3
+> **다음 작업**: W2b — 팀원 2명(w2-req-a: 03_requirements 01~07 · 13 / w2-req-b: 08~12 · 14). 웨이브 인계 표의 W2 · W2b 행 포함. 15 · 16은 W7 리드
 > **참고**: 기존 루트 4본(architecture.md · data_flow.md · tech_stack.md · implementation_plan.md)은 **W7까지 삭제하지 않는다** — 이관 누락을 검증할 원본이 필요하다
 
 ## 실행 계획 보정 (2026-09-23 확정)
@@ -53,10 +53,20 @@ W1 w1-glossary 판정 · 미확인 — 행선지 웨이브가 확정한다.
 | W4 06_pipeline/08 | ACK 시 Redis alarm:state 갱신 주체 |
 | W5 07_api/01 | API 응답 points의 시각 형식 |
 | W6 09_tech_stack/03 | ClickHouse 서버 시간대 설정 |
+| W2b 03_requirements | 에러 코드 후보(채택 시 11_glossary/02에 채번): alarms.ack_not_allowed/409 · master.scale_change_forbidden/409 · work_orders.invalid_status_transition/409 · timeseries.clickhouse_unavailable/503 · 비활성 계정은 auth.invalid_credentials 재사용 · health 부분 실패 표현(03/12) · 알람 규칙 변경의 감사 대상 여부(03/10) |
+| W3 05_data_stores/05 | sess:{session_id} 소비 기능 없음 · lock:job:rollup 소비자 없음(롤업은 MV) · rl 키에 엔드포인트 자리 없음(arch §18 엔드포인트별 제한과 충돌 — 12_security/03 연계) |
+| W3 05_data_stores/07 · 01 | dict_tag WHERE is_active로 비활성 태그 과거 행의 태그명 소실 · 알람 담당자 배정 컬럼 부재 |
+| W3 04_architecture/02 · 06 | 포트 · 구현 이름 9개(SW-03 외 잠정) · SIM은 COL · GEN 모드 A와 동거 필수 · OBS APP_ROLE · SW-10 off일 때 경고 단계 데드밴드 강화의 의미 |
+| W3 05/10 · W4 06/04 | SW-09 대조군 삽입 실패 의미론과 PostgreSQL 쪽 멱등 수단 |
+| W4 06_pipeline | SW-01 off의 토큰 재료(06/03) · 모드 B 길이 검사와 모드 D 대조군 동일 행 절차(06/10) · Collector 실행 중 마스터 변경 반영(06/02) · FC01 · FC02 BOOL 응답 영역(SIM) · 비활성 태그 알람 규칙(06/08) · SIM 지연·오류 주입 제어 수단(W4 · W5) |
+| W5 07_api | WebSocket 구독 방식(쿼리 파라미터 vs subscribe 메시지, 07_api/11) · 원본에 없는 표면 판정 |
+| W6 | 스위치 상태 레이블 이름 · 스위치별 EXP 번호 · 모드 C 인증 비용은 S7 이후만 측정 가능 |
 | W2 02_features/12 | role_code 값 · 역할 수 · 알람 규칙 변경 권한 주체 · 실험 콘솔 접근 권한 · GEN · OBS 표면 인가 |
 | W3 04_architecture/02 · 09 | SIM · OBS의 APP_ROLE 배정 · 보정 7.2 결정 시점(S3 전 잠정안 + 교체 가능한 포트 · S6 실측으로 최종) |
 | W3 05_data_stores | 롤업 테이블 · MV 도메인 귀속(잠정 ING) · audit_log 소유(WRK) vs MST 트랜잭션 쓰기 — 한계 등재(05/02) |
 | W4 06_pipeline/04 | ②계층 "생산 카운터"(스트림 유래)와 production_log(WRK CRUD)의 구분과 분기 기전 |
+
+W2 처리: 모드 A SIMULATED 판정(02_features/03 — 루프백 host 규칙) · 역할 3(OPERATOR · ENGINEER · ADMIN) · 알람 규칙 변경 ENGINEER · ACK OPERATOR · 실험 콘솔 인증 사용자 전원 표시 전용 · health · metrics 공개 · bulk 게이트 + 인증 — W2 행의 02_features 항목은 닫혔다.
 
 W1 판정(정본 11_glossary): 알람 state 값은 ACTIVE · CLEARED 둘, ACK는 acked_by · acked_at · 해제는 §8.1의 CLEARING 디바운스를 따른다 · DROPOUT은 생성 모드에서 행 누락 · 데드밴드 컬럼은 공학 단위 절대값 · XAUTOCLAIM 회수는 30초 주기 타이머 · 에러 네임스페이스는 표면 소유 도메인을 따른다(datagen.stream_full/503) · API 표면 표기 "{문서} #N".
 

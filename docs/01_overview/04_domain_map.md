@@ -2,6 +2,7 @@
 
 > **대상**: 전 설계자 · 신규 합류자 — 11도메인이 어느 NestJS 모듈 · 평면 · 위치에 앉고, 서로 어떤 경계로 이어지며, 각 폴더에서 어디가 비는가
 > **작성일**: 2026-09-24
+> **개정일**: 2026-09-24 — W2 판정 반영 — 인가 간선 AUT → GEN 추가(부하 주입 표면은 환경변수 게이트 + 인증) · 인가 5 → **6** · 간선 17 → **18** · GEN · OBS 인가 미정 불릿을 판정 결과로 교체
 > **원천**: 원본 architecture.md §4 · §5 · §6 · §8.2 · §11(커밋 ff66a37) · 원본 tech_stack.md §3.1 · §3.3 · §10.1 · §11(커밋 ff66a37) · 원본 data_flow.md §1 · §2 · §7 · §7.2 · §8 · §11(커밋 ff66a37) · 원본 implementation_plan.md §6 · §7.3(커밋 ff66a37) · 저장소 루트 docs_plan.md(도메인 벡터 · 보정 #11 · #12 · #13) · [../README.md](../README.md) 고정 기준(도메인 · 도메인 공백)
 
 이 문서는 **도메인 ↔ NestJS 모듈 ↔ 평면 매핑의 정본**이다. 도메인은 NestJS 모듈과 1:1이며, **도메인 경계가 곧 문서 소유권 경계**다 — 기능 ID는 [../02_features](../02_features/README.md)의 도메인 파일에서, 요구사항 ID는 [../03_requirements](../03_requirements/README.md)의 도메인 파일에서만 채번한다.
@@ -64,6 +65,7 @@ flowchart LR
     AUT -.->|"인가"| RLT
     AUT -.->|"인가"| ALM
     AUT -.->|"인가"| WRK
+    AUT -.->|"인가"| GEN
     OBS["OBS 관측 · 전 도메인 계측 수집"]
 ```
 
@@ -85,11 +87,11 @@ flowchart LR
 | 직접 호출(예외) | 같은 프로세스 내 호출 | ING → ALM | 배치와 판정의 재처리 단위 일치 — 별도 큐 불필요 | 근거가 없으면 경계 원칙의 무근거 예외가 된다(근거 정본 04_architecture/02 · W3) |
 | 저장소 경유 | 한 도메인이 쓰고 다른 도메인이 읽는 저장 객체 | ING → RLT(rt:latest) · ING → TSQ · MST → COL · MST → TSQ | 쓰는 쪽과 읽는 쪽의 수명 분리 | 호출 결합으로 바뀌어 한쪽 장애가 다른 쪽 응답으로 번진다 |
 | 트랜잭션 공유 | 같은 PostgreSQL 트랜잭션 | MST → WRK | 업무 변경과 감사 기록의 원자성 | 변경은 커밋됐는데 감사가 빠지는 창이 생긴다 |
-| 인가 | 엔드포인트별 Guard | AUT → MST · TSQ · RLT · ALM · WRK | 표면마다 역할 검사 | 127.0.0.1 바인드만 남아 같은 머신의 모든 프로세스가 전 권한을 갖는다 |
+| 인가 | 엔드포인트별 Guard | AUT → MST · TSQ · RLT · ALM · WRK · GEN | 표면마다 역할 검사 | 127.0.0.1 바인드만 남아 같은 머신의 모든 프로세스가 전 권한을 갖는다 |
 | 시뮬레이션 결합 | 프로세스 내 Buffer 갱신 | GEN → SIM | 모드 A의 현실 재현 | 해당 없음 — 수집 이전 구간이라 경계 규칙 밖이다 |
 
-- 검산: Stream 2 + Pub/Sub 2 + Modbus 1 + 직접 호출 1 + 저장소 경유 4 + 트랜잭션 공유 1 + 인가 5 + 시뮬레이션 결합 1 = **17**(그래프 간선 수와 같다)
-- **GEN · OBS 표면의 인가 여부는 원본에 없다.** 부하 주입 표면은 환경변수로 켜고 끄는 게이트만 있고(원본 architecture.md §18), /api/v1/health · /metrics의 인증 여부는 적혀 있지 않다 — [../02_features/12_permission_matrix.md](../02_features/12_permission_matrix.md)(W2)와 [../07_api/10_metrics.md](../07_api/10_metrics.md)(W5)가 정한다. 그래서 인가 간선에 넣지 않았다.
+- 검산: Stream 2 + Pub/Sub 2 + Modbus 1 + 직접 호출 1 + 저장소 경유 4 + 트랜잭션 공유 1 + 인가 6 + 시뮬레이션 결합 1 = **18**(그래프 간선 수와 같다)
+- **W2 판정 — GEN · OBS 표면 인가.** /api/v1/ingest/bulk는 환경변수 게이트 + 인증(역할 무관)이라 AUT → GEN 인가 간선을 둔다. /api/v1/health · /metrics는 **공개**다 — Compose healthcheck가 토큰 없이 부르고, 토큰 만료가 측정 공백을 만들지 않게 하기 위해서다. 그래서 OBS로는 인가 간선이 없다. 정본 [../02_features/12_permission_matrix.md](../02_features/12_permission_matrix.md).
 
 ## 도메인 × 저장 객체
 

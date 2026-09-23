@@ -2,6 +2,7 @@
 
 > **대상**: db_study가 저장 · 전송 · 설정에 쓰는 닫힌 값 집합(enum) 전수와 상태 머신 3종(배치 재시도 · 알람 · 백프레셔) — enum 값 정본
 > **작성일**: 2026-09-24
+> **개정일**: 2026-09-24 — W2 확정 반영 — role.role_code 미설계 → **확정 3값**(OPERATOR · ENGINEER · ADMIN) · 전수 검산 14 + 4 → **15 + 3** · 모드 A SIMULATED 표지 미확인 → 판정 완료(정본 02_features/03)
 > **원천**: 원본 data_flow.md §3.2 · §4 · §8 · §8.1 · §8.2 · §11 · §11.1(커밋 ff66a37) · 원본 architecture.md §6 · §7.1 · §7.2 · §7.3 · §9.2 · §9.3 · §11.1(커밋 ff66a37) · 원본 tech_stack.md §6 · §7 · §10.1(커밋 ff66a37) · docs_plan.md 실행 계획 보정 #20
 
 이 문서는 **값의 목록과 그 값이 무엇을 일으키는가**를 고정한다. 컬럼의 타입 · 제약은 [../05_data_stores](../05_data_stores/README.md)가, 전이를 실행하는 기전은 [../06_pipeline](../06_pipeline/README.md)이 갖는다. 값을 더하거나 빼면 여기서 먼저 고치고, 값을 인용하는 컬럼 · 메트릭 · 화면이 뒤따른다.
@@ -29,9 +30,9 @@
 | 15 | alarm_rule.condition_type | alarm_rule.condition_type | 미설계 | 미설계 enum |
 | 16 | alarm_rule.severity | alarm_rule.severity · alarm_eval.severity | 미설계 | 미설계 enum |
 | 17 | work_order.status | work_order.status | 미설계 | 미설계 enum |
-| 18 | role.role_code | role.role_code | 미설계 | 미설계 enum |
+| 18 | role.role_code | role.role_code | 3 | 기타 enum(W2 확정) |
 
-검산: 값 확정 14(#1~#14) + 미설계 4(#15~#18) = **18**
+검산: 값 확정 15(#1~#14 · #18) + 미설계 3(#15~#17) = **18**
 
 - **실험 축 중 용량 티어 · 메모리 프로파일 · 부하 시나리오는 enum이 아니다.** 코드가 분기하는 값이 아니라 측정 조건이며, 정본은 [../04_architecture/07_capacity_planning.md](../04_architecture/07_capacity_planning.md) · [../04_architecture/03_execution_topology.md](../04_architecture/03_execution_topology.md) · [../10_observability/05_load_scenarios.md](../10_observability/05_load_scenarios.md)다. 역할 스위치 SW-NN도 여기 두지 않는다 — 정본 [../02_features/13_switch_matrix.md](../02_features/13_switch_matrix.md).
 
@@ -76,7 +77,7 @@
 검산: 아날로그 3(SINE · RANDOM_WALK · RAMP) + 이산 3(STEP · BINARY · COUNTER) + 이상 2(SPIKE · DROPOUT) = **8**
 
 - **불일치 판정 — DROPOUT의 품질 코드.** 원본은 DROPOUT을 "확률적 결측 + 품질 코드 BAD"로, 생성 데이터 전체를 "항상 SIMULATED(9)"로 적었다. 품질 컬럼은 하나라 한 행이 둘을 동시에 가질 수 없다. 이 문서는 **모드 B · C · D에서 결측을 행 생략으로 표현하고 산출 행은 전부 9**로 판정한다 — BAD를 달면 생성 데이터 표지가 지워져 전역 불변식(생성 데이터 구분)이 깨진다. 모드 A에서 통신 장애를 재현하려면 PlcSim이 Modbus 예외 · 지연을 내고 Collector가 2 · 3을 판정한다.
-- **미확인 — 모드 A의 SIMULATED 표지.** 모드 A는 값이 Modbus 레지스터를 지나며, 레지스터에는 품질 필드가 없다. Collector가 무엇을 보고 9를 다는지(설비 마스터 표지 · 환경변수 등)는 원본에 없다. 확정 자리는 [../02_features/03_collector.md](../02_features/03_collector.md) · [../02_features/05_datagen.md](../02_features/05_datagen.md)(W2)다. 확정 전에는 모드 A 산출이 GOOD(0)으로 저장되어 실데이터와 구분되지 않는다.
+- **판정 완료 — 모드 A의 SIMULATED 표지.** 레지스터에는 품질 필드가 없으므로 Collector가 **설비 단위 규칙**으로 9를 단다 — modbus_config.host가 컨테이너 루프백이면 시뮬레이션 설비다. 건강 코드 2 · 4가 출처 코드 9보다 우선하며, 출처는 설비 규칙으로 복원된다. 정본 [../02_features/03_collector.md](../02_features/03_collector.md). 잔여 — PlcSim을 별도 프로세스로 분리하면 루프백 규칙을 다시 판정한다.
 - **품질 코드가 출처 축과 건강 축을 한 칸에 겹친다.** 9는 "누가 만들었나", 0~5는 "얼마나 믿을 수 있나"다. 두 축을 가를지(컬럼 신설)는 [../05_data_stores/03_clickhouse_schema.md](../05_data_stores/03_clickhouse_schema.md)(W3)의 결정이며, 이 문서는 고정 기준의 7값을 유지한다.
 
 ## Modbus 매핑 enum
@@ -271,7 +272,7 @@ stateDiagram-v2
 | alarm_rule.condition_type | text 컬럼 · 조건 종류 넷(초과 · 미만 · 범위 이탈 · 변화율 — 원본 data_flow.md §8) | **미설계 — 저장 문자열 미정** | [../05_data_stores/01_postgresql_schema.md](../05_data_stores/01_postgresql_schema.md)(W3) · 판정 의미는 [../06_pipeline/08_alarm.md](../06_pipeline/08_alarm.md) |
 | alarm_rule.severity | smallint 컬럼 · alarm_eval.severity UInt8로 복사 | **미설계 — 값 범위와 뜻 미정** | [../05_data_stores/01_postgresql_schema.md](../05_data_stores/01_postgresql_schema.md)(W3) |
 | work_order.status | text 컬럼 · (line_id, status) 인덱스 | **미설계 — W3 05_data_stores/01이 확정** | [../05_data_stores/01_postgresql_schema.md](../05_data_stores/01_postgresql_schema.md)(W3) · 기능은 [../02_features/10_work_orders.md](../02_features/10_work_orders.md) |
-| role.role_code | text UK 컬럼 · 원본 컨텍스트의 사용자 유형(현장 운영자 · 엔지니어) | **미설계 — 역할 코드 미정** | [../02_features/12_permission_matrix.md](../02_features/12_permission_matrix.md)(W2) · [../01_overview/03_personas_roles.md](../01_overview/03_personas_roles.md) |
+| role.role_code | text UK 컬럼 · 원본 컨텍스트의 사용자 유형(현장 운영자 · 엔지니어) | **OPERATOR · ENGINEER · ADMIN**(W2 확정 · 누적 아님) | [../02_features/12_permission_matrix.md](../02_features/12_permission_matrix.md) · [../01_overview/03_personas_roles.md](../01_overview/03_personas_roles.md) |
 
 - **work_order.status에 상태 인덱스가 먼저 있다는 것은 값이 조회 조건으로 쓰인다는 뜻이다.** 값이 확정되면 이 문서에 상태 머신을 더하고 [02_error_codes.md](./02_error_codes.md)에 전이 위반 코드를 채번한다.
 

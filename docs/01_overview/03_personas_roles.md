@@ -2,6 +2,7 @@
 
 > **대상**: 기능 · 화면 · 권한 설계자 — db_study를 누가 어떤 목적으로 쓰는가, 각자 어느 화면과 어느 경로로 어느 저장소에 닿는가
 > **작성일**: 2026-09-24
+> **개정일**: 2026-09-24 — W2 확정 반영 — 페르소나별 권한 역할 채움(OPERATOR · ADMIN · ENGINEER · 실험 수행자는 역할 없음) · 미확정 등재 3행(역할 값 · 알람 규칙 권한 · 실험 콘솔 권한)을 닫는다. 정본 02_features/12
 > **원천**: 원본 architecture.md §2 · §6 · §11 · §11.2 · §18(커밋 ff66a37) · 원본 data_flow.md §7.2 · §8.1 · §8.2(커밋 ff66a37) · 원본 implementation_plan.md §5 S0 · S2 · S7(커밋 ff66a37) · [01_purpose_learning_goals.md](./01_purpose_learning_goals.md) · [06_design_decisions.md](./06_design_decisions.md) D-01 · D-02 · D-11
 
 원본은 사용자를 세 종류로 그렸다 — 실시간 모니터링의 **현장 운영자**, 업무 데이터 관리의 **관리자**, 이력 분석의 **엔지니어**(원본 architecture.md §2). 이 문서는 여기에 **실험 수행자**를 더한다. 원본 세 종류는 이 시스템이 모사하는 현장의 사용자이고, 실험 수행자는 이 시스템을 측정 장치로 쓰는 사용자다. 학습 목표 2축(D-01)의 산출물은 앞의 셋이 아니라 넷째가 만든다.
@@ -12,10 +13,10 @@
 
 | 페르소나 | 원천 | 목표 | 대표 질문 | 주 화면 | 빈도 | 권한 역할 |
 |------|------|------|------|------|------|------|
-| 현장 운영자 | 원본 architecture.md §2 | 설비 상태를 지금 보고 알람에 반응한다 | 이 설비의 태그가 지금 정상인가 · 방금 뜬 알람을 확인했는가 | [../08_screen/03_realtime_dashboard.md](../08_screen/03_realtime_dashboard.md) · [../08_screen/05_alarm_console.md](../08_screen/05_alarm_console.md) | 상시 — 화면을 띄워 둔다 | W2 확정(12_permission_matrix) |
-| 관리자 | 원본 architecture.md §2 | 마스터 · 작업지시 · 실적 등 업무 데이터를 정확히 유지한다 | 새 설비와 태그를 등록했는가 · 작업지시 상태가 맞는가 | [../08_screen/06_master_admin.md](../08_screen/06_master_admin.md) | 수시 — 변경이 생길 때 | 상동 |
-| 엔지니어 | 원본 architecture.md §2 | 과거 시계열과 알람 판정 이력으로 원인과 임계값을 분석한다 | 지난주 이 태그는 어떻게 움직였나 · 이 임계값은 오탐이 많은가 | [../08_screen/04_trend_analysis.md](../08_screen/04_trend_analysis.md) · [../08_screen/05_alarm_console.md](../08_screen/05_alarm_console.md) | 분석 세션 단위 | 상동 |
-| 실험 수행자 | **신설** — 학습 목표 2축(D-01) | 스위치 조건을 바꿔 두 축의 비교 수치를 만들고 기록한다 | SW-02를 끄면 최신값 조회가 얼마나 느려지나 · 몇 행부터 역전되나 | [../08_screen/07_experiment_console.md](../08_screen/07_experiment_console.md) · 저장소 CLI · observability 프로파일 대시보드 | 실험 세션 단위 — 같은 실험을 반복한다 | 앱 역할보다 **머신 접근**이 주 권한이다(§권한 역할) |
+| 현장 운영자 | 원본 architecture.md §2 | 설비 상태를 지금 보고 알람에 반응한다 | 이 설비의 태그가 지금 정상인가 · 방금 뜬 알람을 확인했는가 | [../08_screen/03_realtime_dashboard.md](../08_screen/03_realtime_dashboard.md) · [../08_screen/05_alarm_console.md](../08_screen/05_alarm_console.md) | 상시 — 화면을 띄워 둔다 | OPERATOR |
+| 관리자 | 원본 architecture.md §2 | 마스터 · 작업지시 · 실적 등 업무 데이터를 정확히 유지한다 | 새 설비와 태그를 등록했는가 · 작업지시 상태가 맞는가 | [../08_screen/06_master_admin.md](../08_screen/06_master_admin.md) | 수시 — 변경이 생길 때 | ADMIN |
+| 엔지니어 | 원본 architecture.md §2 | 과거 시계열과 알람 판정 이력으로 원인과 임계값을 분석한다 | 지난주 이 태그는 어떻게 움직였나 · 이 임계값은 오탐이 많은가 | [../08_screen/04_trend_analysis.md](../08_screen/04_trend_analysis.md) · [../08_screen/05_alarm_console.md](../08_screen/05_alarm_console.md) | 분석 세션 단위 | ENGINEER |
+| 실험 수행자 | **신설** — 학습 목표 2축(D-01) | 스위치 조건을 바꿔 두 축의 비교 수치를 만들고 기록한다 | SW-02를 끄면 최신값 조회가 얼마나 느려지나 · 몇 행부터 역전되나 | [../08_screen/07_experiment_console.md](../08_screen/07_experiment_console.md) · 저장소 CLI · observability 프로파일 대시보드 | 실험 세션 단위 — 같은 실험을 반복한다 | 역할 없음 — **머신 접근**이 주 권한이다(§권한 역할) |
 
 - 검산: 원본 3(현장 운영자 · 관리자 · 엔지니어) + 신설 1(실험 수행자) = **4**
 - **빈도는 정성 서술이다.** 동시 사용자 수 · 요청률은 페르소나가 아니라 용량 티어와 부하 시나리오가 정한다([../04_architecture/07_capacity_planning.md](../04_architecture/07_capacity_planning.md) · [../10_observability/05_load_scenarios.md](../10_observability/05_load_scenarios.md)).
@@ -58,7 +59,7 @@
 | 알람 규칙 조정 | 05_alarm_console | BFF 경유 | PostgreSQL alarm_rule · 캐시 즉시 무효화 | ② 규칙(원천) |
 
 - **엔지니어는 해상도를 고르지 않는다.** 조회 범위에 따라 서버가 raw · 1m · 1h · 1d 중 하나를 고른다 — 원시 1년치 요청이 ClickHouse를 마비시키는 사고를 서버가 구조로 막기 위해서다. 원시가 꼭 필요하면 내보내기로 간다.
-- **알람 규칙을 누가 고치는지는 원본에 없다.** 판정 전수를 분석하는 엔지니어와 업무 데이터를 관리하는 관리자 중 누구의 권한인지는 W2가 정한다(§미확정 등재).
+- **알람 규칙은 ENGINEER가 고친다(W2 판정).** 원본은 주체를 정하지 않았고, 판정 전수를 분석해 임계값을 조정하는 쪽이 엔지니어이므로 규칙 변경을 ENGINEER에, 알람 확인(ACK)을 OPERATOR에 둔다. 정본 [../02_features/12_permission_matrix.md](../02_features/12_permission_matrix.md).
 
 ### 실험 수행자
 
@@ -107,7 +108,7 @@
 
 | 항목 | 원본이 정한 것 | 원본에 없는 것 | 확정 자리 |
 |------|------|------|------|
-| 역할 저장 | role(role_code 유일) · user_role(사용자 ↔ 역할 다대다) 테이블(원본 architecture.md §6) | role_code 값 · 역할 수 | [../02_features/12_permission_matrix.md](../02_features/12_permission_matrix.md) · [../05_data_stores/01_postgresql_schema.md](../05_data_stores/01_postgresql_schema.md) |
+| 역할 저장 | role(role_code 유일) · user_role(사용자 ↔ 역할 다대다) 테이블(원본 architecture.md §6) | **W2 확정** — OPERATOR · ENGINEER · ADMIN 3값 · 알람 규칙 변경 ENGINEER · ACK OPERATOR · 실험 콘솔은 인증 사용자 전원 표시 전용 | [../02_features/12_permission_matrix.md](../02_features/12_permission_matrix.md) · [../05_data_stores/01_postgresql_schema.md](../05_data_stores/01_postgresql_schema.md) |
 | 인가 방식 | 역할 기반 · 엔드포인트별 Guard 검사(원본 architecture.md §18) | 역할 × 기능 매트릭스 | [../02_features/12_permission_matrix.md](../02_features/12_permission_matrix.md) |
 | 권한 캐시 | cache-aside · 권한 변경 시 즉시 삭제(원본 architecture.md §10.1) | 캐시 키 모양 | [../05_data_stores/05_redis_keyspace.md](../05_data_stores/05_redis_keyspace.md) |
 | 페르소나 ↔ 역할 | 없음 | 페르소나 하나가 역할 하나인지 여부 | [../02_features/12_permission_matrix.md](../02_features/12_permission_matrix.md) |
@@ -144,9 +145,6 @@
 
 | 항목 | 상태 | 확정 자리 |
 |------|------|------|
-| role_code 값과 역할 수 | 원본에 없음 — 임의로 만들지 않는다 | [../02_features/12_permission_matrix.md](../02_features/12_permission_matrix.md)(W2) |
-| 알람 규칙 변경 권한의 주체(관리자 · 엔지니어) | 원본에 없음 | 상동 |
-| 실험 콘솔 화면의 접근 권한 | 원본에 없음(화면 자체가 신설) | 상동 · [../08_screen/07_experiment_console.md](../08_screen/07_experiment_console.md)(W5) |
 | 화면 코드({표면}-{의미}) | 채번 전 — 이 문서는 파일명으로만 가리킨다 | [../08_screen/README.md](../08_screen/README.md)(W5) |
 
 ## 관련 문서

@@ -64,7 +64,7 @@ db_study는 배포하지 않는 **로컬 전용 학습 시스템**이다. 목적
 | 학습 목표 | **2축** — ① 컬럼형 vs RDB(측정) ② Redis 중간 계층의 성격별 분기. 정본 [01_overview/01_purpose_learning_goals.md](./01_overview/01_purpose_learning_goals.md) |
 | 분기 계층 | **3계층** — ① 태그 원시값 → ClickHouse 전용 ② 알람 판정 · 생산 카운터 → 확정 이벤트 PostgreSQL · 판정 전수 ClickHouse · 핫 상태 Redis Hash로 갈라짐 ③ 회원 · 작업지시 · 감사 → PostgreSQL 전용(Redis는 캐시 · Stream을 타지 않음). 정책 정본 [04_architecture/04_storage_split.md](./04_architecture/04_storage_split.md) · 기전 정본 [06_pipeline/04_routing.md](./06_pipeline/04_routing.md) |
 | 데이터 흐름 | **10종** — F-01~F-10(수집 · 배치 적재 · 최신값 조회 · 시계열 조회 · 업무 CRUD · 알람 판정 · 실시간 푸시 · 롤업 · 테스트 데이터 주입 · 백프레셔와 장애). 정본 [06_pipeline/01_flow_inventory.md](./06_pipeline/01_flow_inventory.md) |
-| 역할 스위치 | **10종** — SW-01~SW-10. Redis 역할 9(백프레셔 1 · 캐시 4 · 팬아웃 2 · 멱등 1 · 대조군 1) + 수집 1(데드밴드). 검산: 1 + 4 + 2 + 1 + 1 + 1 = **10**. 정본 [02_features/13_switch_matrix.md](./02_features/13_switch_matrix.md) |
+| 역할 스위치 | **10종** — SW-01~SW-10. Redis 역할 9(백프레셔 1 · 캐시 4 · 팬아웃 2 · 멱등 1 · 대조군 1) + 수집 1(데드밴드). 검산: 1 + 4 + 2 + 1 + 1 + 1 = **10**. 기본값 on 8 · off 2(SW-09 · SW-10). 정본 [02_features/13_switch_matrix.md](./02_features/13_switch_matrix.md) |
 | 실행 구성 | Docker Compose 컨테이너 **4개** — 애플리케이션 1(api) + 저장소 3(postgres · clickhouse · redis). 웹은 **컨테이너가 아니라** 호스트 프로세스다. 관측 스택은 선택 기동 observability 프로파일이며 구성원 정본은 [09_tech_stack/03_data_infra.md](./09_tech_stack/03_data_infra.md) |
 | 기동 역할 | APP_ROLE — all(기본) · api · worker · collector · datagen. 역할 분리는 확장 로드맵 1단계이며 코드 변경이 없다 |
 | 호스트 포트 | 전부 **127.0.0.1 바인드** — 웹 3001 · api 3000 · postgres 5432 · clickhouse 8123 · 9000 · 9363 · redis 6379 · (프로파일) prometheus 9090 · grafana 3002. PlcSim 5020~5119는 컨테이너 내부 루프백 전용이라 publish하지 않는다 |
@@ -77,7 +77,9 @@ db_study는 배포하지 않는 **로컬 전용 학습 시스템**이다. 목적
 | 성능 수치 | 실측 전 성능 수치는 **3계층 미확인**이다 — "미확인 — 확정 전 임의 값 고정 금지"로 등재하고 생략하지 않는다. 확정은 EXP-NN 실측 결과로만 한다. 목표치의 정본 [03_requirements/13_nonfunctional.md](./03_requirements/13_nonfunctional.md) |
 | 에러 코드 | **14종** — 네임스페이스 정의 **9**(표면 도메인 8 + common 1) · 코드 보유 **5**(common 5 · auth 5 · timeseries 1 · realtime 1 · datagen 2). 검산: 5 + 5 + 1 + 1 + 2 = **14**. 네임스페이스는 URL 경로가 아니라 **표면을 소유한 도메인**을 따른다. 채번 정본 [11_glossary/02_error_codes.md](./11_glossary/02_error_codes.md) · 미러 [07_api/02_errors.md](./07_api/02_errors.md) · W2 · W5가 채번 보류분을 정본에서 추가한다 |
 | 제품·학습 결정 | **12** — D-01~D-12(결번 없음). 확정 주체: 사용자 5 + 원본 4 + 리드 판정 1 + W1 판정 후 사용자 확정 2 = **12**. 정본 [01_overview/06_design_decisions.md](./01_overview/06_design_decisions.md) |
-| 채번 진행 중인 축 | 기능 ID · REQ · AC(W2) · ADR-NN · 테이블 컬럼(W3) · API 표면 · 화면 코드(W5) · EXP-NN(W6). **수치는 정본이 채번한 같은 변경 단위에서 본 표에 행으로 올린다** — 정본보다 먼저 쓰지 않는다 |
+| 기능 ID | **91** — AUT 7 · MST 9 · COL 9 · SIM 5 · GEN 10 · ING 13 · TSQ 9 · RLT 9 · ALM 9 · WRK 5 · OBS 6. 검산: 7 + 9 + 9 + 5 + 10 + 13 + 9 + 9 + 9 + 5 + 6 = **91**. 정본 [02_features](./02_features/README.md) 도메인 파일 11본 · 세는 자리는 [02_features/12_permission_matrix.md](./02_features/12_permission_matrix.md) §검산 |
+| 역할 | **3** — OPERATOR · ENGINEER · ADMIN. 누적 관계가 아니며 다중 역할은 합집합으로 판정한다. 실험 수행자는 역할이 아니다(머신 접근). 정본 [02_features/12_permission_matrix.md](./02_features/12_permission_matrix.md) |
+| 채번 진행 중인 축 | REQ · AC(W2) · ADR-NN · 테이블 컬럼(W3) · API 표면 · 화면 코드(W5) · EXP-NN(W6). **수치는 정본이 채번한 같은 변경 단위에서 본 표에 행으로 올린다** — 정본보다 먼저 쓰지 않는다 |
 | 스택 표기 | **Next.js · NestJS · PostgreSQL 18 · ClickHouse 25.8 · Redis 8 · Docker Compose**로 통일한다. 정확 버전은 09_tech_stack에만 적는다 |
 | 단위와 시각 | ts = 측정 시각(모드 A는 Collector 폴링 시점 · 생성 모드는 생성기 시점) · ingested_at = 적재 시각 · 저장은 epoch 기준 · 표시 시점에만 Asia/Seoul로 변환 · 측정값 Float64. 정본 [11_glossary/05_units_and_time.md](./11_glossary/05_units_and_time.md) |
 
