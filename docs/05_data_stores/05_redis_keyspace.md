@@ -2,6 +2,7 @@
 
 > **대상**: Redis 단일 인스턴스의 영역 접두 9 · 키 패턴 전수 · 값 모양 · TTL 조회 계약 · 네이밍 · 계열별 실패 전략 · Pub/Sub 채널 3 · **봉인 표** · 키 계열별 래퍼 강제(ADR-13) · 키 인계 판정 — Redis 키 패턴 채번 정본
 > **작성일**: 2026-09-24
+> **개정일**: 2026-09-24 — W4 판정 반영 — rt:latest 조건부 쓰기(새 ts ≥ 저장 ts) · DurableKeyClient 조건부 쓰기 스크립트 노출 · ch:rt 발행자 ING → **SW-11 쓰기 주체** · DLQ 값에 원 배치 토큰 · 재처리 그룹 grp:dlq · alarm:state 쓰기 주체 판정기 단독 · 체인 번호 6단 표기 · 미확인 4행 W4 판정 — 키 패턴 · 봉인 칸 수 불변
 > **원천**: 원본 architecture.md §5 · §8 · §8.1 · §8.2 · §8.3 · §10.1 · §10.3 · §11 · §11.2 · §17 · §18(커밋 ff66a37) · 원본 tech_stack.md §5.3(커밋 ff66a37) · 원본 data_flow.md §3 · §4 · §5 · §6 · §6.2 · §7 · §7.1 · §8 · §12.2(커밋 ff66a37) · 원본 implementation_plan.md §4.1 · §7.4 · §7.5(커밋 ff66a37) · docs_plan.md 이식 패턴 ② 봉인 표 · 보정 #5 · 웨이브 인계 W3 05_data_stores/05 행 전부 · ADR-05 · ADR-10 · ADR-12 · ADR-13 · [../README.md](../README.md) 고정 기준 Redis 영역 접두
 
 Redis는 **단일 인스턴스 · volatile-lru**다(ADR-05). 인스턴스를 스트림용과 캐시용으로 나누지 않는 대신 **TTL 유무로 축출 대상을 가른다** — TTL이 없는 키는 volatile-lru의 후보가 되지 않고, TTL이 있는 키만 메모리 압박에 밀려난다. 그래서 이 인스턴스에서는 **키 접두 하나가 곧 데이터 생존 정책의 경계**다(전역 불변식 TTL 우선순위).
@@ -35,9 +36,9 @@ TTL을 붙이지 않는다. 사라지면 복구할 수 없거나(stream · alarm
 | 키 패턴 | 자료구조 | 값 · 필드 | 크기 제어 | 쓰는 주체 | 읽는 주체 |
 |------|------|------|------|------|------|
 | stream:plc:raw | Stream · 컨슈머 그룹 grp:ingest | 엔트리 1 = 스캔 사이클 1 — MessagePack 컬럼 배열(v · d · s · t0 · tg · dt · va · q) | XADD MAXLEN ~ (근사 트리밍) | COL · GEN 모드 B · C | ING(XREADGROUP · XACK · XAUTOCLAIM) |
-| stream:plc:dlq | Stream | 엔트리 1 = **실패한 원 엔트리 1** + 원 엔트리 ID + 오류 사유 | XADD MAXLEN ~ | ING(재시도 소진 · 해독 불가) | 사람 · 재처리 경로(W4) |
-| rt:latest:{device_id} | Hash | 필드 tag_id · 값 "ts,value,quality"(ts는 epoch ms 10진) | 태그 수만큼 · 덮어쓰기 | ING-08 — LatestValueWritePort(ADR-10 잠정 · S6 최종) · RLT-04 워밍 | RLT · TSQ-08 진행 구간 |
-| alarm:state:{rule_id} | Hash | state · first_breach_ts · breach_count · event_id · **first_clear_ts · last_value · last_ts** | 규칙 수만큼 | ALM-03 · ACK 반영 주체(W4) | ALM-03 |
+| stream:plc:dlq | Stream | 엔트리 1 = **실패한 원 엔트리 1** + 원 엔트리 ID + 오류 사유 + **원 배치 토큰**(재시도 소진 사유만 · W4) | XADD MAXLEN ~ | ING(재시도 소진 · 해독 불가) | 사람의 DLQ 재처리 절차 — 재처리 전용 컨슈머 그룹 **grp:dlq**(W4 · [../06_pipeline/11_backpressure_failure.md](../06_pipeline/11_backpressure_failure.md) §DLQ 재처리) |
+| rt:latest:{device_id} | Hash | 필드 tag_id · 값 "ts,value,quality"(ts는 epoch ms 10진) | 태그 수만큼 · **필드 조건부 쓰기(새 ts ≥ 저장 ts · W4)** | SW-11 쓰기 주체(ingest 기본 · collector) — LatestValueWritePort(ADR-10 잠정 · S6 최종) · RLT-04 워밍 · 기동 복원 | RLT · TSQ-08 진행 구간 |
+| alarm:state:{rule_id} | Hash | state · first_breach_ts · breach_count · event_id · **first_clear_ts · last_value · last_ts** | 규칙 수만큼 | ALM-03 판정기 하나 — **확인 표면은 쓰지 않는다**(W4 · state 값 NORMAL · PENDING · ACTIVE · CLEARING) | ALM-03 |
 
 - **DLQ 엔트리를 원 엔트리 단위로 둔다(판정).** 원본은 "실패 배치 + 오류 사유"(원본 architecture.md §8.1)라 배치 통째(최대 수만 행)가 엔트리 하나가 될 수 있었다 — 그러면 DLQ MAXLEN이 엔트리 수로는 작아도 메모리로는 Stream 본체를 넘는다. 원 엔트리 단위면 크기가 본 Stream 엔트리와 같아 메모리 산정([06_redis_memory.md](./06_redis_memory.md))이 닫히고, 재처리가 원 엔트리 ID로 추적된다.
 - **alarm:state 필드 7 중 셋을 신설한다.** 원본 필드(상태 · 연속 위반 횟수 · 최초 위반 시각) + event_id(원본 data_flow.md §8)만으로는 ① CLEARING 디바운스의 경과를 잴 시작 시각이 없고 ② RATE_OF_CHANGE의 직전 값이 없다([01_postgresql_schema.md](./01_postgresql_schema.md) §enum 값 확정). 시각 필드는 전부 **epoch ms 정수**다 — 문자열 날짜면 디바운스 계산이 매번 파싱을 거치고 시간대 없는 문자열이 9시간 어긋난 디바운스를 만든다([../11_glossary/05_units_and_time.md](../11_glossary/05_units_and_time.md)의 판정을 여기서 확정).
@@ -70,12 +71,12 @@ TTL 없이 만들지 않는다. 사라져도 원천(PostgreSQL · ClickHouse)에
 
 | 채널 | 발행자 | 구독자 | 페이로드 | SW-06 대상 |
 |------|------|------|------|:------:|
-| ch:rt:{device_id} | ING(최신값 갱신 뒤) | WebSocket 게이트웨이 | 변경된 태그 값 배열 | 대상 |
+| ch:rt:{device_id} | **SW-11 최신값 쓰기 주체**(ingest 기본 · collector) — 조건부 쓰기가 받아들인 필드만(W4) | WebSocket 게이트웨이 | 변경된 태그 값 배열 | 대상 |
 | ch:alarm | ALM(PostgreSQL 커밋 뒤 · REQ-ALM-10) | WebSocket 게이트웨이 | 알람 열림 · 닫힘 이벤트 | 대상 |
-| ch:cacheinv | api 마스터 쓰기(커밋 뒤) | 다른 api 인스턴스 · RLT-09 브라우저 중계 | 무효화된 키 이름 | **대상 아님** |
+| ch:cacheinv | api 마스터 쓰기(커밋 뒤 · modbus_config만 바꾼 쓰기도 cache:devlist 키 이름으로 — W4) | 다른 api 인스턴스 · RLT-09 브라우저 중계 · **Collector 마스터 재로드(W4)** | 무효화된 키 이름 | **대상 아님** |
 
 - 검산: 채널 = **3** · SW-06 대상 2(ch:rt · ch:alarm) + 비대상 1(ch:cacheinv)
-- **ch:cacheinv가 SW-06 밖인 이유** — 끄면 무효화 체인 ② · ⑤단이 스위치 상태에 따라 달라져 정합성 계약에 스위치가 생긴다(판정 정본 [../02_features/13_switch_matrix.md](../02_features/13_switch_matrix.md)).
+- **ch:cacheinv가 SW-06 밖인 이유** — 끄면 무효화 체인 ③ · ⑥단(6단 번호 — [../06_pipeline/07_business_crud.md](../06_pipeline/07_business_crud.md))이 스위치 상태에 따라 달라져 정합성 계약에 스위치가 생긴다(판정 정본 [../02_features/13_switch_matrix.md](../02_features/13_switch_matrix.md)).
 - **채널은 키가 아니다.** 발행된 메시지는 구독자가 없으면 버려지고 메모리에 남지 않는다 — 봉인 표의 대상이 아니며, 누락은 재연결 뒤 최신값 재조회로 메운다([../06_pipeline/05_realtime_read.md](../06_pipeline/05_realtime_read.md)).
 - 단일 프로세스인데도 Pub/Sub을 거치는 것은 루프백 1홉으로 역할 분리 · 수평 확장 때의 팬아웃 재작성을 면제받는 값이다(ADR-07).
 
@@ -110,7 +111,7 @@ TTL은 2계층 조정값이다. 본문에 값을 박지 않고 **키 모양 · �
 | 접두 채번 | 영역 접두는 이 문서에서만 늘린다 · 봉인인지 캐시인지 먼저 정한다 | 정책 미정 키가 기본 래퍼로 들어가 생존 정책이 우연으로 정해진다 |
 | 식별자 | 정수 id · SHA-1 16진 40자 · epoch 정수(unix_minute)만. 문자열 날짜 금지 | 시간대 없는 날짜 문자열이 키를 두 개로 가른다 |
 | 스캔 | KEYS 금지 — 필요하면 SCAN + COUNT(운영 도구만) | 단일 스레드 Redis가 키 공간 전체를 훑는 동안 모든 명령이 멈춘다 |
-| 쓰기 주체 | 키 패턴 하나에 쓰는 모듈 하나(rt:latest의 워밍만 예외 · 같은 봉인 래퍼) | 두 모듈이 다른 값 형식으로 같은 키를 덮어쓴다 |
+| 쓰기 주체 | 키 패턴 하나에 쓰는 모듈 하나(rt:latest의 워밍 · SW-11 collector만 예외 · 같은 봉인 래퍼 · 조건부 쓰기로 순서 역전 차단) | 두 모듈이 다른 값 형식으로 같은 키를 덮어쓴다 |
 | 값 인코딩 | 시각은 epoch ms 정수 · 숫자는 10진 문자열 · 구조는 JSON(대형은 gzip) | 파서가 둘이 된다 |
 
 - 검산: 규칙 = **7**
@@ -177,7 +178,7 @@ ADR-13(보정 7.5)의 계약이다. 인터페이스 이름과 책임만 적는�
 
 | 래퍼 | 접두 | 노출하는 것 | 노출하지 않는 것 | 실패 처리 |
 |------|------|------|------|------|
-| DurableKeyClient | stream · rt · alarm | XADD(MAXLEN 필수 인자) · XREADGROUP · XACK · XAUTOCLAIM · XLEN · XPENDING · XINFO GROUPS(적체 판정량) · HSET · HGET · HGETALL · 파이프라인 | 모든 TTL 명령(키 · 필드) · KEYS · FLUSH 계열 | 예외를 그대로 던진다 — 백프레셔 발동 |
+| DurableKeyClient | stream · rt · alarm | XADD(MAXLEN 필수 인자) · XREADGROUP · XACK · XAUTOCLAIM · XLEN · XPENDING · XINFO GROUPS(적체 판정량) · HSET · HGET · HGETALL · **rt:latest 필드 조건부 쓰기 스크립트(W4)** · 파이프라인 | 모든 TTL 명령(키 · 필드) · KEYS · FLUSH 계열 | 예외를 그대로 던진다 — 백프레셔 발동 |
 | CacheKeyClient | cache · lock · rl · sess · auth | TTL 필수 쓰기(SET · HSET + EXPIRE NX · INCR + 창 만료) · GET · HGET · DEL · 소유자 검증 락 해제 | TTL 없는 쓰기 · PERSIST · KEYS · FLUSH 계열 | 짧은 타임아웃 · 예외를 삼키고 미스(degrade) 신호를 돌려준다 |
 | FanoutPublisher | ch | PUBLISH · SUBSCRIBE | 키 명령 전부 | 발행 실패를 계수하고 삼킨다 |
 
@@ -228,10 +229,10 @@ ADR-13(보정 7.5)의 계약이다. 인터페이스 이름과 책임만 적는�
 |------|------|------|
 | lock:rebuild:rt 만료 값 | 계약만 — 복원 쿼리 타임아웃 이상. 복원 쿼리 시간은 3계층 미확인 | S2 실측 뒤 이 문서 |
 | rl class 값 집합 · 등급별 한도 | 키 모양만 확정 | [../12_security/03_api_surface_defense.md](../12_security/03_api_surface_defense.md)(W7) |
-| DLQ 재처리 경로 · alarm_eval DLQ가 같은 stream:plc:dlq인지 | DLQ 엔트리 단위만 확정 | [../06_pipeline/11_backpressure_failure.md](../06_pipeline/11_backpressure_failure.md) · [../06_pipeline/08_alarm.md](../06_pipeline/08_alarm.md)(W4) |
-| ACK가 alarm:state를 바꾸는 주체 | W1 등재 미확인 | [../06_pipeline/08_alarm.md](../06_pipeline/08_alarm.md)(W4) |
-| rt:latest 덮어쓰기의 ts 비교 | 한계 등재 [02_postgresql_constraints.md](./02_postgresql_constraints.md) #2 | [../06_pipeline/05_realtime_read.md](../06_pipeline/05_realtime_read.md)(W4) |
-| 캐시 호출 타임아웃 값 | 현행 50 ms | [../06_pipeline/06_timeseries_read.md](../06_pipeline/06_timeseries_read.md)(W4) |
+| DLQ 재처리 경로 · alarm_eval DLQ가 같은 stream:plc:dlq인지 | **W4 판정** — 원 토큰 직접 삽입 절차 · grp:dlq · alarm_eval은 DLQ에 격리하지 않는다 | [../06_pipeline/11_backpressure_failure.md](../06_pipeline/11_backpressure_failure.md) · [../06_pipeline/08_alarm.md](../06_pipeline/08_alarm.md)(W4) |
+| ACK가 alarm:state를 바꾸는 주체 | **W4 판정** — 판정기 단독 · 해소 첫 감지 때 acked_at 조회 | [../06_pipeline/08_alarm.md](../06_pipeline/08_alarm.md)(W4) |
+| rt:latest 덮어쓰기의 ts 비교 | **W4 판정** — 조건부 쓰기 · 한계 등재 [02_postgresql_constraints.md](./02_postgresql_constraints.md) #2 갱신 | [../06_pipeline/05_realtime_read.md](../06_pipeline/05_realtime_read.md)(W4) |
+| 캐시 호출 타임아웃 값 | 현행 50 ms · 소유 W4 확정 | [../06_pipeline/06_timeseries_read.md](../06_pipeline/06_timeseries_read.md)(W4) |
 | 캐시 히트율 · 키별 메모리 | 3계층 미확인 — 확정 전 임의 값 고정 금지 | [06_redis_memory.md](./06_redis_memory.md) · REQ-NFR-10 |
 
 ## 관련 문서

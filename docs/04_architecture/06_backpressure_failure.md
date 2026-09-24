@@ -2,6 +2,7 @@
 
 > **대상**: 백프레셔 5단계 · **판정량(미확인 적체)** · **프로파일별 임계(2계층 조정값 정본)** · **하강 히스테리시스 판정** · MAXLEN과 maxmemory의 관계 · **SW-10 off일 때 경고 단계 데드밴드 강화의 의미 판정** · 장애 시나리오 10 · degrade 원칙 · **ClickHouse 중단 시 최신값 정지**
 > **작성일**: 2026-09-24
+> **개정일**: 2026-09-24 — W4 판정 반영 — 장애 #1 ClickHouse 중단에 **알람 판정 정지** 추가 · 복구 중 rt:latest 순서 역전 · DLQ 재처리 경로 미확인 → **W4 판정** — 시나리오 수 불변
 > **원천**: 원본 architecture.md §1 · §8 · §8.4 · §9.2 · §9.3 · §13 · §17(커밋 ff66a37) · 원본 data_flow.md §5 · §12.1~§12.4 · §13(커밋 ff66a37) · 원본 tech_stack.md §5.3(커밋 ff66a37) · 원본 implementation_plan.md §2.3 · §4.1 · §5 S6 · §7.2 · §7.5(커밋 ff66a37) · D-08 · ADR-05 · ADR-09 · ADR-10 · ADR-13 · ADR-21 · ADR-23 · ADR-24 · [../11_glossary/03_enums_state_machines.md](../11_glossary/03_enums_state_machines.md) 상태 머신 3 · [../03_requirements/01_global_rules.md](../03_requirements/01_global_rules.md) REQ-GLB-05 · 09 · 10
 
 **버퍼가 차면 조용히 버리지 않고 실패시키고 계측한다**(REQ-GLB-10). 이 문서는 그 원칙이 Stream 앞에서 어떤 단계로 작동하는지, 임계를 어떤 계약으로 조회하는지, 저장소가 하나씩 멈출 때 무엇이 멈추고 무엇이 남는지를 고정한다. **백프레셔 임계의 정본은 이 문서다**(루트 README 고정 기준 조정값). 단계의 이름과 상태 머신 모양의 정본은 [../11_glossary/03_enums_state_machines.md](../11_glossary/03_enums_state_machines.md), 흐름 기전(스풀 · 재발행 · 소진)의 정본은 [../06_pipeline/11_backpressure_failure.md](../06_pipeline/11_backpressure_failure.md)다.
@@ -89,7 +90,7 @@
 - **상승은 즉시, 하강은 느리게.** 상승을 늦추면 위험 임계와 MAXLEN 사이 여유(MAXLEN × 10%)를 넘겨 트리밍이 먼저 온다. 하강을 늦추는 비용은 반응이 조금 더 오래 켜져 있는 것뿐이다.
 - **위험은 경고 · 주의 대역으로 내려와도 스풀을 유지한다.** 위험 임계 바로 아래에서 스풀을 닫으면 다음 스캔 사이클의 XADD가 다시 임계를 넘겨 스풀과 Stream이 번갈아 엔트리를 받는다 — 재발행 순서가 뒤섞이고 spool_bytes가 톱니가 되어 흡수량을 읽을 수 없다. 위험의 하강 기준이 주의 임계인 것은 원본 그대로다.
 - **복구는 적체를 다시 올리지 않는 속도로 재발행한다.** 재발행이 적체를 주의 임계 위로 밀면 주의로 가지 않고 재발행만 멈춘다 — 복구 중에 주의 단계 반응(컨슈머 증설 · 알림)이 겹치면 재발행이 만든 적체가 외부 적체로 계측된다.
-- **복구 중 새 수집분은 Stream에 직접 발행한다.** 새 수집분까지 스풀에 쌓으면 수집 속도 ≥ 재발행 속도인 동안 스풀이 영영 비지 않아 복구가 끝나지 않는다. 스풀의 옛 엔트리와 새 엔트리가 섞여 적재되는 것은 순서 무관성(REQ-GLB-07)이 허용한다. **단 rt:latest가 옛 스풀 값으로 덮어쓰일 수 있다** — 덮어쓰기 순서 역전의 기전은 [../06_pipeline/05_realtime_read.md](../06_pipeline/05_realtime_read.md)(W4)가 판정한다.
+- **복구 중 새 수집분은 Stream에 직접 발행한다.** 새 수집분까지 스풀에 쌓으면 수집 속도 ≥ 재발행 속도인 동안 스풀이 영영 비지 않아 복구가 끝나지 않는다. 스풀의 옛 엔트리와 새 엔트리가 섞여 적재되는 것은 순서 무관성(REQ-GLB-07)이 허용한다. **단 rt:latest가 옛 스풀 값으로 덮어쓰일 수 있다** — 덮어쓰기 순서 역전은 W4가 조건부 쓰기(새 ts ≥ 저장 ts)로 막는다 — [../06_pipeline/05_realtime_read.md](../06_pipeline/05_realtime_read.md).
 - **폭과 유지 시간은 2계층 조정값이며 원본 값이 없다.** 현행 값 미정 — S6 백프레셔 재현에서 전이 진동 수를 보고 정하며 확정 전 임의 값을 고정하지 않는다. 폭은 MAXLEN 비율로 둔다(임계와 같은 조회 계약).
 
 ## SW-10 off와 경고 단계
@@ -129,7 +130,7 @@
 
 | # | 시나리오 | 감지 | 시스템 반응 | 최신값 | 검증 방법 | 복구 목표(원본) |
 |------|------|------|------|------|------|------|
-| 1 | ClickHouse 중단 | 삽입 예외 | Ingest가 XACK 보류 → 적체 증가 → 단계 상승 → 위험이면 스풀 | **정지** — §ClickHouse 중단 시 최신값 정지 | ClickHouse 5분 정지 | 재기동 후 무손실 · 무중복 소진 · 소진 시간 ≤ 중단의 30% |
+| 1 | ClickHouse 중단 | 삽입 예외 | Ingest가 XACK 보류 → 적체 증가 → 단계 상승 → 위험이면 스풀 · **알람 판정 정지** — 판정 입력이 삽입 확정 배치라(ADR-11) 복구 뒤 소진과 함께 늦게 판정된다(발생 시각은 행 ts · W4) | **정지** — §ClickHouse 중단 시 최신값 정지 | ClickHouse 5분 정지 | 재기동 후 무손실 · 무중복 소진 · 소진 시간 ≤ 중단의 30% |
 | 2 | ClickHouse 느려짐(머지 폭주) | 삽입 지연 · 활성 파트 증가 | 배치 크기 확대 · 삽입 주기 감소 | 지연 — 삽입 지연만큼 늦게 갱신 | 소량 배치 다중 삽입으로 파트 유발 | 파트 수 자연 감소 |
 | 3 | Redis 중단 | XADD · XREADGROUP · GET 동시 실패 | **두 degrade가 동시 발동** — Collector 스풀 · Ingest 대기 · 조회는 캐시 우회 · 최신값 503 · WebSocket 중단 | 503(realtime.latest_unavailable) — ClickHouse로 폴백하지 않는다 | Redis 3분 정지 | AOF 복원 → 스풀 재발행 → 최신값 재구성 |
 | 4 | Redis 메모리 초과 | 축출 급증 후 XADD OOM | 캐시 계열 먼저 전부 축출 → 히트율 0 → XADD OOM → 위험(스풀). 점유 합에는 수집 버퍼 · DLQ(원 엔트리 단위) · 최신값 · 알람 상태가 든다. **Stream 엔트리의 조용한 유실은 없다** | 유지 — 봉인 계열은 축출되지 않는다 | maxmemory 하향 또는 태그 500 구성으로 강제 유발 — M 티어 정상 구성에서는 재현되지 않는다 | 소진 후 정상화 |
@@ -189,10 +190,10 @@ api 컨테이너가 죽으면 조회뿐 아니라 수집 · 적재 · 판정까�
 | 데드밴드 강화 계수 | 2계층 조정값 · 원본 값 없음 | 상동 |
 | 컨슈머 랙 산출식 · 단계 게이지 · 데드밴드 생략분 메트릭 이름 | 미확인 · 신설 | [../10_observability/01_metrics_catalog.md](../10_observability/01_metrics_catalog.md)(W6) |
 | 최신값 갱신 주체의 최종안 · SW-11 기본값 | 잠정 A(SW-11 기본 ingest) — S6 실측 | ADR-10 · [../02_features/13_switch_matrix.md](../02_features/13_switch_matrix.md) |
-| 복구 중 rt:latest 덮어쓰기 순서 역전 | 미확인 | [../06_pipeline/05_realtime_read.md](../06_pipeline/05_realtime_read.md)(W4) |
+| 복구 중 rt:latest 덮어쓰기 순서 역전 | **W4 판정** — 조건부 쓰기 | [../06_pipeline/05_realtime_read.md](../06_pipeline/05_realtime_read.md)(W4) |
 | 소진 시간 · 재기동 시간 · 결측 구간 길이 | 3계층 미확인 — 미확인 · 확정 전 임의 값 고정 금지 | [../10_observability/06_experiment_catalog.md](../10_observability/06_experiment_catalog.md)(W6) |
 | 실제 Stream 엔트리 크기 | 미확인 — 원본 산정 약 7 KB(태그 500) | [../05_data_stores/06_redis_memory.md](../05_data_stores/06_redis_memory.md) · 실측 |
-| DLQ 엔트리의 재처리 경로 | 미설계 | [../06_pipeline/11_backpressure_failure.md](../06_pipeline/11_backpressure_failure.md)(W4) |
+| DLQ 엔트리의 재처리 경로 | **W4 판정** — 원 토큰 직접 삽입 절차 · 재발행 금지 | [../06_pipeline/11_backpressure_failure.md](../06_pipeline/11_backpressure_failure.md)(W4) |
 
 ## 관련 문서
 

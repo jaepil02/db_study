@@ -2,6 +2,7 @@
 
 > **대상**: db_study가 저장 · 전송 · 설정에 쓰는 닫힌 값 집합(enum) 전수와 상태 머신 4종(배치 재시도 · 알람 · 백프레셔 · 작업지시) — enum 값 정본
 > **작성일**: 2026-09-24
+> **개정일**: 2026-09-24 — W4 판정 반영 — ACKED는 alarm:state에 저장하지 않는 파생 상태 — 저장 state 값 **4** · ACK의 Redis 주체 미확인 → **판정기 단독** · CLEARING 중 ACK 전이 판정 · BAD_TIMEOUT 기록 자리 · FLOAT64 4워드 순서 · 레지스터 비트 BOOL W4 판정 — enum 수 · 값 수 불변
 > **개정일**: 2026-09-24 — W3 판정 반영 — 미설계 3 → **확정**(condition_type 4 · severity 3 · work_order.status 4 · 정본 05_data_stores/01) · 전수 검산 15 + 3 → **18 + 0** · 상태 머신 3 → **4**(작업지시 · 허용 전이 4쌍) · alarm:state 필드 **7** · bad_cnt 조건식 **W3 확정 quality IN (2, 4)**
 > **개정일**: 2026-09-24 — W3 판정 반영 — 백프레셔 판정량 XLEN → **미확인 적체(그룹 lag + pending)**(ADR-21) · 하강 전이 잠정 표기 → **히스테리시스 확정**(ADR-23)
 > **개정일**: 2026-09-24 — W2 판정 반영 — CLEARING · CLEARED 이벤트 ACK 허용 조건 링크
@@ -26,7 +27,7 @@
 | 8 | 집계 함수 | 조회 요청 aggregations | 5 | 실험 · 조회 축 enum |
 | 9 | 백프레셔 단계 | 메트릭 — **저장 컬럼 없음** | 5 | 상태 머신 3 |
 | 10 | 배치 재시도 상태 | Ingest 모듈 메모리 — **저장 컬럼 없음** | 7 | 상태 머신 1 |
-| 11 | 알람 상태 | alarm:state:{rule_id} Hash의 상태 필드 | 5 | 상태 머신 2 |
+| 11 | 알람 상태 | 상태 머신 5 — alarm:state:{rule_id}의 state 필드에 저장되는 값은 4(ACKED는 alarm_event.acked_at에서 파생 · W4) | 5 | 상태 머신 2 |
 | 12 | alarm_event.state | alarm_event.state | 2 | 상태 머신 2 |
 | 13 | APP_ROLE | 환경변수 | 5 | 기타 enum |
 | 14 | alarm_eval.breached | alarm_eval.breached | 2 | 기타 enum |
@@ -60,7 +61,7 @@
 - **STALE은 저장 경로가 쓰지 않는다(판정).** 원본의 조건이 "지정 주기 안에 갱신 없음"이라 새 행이 오지 않는 상황에서만 참이고, 행이 오지 않으면 쓸 행도 없다. Collector 예외 시 "해당 설비 태그가 STALE로 전환"(원본 architecture.md §17)도 조회 시점 판정의 결과로 읽는다.
 - **W3 확정 — bad_cnt는 quality IN (2, 4)만 센다.** 원본 mv_tag_1m은 countIf(quality > 0)으로 bad_cnt를 만들므로(원본 architecture.md §7.2) UNCERTAIN · STALE · SIMULATED가 모두 불량으로 집계된다. 생성 데이터만 있는 이 시스템에서는 bad_cnt = cnt가 되어 지표가 무의미하다. 조건식은 [../05_data_stores/04_clickhouse_rollup.md](../05_data_stores/04_clickhouse_rollup.md) §bad_cnt 조건식 판정이 **BAD 계열 중 tag_raw에 저장되는 2 · 4**로 확정했다. UNCERTAIN 가중치는 구현하지 않는다(같은 문서).
 - **불일치 등재 — UNCERTAIN의 가중치.** 원본은 "집계에서 가중치를 낮춘다"인데 mv_tag_1m은 avgState(value)로 품질과 무관하게 평균한다. 확정 전 롤업 avg는 UNCERTAIN을 GOOD과 같은 무게로 센다. 또한 Collector 디코딩 파이프라인(원본 data_flow.md §3)에 보간 · 추정 단계가 없어 1을 부여하는 주체가 미확인이다. 확정 자리는 [../05_data_stores/04_clickhouse_rollup.md](../05_data_stores/04_clickhouse_rollup.md) · [../06_pipeline/02_collect.md](../06_pipeline/02_collect.md)다.
-- **불일치 등재 — BAD_TIMEOUT의 기록 자리.** 원본 data_flow.md §3.2는 "저장하지 않고 결측 처리", 원본 architecture.md §17은 "품질 BAD_TIMEOUT 기록"이다. 이 문서는 전자를 따라 tag_raw에 행을 쓰지 않는다. 후자의 "기록"이 메트릭인지 rt:latest 갱신인지는 미확인이며 [../06_pipeline/02_collect.md](../06_pipeline/02_collect.md)(W4)가 확정한다.
+- **W4 판정 — BAD_TIMEOUT의 기록 자리.** 원본 data_flow.md §3.2는 "저장하지 않고 결측 처리", 원본 architecture.md §17은 "품질 BAD_TIMEOUT 기록"이다. "기록"은 **메트릭**이다 — 타임아웃 계수와 Modbus 왕복 히스토그램의 타임아웃 칸. tag_raw 행 · rt:latest 갱신 · Stream 엔트리를 만들지 않는다. 정본 [../06_pipeline/02_collect.md](../06_pipeline/02_collect.md).
 
 ## 신호 프로파일
 
@@ -94,8 +95,8 @@
 | UINT32 | 2 | 적용 | 3 · 4 |
 | INT32 | 2 | 적용 | 3 · 4 |
 | FLOAT32 | 2 | 적용 | 3 · 4 |
-| FLOAT64 | 4 | 적용 — **4워드 해석 미확인** | 3 · 4 |
-| BOOL | 비트 | 없음 | 1 · 2 — 레지스터 비트 BOOL은 미확인 |
+| FLOAT64 | 4 | 적용 — 두 축 조합 · 하위 워드 먼저는 4워드 완전 역순(W4) | 3 · 4 |
+| BOOL | 비트 | 없음 | 1 · 2 — 레지스터 비트 BOOL은 지원하지 않는다(W4) · FC01 · FC02 시드 금지 유지 |
 
 검산: 16비트 2 + 32비트 3 + 64비트 1 + 비트 1 = **7**
 
@@ -114,7 +115,7 @@
 | 4 | Input Register | 16비트 워드 | 읽기 전용 | 원본 미기재 |
 
 - **A형 — word_order가 틀려도 오류가 나지 않는다.** 통념은 "디코딩이 틀리면 예외가 난다"이지만, 워드 순서가 틀린 FLOAT32는 예외 없이 엉뚱한 유한값이나 비정상 부동소수로 풀린다. 진짜 축은 값의 범위이며, 범위 밖 값은 BAD_RANGE(4)로 드러난다. 대체 경로는 태그 등록 시 알려진 값으로 디코딩을 대조하는 것이다(원본 tech_stack.md §6이 "실무 최대 함정"으로 적었다).
-- **미확인 — FLOAT64의 워드 순서 표기.** ABCD 표기는 4바이트를 가리키는데 FLOAT64는 8바이트다. 4워드 순서를 같은 4값으로 어떻게 확장하는지는 원본에 없으며 [../06_pipeline/02_collect.md](../06_pipeline/02_collect.md)(W4)가 확정한다.
+- **W4 판정 — FLOAT64의 워드 순서 표기.** word_order 4값을 워드 순서 축(상위 먼저 · 하위 먼저)과 워드 안 바이트 순서 축의 조합으로 읽고 64비트에도 그대로 적용한다 — 하위 워드 먼저는 4워드 완전 역순이다. 32비트 반쪽 교환(W1 W0 W3 W2)은 현 값 집합으로 표현하지 않는 잔여이며 필요해지면 이 문서에서 값을 채번한다. 레지스터 비트 BOOL은 지원하지 않는다(비트 인덱스 컬럼 없음). 정본 [../06_pipeline/02_collect.md](../06_pipeline/02_collect.md).
 - Collector는 읽기만 한다. function_code의 쓰기 가능 여부는 대상 영역의 성질이며 이 시스템이 쓰기를 쓴다는 뜻이 아니다.
 
 ## 실험 · 조회 축 enum
@@ -204,8 +205,9 @@ stateDiagram-v2
 | PENDING | 위반했으나 디바운스 미경과 — 오탐 억제 구간 | 상태 · 최초 위반 시각 · 연속 위반 횟수 | breached 1 |
 | ACTIVE | 확정된 알람 | 상태 · event_id | breached 1 |
 | CLEARING | 해소했으나 디바운스 미경과 | 상태 · event_id | breached 0 |
-| ACKED | 운영자가 확인한 확정 알람 | 상태 · event_id | breached 1 |
+| ACKED | 운영자가 확인한 확정 알람 | **기록하지 않는다** — state는 ACTIVE로 남고 확인은 alarm_event.acked_at이 갖는다(W4) | breached 1 |
 
+- **ACKED는 alarm:state에 저장되지 않는 파생 상태다(W4 판정).** alarm:state의 쓰기 주체는 판정기 하나이고 확인 표면은 Redis를 쓰지 않는다 — 판정기가 ACTIVE · CLEARING 규칙의 해소를 처음 감지할 때 alarm_event.acked_at을 한 번 읽어, 확인됐으면 디바운스 없이 닫는다(ACKED → NORMAL). 검산: 저장 state 값 = NORMAL · PENDING · ACTIVE · CLEARING = **4** · 상태 머신 5 = 저장 4 + 파생 1(ACKED). 기전 정본 [../06_pipeline/08_alarm.md](../06_pipeline/08_alarm.md) §ACK와 alarm:state.
 - **alarm:state Hash 필드는 7이다(W3 확정)** — state · first_breach_ts · breach_count · event_id · first_clear_ts · last_value · last_ts. 시각 필드는 epoch ms 정수다. first_clear_ts는 CLEARING 디바운스의 시작, last_value · last_ts는 RATE_OF_CHANGE의 직전 값이다. 정본 [../05_data_stores/05_redis_keyspace.md](../05_data_stores/05_redis_keyspace.md).
 
 ### alarm_event.state 대응 (docs_plan #20 판정)
@@ -225,7 +227,7 @@ stateDiagram-v2
 
 - **ACKED를 state 값으로 두지 않는 이유** — state에 ACKED를 쓰면 "확인 후 해제"와 "확인 없이 해제"가 둘 다 CLEARED로 덮이는 순간 확인 여부가 state에서 사라지고, 반대로 확인된 열린 알람과 확인 안 된 열린 알람을 가르려고 state와 acked_at을 함께 읽어야 한다. 축을 가르면 "열린 알람"은 state = ACTIVE 하나로, "미확인 알람"은 acked_at IS NULL 하나로 조회된다.
 - **불일치 판정 — 해제 경로.** 원본 data_flow.md §8 시퀀스는 "정상이고 이전 상태 ACTIVE → CLEARED UPDATE · 상태 NORMAL"로 CLEARING을 건너뛰고, 원본 §8.1 상태도는 CLEARING 디바운스를 둔다. 이 문서는 **§8.1을 따른다** — CLEARING이 없으면 경계값 근처 노이즈마다 이벤트가 닫히고 다시 열려 alarm_event 행이 폭증한다. 시퀀스가 ACKED 상태의 해소를 다루지 않는 누락도 위 표의 마지막 행으로 닫는다.
-- **미확인 — ACK가 Redis 상태를 바꾸는 주체.** ACK는 API가 PostgreSQL에 쓴다(/api/v1/alarms/events/{id}/ack). 상태 머신이 ACKED를 알려면 alarm:state도 바뀌어야 하는데, 원본은 누가 쓰는지 적지 않았다. Redis가 ACTIVE로 남으면 ACK된 알람도 CLEARING 디바운스를 타서 상태도의 ACKED → NORMAL 전이가 실행되지 않는다. 확정 자리는 [../06_pipeline/08_alarm.md](../06_pipeline/08_alarm.md)(W4)다.
+- **W4 판정 — ACK가 Redis 상태를 바꾸는 주체.** ACK는 API가 PostgreSQL에 쓰고(/api/v1/alarms/events/{id}/ack) alarm:state는 쓰지 않는다. 판정기가 해소 첫 감지 때 acked_at을 읽어 ACKED 경로(디바운스 없는 닫기)를 실행한다 — 두 프로세스가 같은 봉인 키를 쓰는 경합이 없다. **CLEARING 중 확인은 Redis 전이를 일으키지 않는다** — 해제는 디바운스 완료에서 닫히고(확인 유지), 그 사이 재위반하면 ACTIVE로 돌아간 뒤 다음 해소에서 즉시 닫힌다. 정본 [../06_pipeline/08_alarm.md](../06_pipeline/08_alarm.md).
 - **원본 사실 — 해제 디바운스의 비대칭.** ACKED → NORMAL은 디바운스 없이 첫 해소에서 전이하고 ACTIVE → NORMAL은 CLEARING을 거친다. CLEARING · CLEARED 상태 이벤트의 ACK 허용 여부는 원본에 없어 W2가 판정했다 — 행 state ACTIVE · acked_at NULL일 때만 허용(CLEARING 허용 · CLEARED 거절 alarms.ack_not_allowed/409). 정본 [../03_requirements/10_alarms.md](../03_requirements/10_alarms.md).
 - **PostgreSQL 쓰기 실패 시 alarm:state를 되돌린다.** INSERT가 실패하면 상태를 PENDING으로 두고 다음 판정 주기에 다시 시도한다 — 진실은 alarm_event다(원본 data_flow.md §8.2). alarm_eval 삽입 실패는 알람 기능을 막지 않는다.
 

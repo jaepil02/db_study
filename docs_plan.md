@@ -1,9 +1,9 @@
 # docs/ 설계 문서군 구축 계획
 
-> **상태**: W3 완료(2026-09-24) · W4 착수
-> **완료된 것**: 실행 계획 확정(아래 "실행 계획 보정" 절) · docs/ 12폴더 재생성 · W0 14본(docs/README.md · docs/CLAUDE.md · 폴더 README 12본 골격판) · 린트 .omc/docs_lint.py 오류 0건 · W1 11본(11_glossary 5 · 01_overview 6) — 에러 코드 14 · D-01~D-12 · W2a 13본(02_features) — 기능 91 · SW 10 · 역할 3 · W2b 14본(03_requirements 01~14) — REQ 228 · AC 45 · 에러 코드 19 · W3 20본(04_architecture 9 · 05_data_stores 11) — ADR 25 · SW 11(D-13) · 키 패턴 18 · 봉인 26
-> **다음 작업**: W4 — 팀원 1명(w4-pipeline: 06_pipeline 01~12 · F-01~F-10 채번). 웨이브 인계 표의 W4 행 전부 포함
-> **팀원 누적**: 7 / 15 — w1-glossary · w1-overview · w2-features · w2-req-a · w2-req-b · w3-arch · w3-stores(전원 종료)
+> **상태**: W4 완료(2026-09-24) · W5 착수
+> **완료된 것**: 실행 계획 확정(아래 "실행 계획 보정" 절) · docs/ 12폴더 재생성 · W0 14본(docs/README.md · docs/CLAUDE.md · 폴더 README 12본 골격판) · 린트 .omc/docs_lint.py 오류 0건 · W1 11본(11_glossary 5 · 01_overview 6) — 에러 코드 14 · D-01~D-12 · W2a 13본(02_features) — 기능 91 · SW 10 · 역할 3 · W2b 14본(03_requirements 01~14) — REQ 228 · AC 45 · 에러 코드 19 · W3 20본(04_architecture 9 · 05_data_stores 11) — ADR 25 · SW 11(D-13) · 키 패턴 18 · 봉인 26 · W4 12본(06_pipeline) — F-01~F-10 · 분기 기전 19행 · 한계 등재 17
+> **다음 작업**: W5 — 팀원 2명(w5-api: 07_api 01~11 / w5-screen: 08_screen 01~07). 착수 전 리드가 API 문서 번호 · 화면 코드 목록 선점. 웨이브 인계 표의 W5 행 전부 포함
+> **팀원 누적**: 8 / 15 — w1-glossary · w1-overview · w2-features · w2-req-a · w2-req-b · w3-arch · w3-stores · w4-pipeline(전원 종료)
 > **참고**: 기존 루트 4본(architecture.md · data_flow.md · tech_stack.md · implementation_plan.md)은 **W7까지 삭제하지 않는다** — 이관 누락을 검증할 원본이 필요하다
 
 ## 실행 계획 보정 (2026-09-23 확정)
@@ -70,11 +70,17 @@ W1 w1-glossary 판정 · 미확인 — 행선지 웨이브가 확정한다.
 | W4 06_pipeline | 판정을 flusher 흐름에서 기다리는가(06/08) · 복구 중 rt:latest 순서 역전(06/05) · fan-in 배치 행 수 상한 · flusher 메모리(06/03) · RATE_OF_CHANGE 경계 · 비활성 태그 규칙(06/08) · Collector 기동 시 PG 태그 목록 선조회(06/02) · 생산 카운터 기전(06/04 — 정책: 원시 표본은 ①, 파생만 ②, production_log 대체 금지) · 원시 삽입 성공 · MV 실패 뒤 같은 토큰 재시도 시 MV 재실행 여부(S0 실측) |
 | W5 07_api | 실적 기록 시점의 작업지시 상태 조건(08) · unit만 바꾸는 태그 수정 허용 여부(04) |
 | W6 10_observability · 09_tech_stack | 알림 "스트림 길이 MAXLEN 80%" → 적체 기준으로(10/03) · Stream 대기 측정 시작점 = 엔트리 ID 시각(10/02) · 판정 구간 · 6a~6c 예산 · 단계 게이지 · 데드밴드 생략분 메트릭 · 대조 실험 적재 시간 · 디스크 예산 · Q5 문턱 · pg_partman 미리 만들기 개수 · TTL 머지 주기 · ClickHouse 서버 timezone(09/03) · rl class 값 집합(12_security/03) |
+| W5 07_api | 실행 중 주입 제어 표면 필요 여부(09) · 최신값 설비 전체 200(메타 비움) · 단일 태그 common.postgres_unavailable/503(06) |
+| S5 실측 · 04_architecture/07 | 배치 행 트리거 R 선택(현행 50,000 — M+ 초당 2회 · L 초당 10회 · 초당 1회를 원하면 R 상향) — 2계층 조정값 |
+| W6 | 주입 계획 파일 형식(09_tech_stack/05) · 창 닫힘 유예 · 대조군 COPY 타임아웃 · 최신값 락 실패 대기 · 스탬피드 대기 총량 < 재구성 p95 위반 가능(AC-25) · 스풀 재발행 속도 상한 · 분할 INSERT의 ingested_at 동일성 · W4 신설 메트릭 이름(10_observability/01) |
+| W7 · 확장 | worker 다중화 시 알람 판정 분할(04_architecture/08) |
 | W6 | 스위치 상태 레이블 이름 · 스위치별 EXP 번호 · 모드 C 인증 비용은 S7 이후만 측정 가능 |
 | W2 02_features/12 | role_code 값 · 역할 수 · 알람 규칙 변경 권한 주체 · 실험 콘솔 접근 권한 · GEN · OBS 표면 인가 |
 | W3 04_architecture/02 · 09 | SIM · OBS의 APP_ROLE 배정 · 보정 7.2 결정 시점(S3 전 잠정안 + 교체 가능한 포트 · S6 실측으로 최종) |
 | W3 05_data_stores | 롤업 테이블 · MV 도메인 귀속(잠정 ING) · audit_log 소유(WRK) vs MST 트랜잭션 쓰기 — 한계 등재(05/02) |
 | W4 06_pipeline/04 | ②계층 "생산 카운터"(스트림 유래)와 production_log(WRK CRUD)의 구분과 분기 기전 |
+
+W4 처리: F-01~F-10 채번(원본 §3~§12 대응 10/10) · 분기 기전 19행 = 정책 19행 · rt:latest 조건부 쓰기(ts 비교 스크립트) · fan-in 토큰 = 엔트리 ID 시각 창 정렬 배치 · flusher 최대 4배치 · 모드 A ts = 요청 블록 송신 직전 · BAD_TIMEOUT 메트릭만 · BOOL 레지스터 비트 미지원 · FC01 · FC02 시드 금지 유지 · 마스터 변경은 ch:cacheinv 구독으로 설비 단위 재로드 · ACK의 alarm:state 주체 = 판정기 · CLEARING 중 ACK Redis 전이 없음 · 비활성 태그 규칙 판정 제외 · 생산 카운터 파생 판정기 현 범위 밖 · SW-09 COPY는 flusher 안 CH 성공 뒤 · XACK 전 · DLQ 재처리 수동 · 원 토큰 직접 삽입 — W4 행은 닫혔다(MV 재실행 여부만 S0 실측 미확인).
 
 W3 처리: ADR 25(선점 21 + 신설 22~25) · SW-11 신설(D-13) · 백프레셔 판정량 XLEN → 그룹 적체(ADR-21 — 원본 결함) · 히스테리시스(ADR-23) · SW-10 off 강화 무동작(ADR-24) · APP_ROLE 배정(ADR-22) · 포트 이름 확정(04/02 · SW-02 LatestValueReadPort) · enum 확정(condition_type 4 · severity 3 · work_order.status 4 · 전이 4쌍) · 롤업 귀속 ING · 키 패턴 18 · 봉인 26 · sess 예약 · rt:seq · lock:job:rollup 폐지 · dict_tag is_active 속성화 · 대조군 COPY 1회 · 재시도 없음 · 달력 경계 KST · ttl_only_drop_parts — W3 행은 닫혔다.
 

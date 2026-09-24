@@ -2,6 +2,7 @@
 
 > **대상**: 역할 스위치 11종의 채번 · 환경변수 · 기본값 · off · on 동작 · 측정 대상 · 교체되는 포트 · 관련 기능 · 흐름 · 원본 예상치 · 실험 자리 · 조합 제약 — SW-NN 채번 정본
 > **작성일**: 2026-09-24
+> **개정일**: 2026-09-24 — W4 판정 반영 — SW-11 관련 흐름에 F-01 추가(collector 구현이 발행 파이프라인에서 실행) · 흐름 참여 합 17 → **18** · 세는 기준 명시 — 스위치 수 불변
 > **개정일**: 2026-09-24 — **SW-11 LATEST_VALUE_WRITER 신설**(사용자 결정 D-13) · 스위치 10 → **11** · SW-02 포트 LatestValuePort → **LatestValueReadPort** 개명(W3 04/02 확정) · 포트 이름 잠정 · SW-10 off 경고 강화 미확인 행을 닫는다(ADR-24 — 무동작)
 > **원천**: 원본 implementation_plan.md §3.1 · §3.2 · §4 · §4.1 · §4.2 · §4.3 · §5 · §8(커밋 ff66a37) · 원본 data_flow.md §3.3 · §5 · §6 · §9.1 · §11.1(커밋 ff66a37) · 원본 architecture.md §4 · §9 · §17(커밋 ff66a37) · 저장소 루트 docs_plan.md(두 목표를 관통하는 축 — 역할 스위치 SW-NN · 보정 #2 · #14) · D-05 · D-06 · D-08 · D-10 · [README.md](./README.md) 스위치 목록 순서
 
@@ -48,7 +49,7 @@ SW-01~SW-10의 순서는 [README.md](./README.md) 고정 기준의 목록 순서
 | SW-08 | 재시도 중복 | BatchTokenPort — DeterministicBatchToken · NoBatchToken | ING-04 | F-02 | off — 재시도 시 중복 행 발생 · on — 미발생 | 상동 — W6 채번 |
 | SW-09 | 목표 ①의 실행 — 쿼리별 역전 지점 · 비교 축 6 | ControlTableSinkPort — PostgresControlSink · NoopControlSink | ING-11 · GEN-10 | F-02 · F-09 | 원본 예상치 없음 — 역전 지점이 산출물이다 | 상동 — **EXP-01~EXP-05 대조군 예약 대역**([../11_glossary/04_id_conventions.md](../11_glossary/04_id_conventions.md)) |
 | SW-10 | 전송량 · ClickHouse 행 수 · 압축률 | DeadbandFilterPort — TagDeadbandFilter · PassthroughFilter | COL-06 | F-01 | 프로파일별 전송률 3~100%(원본 data_flow.md §3.3) | 상동 — W6 채번 |
-| SW-11 | ClickHouse 중단 중 최신값 갱신 지속 · 적재 경로와 최신값의 결합도 | LatestValueWritePort — IngestLatestValueWriter · CollectorLatestValueWriter | ING-08 · COL-07 | F-02 · F-03 · F-10 | 원본 예상치 없음 — ingest는 ClickHouse 중단 동안 최신값이 멈추고 collector는 계속 갱신된다는 구조적 차이만 있다(원본 implementation_plan.md §7.2) | 상동 — W6 채번 |
+| SW-11 | ClickHouse 중단 중 최신값 갱신 지속 · 적재 경로와 최신값의 결합도 | LatestValueWritePort — IngestLatestValueWriter · CollectorLatestValueWriter | ING-08 · COL-07 | F-01 · F-02 · F-03 · F-10 | 원본 예상치 없음 — ingest는 ClickHouse 중단 동안 최신값이 멈추고 collector는 계속 갱신된다는 구조적 차이만 있다(원본 implementation_plan.md §7.2) | 상동 — W6 채번 |
 
 - **포트 이름의 정본은 [../04_architecture/02_module_boundaries.md](../04_architecture/02_module_boundaries.md)다(W3 확정).** SW-02는 쓰기 포트(SW-11)와 가르기 위해 LatestValueReadPort로 개명됐다. 이 표는 "포트 하나에 구현 둘"이라는 모양과 교체 대상 기능을 고정한다.
 - **예상 차이는 전부 3계층 미확인이다** — 4요소가 없는 원본 예상치이며 목표가 아니다. 확정은 해당 실험의 실측 결과로만 한다([../CLAUDE.md](../CLAUDE.md) 수치 3계층).
@@ -59,7 +60,7 @@ SW-01~SW-10의 순서는 [README.md](./README.md) 고정 기준의 목록 순서
 - 분류: 백프레셔 1(SW-01) + 캐시 4(SW-02 · 03 · 04 · 05) + 팬아웃 2(SW-06 · 07) + 멱등 1(SW-08) + 대조군 1(SW-09) + 수집 1(SW-10) + 최신값 결합 1(SW-11) = **11** — Redis 역할 1 + 4 + 2 + 1 + 1 + 1 = **10** · 수집 **1**
 - 기본값: on 8(SW-01~08) + off 2(SW-09 · 10) + 구현 선택 1(SW-11 = ingest) = **11**
 - 값 형식: 켜고 끄는 불리언 9 + 밀리초 1(SW-07 — 0이 off) + 구현 선택 1(SW-11) = **11**
-- 관련 흐름 참여(중복 허용): F-01 2(SW-01 · 10) + F-02 4(SW-01 · 08 · 09 · 11) + F-03 2(SW-02 · 11) + F-04 3 + F-06 1 + F-07 2 + F-09 1 + F-10 2(SW-01 · 11) = **17**. 스위치가 걸린 흐름 8 · 걸리지 않는 흐름 F-05 · F-08 — 10 − 8 = **2**(업무 CRUD의 무효화 체인과 롤업은 정합성 계약이라 스위치를 두지 않는다)
+- 관련 흐름 참여(중복 허용): F-01 3(SW-01 · 10 · 11) + F-02 4(SW-01 · 08 · 09 · 11) + F-03 2(SW-02 · 11) + F-04 3 + F-06 1 + F-07 2 + F-09 1 + F-10 2(SW-01 · 11) = **18**. 세는 기준은 **그 흐름 안에서 스위치의 구현이 실행되는가**다 — SW-11 collector는 Collector 발행 파이프라인(F-01)에서 최신값을 쓰므로 F-01에 든다(W4 판정 · [../06_pipeline/01_flow_inventory.md](../06_pipeline/01_flow_inventory.md)). 스위치가 걸린 흐름 8 · 걸리지 않는 흐름 F-05 · F-08 — 10 − 8 = **2**(업무 CRUD의 무효화 체인과 롤업은 정합성 계약이라 스위치를 두지 않는다)
 
 ## 공통 규칙
 

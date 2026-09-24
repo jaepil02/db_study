@@ -2,6 +2,7 @@
 
 > **대상**: db_study의 시각 의미론(ts · ingested_at) · 시각 인코딩 · 저장 시간대와 표시 시간대 · 버킷 경계 · 공학 단위 · 부동소수 비교 · 수치 단위 표기 — 시각 의미론 정본
 > **작성일**: 2026-09-24
+> **개정일**: 2026-09-24 — W4 판정 반영 — Stream 대기 시작점 t0 → **엔트리 ID 시각** · t0 = 엔트리 ts 최솟값 · dt ≥ 0 판정 반영(06_pipeline/12)
 > **개정일**: 2026-09-24 — W3 판정 반영 — 시간대 표기 통일 경계 → **닫힘**(ClickHouse 전 시각 컬럼 Asia/Seoul 명시 · 정본 05_data_stores/03) · 버킷 · 파티션 경계 미확인 → **KST 확정**(tag_1d · tag_1m · tag_1h · alarm_eval · alarm_event) · site.timezone 미확인 → **CHECK Asia/Seoul 고정**(05_data_stores/01)
 > **개정일**: 2026-09-24 — W2 판정 반영 — 롤업 대 원시 허용 오차 미확인 → avg 상계식 · count · min · max · last 정확 일치 · p95만 미확인(정본 03_requirements/14)
 > **원천**: 원본 architecture.md §6 · §7.1 · §7.2 · §7.3 · §8.2 · §10.2 · §12(커밋 ff66a37) · 원본 data_flow.md §3 · §5 · §6.2 · §14 · §14.1 · §15 · §17(커밋 ff66a37) · 원본 tech_stack.md §6(커밋 ff66a37) · docs_plan.md 실행 계획 보정 #16 · [../README.md](../README.md) 전역 불변식 시각 의미론
@@ -97,8 +98,8 @@
 | v | uint8 | 스키마 버전 | 디코더 선택 |
 
 - **오프셋을 8바이트에서 4바이트로 줄이는 것이 목적이다.** int32 ms는 ±약 24.8일을 표현하므로 한 스캔 사이클 안의 오프셋으로는 넘칠 수 없다. 넘친다면 한 엔트리에 서로 다른 사이클이 섞였다는 결함이다.
-- **dt는 부호가 있다.** t0가 사이클의 최솟값이라는 보장이 원본에 없으므로 음수 오프셋을 금지하지 않는다. t0를 사이클 최솟값으로 고정할지는 [../06_pipeline/12_data_contract.md](../06_pipeline/12_data_contract.md)가 정한다.
-- **Stream 대기 지연 = XREADGROUP 수신 시각 − t0**다(원본 data_flow.md §15). 엔트리 단위 지표이므로 행 단위 E2E와 섞어 쓰지 않는다.
+- **t0는 엔트리 안 ts의 최솟값이다(W4 판정).** 발행자는 dt ≥ 0이 되게 t0를 잡고, 소비자는 음수 dt를 거절하지 않고 계수만 한다 — 발행자 결함을 적재 유실로 바꾸지 않기 위해서다. 정본 [../06_pipeline/12_data_contract.md](../06_pipeline/12_data_contract.md).
+- **Stream 대기(체류)의 시작점은 t0가 아니라 엔트리 ID의 밀리초(Redis가 XADD를 받은 시각)다(W3 판정 · W4 통일).** 원본 식 "XREADGROUP 수신 시각 − t0"(원본 data_flow.md §15)는 t0가 폴링 시각이라 Modbus 왕복 · 디코딩 · 인코딩 · XADD를 Stream 대기에 함께 센다 — Modbus 지연이 는 실험에서 플러시 주기를 줄이는 잘못된 튜닝으로 이어진다. 정본 [../04_architecture/05_latency_budget.md](../04_architecture/05_latency_budget.md) §구간 경계 판정. 엔트리 단위 지표이므로 행 단위 E2E와 섞어 쓰지 않는다.
 
 ## 캐시 키 시간 스냅과 TTL 분류
 

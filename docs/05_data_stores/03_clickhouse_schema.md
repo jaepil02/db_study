@@ -2,6 +2,7 @@
 
 > **대상**: ClickHouse 객체 9(테이블 5 · MV 3 · Dictionary 1)의 목록과 원시 · 판정 테이블 tag_raw · alarm_eval DDL · 코덱 · 파티션 · 정렬 키(ADR-15) · 중복 제거(ADR-14) · 시각 컬럼 시간대 표기 통일 · dict_tag DDL · 품질 코드 컬럼 판정 · 서버 설정 계약
 > **작성일**: 2026-09-24
+> **개정일**: 2026-09-24 — W4 판정 반영 — Dictionary 즉시 반영 단 번호 ③ → **④**(무효화 체인 6단 표기)
 > **원천**: 원본 architecture.md §5 · §7.1 · §7.3 · §7.4 · §7.5 · §12 · §15(커밋 ff66a37) · 원본 tech_stack.md §5.2(커밋 ff66a37) · 원본 data_flow.md §4 · §4.3 · §11.2 · §14.1 · §14.2(커밋 ff66a37) · docs_plan.md 보정 #16 · 웨이브 인계(ingested_at · alarm_eval.ts 시간대 표기 통일) · ADR-03 · ADR-14 · ADR-15 · ADR-16 · [../11_glossary/05_units_and_time.md](../11_glossary/05_units_and_time.md) 시각 의미론 정본
 
 ClickHouse는 **분기 ①계층(태그 원시값)의 유일한 목적지**이고 ②계층 판정 전수의 목적지다(ADR-03 · D-04). 이 문서는 원시 · 판정 테이블의 모양과 ClickHouse 쪽 공통 규약을 고정한다. 롤업 테이블 tag_1m · tag_1h · tag_1d와 MV 3의 명세는 [04_clickhouse_rollup.md](./04_clickhouse_rollup.md)가, Dictionary가 지키는 교차 저장소 원칙은 [07_cross_store_consistency.md](./07_cross_store_consistency.md)가 갖는다.
@@ -173,7 +174,7 @@ LIFETIME(MIN 300 MAX 600);
 
 - **적재 쿼리에서 WHERE is_active를 뺐다.** 원본 조건은 비활성화 순간 그 태그의 과거 행에서 dictGet이 이름을 잃게 했다 — 판정 [07_cross_store_consistency.md](./07_cross_store_consistency.md). 활성 여부는 is_active 속성으로 싣는다.
 - **키를 UInt64로 선언한다.** 단순 키 Dictionary의 키는 UInt64다 — 원본은 UInt32로 적고 조회에서 toUInt64(tag_id)로 바꿨다. 조회 쪽 변환은 그대로 둔다.
-- **LIFETIME(MIN 300 MAX 600)은 2계층 조정값이다.** 조회 계약 — 마스터 커밋 뒤 즉시 반영은 LIFETIME이 아니라 SYSTEM RELOAD DICTIONARY가 한다(무효화 체인 ③ · REQ-MST-09). 비밀번호는 DDL에 쓰지 않고 설정 파일로 주입한다([../12_security/02_secrets_config.md](../12_security/02_secrets_config.md)).
+- **LIFETIME(MIN 300 MAX 600)은 2계층 조정값이다.** 조회 계약 — 마스터 커밋 뒤 즉시 반영은 LIFETIME이 아니라 SYSTEM RELOAD DICTIONARY가 한다(무효화 체인 ④ — 6단 번호 · tag_master 쓰기만 · [../06_pipeline/07_business_crud.md](../06_pipeline/07_business_crud.md)). 비밀번호는 DDL에 쓰지 않고 설정 파일로 주입한다([../12_security/02_secrets_config.md](../12_security/02_secrets_config.md)).
 
 ## 품질 코드 컬럼 판정
 

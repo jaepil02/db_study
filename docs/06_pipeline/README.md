@@ -2,6 +2,7 @@
 
 > **대상**: db_study의 데이터 흐름 10종 — 수집 · 적재 · 분기 · 조회 · 업무 CRUD · 알람 · 롤업 · 주입 · 백프레셔 · 데이터 계약
 > **작성일**: 2026-09-23
+> **개정일**: 2026-09-24 — W4 완성판 — 12본 작성 완료 · 흐름 참여 · 정책 대응 · 최신값 조건부 쓰기를 고정 기준에 올린다
 > **원천**: [../README.md](../README.md)(흐름 10 · 분기 3계층) · [../04_architecture/04_storage_split.md](../04_architecture/04_storage_split.md)(분기 정책) · 원본 data_flow.md §1~§14 · §16 · 원본 architecture.md §9 · §10 · 원본 implementation_plan.md §7.1~§7.4(커밋 ff66a37)
 
 "데이터가 어떻게 흐르고 갈라지는가"에 답하는 폴더다. **흐름 ID F-NN을 채번**하며 채번 자리는 [01_flow_inventory.md](./01_flow_inventory.md)다. 원본의 F1~F10은 F-01~F-10으로 옮긴다.
@@ -36,6 +37,9 @@
 | 흐름 | **10종** F-01~F-10 — 01 수집 · 02 배치 적재 · 03 최신값 조회 · 04 시계열 조회 · 05 업무 CRUD · 06 알람 판정 · 07 실시간 푸시 · 08 롤업 · 09 테스트 데이터 주입 · 10 백프레셔와 장애 |
 | 분기 계층 | **3계층** — 정책 [../04_architecture/04_storage_split.md](../04_architecture/04_storage_split.md) · 기전 [04_routing.md](./04_routing.md) |
 | 주입 모드 | **4**(A Modbus 경유 · B Stream 직결 · C HTTP · D ClickHouse 직접) — 한 번에 하나의 계층만 부하를 준다 |
+| 흐름 참여 | 참여 도메인 10 + 불참 OBS 1 = **11** · 기능 참여 **117**(중복 허용 — 정본 [01_flow_inventory.md](./01_flow_inventory.md)) |
+| 정책 ↔ 기전 대응 | [../04_architecture/04_storage_split.md](../04_architecture/04_storage_split.md) 목적지 19행 = [04_routing.md](./04_routing.md) 기전 자리 19 · 누락 0 |
+| 최신값 쓰기 | 모든 rt:latest 쓰기는 **필드 조건부 쓰기**(새 ts ≥ 저장 ts)다 — 컨슈머 간 순서 역전 · 복구 중 역전을 막는다. 쓰기 주체는 SW-11 |
 | 도메인 공백 | **OBS는 어떤 흐름에도 참여하지 않는다** — 흐름을 계측할 뿐 데이터를 옮기지 않는다. AUT는 F-05의 BFF 경유(로그인 · 토큰 갱신)로 참여한다 |
 | 조정값 | 배치 크기 · 플러시 주기 · 백오프 · 스로틀 창은 2계층 조정값이다. 흐름 문서는 값이 아니라 트리거 관계와 금지된 대체 동작을 쓴다 |
 

@@ -2,6 +2,7 @@
 
 > **대상**: db_study api 컨테이너의 REST 표면이 반환하는 에러 코드 전수 — 채번 정본
 > **작성일**: 2026-09-24
+> **개정일**: 2026-09-24 — W4 판정 반영 — datagen.stream_full 조건 스트림 길이 → **미확인 적체**(ADR-21) · common.postgres_unavailable 표면에 최신값 단일 태그 추가 · common.rate_limited 키 표기 rl:{class}:{user_id}:{unix_minute} — 코드 수 불변
 > **개정일**: 2026-09-24 — W2 요구사항 판정으로 채번 보류 8건을 닫는다 — 에러 코드 14 → **19종**(auth.token_store_unavailable/503 · master.scale_change_forbidden/409 · timeseries.clickhouse_unavailable/503 · alarms.ack_not_allowed/409 · work_orders.invalid_status_transition/409 신설) · 코드 보유 네임스페이스 5 → **8** · 재사용 1 · 코드 없음 2
 > **원천**: 원본 architecture.md §9.3 · §11 · §11.1 · §11.2 · §17(커밋 ff66a37) · 원본 data_flow.md §5 · §7.2 · §12.1 · §12.2(커밋 ff66a37) · 원본 architecture.md §6 ERD 유일 제약 · docs_plan.md 실행 계획 보정 #11 · #12 · [04_id_conventions.md](./04_id_conventions.md) 에러 코드 형식
 
@@ -52,7 +53,7 @@
 | metrics | OBS | [../07_api/10_metrics.md](../07_api/10_metrics.md) | 현재 채번 없음 |
 
 - **COL · SIM · ING은 네임스페이스를 두지 않는다.** 세 도메인은 외부 표면이 없는 내부 모듈이라 HTTP 응답을 만드는 자리가 없다. 내부 모듈의 실패는 에러 코드가 아니라 **메트릭과 상태 전이**로 드러난다 — ING의 삽입 실패는 재시도대기 → 격리(DLQ) 전이와 dlq_count로, COL의 XADD 실패는 스풀 전환과 spool_active로 계측한다. 코드를 주면 응답으로 나갈 곳이 없는 코드가 생겨 미러와 추적성 표에 유령 행이 된다.
-- **/api/v1/ingest/bulk의 에러는 datagen 네임스페이스다.** URL 경로에 ingest가 들어 있지만 이 표면은 부하 주입 표면이라 GEN이 소유한다(docs_plan.md 실행 계획 보정 #11). 거절을 판정하는 것도 ING 소비 루프가 아니라 표면이 XADD 전에 하는 Stream 길이 검사다. [../README.md](../README.md) ID 규약 표의 예시 ingest.stream_full/503은 **이 배정과 충돌하므로 datagen.stream_full/503으로 채번한다** — ingest를 네임스페이스로 쓰면 "ING은 표면 없음"과 "ING 네임스페이스 코드가 응답으로 나간다"가 동시에 참이 되어 도메인 공백 진술이 깨진다.
+- **/api/v1/ingest/bulk의 에러는 datagen 네임스페이스다.** URL 경로에 ingest가 들어 있지만 이 표면은 부하 주입 표면이라 GEN이 소유한다(docs_plan.md 실행 계획 보정 #11). 거절을 판정하는 것도 ING 소비 루프가 아니라 표면이 XADD 전에 하는 미확인 적체 검사(그룹 lag + pending — XLEN이 아니다 · ADR-21)다. [../README.md](../README.md) ID 규약 표의 예시 ingest.stream_full/503은 **이 배정과 충돌하므로 datagen.stream_full/503으로 채번한다** — ingest를 네임스페이스로 쓰면 "ING은 표면 없음"과 "ING 네임스페이스 코드가 응답으로 나간다"가 동시에 참이 되어 도메인 공백 진술이 깨진다.
 - **네임스페이스 정의와 코드 보유를 가른다.** 표면 있는 도메인 8은 코드가 0이어도 네임스페이스를 가진다 — 첫 코드를 채번할 때 이름을 새로 정하지 않도록 자리를 먼저 고정한다.
 
 ## 에러 코드 전수
@@ -64,8 +65,8 @@
 | common.validation_failed | 400 | 요청 본문 · 쿼리가 스키마를 어긴다 — 타입 불일치 · 필수 누락 · 허용값 밖(interval이 raw · 1m · 1h · 1d가 아님 · aggregations가 5종 밖 · from · to가 ISO 8601이 아님). 원본 architecture.md §11.1 | 전 REST 표면 | 요청을 고친다. 같은 요청의 재시도 금지 |
 | common.not_found | 404 | 경로의 식별자가 가리키는 대상이 마스터에 없다(설비 · 태그 · 알람 이벤트 · 작업지시). **rt:latest 키가 비어 있는 것은 여기가 아니다** — 설비가 마스터에 있으면 ClickHouse 복원 경로를 탄다(원본 data_flow.md §5) | [../07_api/04_master.md](../07_api/04_master.md) · [../07_api/06_realtime.md](../07_api/06_realtime.md) · [../07_api/07_alarms.md](../07_api/07_alarms.md) · [../07_api/08_work_orders.md](../07_api/08_work_orders.md) | 식별자를 확인한다 |
 | common.duplicate_key | 409 | 유일 제약 컬럼에 이미 있는 값을 쓴다 — tag_master.tag_code · work_order.order_no(원본 architecture.md §6 ERD의 UK) | [../07_api/04_master.md](../07_api/04_master.md) · [../07_api/08_work_orders.md](../07_api/08_work_orders.md) | 다른 값으로 다시 요청한다 |
-| common.rate_limited | 429 | 사용자 · 토큰 기준 분당 요청 수가 한도를 넘었다. 판정 키는 rl:{user_id}:{unix_minute} INCR이며 **IP 기준이 아니다** — 모든 요청이 127.0.0.1에서 오므로 IP 기준은 전원을 한 사용자로 센다(원본 architecture.md §11.2). 한도 값은 2계층 조정값이며 소유처는 [../12_security/03_api_surface_defense.md](../12_security/03_api_surface_defense.md) | 전 REST 표면 | 다음 분 창까지 기다린다 |
-| common.postgres_unavailable | 503 | PostgreSQL에 접속할 수 없어 업무 읽기 · 쓰기가 실패한다. 시계열 조회는 영향을 받지 않는다 — Dictionary가 마지막 적재 값을 유지한다(원본 architecture.md §17) | 업무 CRUD 표면 · 로그인 | 백오프 후 다시 요청한다 |
+| common.rate_limited | 429 | 사용자 · 토큰 기준 분당 요청 수가 한도를 넘었다. 판정 키는 rl:{class}:{user_id}:{unix_minute} INCR이며(키 모양 정본 [../05_data_stores/05_redis_keyspace.md](../05_data_stores/05_redis_keyspace.md)) **IP 기준이 아니다** — 모든 요청이 127.0.0.1에서 오므로 IP 기준은 전원을 한 사용자로 센다(원본 architecture.md §11.2). 한도 값은 2계층 조정값이며 소유처는 [../12_security/03_api_surface_defense.md](../12_security/03_api_surface_defense.md) | 전 REST 표면 | 다음 분 창까지 기다린다 |
+| common.postgres_unavailable | 503 | PostgreSQL에 접속할 수 없어 업무 읽기 · 쓰기가 실패한다. 시계열 조회는 영향을 받지 않는다 — Dictionary가 마지막 적재 값을 유지한다(원본 architecture.md §17). 최신값 단일 태그 조회는 태그 → 설비 해석(cache:tagmeta 미스)이 PostgreSQL에 막히면 이 코드다 — 설비 전체 조회는 값을 내고 메타만 비운다(W4 판정 · [../06_pipeline/05_realtime_read.md](../06_pipeline/05_realtime_read.md)) | 업무 CRUD 표면 · 로그인 · 최신값 단일 태그([../07_api/06_realtime.md](../07_api/06_realtime.md)) | 백오프 후 다시 요청한다 |
 
 ### auth — 인증 · 인가
 
@@ -120,7 +121,7 @@
 
 | 코드 | HTTP | 발생 조건 | 발생 표면 | 클라이언트 대응 |
 |------|:----:|----------|----------|---------------|
-| datagen.stream_full | 503 | stream:plc:raw 길이가 백프레셔 **위험** 단계 임계를 넘었다. Collector가 스풀로 전환하는 것과 같은 임계다(원본 architecture.md §9.3 · 원본 data_flow.md §12.1). 임계 값은 2계층 조정값이며 정본은 [../04_architecture/06_backpressure_failure.md](../04_architecture/06_backpressure_failure.md) | [../07_api/09_datagen.md](../07_api/09_datagen.md) | 거절 수를 측정값으로 센다. 재시도 루프로 덮지 않는다 |
+| datagen.stream_full | 503 | stream:plc:raw의 미확인 적체(컨슈머 그룹 lag + pending — XLEN이 아니다 · ADR-21)가 백프레셔 **위험** 단계 임계를 넘었다. Collector가 스풀로 전환하는 것과 같은 임계다(원본 architecture.md §9.3 · 원본 data_flow.md §12.1). 임계 값은 2계층 조정값이며 정본은 [../04_architecture/06_backpressure_failure.md](../04_architecture/06_backpressure_failure.md) | [../07_api/09_datagen.md](../07_api/09_datagen.md) | 거절 수를 측정값으로 센다. 재시도 루프로 덮지 않는다 |
 | datagen.bulk_disabled | 404 | 부하 주입 표면이 비활성이다. 기본값이 비활성이고 환경변수로만 켠다(원본 architecture.md §11) | [../07_api/09_datagen.md](../07_api/09_datagen.md) | 환경변수를 켜고 재기동한다 |
 
 - **stream_full은 k6 입장에서 실패가 아니라 관측 대상이다.** 모드 C 부하 실험에서 이 코드의 발생률이 곧 HTTP 경유 수집 상한의 신호이며, 재시도로 덮으면 백프레셔가 흡수한 양과 거절한 양을 가를 수 없다.

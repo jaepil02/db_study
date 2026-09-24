@@ -2,6 +2,7 @@
 
 > **대상**: 수집(COL · NestJS collector 모듈)의 동작 계약 — 정의 로드 · 폴링 · 블록 병합 · 디코딩 · 품질 판정 · SIMULATED 표지 · 데드밴드 · Stream 발행 · 발행량 감축 · 스풀 전환과 재발행 · 관측 — REQ-COL-NN 채번 정본
 > **작성일**: 2026-09-24
+> **개정일**: 2026-09-24 — W4 판정 반영 — REQ-COL-01 기동 로드 원천 → **PostgreSQL** · 실행 중 마스터 변경 재기동 전 미반영 → **ch:cacheinv 반영** · 미확인 4행 W4 판정 반영 — REQ 수 불변
 > **개정일**: 2026-09-24 — W3 판정 반영 — REQ-COL-10 판정량을 XLEN에서 그룹 적체(lag + pending)로 교정(ADR-21)
 > **원천**: 원본 data_flow.md §3 · §3.1 · §3.2 · §3.3 · §12.1 · §12.2 · §14.1 · §15 · §16 · §17(커밋 ff66a37) · 원본 architecture.md §3 · §4 · §8.1 · §9 · §9.3 · §17(커밋 ff66a37) · 원본 tech_stack.md §5.3 · §6(커밋 ff66a37) · 원본 implementation_plan.md §4.1 · §5 S2 · S3 · S6 · §7.2 · §7.5(커밋 ff66a37) · D-08 · [../02_features/03_collector.md](../02_features/03_collector.md) COL-01~09 · [../02_features/13_switch_matrix.md](../02_features/13_switch_matrix.md) SW-01 · SW-10 · [01_global_rules.md](./01_global_rules.md) REQ-GLB-03 · 10 · 18
 
@@ -13,7 +14,7 @@
 
 | ID | 요구 | 근거 | 위반 시 구체적 실패 | 검증 방법 | 관련 기능 | 관련 흐름 | 관련 에러 코드 |
 |------|------|------|------|------|------|------|------|
-| **REQ-COL-01** | 기동 시 활성 태그 정의(cache:tagmeta — 미스면 PostgreSQL)와 설비별 modbus_config를 한 번 읽어 설비 × scan_rate_ms로 스캔 그룹을 만든다. 폴링 중에는 포인트마다 PostgreSQL을 읽지 않는다. 실행 중 마스터 변경은 재기동 전까지 반영되지 않는다(현행 — §미확인 · 미설계 등재) | 원본 data_flow.md §3 · 원본 architecture.md §5 · 원본 tech_stack.md §5.3 마스터 캐시 | 포인트마다 PostgreSQL을 읽으면 M 티어에서 초당 1만 회 조회가 업무 DB로 가 업무 CRUD p95 측정이 수집 부하에 오염된다 | 폴링 중 pg_stat_statements의 tag_master 조회 수 증가 0 · cache:tagmeta 삭제 후 기동 성공 | COL-01 | F-01 | 해당 없음 — 기동 실패는 points_emitted 0 |
+| **REQ-COL-01** | 기동 시 활성 태그 정의와 설비별 modbus_config를 **PostgreSQL에서** 읽어 설비 × scan_rate_ms로 스캔 그룹을 만들고 cache:tagmeta:{tag_id}를 워밍한다 — 캐시는 기동 로드의 원천이 아니다(태그별 키는 열거할 수 없다). 기동 시 PostgreSQL이 불가면 폴링을 시작하지 않고 재시도한다. 폴링 중에는 포인트마다 PostgreSQL을 읽지 않는다. 실행 중 마스터 변경은 ch:cacheinv 신호를 받아 해당 설비만 다음 사이클 경계에 다시 읽는다(W4 판정 · [../06_pipeline/02_collect.md](../06_pipeline/02_collect.md)) | 원본 data_flow.md §3 · 원본 architecture.md §5 · 원본 tech_stack.md §5.3 마스터 캐시 | 포인트마다 PostgreSQL을 읽으면 M 티어에서 초당 1만 회 조회가 업무 DB로 가 업무 CRUD p95 측정이 수집 부하에 오염된다 | 폴링 중 pg_stat_statements의 tag_master 조회 수 증가 0 · cache:tagmeta 삭제 후 기동 성공 | COL-01 | F-01 | 해당 없음 — 기동 실패는 points_emitted 0 |
 | **REQ-COL-02** | 설비당 Modbus 연결 1개 위에서 스캔 그룹마다 폴링 루프를 돈다. 응답이 설비별 timeout_ms 안에 오지 않으면 그 그룹은 그 주기를 건너뛰고 **행을 만들지 않으며** 타임아웃 계수를 올린다. 다음 주기는 자동으로 다시 시도한다 | 원본 data_flow.md §3 · 원본 architecture.md §17 Modbus 타임아웃 | 타임아웃에 행을 만들면 결측이 값처럼 저장되어 평균 · 롤업이 가짜 값을 포함한다. 건너뛰지 않고 대기하면 다음 주기가 밀려 폴링 주기가 붕괴한다 | SIM 지연 주입(REQ-SIM-08) → 타임아웃율 증가 · 해당 구간 tag_raw 행 없음 · 주입 해제 후 다음 주기 행 재개 | COL-02 | F-01 · F-10 | 해당 없음 — 타임아웃율 |
 | **REQ-COL-03** | ts는 Collector가 폴링 시점에 api 컨테이너 시계로 찍는다(epoch ms). Modbus 응답에는 시각이 없다. 요청 직전 · 응답 직후 중 어느 쪽인지는 미확인이며 확정 전에는 두 시각을 모두 계측해 Modbus 왕복 히스토그램으로 남긴다 | 원본 data_flow.md §3 · §15 측정 방법 · [../11_glossary/05_units_and_time.md](../11_glossary/05_units_and_time.md) · REQ-GLB-01 | 채취 시점이 불명이면 모드 A E2E에서 Modbus 왕복이 포함되는지가 실행마다 달라져 두 측정을 비교할 수 없다 | 스캔 사이클별 요청 직전 · 응답 직후 시각과 ts 대조 · Modbus 왕복 히스토그램 존재 조회 | COL-02 | F-01 | 해당 없음 — Modbus 왕복 히스토그램 |
 | **REQ-COL-04** | 연속 주소 태그를 한 요청으로 묶고 사이의 안 쓰는 레지스터를 허용 갭까지 함께 읽는다. 요청당 레지스터 수는 FC03 상한 125(1계층 프로토콜 제약) 이하이고 설비별 max_regs_per_request를 넘지 않는다. 허용 갭 크기는 2계층 조정값(현행 참고 20 레지스터 · 소유 [../06_pipeline/02_collect.md](../06_pipeline/02_collect.md)) | 원본 data_flow.md §3.1 · 원본 architecture.md §6 modbus_config | 병합이 없으면 태그 1개당 요청 1회가 되어 설비 50대 · 1초 주기에서 초당 2만 5천 요청으로 **폴링 주기를 넘긴다** — F-01의 1차 병목이 설계로 확정된다 | 설비당 스캔 사이클의 요청 수 계측 · poll_duration < scan_rate 유지 확인 · 요청 레지스터 수 최대값 ≤ 125 | COL-03 | F-01 | 해당 없음 — poll_duration |
@@ -90,12 +91,12 @@ COL의 요구가 깨질 때 무엇이 보이는지를 한 표로 모은다. 에�
 
 | 항목 | 상태 | 확정 자리 |
 |------|------|------|
-| 모드 A ts 채취 시점(요청 직전 · 응답 직후) | W1 등재 미확인 — REQ-COL-03이 확정 전 계측 요구만 둔다 | [../06_pipeline/02_collect.md](../06_pipeline/02_collect.md)(W4) |
-| 실행 중 마스터 변경의 반영 | 재적재 신호 없음 — REQ-COL-01이 현행을 적었다 | 상동 |
+| 모드 A ts 채취 시점(요청 직전 · 응답 직후) | **W4 판정** — 요청 블록 송신 직전(응답 직후 시각은 왕복 히스토그램에만) | [../06_pipeline/02_collect.md](../06_pipeline/02_collect.md) |
+| 실행 중 마스터 변경의 반영 | **W4 판정** — ch:cacheinv 구독 · REQ-COL-01 반영 | 상동 |
 | SW-10 off와 경고 단계 데드밴드 강화 | 데드밴드가 꺼진 상태에서 "강화"가 태그별 설정값 적용인지 무동작인지 없다 | [../04_architecture/06_backpressure_failure.md](../04_architecture/06_backpressure_failure.md)(W3) |
 | 백프레셔 하강 히스테리시스 | 경고 해제 · 스풀 종료 조건의 떨림 방지 없음 | 상동 |
-| BAD_TIMEOUT "기록"의 자리 | 행을 쓰지 않는다(W1 판정) — REQ-COL-02가 타임아웃율 계수로 기록한다 | [../06_pipeline/02_collect.md](../06_pipeline/02_collect.md)(W4) |
-| FLOAT64 4워드 순서 · 레지스터 비트 BOOL | W1 등재 미확인 | 상동 |
+| BAD_TIMEOUT "기록"의 자리 | **W4 판정** — 메트릭만 · 행 · 최신값 갱신 없음 | [../06_pipeline/02_collect.md](../06_pipeline/02_collect.md) |
+| FLOAT64 4워드 순서 · 레지스터 비트 BOOL | **W4 판정** — 두 축 조합 · 레지스터 비트 BOOL 미지원 | 상동 |
 | 품질 코드별 계수 · Modbus 왕복 히스토그램의 메트릭 이름 | **신규 미확인** — REQ-COL-15가 요구한다 | [../10_observability/01_metrics_catalog.md](../10_observability/01_metrics_catalog.md)(W6) |
 | 폴링 주기 여유 · Modbus 왕복 지연 | 3계층 미확인 — 미확인 · 확정 전 임의 값 고정 금지. 원본 목표(4 vCPU 가정) Modbus 왕복 p95 30 ms | [13_nonfunctional.md](./13_nonfunctional.md) REQ-NFR-04 |
 

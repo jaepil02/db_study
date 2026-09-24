@@ -2,6 +2,7 @@
 
 > **대상**: 적재·분기(ING · NestJS ingest 모듈)의 동작 계약 — Stream 소비 · 배치 플러시 · ClickHouse 삽입 · 멱등 · XACK · 재시도 · DLQ · PEL 회수 · 다중 컨슈머 · 최신값 · 알람 전달 · 3계층 분기 실행 · 대조군 동시 적재 · 롤업 발동 · 백프레셔 대응 · 관측 — REQ-ING-NN 채번 정본
 > **작성일**: 2026-09-24
+> **개정일**: 2026-09-24 — W4 판정 반영 — REQ-ING-18 Stream 대기 시작점 t0 → **엔트리 ID 시각**(04_architecture/05 판정과 통일) — REQ 수 불변
 > **개정일**: 2026-09-24 — W3 판정 반영 — 롤업 객체 귀속 잠정 ING → **ING 확정**
 > **원천**: 원본 architecture.md §5 · §7.1 · §7.2 · §7.5 · §9 · §9.1 · §9.2 · §9.3 · §14 · §17(커밋 ff66a37) · 원본 data_flow.md §4 · §4.1 · §4.2 · §4.3 · §8.2 · §10.2 · §12.2 · §12.3 · §12.4 · §15 · §17(커밋 ff66a37) · 원본 tech_stack.md §5.3(커밋 ff66a37) · 원본 implementation_plan.md §4.1 · §5 S3 · S6 · S7 · §7.1 · §7.2 · §7.3 · §7.5(커밋 ff66a37) · D-04 · D-05 · D-12 · [../02_features/06_ingest.md](../02_features/06_ingest.md) ING-01~13 · [../02_features/13_switch_matrix.md](../02_features/13_switch_matrix.md) · [01_global_rules.md](./01_global_rules.md) REQ-GLB-04~07 · 11 · 12
 
@@ -49,7 +50,7 @@
 | ID | 요구 | 근거 | 위반 시 구체적 실패 | 검증 방법 | 관련 기능 | 관련 흐름 | 관련 에러 코드 |
 |------|------|------|------|------|------|------|------|
 | **REQ-ING-17** | ClickHouse가 멈추면 XACK를 보류해 엔트리를 PEL에 둔다. 백프레셔 **주의** 단계에서 컨슈머 동시성을 늘리고, 복구 뒤에는 소진 모드로 배치를 키워(현행 참고 100,000행 · 소유 [../06_pipeline/03_ingest_batch.md](../06_pipeline/03_ingest_batch.md)) 적체를 빼낸다. 소진 시간(랙이 0으로 돌아오는 시간)을 계측한다. Redis 중단 중에는 XREADGROUP 실패로 대기한다 | 원본 architecture.md §9.3 · §17 · 원본 data_flow.md §12.2 · §12.3 | 소진 모드가 없으면 복구 후 평상 배치로 적체를 빼느라 소진 시간이 중단 시간보다 길어질 수 있다. 소진 시간을 재지 않으면 S6 판정(원본 목표 — 중단 시간의 30% 이내)을 할 수 없다 | ClickHouse 5분 중단 → 복구 후 무손실 · 무중복 · 소진 시간 기록 | ING-13 | F-10 | 해당 없음 — consumer_lag · stream_length |
-| **REQ-ING-18** | ING는 consumer_lag · rows_inserted · insert_duration · batch_size · dlq_count · 계층별 쓰기 계수 · 대조군 실패 계수 · Stream 대기 지연(XREADGROUP 수신 시각 − t0) 히스토그램을 노출한다. 에러 네임스페이스를 두지 않는다 | 원본 architecture.md §14 · 원본 data_flow.md §15 · REQ-GLB-16 · [../11_glossary/02_error_codes.md](../11_glossary/02_error_codes.md) 에러 코드가 아닌 것 | 지표가 빠지면 그 실패는 응답 코드로도 드러나지 않아 관측 불가능하다 — consumer_lag가 없으면 격리 XACK 누락(REQ-ING-08)을 발견할 자리가 없다 | /metrics에서 지표 8종 존재 조회 · 이름 정본 [../10_observability/01_metrics_catalog.md](../10_observability/01_metrics_catalog.md) 대조 | ING-01~13 | F-02 · F-08 · F-10 | 해당 없음 |
+| **REQ-ING-18** | ING는 consumer_lag · rows_inserted · insert_duration · batch_size · dlq_count · 계층별 쓰기 계수 · 대조군 실패 계수 · Stream 체류 지연(XREADGROUP 수신 시각 − 엔트리 ID 시각 — t0가 아니다 · [../04_architecture/05_latency_budget.md](../04_architecture/05_latency_budget.md) §구간 경계 판정) 히스토그램을 노출한다. 에러 네임스페이스를 두지 않는다 | 원본 architecture.md §14 · 원본 data_flow.md §15 · REQ-GLB-16 · [../11_glossary/02_error_codes.md](../11_glossary/02_error_codes.md) 에러 코드가 아닌 것 | 지표가 빠지면 그 실패는 응답 코드로도 드러나지 않아 관측 불가능하다 — consumer_lag가 없으면 격리 XACK 누락(REQ-ING-08)을 발견할 자리가 없다 | /metrics에서 지표 8종 존재 조회 · 이름 정본 [../10_observability/01_metrics_catalog.md](../10_observability/01_metrics_catalog.md) 대조 | ING-01~13 | F-02 · F-08 · F-10 | 해당 없음 |
 
 ## 관측 형태 요약
 

@@ -2,6 +2,7 @@
 
 > **대상**: 실시간(RLT · NestJS realtime 모듈) 기능 목록 · 기능별 경계 · 스위치 교체 · 의존 도메인 · 실패 시 보이는 것 — 기능 ID RLT-NN 채번 정본
 > **작성일**: 2026-09-24
+> **개정일**: 2026-09-24 — W4 판정 반영 — RLT-09 무효화 체인 ⑤단 → **⑥단**(6단 번호 표기) — 기능 수 불변
 > **원천**: 원본 data_flow.md §2 · §5 · §7.2 · §9 · §9.1 · §9.2 · §12.2 · §16 · §17(커밋 ff66a37) · 원본 architecture.md §5 · §8.1 · §8.2 · §11 · §11.2 · §17(커밋 ff66a37) · 원본 implementation_plan.md §4.1 · §5 S2 · S4 · §7.2 · §7.4(커밋 ff66a37) · [13_switch_matrix.md](./13_switch_matrix.md) SW-02 · SW-06 · SW-07 · [../11_glossary/05_units_and_time.md](../11_glossary/05_units_and_time.md) STALE 판정
 
 RLT는 **"지금 값"을 ClickHouse에 닿지 않고 돌려주는 도메인**이다. 최신값은 Ingest가 쓴 Redis Hash(rt:latest)에서 읽고, 실시간 변화는 Ingest · Alarm이 발행한 Pub/Sub(ch:rt · ch:alarm)을 WebSocket으로 밀어준다. 자기 저장 객체가 없다 — 읽기만 한다([../01_overview/04_domain_map.md](../01_overview/04_domain_map.md)).
@@ -22,7 +23,7 @@ RLT는 **"지금 값"을 ClickHouse에 닿지 않고 돌려주는 도메인**이
 | **RLT-06** | 스로틀 병합 | 창(현행 100 ms) 안에 들어온 같은 태그의 중간값을 버리고 최종값만 한 프레임으로 보낸다. 사람 눈은 초당 10회 이상의 숫자 변화를 읽지 못한다 — 그 이상은 낭비이고 브라우저 탭을 멈춘다. SW-07이 창 크기이며 0이면 무제한 전송이다 | S4 | F-07 | SW-07 | 07_api/11_websocket | 없음 — 메모리 |
 | **RLT-07** | 연결 관리 · 재연결 동기화 | 주기 ping(현행 30초)에 pong이 연속으로 오지 않으면(현행 3회) 소켓을 닫고 구독을 정리한다. 느린 구독자는 Redis Pub/Sub 출력 버퍼 한도로 강제 절단한다. 클라이언트는 지수 백오프로 재연결하고 **재연결 직후 REST 최신값을 1회 읽어** 끊긴 동안의 공백을 메운다 — Pub/Sub은 전달을 보장하지 않는다 | S4 | F-07 · F-03 | 해당 없음 | 07_api/11_websocket · 07_api/06_realtime | Redis ch:rt · rt:latest |
 | **RLT-08** | 알람 푸시 | ch:alarm을 구독해 알람 발생 · 해제 이벤트를 연결된 클라이언트에 브로드캐스트한다 | S7 | F-06 · F-07 | SW-06 | 07_api/11_websocket | Redis ch:alarm(구독) |
-| **RLT-09** | 무효화 신호 중계 | 마스터 쓰기 뒤의 캐시 무효화 신호를 WebSocket으로 브라우저에 전달해 브라우저 쿼리 캐시를 무효화하게 한다(무효화 체인 ⑤단). ch:cacheinv에 구독자를 더하는 것만으로 된다(원본 implementation_plan.md §7.4) | S4 | F-05 | 해당 없음 | 07_api/11_websocket | Redis ch:cacheinv(구독) |
+| **RLT-09** | 무효화 신호 중계 | 마스터 쓰기 뒤의 캐시 무효화 신호를 WebSocket으로 브라우저에 전달해 브라우저 쿼리 캐시를 무효화하게 한다(무효화 체인 ⑥단 — 6단 번호 정본 [../06_pipeline/07_business_crud.md](../06_pipeline/07_business_crud.md)). ch:cacheinv에 구독자를 더하는 것만으로 된다(원본 implementation_plan.md §7.4) | S4 | F-05 | 해당 없음 | 07_api/11_websocket | Redis ch:cacheinv(구독) |
 
 - 검산: RLT-01~09 = **9**. 단계별(첫 도입 기준) S2 4(RLT-01 · 03 · 04 · 05) + S4 4(RLT-02 · 06 · 07 · 09) + S7 1(RLT-08) = **9**
 - 표면별: REST(07_api/06_realtime) 4(RLT-01 · 02 · 03 · 04) + WebSocket(07_api/11_websocket) 5(RLT-05 · 06 · 07 · 08 · 09) = **9**. RLT-07은 재연결 동기화에서 REST 최신값을 한 번 더 부른다.
@@ -97,7 +98,7 @@ RLT-04의 두 갈래다. 같은 "값이 없다"가 반대의 응답을 만든다
 | 원본 항목 | 이 문서의 반영 | 정본 |
 |------|------|------|
 | 보정 7.2 ClickHouse 중단 시 최신값 정지 | RLT-03 STALE 표시로 드러낸다 · 갱신 주체 결정은 S6 | [../04_architecture/06_backpressure_failure.md](../04_architecture/06_backpressure_failure.md) · ADR [../04_architecture/09_decision_records.md](../04_architecture/09_decision_records.md) |
-| 보정 7.4 브라우저가 무효화 체인에서 빠짐 | RLT-09가 ⑤단의 중계를 맡는다 | [../06_pipeline/07_business_crud.md](../06_pipeline/07_business_crud.md) |
+| 보정 7.4 브라우저가 무효화 체인에서 빠짐 | RLT-09가 ⑥단의 중계를 맡는다 | [../06_pipeline/07_business_crud.md](../06_pipeline/07_business_crud.md) |
 | 보정 7.5 TTL 강제 수단 | rt:latest 워밍(RLT-04)은 봉인 계열 래퍼로 쓴다 — TTL을 붙이지 않는다. lock:rebuild는 TTL 필수 래퍼다 | [../05_data_stores/05_redis_keyspace.md](../05_data_stores/05_redis_keyspace.md) |
 | 보정 7.1 · 7.3 | 해당 없음 | 해당 없음 |
 

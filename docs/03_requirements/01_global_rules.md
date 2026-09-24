@@ -2,6 +2,7 @@
 
 > **대상**: db_study 전 도메인이 전제하는 공통 계약 — 시각 의미론 · 비동기 경계 · 전달 보장 · Redis 키 계열 · 저장소 책임과 분기 · 측정과 계측 · 실행 경계 — REQ-GLB-NN 채번 정본
 > **작성일**: 2026-09-24
+> **개정일**: 2026-09-24 — W4 판정 반영 — REQ-GLB-10 1차 신호 스트림 길이 검사 → **미확인 적체 검사**(ADR-21) — REQ 수 불변
 > **원천**: 원본 architecture.md §1 · §5 · §7.1 · §8 · §9 · §9.2 · §9.3 · §12 · §17 · §18 · §19(커밋 ff66a37) · 원본 tech_stack.md §1 · §5.3 · §10.4(커밋 ff66a37) · 원본 data_flow.md §2 · §3.2 · §4.2 · §4.3 · §8.2 · §12.1 · §15 · §17(커밋 ff66a37) · 원본 implementation_plan.md §2.4 · §4 · §7.3 · §7.5 · §8(커밋 ff66a37) · D-02 · D-04 · D-05 · D-06 · D-10 · [../README.md](../README.md) 전역 불변식 · [../11_glossary/05_units_and_time.md](../11_glossary/05_units_and_time.md) · [../02_features/13_switch_matrix.md](../02_features/13_switch_matrix.md)
 
 이 문서는 루트 README 전역 불변식 표의 **상세 계약**이다. 불변식 한 행은 요약 문장이고, 여기서는 그 문장을 **검증 가능한 계약 · 위반 시 구체적 실패 · 검증 방법**으로 풀어 REQ-GLB-NN으로 채번한다. 도메인 파일(02~12)은 이 계약을 다시 서술하지 않고 REQ-GLB 번호로 인용한다.
@@ -35,7 +36,7 @@
 |------|------|------|------|------|------|------|------|
 | **REQ-GLB-08** | 키 접두 하나가 곧 생존 정책의 경계다. 봉인 계열(stream · rt · alarm)은 TTL을 붙이지 않고, 캐시 계열(cache · lock · rl · sess · auth)은 TTL 없이 만들지 않는다. 강제 수단은 린트가 아니라 **키 계열별 래퍼**다 — 캐시 래퍼는 TTL을 필수 파라미터로 받고 봉인 래퍼는 TTL 명령을 노출하지 않는다. 새 용도가 기존 접두의 정책과 다르면 접두를 빌리지 않는다 | 원본 architecture.md §8 · §8.3 · 원본 implementation_plan.md §7.5 · 불변식 "TTL 우선순위" · 봉인 표 [../05_data_stores/05_redis_keyspace.md](../05_data_stores/05_redis_keyspace.md) | 봉인 키에 TTL이 붙으면 volatile-lru의 축출 후보가 되어 메모리 압박 시 **Stream 엔트리 · 알람 상태가 조용히 사라진다.** 캐시 키에 TTL이 없으면 축출되지 않는 캐시가 Stream 예산을 잠식한다 | SCAN으로 접두별 샘플을 뽑아 TTL 조회(봉인 −1 · 캐시 양수) · maxmemory 하향 실험에서 evicted_keys 증가 중 stream · rt · alarm 키 수 불변 조회 | COL-07 · ING-05 · ING-08 · AUT-01 · AUT-06 · MST-07 | F-01 · F-02 · F-10 | 해당 없음 |
 | **REQ-GLB-09** | 같은 Redis 인스턴스 안에서 실패 전략은 키 계열에 따라 정반대다 — 캐시 계열 호출은 짧은 타임아웃 후 예외를 삼키고 원천 DB로 우회(degrade)하며, 봉인 계열 호출 실패는 그대로 던져 백프레셔를 발동시킨다. 타임아웃은 2계층 조정값(현행 참고 50 ms · 소유 [../05_data_stores/05_redis_keyspace.md](../05_data_stores/05_redis_keyspace.md)) | 원본 architecture.md §8 · §17 degrade 원칙 · 불변식 "실패 전략 이원화" | 캐시 호출 실패를 그대로 던지면 캐시 장애가 조회 서비스 실패가 된다. 봉인 호출 실패를 삼키면 XADD 실패가 스풀 전환 없이 **유실**이 된다. 최신값을 ClickHouse로 우회하면 초당 수백 회 점조회가 대량 스캔 엔진을 과부하시켜 적재까지 밀린다 | Redis 3분 중단 주입 — 시계열 조회 200(지연 증가) · 최신값 503 · Collector spool_active 켜짐을 동시에 조회 | TSQ-04 · RLT-04 · COL-09 · MST-08 | F-03 · F-04 · F-10 | realtime.latest_unavailable/503 |
-| **REQ-GLB-10** | 버퍼가 차면 조용히 버리지 않고 실패시키고 계측한다. 1차 신호는 발행자의 스트림 길이 검사(백프레셔 위험 단계 — 스풀 전환 · 부하 주입 표면 거절)이고, MAXLEN 트리밍은 검사를 우회한 발행자를 막는 최후 안전장치다. 미소비 엔트리가 잘리면 stream_trimmed_unacked로 **결함**으로 센다. 단계 임계는 2계층 조정값이며 정본은 [../04_architecture/06_backpressure_failure.md](../04_architecture/06_backpressure_failure.md) | 원본 architecture.md §1 백프레셔 명시화 · §9.3 · 원본 data_flow.md §12.1 · 불변식 "백프레셔 명시화" | MAXLEN 트리밍은 오류 없이 오래된 데이터를 버린다 — 유실을 인지하지 못한 채 **틀린 처리량 수치**를 얻는다. 길이 검사를 하지 않는 발행자가 하나라도 있으면 그 발행자가 곧 "우회한 발행자"다 | 백프레셔 단계 전이 재현 중 stream_trimmed_unacked = 0 조회 · 모드 C 위험 단계 거절 수 집계 · 발행 경로 전수(Collector · 모드 B · 모드 C)의 길이 검사 유무 대조 | COL-07 · COL-09 · GEN-06 · GEN-07 · ING-13 | F-01 · F-09 · F-10 | datagen.stream_full/503 |
+| **REQ-GLB-10** | 버퍼가 차면 조용히 버리지 않고 실패시키고 계측한다. 1차 신호는 발행자의 적체 검사(컨슈머 그룹 lag + pending — XLEN이 아니다 · ADR-21 · 백프레셔 위험 단계 — 스풀 전환 · 부하 주입 표면 거절)이고, MAXLEN 트리밍은 검사를 우회한 발행자를 막는 최후 안전장치다. 미소비 엔트리가 잘리면 stream_trimmed_unacked로 **결함**으로 센다. 단계 임계는 2계층 조정값이며 정본은 [../04_architecture/06_backpressure_failure.md](../04_architecture/06_backpressure_failure.md) | 원본 architecture.md §1 백프레셔 명시화 · §9.3 · 원본 data_flow.md §12.1 · 불변식 "백프레셔 명시화" | MAXLEN 트리밍은 오류 없이 오래된 데이터를 버린다 — 유실을 인지하지 못한 채 **틀린 처리량 수치**를 얻는다. 길이 검사를 하지 않는 발행자가 하나라도 있으면 그 발행자가 곧 "우회한 발행자"다 | 백프레셔 단계 전이 재현 중 stream_trimmed_unacked = 0 조회 · 모드 C 위험 단계 거절 수 집계 · 발행 경로 전수(Collector · 모드 B · 모드 C)의 길이 검사 유무 대조 | COL-07 · COL-09 · GEN-06 · GEN-07 · ING-13 | F-01 · F-09 · F-10 | datagen.stream_full/503 |
 
 ## 요구사항 — 저장소 책임과 분기
 
@@ -128,7 +129,7 @@
 | REQ-GLB-06 | 결정적 토큰 + ClickHouse 중복 제거 윈도우 | 윈도우 안 재시도 중복 | 윈도우 밖 재삽입 · 대조군 쪽 중복 | [07_ingest.md](./07_ingest.md) REQ-ING-15 |
 | REQ-GLB-07 | 없음 — 설계 전제 | 해당 없음 | 순서 의존 집계의 도입 자체 | 한계 등재 — 순서 무관성 행 |
 | REQ-GLB-08 | 키 계열별 래퍼(타입 시스템) | 래퍼를 거친 TTL 위반 | redis-cli 수동 조작 · 래퍼를 우회한 원시 클라이언트 호출 | 봉인 표 [../05_data_stores/05_redis_keyspace.md](../05_data_stores/05_redis_keyspace.md) |
-| REQ-GLB-10 | 발행자의 길이 검사 + MAXLEN | 검사하는 발행자의 넘침 | 검사하지 않는 발행자의 조용한 유실 — 계측만 한다 | stream_trimmed_unacked |
+| REQ-GLB-10 | 발행자의 적체 검사 + MAXLEN | 검사하는 발행자의 넘침 | 검사하지 않는 발행자의 조용한 유실 — 계측만 한다 | stream_trimmed_unacked |
 | REQ-GLB-14 | 시퀀스 · 논리 삭제 · 쓰기 표면 | 표면을 통한 물리 삭제 · 스케일 덮어쓰기 | psql 직접 UPDATE | 한계 등재 |
 | REQ-GLB-19 | Compose 포트 표기 | LAN 노출 | 같은 머신의 다른 프로세스 접근 | [../12_security/05_local_exposure.md](../12_security/05_local_exposure.md) |
 
@@ -141,7 +142,7 @@
 | 판정 | 전역 계약 | 판정 자리 |
 |------|------|------|
 | Redis 중단 시 로그인 · 갱신은 거절하고 레이트 리밋은 degrade한다 | REQ-GLB-09 — auth 계열은 캐시 계열이지만 **원천 DB가 없어 우회할 곳이 없다** | [02_auth.md](./02_auth.md) REQ-AUT-14 |
-| 모드 B도 발행 전 길이 검사를 한다 | REQ-GLB-10 — 검사 없는 발행자를 남기지 않는다 | [06_datagen.md](./06_datagen.md) REQ-GEN-07 |
+| 모드 B도 발행 전 적체 검사를 한다 | REQ-GLB-10 — 검사 없는 발행자를 남기지 않는다 | [06_datagen.md](./06_datagen.md) REQ-GEN-07 |
 | SW-09 대조군 삽입 실패는 XACK를 막지 않는다 | REQ-GLB-11 — 계측물의 실패가 분기 목적지의 경로를 멈추지 않는다 | [07_ingest.md](./07_ingest.md) REQ-ING-15 |
 
 ## 관련 문서

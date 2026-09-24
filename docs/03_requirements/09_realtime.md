@@ -2,6 +2,7 @@
 
 > **대상**: 실시간(RLT)의 동작 계약 — 최신값 읽기 · STALE 판정 · 메타 부착 · 빈 키 복원과 Redis 불가 503의 구분 · SW-02 읽기 포트 교체 · WebSocket 연결과 인증 · 스로틀 병합 · 연결 관리 · 재연결 동기화 · 알람 푸시 · 무효화 신호 중계 · ClickHouse 중단 중 최신값 정지의 표시 — REQ-RLT-NN 채번 정본
 > **작성일**: 2026-09-24
+> **개정일**: 2026-09-24 — W4 판정 반영 — 무효화 체인 단 번호를 6단 정본(07_business_crud · ADR-12)에 맞춤(⑤단 → ⑥단)
 > **원천**: 원본 data_flow.md §5 · §7.2 · §9 · §9.1 · §9.2 · §12.2 · §12.4 · §15 · §17(커밋 ff66a37) · 원본 architecture.md §8.1 · §8.2 · §10.1 · §11 · §11.2 · §17 · §18(커밋 ff66a37) · 원본 implementation_plan.md §4.1 · §5 S2 · S6 · §7.2 · §7.4 · §7.5(커밋 ff66a37) · D-06 · [../02_features/08_realtime.md](../02_features/08_realtime.md) RLT-01~09 · [../02_features/13_switch_matrix.md](../02_features/13_switch_matrix.md) SW-02 · SW-06 · SW-07 · [../11_glossary/05_units_and_time.md](../11_glossary/05_units_and_time.md) STALE 판정 · [../11_glossary/02_error_codes.md](../11_glossary/02_error_codes.md) realtime.latest_unavailable
 
 이 문서는 **"지금 값"을 ClickHouse에 닿지 않고 돌려주는 계약**을 고정한다. 기능의 존재와 경계는 [../02_features/08_realtime.md](../02_features/08_realtime.md)가, F-03 · F-07 기전은 [../06_pipeline/05_realtime_read.md](../06_pipeline/05_realtime_read.md)가 갖는다. RLT는 저장 객체가 없어 모든 계약이 "무엇을 읽고, 무엇을 읽지 않는가"로 선다.
@@ -117,7 +118,7 @@
 | 원본 항목 | 이 문서의 반영 | 정본 |
 |------|------|------|
 | 보정 7.2 ClickHouse 중단 시 최신값 정지 | REQ-RLT-16 — STALE로 드러내고 갱신 주체 결정은 S6 실측 | [../04_architecture/06_backpressure_failure.md](../04_architecture/06_backpressure_failure.md) · [../04_architecture/09_decision_records.md](../04_architecture/09_decision_records.md) |
-| 보정 7.4 브라우저가 무효화 체인에서 빠짐 | REQ-RLT-15 — ⑤단 중계 · SW-06 대상 제외 | [../06_pipeline/07_business_crud.md](../06_pipeline/07_business_crud.md) |
+| 보정 7.4 브라우저가 무효화 체인에서 빠짐 | REQ-RLT-15 — ⑥단 중계 · SW-06 대상 제외 | [../06_pipeline/07_business_crud.md](../06_pipeline/07_business_crud.md) |
 | 보정 7.5 TTL 강제 수단 | REQ-RLT-05 — 워밍은 봉인 계열 래퍼 · 복원 락은 캐시 계열 래퍼 | [../05_data_stores/05_redis_keyspace.md](../05_data_stores/05_redis_keyspace.md) |
 | 보정 7.1 · 7.3 | 해당 없음 | 해당 없음 |
 
