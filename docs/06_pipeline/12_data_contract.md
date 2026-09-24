@@ -2,13 +2,14 @@
 
 > **대상**: 측정값 하나가 계층을 지나며 바뀌는 모양의 정본 — 단계별 스키마(와이어 → 디코딩 → Stream 엔트리 → ClickHouse 행 → API 응답) · 스키마 버전 필드 v · t0 · dt 규칙 · 최신값 Hash 값 · Pub/Sub 페이로드 · 스풀 프레임 · DLQ 엔트리 · 계약 변경 규칙 · 발행자 공통 계약
 > **작성일**: 2026-09-24
+> **개정일**: 2026-09-24 — S1 실측 반영(EXP-21 기록 006 · 410a146 · EXP-39 기록 007~009 · 019e54d) — 계약 v1의 코드 자리 등재(packages/shared) · §와이어 표현 신설(va 정수 int · 실수 float64 · s · t0 int64) · 엔트리 크기 미확인 → **7,051 B(태그 500 · RANDOM_WALK)** — 객체 배열 대비 크기 비는 미확인 유지
 > **개정일**: 2026-09-24 — W7 검수 반영 — 미확인 2행 닫힘(모드 C 본문 · 응답 시각 형식과 WebSocket 프레임)
 > **개정일**: 2026-09-24 — W6 실험 채번 반영 — 메트릭 이름 반영(정본 10_observability/01 · 06)
 > **원천**: 원본 data_flow.md §14 · §14.1 · §14.2 · §15(커밋 ff66a37) · 원본 architecture.md §9.3(커밋 ff66a37) · docs_plan.md 파일 목차(06_pipeline/12) · ADR-01 · ADR-04 · ADR-14 · ADR-15 · REQ-GLB-01 · 02 · 21 · REQ-COL-09 · REQ-GEN-07 · REQ-ING-01 · 05 · REQ-TSQ-05 · [../11_glossary/05_units_and_time.md](../11_glossary/05_units_and_time.md) 기준값 + 오프셋 인코딩 · [../05_data_stores/03_clickhouse_schema.md](../05_data_stores/03_clickhouse_schema.md) tag_raw · [../05_data_stores/05_redis_keyspace.md](../05_data_stores/05_redis_keyspace.md) 봉인 계열 값 모양
 
 모듈 사이의 결합은 **데이터 계약 하나로만** 한다(REQ-GLB-21). Collector와 Ingest는 같은 프로세스에 있어도 서로의 코드를 부르지 않고 Stream 엔트리의 모양으로만 만난다 — 역할 분리(APP_ROLE) 뒤에는 두 모듈이 서로 다른 시점에 배포되어 **두 버전이 공존하는 구간이 반드시 생긴다.** 이 문서가 그 모양과 버전 규칙의 정본이다.
 
-계약의 물리적 자리는 packages/shared의 스키마 정의다(ADR-01) — 이 문서는 필드 · 타입 · 의미 · 불변 조건을 고정하고 코드는 쓰지 않는다. 테이블 DDL의 정본은 [../05_data_stores/03_clickhouse_schema.md](../05_data_stores/03_clickhouse_schema.md), API 응답 봉투 · 시각 형식은 [../07_api/01_conventions.md](../07_api/01_conventions.md)(W5), 시각 의미론은 [../11_glossary/05_units_and_time.md](../11_glossary/05_units_and_time.md)다.
+계약의 물리적 자리는 packages/shared의 스키마 정의다(ADR-01) — 이 문서는 필드 · 타입 · 의미 · 불변 조건을 고정하고 코드는 쓰지 않는다. **S1에서 구현됐다** — packages/shared/src/stream-entry.ts(불변 조건 검증) · codec.ts(언어 중립 인코딩 — 표준 배열 · map · t0와 s는 정수 타입)이며, 계약과 어긋나면 테스트가 막는다. 테이블 DDL의 정본은 [../05_data_stores/03_clickhouse_schema.md](../05_data_stores/03_clickhouse_schema.md), API 응답 봉투 · 시각 형식은 [../07_api/01_conventions.md](../07_api/01_conventions.md)(W5), 시각 의미론은 [../11_glossary/05_units_and_time.md](../11_glossary/05_units_and_time.md)다.
 
 ## 계층을 지나는 변형
 
@@ -65,7 +66,9 @@
 - **t0를 엔트리의 최솟값으로 고정한다(판정).** 용어 사전이 "t0가 사이클 최솟값이라는 보장이 없어 음수 dt를 금지하지 않는다"며 넘긴 자리를 닫는다. Collector는 사이클 첫 요청의 송신 직전 시각을 t0로 쓰고 뒤 블록은 그 이후라 dt ≥ 0이 자연히 성립한다. 생성기도 엔트리 안 최소 ts를 t0로 둔다. **소비자는 음수 dt를 거절하지 않고 계수만 한다** — 발행자 결함을 적재 유실로 바꾸지 않기 위해서다.
 - **dt가 int32라 한 엔트리의 시각 폭은 약 ±24.8일이다.** 한 사이클 안에서 넘칠 수 없으므로, 넘친다면 한 엔트리에 다른 사이클이 섞였다는 결함이다.
 - **품질 1(UNCERTAIN)은 계약상 허용하되 현재 부여 주체가 없다**([02_collect.md](./02_collect.md) §품질 판정). 계약에서 빼면 부여 주체가 생길 때 v를 올려야 한다.
-- 엔트리 크기의 원본 산정은 약 7 KB(설비당 태그 500)이며 실제 크기는 미확인이다([../05_data_stores/06_redis_memory.md](../05_data_stores/06_redis_memory.md)).
+- 엔트리 크기의 원본 산정은 약 7 KB(설비당 태그 500)이며, 인코딩 실측은 RANDOM_WALK 7,051 B · 혼합 5,455 B다(기록 009 · 019e54d · 부하 실험 · L · 스위치 기본값). Redis 안 크기는 미확인이다([../05_data_stores/06_redis_memory.md](../05_data_stores/06_redis_memory.md)).
+- **와이어 표현(S1 판정)** — 숫자는 msgpack 정수 또는 float64로 실린다. va는 정수로 떨어지는 값이면 int, 나머지는 float64이며 **소비자는 va를 Float64로 해석한다.** uint64 계약(s · t0)은 음이 아닌 msgpack 정수(int64 · uint64 어느 쪽이든)다. 배열은 표준 msgpack 배열이고 타입 배열 확장 · bin을 쓰지 않는다 — 전환 조건 ①의 Python 생성기가 같은 모양을 낸다. 엔트리 크기는 이 표현에 기댄다(정수 값 1~3 B · 실수 9 B).
+- **발행자와 소비자의 검증이 다르다.** 발행자는 t0 = 최솟값 · dt ≥ 0을 지켜 내고, 소비자는 음수 dt를 거절하지 않고 계수한다 — 코드는 packages/shared의 발행자 스키마와 소비자 스키마 둘로 가른다.
 
 ### 발행자 공통 계약
 
@@ -192,7 +195,7 @@ stream:plc:dlq 엔트리 하나 = **실패한 원 엔트리 하나**다(W3 판�
 
 | 항목 | 상태 | 확정 자리 |
 |------|------|------|
-| 실제 엔트리 크기 · 컬럼 배열 대 객체 배열 크기 비 | 3계층 미확인 — 원본 예상치 약 7 KB(태그 500) · 약 1/9 | [../05_data_stores/06_redis_memory.md](../05_data_stores/06_redis_memory.md) · 실측 |
+| 실제 엔트리 크기 · 컬럼 배열 대 객체 배열 크기 비 | 엔트리 크기는 **인코딩 확정(S1 · 기록 009 · 019e54d · 부하 실험 · L · 스위치 기본값)** — 태그 500 RANDOM_WALK 7,051 B · 혼합 5,455 B · 객체 배열 대비 크기 비(원본 예상치 약 1/9)는 3계층 미확인 유지 | [../05_data_stores/06_redis_memory.md](../05_data_stores/06_redis_memory.md) · 실측 |
 | 모드 C 요청 본문 모양 | 닫힘 — §요청 본문(이 계약으로 변환) — [../07_api/09_datagen.md](../07_api/09_datagen.md) | [../07_api/09_datagen.md](../07_api/09_datagen.md)(W5) |
 | 응답 시각 형식 · WebSocket 프레임 · 채널 필드 이름 | 닫힘 — 측정 시각은 epoch ms 정수 · 업무 시각은 UTC ISO 8601 · WebSocket 프레임 · 채널 필드는 07_api/11 — [../07_api/01_conventions.md](../07_api/01_conventions.md) | [../07_api/01_conventions.md](../07_api/01_conventions.md) · [../07_api/11_websocket.md](../07_api/11_websocket.md)(W5) |
 | DLQ 엔트리 원 배치 토큰 필드 | 판정 — 키 공간 값 모양 갱신 필요 | [../05_data_stores/05_redis_keyspace.md](../05_data_stores/05_redis_keyspace.md)(W4 반영) |

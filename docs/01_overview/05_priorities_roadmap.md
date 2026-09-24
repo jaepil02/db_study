@@ -2,6 +2,7 @@
 
 > **대상**: 학습자 · 실험 수행자 · 구현 착수자 — 무엇을 어떤 순서로 만들고, 각 단계에 무엇을 조건으로 들어가 무엇을 보면 끝났다고 판정하는가
 > **작성일**: 2026-09-24
+> **개정일**: 2026-09-24 — S1 실측 반영(EXP-21 기록 006 · 410a146 · EXP-39 기록 007~009 · 019e54d) — S1 합격 불릿 · 코드 착수 항목 Stream 페이로드 계약 Stream 부분 완료 · 미확인 "생성기 단독 처리량" 미확인 → **약 590만 pps(워커 1)**
 > **개정일**: 2026-09-24 — ClickHouse 26.8 LTS 전환(사용자 결정 · 25.x 보안 지원 종료) — 체크리스트 7 · S0 합격 불릿에 전환 반영(기록 004 · 005) · 체크리스트 항목의 스택 표기 26.8
 > **개정일**: 2026-09-24 — 착수 체크리스트 1 · 7 이행 — Docker VM 7.75 → **15.6 GB**(부하 실험 프로파일 S0 회귀 · 기록 003) · 릴리스 노트 대조 완료(ClickHouse 25.x 보안 지원 종료 등재 · 전환은 사용자 결정 대기)
 > **개정일**: 2026-09-24 — S0 완료 반영 — S0 합격(AC-14 · AC-15 3회 성립 · 기록 002 · EXP-32 기록 001) 불릿 신설 · 체크리스트 4 Node 22.23.3 설치 · .nvmrc 22 · 코드 착수 항목 상태(Taskfile S0분 · docs:lint 편입 · 저장소 설정 · 측정 기록 자리)
@@ -111,6 +112,7 @@ S7 업무 데이터 축        같은 스트림의 데이터가 세 저장소로
 
 - **모든 판정 수치에 4요소를 병기하고 3회 중앙값을 쓴다**(D-10). 기록 형식의 정본은 [../10_observability/04_experiment_protocol.md](../10_observability/04_experiment_protocol.md)다. 숫자 없는 단계 완료는 인정하지 않는다(원본 tech_stack.md §14).
 - **S0 합격(2026-09-24)** — AC-14 · AC-15가 3회 모두 성립했다(docs/measurements 기록 002 · EXP-29). 착수 체크리스트 1(Docker 메모리 상향) · 7(릴리스 노트 대조)이 미완인 채 S0에 들어갔다 — **진입 조건의 예외**였고 같은 날 둘을 이행했다. Docker VM을 15.6 GB로 올려 부하 실험 프로파일에서 AC-14 · AC-15를 다시 3회 확인했고(기록 003), 릴리스 노트 대조에서 ClickHouse 25.x 보안 지원 종료가 드러나 26.8 LTS로 전환하고 S0 판별 · 회귀를 다시 돌렸다(기록 004 · 005 — 26.8의 정수 ts 해석 변경은 프로파일 설정으로 막았다). 저장소 판별 EXP-32(기록 001)는 ADR-14를 보강했다([../04_architecture/09_decision_records.md](../04_architecture/09_decision_records.md)).
+- **S1 합격(2026-09-24)** — 생성기 단독 처리량이 워커 1에서도 약 590만 pps로 M 티어 3배(3만 pps)의 약 197배다(기록 006 · 410a146 · 부하 실험 · M · 스위치 기본값 · EXP-21 · AC-16). 전환 조건 ①은 발동하지 않는다. 엔트리 인코딩 크기는 기록 007 · 008 · 009(EXP-39의 S1 몫 · 티어별)다.
 - **S3 진입 조건의 원본 내부 불일치** — 원본 착수 체크리스트는 7.1과 7.2를 S3 이전에 결정하라고 적었고(원본 implementation_plan.md §9), 같은 문서의 7.2 본문은 최신값 갱신 주체를 S6 실측으로 결정한다고 적었다. 이 문서는 둘을 "S3 이전에는 처리 방침(잠정안과 교체 가능한 포트 구조)을 정하고 최종 선택은 S6 실측으로 한다"로 읽는다. 방침의 정본은 [../04_architecture/09_decision_records.md](../04_architecture/09_decision_records.md)(W3)다.
 
 ## 소요
@@ -156,7 +158,7 @@ S0 시작 전에 끝낼 항목이다(원본 implementation_plan.md §9). 환경 
 | Taskfile 기본 작업 | migrate · seed · snapshot · restore · bench | S0(스냅샷 · 복원 — **완료** 2026-09-24) · S3(migrate · seed 확장) | 원본 tech_stack.md §11 · [../09_tech_stack/05_tooling_devops.md](../09_tech_stack/05_tooling_devops.md) |
 | **문서군 린트의 Taskfile 편입** | **완료(2026-09-24)** — 로컬 스크립트(.omc/docs_lint.py)를 scripts/docs_lint.py로 옮겨 task docs:lint로 편입하고 .githooks/pre-commit 품질 게이트에 붙였다 | S0 | docs_plan 보정 #9 · [../09_tech_stack/05_tooling_devops.md](../09_tech_stack/05_tooling_devops.md) |
 | 저장소 설정 파일 | Compose(healthcheck · cpuset · 메모리 상한 · observability 프로파일) · Redis(volatile-lru) · PostgreSQL · ClickHouse 설정 | S0 — **완료**(커밋 2318618) | [../04_architecture/03_execution_topology.md](../04_architecture/03_execution_topology.md) |
-| Stream 페이로드 계약 | 공유 패키지의 스키마 하나가 API DTO이자 Stream 계약 | S1 | [../06_pipeline/12_data_contract.md](../06_pipeline/12_data_contract.md) |
+| Stream 페이로드 계약 | 공유 패키지의 스키마 하나가 API DTO이자 Stream 계약 | S1 — **Stream 계약 부분 완료**(커밋 410a146 · packages/shared) · API DTO 부분은 S2 | [../06_pipeline/12_data_contract.md](../06_pipeline/12_data_contract.md) |
 | 스위치 포트 | 포트 인터페이스 하나에 구현 둘 · 모듈 초기화 시 선택 · 상태 노출 | S2(SW-01~SW-03)부터 도입 단계별 | D-06 · [../04_architecture/02_module_boundaries.md](../04_architecture/02_module_boundaries.md) |
 | 키 계열별 래퍼 | 캐시 계열은 TTL 필수 파라미터 · 봉인 계열은 TTL 명령 비노출 · 실패 전략 이원화 | S2 | 원본 implementation_plan.md §7.5 · [../05_data_stores/05_redis_keyspace.md](../05_data_stores/05_redis_keyspace.md) |
 | 측정 기록 자리 | docs/measurements 폴더와 기록 템플릿 | S2 첫 기록 전 — **S0에서 먼저 생김**(기록 001 · 002) | D-09 · [../10_observability/04_experiment_protocol.md](../10_observability/04_experiment_protocol.md) |
@@ -164,11 +166,11 @@ S0 시작 전에 끝낼 항목이다(원본 implementation_plan.md §9). 환경 
 
 ## 미확인 등재
 
-로드맵이 판정에 쓰는 성능 수치와 원본 예상치다. 전부 **미확인 — 확정 전 임의 값 고정 금지**이며 확정은 실험의 실측 결과로만 한다.
+로드맵이 판정에 쓰는 성능 수치와 원본 예상치다. 확정 행을 뺀 나머지는 **미확인 — 확정 전 임의 값 고정 금지**이며 확정은 실험의 실측 결과로만 한다.
 
 | 항목 | 원본 예상치 또는 목표 | 확정 단계 | 확정 자리 |
 |------|------|------|------|
-| 생성기 단독 처리량 | 20 스레드 머신에서는 미달 가능성이 낮다(원본 서술) | S1 | [../10_observability/06_experiment_catalog.md](../10_observability/06_experiment_catalog.md) |
+| 생성기 단독 처리량 | 20 스레드 머신에서는 미달 가능성이 낮다(원본 서술) | S1 — **닫힘**(워커 1 약 590만 pps · 기록 006 · 410a146 · 부하 실험 · M · 스위치 기본값) | [../10_observability/06_experiment_catalog.md](../10_observability/06_experiment_catalog.md) |
 | E2E 지연 기준선 p50 · p95 · p99 | 원본 목표 p95 1.5초 이하(M 티어) | S2 기준선 · S5 판정 | 상동 · [../03_requirements/13_nonfunctional.md](../03_requirements/13_nonfunctional.md) |
 | 최신값 조회 on/off 차이 | off 30~150 ms · on 0.3~1 ms | S2 | 상동 |
 | 배치 트리거 세 안의 파트 생성률 | 컨슈머 3개 독립 플러시 시 파트 생성률 3배(원본 산술) | S3 | 상동 · [../06_pipeline/03_ingest_batch.md](../06_pipeline/03_ingest_batch.md) |

@@ -2,12 +2,13 @@
 
 > **대상**: db_study의 비기능 목표(무손실 · 무중복 · 지연 예산 · 처리량 · 조회 지연 · 캐시 히트율 · WebSocket 연결 · 활성 파트 · 압축률 · 이벤트 루프 지연 · 소진 시간 · 역전 지점)와 기술 운영 계약(로컬 실행 · 127.0.0.1 바인드 · 기동 순서 · 버전 고정 · 마이그레이션 순번 · 메모리 프로파일 · 스냅샷 복원 · 측정 기록 4요소 · 3회 중앙값) — REQ-NFR-NN · REQ-TEC-NN 채번 정본 · 성능 목표치의 정본
 > **작성일**: 2026-09-24
+> **개정일**: 2026-09-24 — S1 실측 반영(EXP-21 기록 006 · 410a146 · EXP-39 기록 007~009 · 019e54d) — REQ-NFR-17 이 머신 실측값 미확인 → **워커 1 약 590만 pps**(합격선 3만의 약 197배) · 도입 단락 · 미확인 표의 "전부 미확인" 교정
 > **개정일**: 2026-09-24 — 최종 정밀 검수 — 알람 판정 구간 예산 행에 구간 신설 완료 · 값 EXP-30 연결
 > **개정일**: 2026-09-24 — W6 실험 채번 반영 — REQ-NFR 18행 검증 방법에 EXP 번호 · 오류율 산정 메트릭 판정 · 이벤트 루프 p95 메트릭 이름 통일(정본 10_observability/01 · 06)
 > **개정일**: 2026-09-24 — W6 판정 반영 — 중간 프로파일 정식 채택 안 함 · 관측 스택 구성원 prometheus · grafana 2(정본 09_tech_stack/03 · 04) · REQ 수 불변
 > **원천**: 원본 architecture.md §3 · §13 · §14 · §15 · §16 · §17 · §18 · §19(커밋 ff66a37) · 원본 data_flow.md §11.2 · §11.3 · §12.3 · §15 · §16 · §17(커밋 ff66a37) · 원본 tech_stack.md §1 · §5.1 · §10 · §10.1~§10.6 · §12(커밋 ff66a37) · 원본 implementation_plan.md §2 · §2.1~§2.5 · §4 · §8 · §9(커밋 ff66a37) · D-02 · D-06 · D-09 · D-10 · [../01_overview/05_priorities_roadmap.md](../01_overview/05_priorities_roadmap.md) · [01_global_rules.md](./01_global_rules.md) REQ-GLB-17 · 19 · 22 · 23
 
-이 문서는 **성능 목표치의 정본**이다(루트 README 고정 기준 "성능 수치"). 그러나 이 문서의 목표치는 전부 **3계층 미확인**이다 — 실측 전이므로 "미확인 — 확정 전 임의 값 고정 금지"로 등재하고, 원본 값은 **원본 목표(4 vCPU 가정)**로 곁에 둔다. 원본은 스스로 "로컬 머신에서는 첫 실행 결과를 기준선으로 다시 잡는다"(원본 architecture.md §16)고 적었고, 이 머신은 원본 가정과 병목 방향이 반대다(CPU 과잉 · 메모리 부족 — 원본 implementation_plan.md §2.1). 원본 목표를 그대로 합격선으로 쓰면 다른 머신의 목표로 이 머신을 판정하게 된다.
+이 문서는 **성능 목표치의 정본**이다(루트 README 고정 기준 "성능 수치"). 그러나 이 문서의 목표치는 실측으로 닫힌 행(REQ-NFR-17 — S1)을 빼고 **3계층 미확인**이다 — 실측 전이므로 "미확인 — 확정 전 임의 값 고정 금지"로 등재하고, 원본 값은 **원본 목표(4 vCPU 가정)**로 곁에 둔다. 원본은 스스로 "로컬 머신에서는 첫 실행 결과를 기준선으로 다시 잡는다"(원본 architecture.md §16)고 적었고, 이 머신은 원본 가정과 병목 방향이 반대다(CPU 과잉 · 메모리 부족 — 원본 implementation_plan.md §2.1). 원본 목표를 그대로 합격선으로 쓰면 다른 머신의 목표로 이 머신을 판정하게 된다.
 
 **수치가 없는 대신 확정 수단이 있다.** 각 REQ-NFR은 측정 방법 · 기록 조건 · 확정할 실험 자리를 갖는다. 실험 번호 EXP-NN은 W6이 [../10_observability/06_experiment_catalog.md](../10_observability/06_experiment_catalog.md)에서 채번했다(W6 — EXP-01~39) — 검증 방법 칸이 확정 실험 번호를 가리킨다(대조군 쿼리는 EXP-01~05). 확정된 값은 측정 기록(docs/measurements)의 4요소와 함께 이 문서가 인용해 올리며, 그때 원본 목표 칸은 지우지 않고 남긴다.
 
@@ -37,7 +38,7 @@
 | **REQ-NFR-05** | 정상 상태 컨슈머 랙 — **미확인 — 확정 전 임의 값 고정 금지.** 원본 목표(4 vCPU 가정) M 티어 5,000 엔트리 이하. 5분 지속 증가를 경고로 본다(현행 알림 규칙 · 소유 [../10_observability/03_dashboards_alerts.md](../10_observability/03_dashboards_alerts.md)) | 원본 architecture.md §14 · §16 | 랙 상한이 없으면 적재가 생성을 못 따라가는 상태를 "아직 소진 중"으로 무기한 넘긴다 | consumer_lag 시계열 · 정상 상태 구간의 최대값 · EXP-22 · 34 | ING-01 · ING-07 | F-02 | 해당 없음 |
 | **REQ-NFR-06** | 수집 처리량과 변곡점 — 시스템이 무손실을 유지하며 받는 최대 pps와 성능이 꺾이는 지점. **원본 목표 없음 — 산출물이다.** 미확인 — 확정 전 임의 값 고정 금지. 한 번에 한 주입 모드(REQ-GEN-05) · 생성기 비포화 구간(REQ-GEN-13)에서만 잰다 | 원본 implementation_plan.md §5 S5 · [../01_overview/05_priorities_roadmap.md](../01_overview/05_priorities_roadmap.md) S5 합격 판정 | 모드를 섞거나 생성기 포화 구간을 넣으면 변곡점이 병목 계층이 아니라 **측정 도구의 한계**를 가리킨다 | 부하 시나리오 Ramp-up · Breakpoint · 모드별 pps 대 consumer_lag · E2E 곡선 · EXP-23 · 26 | GEN-06 · GEN-07 · ING-01 | F-02 · F-09 | 해당 없음 |
 | **REQ-NFR-16** | ClickHouse 중단 후 소진 시간 — 랙이 0으로 돌아오는 시간. **미확인 — 확정 전 임의 값 고정 금지.** 원본 목표(4 vCPU 가정) 중단 시간의 30% 이내. 무손실 · 무중복(REQ-NFR-01 · 02)과 함께 판정한다 | 원본 data_flow.md §12.3 · [../04_architecture/06_backpressure_failure.md](../04_architecture/06_backpressure_failure.md) | 소진 시간만 보고 무중복을 보지 않으면 멱등 실패로 빨리 끝난 소진을 합격으로 판정한다 | docker stop clickhouse 5분 → 복구 후 소진 시간 · 무손실 · 무중복 · EXP-16 | ING-13 | F-10 | 해당 없음 |
-| **REQ-NFR-17** | 생성기 단독 처리량 — **M 티어 초당 포인트의 3배 이상**이 판정 조건(배수는 원본 판정 규칙). 이 머신의 실측값은 미확인 — 확정 전 임의 값 고정 금지. 원본 목표(4 vCPU 가정) 30,000 pps. 원본 예상치: 20 스레드 머신에서 미달 가능성 낮음 | 원본 data_flow.md §11.1 · 원본 implementation_plan.md §5 S1 · [06_datagen.md](./06_datagen.md) REQ-GEN-12 | 3배 여유를 확인하지 않고 부하를 걸면 REQ-NFR-06의 변곡점이 생성기 포화점일 수 있다 | 워커 수별 단독 처리량 3회 중앙값 · EXP-21 | GEN-09 | F-09 | 해당 없음 |
+| **REQ-NFR-17** | 생성기 단독 처리량 — **M 티어 초당 포인트의 3배 이상**이 판정 조건(배수는 원본 판정 규칙). **이 머신의 실측값 — 워커 1 약 590만 · 워커 2 약 1,031만 · 워커 4 약 2,006만 pps(api 위치 0-4 · 중앙값 · 기록 006 · 410a146 · 부하 실험 · M · 스위치 기본값) — 판정 성립.** 원본 목표(4 vCPU 가정) 30,000 pps. 원본 예상치: 20 스레드 머신에서 미달 가능성 낮음 | 원본 data_flow.md §11.1 · 원본 implementation_plan.md §5 S1 · [06_datagen.md](./06_datagen.md) REQ-GEN-12 | 3배 여유를 확인하지 않고 부하를 걸면 REQ-NFR-06의 변곡점이 생성기 포화점일 수 있다 | 워커 수별 단독 처리량 3회 중앙값 · EXP-21 | GEN-09 | F-09 | 해당 없음 |
 
 - **REQ-NFR-16 · 17은 파이프라인 표에 둔다.** 번호는 채번 순서이고 표 배치는 주제다 — 번호를 옮기지 않는다([../11_glossary/04_id_conventions.md](../11_glossary/04_id_conventions.md) 재배치 금지).
 
@@ -142,7 +143,7 @@ REQ-NFR을 판정할 때 수치를 어떻게 읽어야 하는지 고정한다. �
 
 | 항목 | 상태 | 확정 자리 |
 |------|------|------|
-| REQ-NFR 18행 전부의 확정 값 | 3계층 미확인 — 미확인 · 확정 전 임의 값 고정 금지 | [../10_observability/06_experiment_catalog.md](../10_observability/06_experiment_catalog.md) EXP-NN(§REQ-NFR → EXP 대응 검산 · 18행 전부 대응) · 실측 기록 |
+| REQ-NFR 18행 전부의 확정 값 | 3계층 미확인 — 미확인 · 확정 전 임의 값 고정 금지 · REQ-NFR-17은 S1에서 닫힘(기록 006) | [../10_observability/06_experiment_catalog.md](../10_observability/06_experiment_catalog.md) EXP-NN(§REQ-NFR → EXP 대응 검산 · 18행 전부 대응) · 실측 기록 |
 | 알람 판정 구간의 지연 예산 | **신설 · 미확인** — 원본 예산표에 구간이 없다(원본 implementation_plan.md §7.3) · 구간 정의는 W3 완료 · 값은 EXP-30 | [../04_architecture/05_latency_budget.md](../04_architecture/05_latency_budget.md) §알람 판정 구간 — 신설 |
 | 설계된 거절을 뺀 오류율의 메트릭 산정 | **W6 판정** — http_designed_rejections_total + 파생 지표 API 오류율(설계 거절 제외) | [../10_observability/01_metrics_catalog.md](../10_observability/01_metrics_catalog.md) |
 | 중간 프로파일의 정식 채택 여부 | **W6 판정** — 정식 채택하지 않는다 · 조건부 대안 — WSL2 메모리 조정이 불가능할 때만 | [../09_tech_stack/04_local_environment.md](../09_tech_stack/04_local_environment.md) |

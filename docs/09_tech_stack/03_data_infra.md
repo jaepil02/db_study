@@ -2,6 +2,7 @@
 
 > **대상**: 저장소 3종(PostgreSQL · ClickHouse · Redis)의 이미지 · 확장 · 설정 파일의 모양 · ClickHouse 서버 timezone 판정 · pg_partman 미리 만들기 · TTL 머지 주기 · Compose healthcheck와 health 타임아웃의 관계 · **observability 프로파일 구성원 판정(보정 #17)** · **버전 고정표(버전 문자열의 유일한 기재처)**
 > **작성일**: 2026-09-24
+> **개정일**: 2026-09-24 — S1 실측 반영(EXP-21 기록 006 · 410a146 · EXP-39 기록 007~009 · 019e54d) — S1 착수 9행 고정 — Node **22.23** · api 기반 이미지 **node:22.23.3-alpine** · TypeScript **5.9** · NestJS **11.2** · msgpackr **1.12** · piscina **5.3** · prom-client **15.1** · zod **4.6** · pnpm **12.6** — 태그 고정 3 → **4** · 버전 고정 2 → **11** · 재확인 대기 21 → **15** · 미고정 10 → **7** · Biome · Vitest 행을 Supertest · Testcontainers와 갈라 행 37 → **38**(도구 6 → **7**) · TypeScript 7 · NestJS 12 · msgpackr 2 · ioredis 6 미채택 판정 · msgpackr-extract 끔 등재
 > **개정일**: 2026-09-24 — ClickHouse 26.8 LTS 전환(사용자 결정 · 25.x 보안 지원 종료) — ClickHouse 태그 고정 25.8.33.6 → **26.8.10.6**(26.8 계열 최신 패치 · 레지스트리 대조) · 스택 표기 26.8 · 미확인 "LTS 트랙 보안 지원 종료" 닫힘 · 사용자 프로파일 트리에 input_format_read_datetime_number_as_raw_value · 설정 수준 확인 문장에 26.8 재확인
 > **개정일**: 2026-09-24 — 착수 체크리스트 7 · Python 반영 — 저장소 3행 릴리스 노트 · 레지스트리 대조 완료(18.6 · 8.10.2 계열 최신 · 25.8.33.6은 25.8 계열 최신이나 **25.x 보안 지원 종료**) · Python 행 신설(**버전 고정** 3.14 · 사용자 지정) — 행 36 → **37** · 도구 5 → **6** · 버전 고정 1 → **2** · 미확인 등재에 ClickHouse LTS 전환 신설
 > **개정일**: 2026-09-24 — S0 실측 반영 — 사용자 프로파일 설정 트리에 deduplicate_blocks_in_dependent_materialized_views 추가(ADR-14 보강 · 기록 001) · alpine 시간대 데이터 미확인 닫힘(PostgreSQL alpine · ClickHouse 모두 Asia/Seoul 해석) · Task 행 미고정 → **버전 고정** 3.53 — 상태 미고정 11 → **10** · 버전 고정 **1** 신설
@@ -181,15 +182,15 @@ docs_plan 실행 계획 보정 #17을 닫는다. 원본 넷이 서로 다른 구
 
 | 구분 | 구성요소 | 원본 기준 | 고정 단위 | 쓰는 자리 | 상태 |
 |------|------|------|------|------|------|
-| 런타임 | Node.js | 22 LTS · 22.15 이상 | 부 버전까지 | api 이미지 · 호스트 웹 · 도구 | 재확인 대기 |
-| 런타임 | api 기반 이미지 | node 22 alpine | 태그 | api 멀티스테이지 빌드 | 재확인 대기 |
-| 런타임 | TypeScript | 원본 미기재 | 부 버전까지 | 전 패키지 | 미고정 |
+| 런타임 | Node.js | 22 LTS · 22.15 이상 | 부 버전까지 | api 이미지 · 호스트 웹 · 도구 | **버전 고정** 22.23(호스트 22.23.3 · .nvmrc 22 · 2026-09-24 · 타입 정의 @types/node 22.20은 Node 메이저를 따른다) |
+| 런타임 | api 기반 이미지 | node 22 alpine | 태그 | api 멀티스테이지 빌드 | **태그 고정** node:22.23.3-alpine(apps/api/Dockerfile) |
+| 런타임 | TypeScript | 원본 미기재 | 부 버전까지 | 전 패키지 | **버전 고정** 5.9 — 7.x(Go 컴파일러)는 NestJS 데코레이터 메타데이터 호환 미검증이라 쓰지 않는다 |
 | 저장소 | PostgreSQL | 18 alpine | 부 버전 태그 | postgres 서비스 | **태그 고정** 18.6-alpine(18 계열 최신 — 릴리스 노트 · 레지스트리 대조 2026-09-24) |
 | 저장소 | ClickHouse | 25.8 LTS 이상 | LTS 패치 태그 | clickhouse 서비스 | **태그 고정** 26.8.10.6(LTS 트랙 전환 — 사용자 결정 2026-09-24 · 25.x 보안 지원 종료 · 26.8 계열 최신 패치 — 레지스트리 대조) |
 | 저장소 | Redis | 8 alpine | 부 버전 태그 | redis 서비스 | **태그 고정** 8.10.2-alpine(8 계열 최신 — 릴리스 · 레지스트리 대조 2026-09-24) |
 | 저장소 확장 | pg_partman | 원본 미기재 | 부 버전까지 | alarm_event 월 파티션 | 미고정 |
 | 저장소 확장 | pg_stat_statements · auto_explain | PostgreSQL 동봉 | 엔진 버전을 따른다 | 쿼리 통계 · 계획 로깅 | 재확인 대기 |
-| 백엔드 | NestJS | 11.x | 부 버전까지 | api 전체 | 재확인 대기 |
+| 백엔드 | NestJS | 11.x | 부 버전까지 | api 전체 | **버전 고정** 11.2(reflect-metadata 0.2 · rxjs 7.8는 NestJS를 따른다) — 12.x는 원본 기준 11.x 밖이라 쓰지 않는다 |
 | 백엔드 | Fastify 어댑터 | NestJS와 같은 메이저 | NestJS를 따른다 | HTTP 서버 | 재확인 대기 |
 | 백엔드 | @clickhouse/client | 1.x | 부 버전까지 | Ingest · TSQ · OBS | 재확인 대기 |
 | 백엔드 | ioredis | 5.x | 부 버전까지 | Streams · Pub/Sub · Lua | 재확인 대기 |
@@ -197,9 +198,9 @@ docs_plan 실행 계획 보정 #17을 닫는다. 원본 넷이 서로 다른 구
 | 백엔드 | pg-copy-streams | 원본 미기재 | 부 버전까지 | 대조군 COPY(SW-09 · ADR-17) | 미고정 |
 | 백엔드 | modbus-serial | 8.x | 부 버전까지 | Collector | 재확인 대기 |
 | 백엔드 | jsmodbus | 4.x | 부 버전까지 | PlcSim | 재확인 대기 |
-| 백엔드 | msgpackr | 1.x | 부 버전까지 | Stream 페이로드 | 재확인 대기 |
-| 백엔드 | piscina | 5.x | 부 버전까지 | worker_threads 풀(ADR-25) | 재확인 대기 |
-| 백엔드 | prom-client | 15.x | 부 버전까지 | /metrics | 재확인 대기 |
+| 백엔드 | msgpackr | 1.x | 부 버전까지 | Stream 페이로드 | **버전 고정** 1.12 — 2.x는 원본 기준 밖 · 네이티브 해제 가속(msgpackr-extract) 끔(§미확인 · 미설계 등재) |
+| 백엔드 | piscina | 5.x | 부 버전까지 | worker_threads 풀(ADR-25) | **버전 고정** 5.3 |
+| 백엔드 | prom-client | 15.x | 부 버전까지 | /metrics | **버전 고정** 15.1 |
 | 백엔드 | 보안 헤더 플러그인(helmet 계열) | 원본 미기재 | 부 버전까지 | 보안 헤더 | 미고정 |
 | 백엔드 | 비밀번호 해시 라이브러리(Argon2id) | 원본 미기재 — 알고리즘은 12_security/01 판정 | 부 버전까지 | 로그인 · seed(REQ-AUT-01) | 미고정 |
 | 프론트엔드 | Next.js | 15.x | 부 버전까지 | 웹 · BFF | 재확인 대기 |
@@ -208,9 +209,10 @@ docs_plan 실행 계획 보정 #17을 닫는다. 원본 넷이 서로 다른 구
 | 프론트엔드 | TanStack Query | 5.x | 부 버전까지 | 브라우저 쿼리 캐시 | 재확인 대기 |
 | 프론트엔드 | Zustand · React Hook Form · Tailwind CSS | 원본 미기재 | 부 버전까지 | 스토어 · 폼 · 스타일 | 미고정 |
 | 프론트엔드 | shadcn/ui | 버전 없음 — 컴포넌트 소스를 저장소에 복사 | 복사 시점 커밋 | UI 컴포넌트 | 해당 없음 |
-| 공유 | zod | 원본 미기재 | 부 버전까지 | packages/shared | 미고정 |
-| 도구 | pnpm | 원본 미기재(원본 체크리스트는 latest 활성화 — 금지) | 패키지 관리자 필드 | 워크스페이스 | 미고정 |
-| 도구 | Biome · Vitest · Supertest · Testcontainers | 원본 미기재 | 부 버전까지 | 품질 게이트 · 통합 테스트 | 미고정 |
+| 공유 | zod | 원본 미기재 | 부 버전까지 | packages/shared | **버전 고정** 4.6 |
+| 도구 | pnpm | 원본 미기재(원본 체크리스트는 latest 활성화 — 금지) | 패키지 관리자 필드 | 워크스페이스 | **버전 고정** 12.6(루트 package.json packageManager · corepack) |
+| 도구 | Biome · Vitest | 원본 미기재 | 부 버전까지 | 품질 게이트 ① · ③ | **버전 고정** Biome 2.5 · Vitest 5.0 |
+| 도구 | Supertest · Testcontainers | 원본 미기재 | 부 버전까지 | 표면 계약 · 통합 테스트 | 미고정 |
 | 도구 | node-pg-migrate | 원본 미기재(원본 후보) | 부 버전까지 | PostgreSQL 마이그레이션 | 미고정 |
 | 도구 | Task(Taskfile 실행기) | 원본 미기재 | 부 버전까지 | migrate · seed · snapshot · restore · bench · docs:lint | **버전 고정** 3.53(호스트 설치 3.53.1 · 2026-09-24) |
 | 도구 | **Python** | 원본 미기재 | 부 버전까지 | docs:lint(scripts/docs_lint.py) · 단계 실습 스크립트 | **버전 고정** 3.14(호스트 3.14.6 · 2026-09-24 사용자 지정) |
@@ -219,7 +221,7 @@ docs_plan 실행 계획 보정 #17을 닫는다. 원본 넷이 서로 다른 구
 | 관측 | Prometheus | 3.x | 부 버전 태그 | observability 프로파일 | 재확인 대기 |
 | 관측 | Grafana | 12.x | 부 버전 태그 | observability 프로파일 | 재확인 대기 |
 
-- 검산: 행 = 런타임 3 + 저장소 3 + 저장소 확장 2 + 백엔드 13 + 프론트엔드 6 + 공유 1 + 도구 6 + 부하 1 + 관측 2 = **37** · 상태 태그 고정 3 + 버전 고정 2 + 재확인 대기 21 + 미고정 10 + 해당 없음 1 = **37**
+- 검산: 행 = 런타임 3 + 저장소 3 + 저장소 확장 2 + 백엔드 13 + 프론트엔드 6 + 공유 1 + 도구 7 + 부하 1 + 관측 2 = **38** · 상태 태그 고정 4 + 버전 고정 11 + 재확인 대기 15 + 미고정 7 + 해당 없음 1 = **38**
 - **원본 고정표에서 뺀 행 1** — Prisma(원본 "pg + Prisma")는 마이그레이션 도구 판정에서 채택하지 않았다([05_tooling_devops.md](./05_tooling_devops.md) §마이그레이션 도구 판정 · [06_decisions_rationale.md](./06_decisions_rationale.md)). 원본의 pg 행은 남았다.
 - **원본에 없던 행 3** — pg-copy-streams(대조군 COPY가 스트림 복사를 요구) · 보안 헤더 플러그인(원본 tech_stack.md §10.4가 이름만 적음) · Python(S0의 docs:lint · 실습 스크립트 — 사용자 지정 3.14). 앞의 둘은 미고정이다.
 - **고정 단위가 "부 버전까지"인 이유** — 메이저만 고정하면 부 버전 갱신이 설치 시점마다 달라 같은 커밋의 두 설치가 다른 코드를 받는다. 잠금 파일이 패치까지 고정하고, 이 표는 잠금 파일을 갱신할 때 넘지 않을 경계를 준다.
@@ -248,6 +250,7 @@ docs_plan 실행 계획 보정 #17을 닫는다. 원본 넷이 서로 다른 구
 | 버전 고정표 전 행의 확정 태그 | 저장소 3행은 릴리스 노트 · 레지스트리 대조 뒤 고정(2026-09-24) · 나머지는 원본 기준 — 각 단계 착수 시 재확인 전까지 확정 아님 | 이 문서 §버전 고정표 · 착수 체크리스트 7번 |
 | ClickHouse LTS 트랙의 보안 지원 종료 | **닫힘(2026-09-24 사용자 결정)** — 25.8.33.6 → 26.8.10.6. 전환으로 드러난 동작 차이 넷(정수 ts 해석 · 적재 측 거절의 원시 커밋 · 토큰 없는 내용 중복 제거 · async_insert 동시 사용)은 기록 004가 적고, 정수 ts는 프로파일 설정으로 막았다 | [../05_data_stores/03_clickhouse_schema.md](../05_data_stores/03_clickhouse_schema.md) §서버 설정 계약 |
 | alpine 이미지의 시간대 데이터 포함 여부 | **닫힘(S0 확인 2026-09-24)** — PostgreSQL alpine · ClickHouse 이미지 모두 Asia/Seoul 해석 | 이 문서 |
+| msgpackr-extract(msgpackr 네이티브 해제 가속) | **신규 — 끔(S1 판정)** — pnpm이 빌드 스크립트 결정을 요구해 pnpm-workspace.yaml의 허용 목록에서 끈다 · 호스트와 컨테이너가 같은 순수 JS 경로 · 해제 성능이 측정 변수가 되는 S2(Ingest)에서 다시 판정 | S2 · 이 문서 · [02_backend.md](./02_backend.md) |
 | @clickhouse/client의 zstd 요청 압축 지원 | 신규 미확인 — 원본은 "zstd(Node 22.15+) 또는 gzip" | 착수 시 공식 참조 · [02_backend.md](./02_backend.md) |
 | client-output-buffer-limit pubsub 값 | 값 미정 — 계약만(게이트웨이 소켓 한도보다 늦게) | S4 · 이 문서 · [../07_api/11_websocket.md](../07_api/11_websocket.md) 소켓 송신 대기량 한도와 같은 변경 단위 |
 | TTL 파티션 삭제 지연 | 3계층 미확인 — 확정 전 임의 값 고정 금지 | EXP-29 · [../10_observability/06_experiment_catalog.md](../10_observability/06_experiment_catalog.md) |

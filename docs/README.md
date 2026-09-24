@@ -2,13 +2,14 @@
 
 > **대상**: db_study 설계 정본 — PLC 대용량 시계열과 업무 데이터를 Redis 중간 계층에서 갈라 ClickHouse와 PostgreSQL에 나눠 싣는 로컬 학습 시스템의 개요 · 기능 · 요구사항 · 아키텍처 · 저장소 · 파이프라인 · API · 화면 · 기술스택 · 관측 · 용어 · 보안
 > **작성일**: 2026-09-23
+> **개정일**: 2026-09-24 — S1 실측 반영(EXP-21 기록 006 · 410a146 · EXP-39 기록 007~009 · 019e54d) — 성격 줄 S1까지 · 현재 상태에 S1 불릿 신설 · 파생 수치 버전 고정표 37 → **38**행
 > **개정일**: 2026-09-24 — ClickHouse 26.8 LTS 전환(사용자 결정 · 25.x 보안 지원 종료) — 스택 표기 · 고정 기준 스택 표기 ClickHouse 25.8 → **26.8** · 현재 상태 S0 불릿에 전환 반영
 > **개정일**: 2026-09-24 — Docker 메모리 상향 · 체크리스트 7 · Python 반영 — 파생 수치 행 버전 고정표 36 → **37**행 · 공식 참조 68 → **70**
 > **개정일**: 2026-09-24 — S0 완료 반영 — 성격 줄 · 현재 상태에 S0 불릿 신설(저장소 3 · Taskfile · 게이트 · 기록 001 · 002 · ADR-14 보강) · 기계 검사 경로 .omc/docs_lint.py → **scripts/docs_lint.py**
 > **개정일**: 2026-09-24 — 측정 머신 전환 · S0 구현 반영 — 호스트 포트 행에 현행 측정 머신의 redis 호스트 포트 6380 등재(충돌 시 호스트 쪽만 변경 규칙)
 > **개정일**: 2026-09-24 — 최종 정밀 검수 — 도메인 공백 행에 08_screen 주 화면 없음 4(COL · SIM · ING · GEN) 추가 · 현재 상태에 남은 미결의 세 부류 명시(문서 판정 대기 0)
 > **개정일**: 2026-09-24 — W7 검수 반영 — 현재 상태 절을 완성 상태로 재작성(122본 · 원본 4본 삭제 · 추적은 커밋 ff66a37) · 기술 · 관측 · 보안 파생 수치 행 신설(정본 링크) · REQ 228 → **229**(GLB 24) · 웹 3001 바인드 강제 수단
-> **성격**: to-be 설계 정본이다. 학습 단계 S0(저장소 · 애플리케이션 코드 없음)까지 구현됐고 애플리케이션 코드는 착수 전이며, 구현과 측정이 진행되면 각 문서를 as-built로 승격하고 미확인 수치를 EXP-NN 실측 결과로 갱신한다
+> **성격**: to-be 설계 정본이다. 학습 단계 S1(저장소 · Stream 페이로드 계약 · 생성기 단독 실행 경로)까지 구현됐고 수집 · 적재 · 조회 경로는 착수 전이며, 구현과 측정이 진행되면 각 문서를 as-built로 승격하고 미확인 수치를 EXP-NN 실측 결과로 갱신한다
 > **원천**: 원본 tech_stack.md · architecture.md · data_flow.md · implementation_plan.md(커밋 ff66a37 — W7에서 삭제) · 구축 계획 docs_plan.md(저장소 루트) · 형식 규율 docs_ref/docs_ref(조직 원리만 이식 · 내용 무관)
 
 db_study는 배포하지 않는 **로컬 전용 학습 시스템**이다. 목적은 서비스 운영이 아니라 폴리글랏 퍼시스턴스 구조의 부하·성능 특성을 **측정해서** 아는 것이다. 본 문서군은 그 설계를 목적별 12폴더로 나눠 담는 단일 정본이며, 폴더 하나가 질문 하나와 채번 정본 하나를 소유한다.
@@ -22,8 +23,9 @@ db_study는 배포하지 않는 **로컬 전용 학습 시스템**이다. 목적
 - **문서군 122본 완성(2026-09-24)** — 웨이브 W0~W7로 구축했다. W0 골격 · W1 용어 · 개요 · W2 기능 · 요구사항 · W3 아키텍처 · 저장소 · W4 흐름 · W5 API · 화면 · W6 기술 스택 · 관측 · W7 보안 · 추적성 · 공식 참조 · 전수 검수. 웨이브 분담 · 착수 전 보정 결정 · 인계 이력은 저장소 루트 docs_plan.md가 갖는다.
 - **원본 설계서 4본(architecture.md · data_flow.md · tech_stack.md · implementation_plan.md)은 W7 마감 커밋에서 삭제했다.** 전 문서의 원천 줄은 원본 절을 커밋 ff66a37 기준으로 적으므로 삭제 뒤에도 git으로 추적된다.
 - **S0 저장소 수동 실습 완료(2026-09-24)** — 저장소 컨테이너 3개(개발 프로파일) · Taskfile(snapshot · restore · docs:lint) · pre-commit 게이트 ④ · 실습 스크립트(scripts/lab/s0). 합격 판정 AC-14 · AC-15가 3회 성립했고(docs/measurements 기록 002), 저장소 판별 EXP-32(기록 001)가 롤업 이중 계수를 드러내 ADR-14를 보강했다([04_architecture/09_decision_records.md](./04_architecture/09_decision_records.md)). 착수 체크리스트 1 · 7을 이행해 부하 실험 프로파일로 전환하고, ClickHouse를 26.8 LTS로 옮겨 판별 · 회귀를 다시 돌렸다(기록 003~005).
+- **S1 생성기 처리량 실측 완료(2026-09-24)** — pnpm 워크스페이스(apps/api · packages/shared) · 품질 게이트 ①~④ · Stream 페이로드 계약 v1 · 신호 프로파일 8종 · piscina 워커 생성기. 단독 처리량은 워커 1에서도 M 티어 3배의 약 197배로 S1 합격(docs/measurements 기록 006 · 410a146 · 부하 실험 · M · 스위치 기본값), 엔트리 인코딩 크기는 기록 007~009(티어별)다.
 - **문서 판정으로 닫을 미결은 0이다(최종 정밀 검수).** 각 문서의 미확인 · 미설계 등재에 남은 행은 세 부류뿐이다 — ① 실측으로만 닫히는 3계층 미확인(EXP-NN 연결) ② 코드 착수 때 정하는 구현 세부 ③ 확장 로드맵 단계 진입 때 정하는 배분. 행선지가 문서 웨이브이거나 리드 판정 대기인 행은 없다.
-- 모든 성능 수치는 실측 전이다 — 3계층 미확인은 [10_observability/06_experiment_catalog.md](./10_observability/06_experiment_catalog.md)의 EXP-NN 실측으로만 확정한다. 공식 참조 URL은 등재만 됐고 대조는 착수 체크리스트 7번이 한다.
+- 성능 수치는 S1의 생성기 단독 처리량 · 엔트리 인코딩 크기(기록 006~009)를 빼고 실측 전이다 — 3계층 미확인은 [10_observability/06_experiment_catalog.md](./10_observability/06_experiment_catalog.md)의 EXP-NN 실측으로만 확정한다. 공식 참조 URL은 등재만 됐고 대조는 착수 체크리스트 7번이 한다.
 
 ## 문서 지도
 
@@ -91,7 +93,7 @@ db_study는 배포하지 않는 **로컬 전용 학습 시스템**이다. 목적
 | API 표면 | **43** — REST JSON 40 + 다운로드 스트림 1 + 메트릭 텍스트 1 + WebSocket 1. 문서별 03_auth 3 · 04_master 17 · 05_timeseries 2 · 06_realtime 2 · 07_alarms 6 · 08_work_orders 9 · 09_datagen 1 · 10_metrics 2 · 11_websocket 1. 검산: 3 + 17 + 2 + 2 + 6 + 9 + 1 + 2 + 1 = **43** · 원본 21 + 신설 22. 세는 기준은 도메인 문서의 표면 요약 표 행 수다(최대 번호가 아니다). 정본 [07_api/README.md](./07_api/README.md) |
 | 화면 | **10** — AUTH-LOGIN · DSH-REALTIME · ANL-TREND · ALM-CONSOLE · ALM-RULES · ADM-MASTER · ADM-WORKORDER · ADM-AUDIT · EXP-CONSOLE · EXP-COMPARE. 검산: AUTH 1 + DSH 1 + ANL 1 + ALM 2 + ADM 3 + EXP 2 = **10**. 정본 [08_screen/README.md](./08_screen/README.md) |
 | 실험 | **39** — EXP-01~39(결번 없음). 대조군 5(EXP-01~05) + 스위치 10 + 장애 재현 5 + 생성기 1 + 부하 시나리오 5 + 확장 진입 2 + 흐름·구조·기반 11. 검산: 5 + 10 + 5 + 1 + 5 + 2 + 11 = **39**. 신설은 EXP-40부터 말미 채번. 정본 [10_observability/06_experiment_catalog.md](./10_observability/06_experiment_catalog.md) |
-| 기술 · 관측 · 보안 파생 수치 | 메트릭 이름 **136**(정본 [10_observability/01_metrics_catalog.md](./10_observability/01_metrics_catalog.md)) · 알림 규칙 14 · 대시보드 6(정본 [10_observability/03_dashboards_alerts.md](./10_observability/03_dashboards_alerts.md)) · 환경변수 **34**(스위치 11 + 스위치 밖 23 · 정본 [09_tech_stack/04_local_environment.md](./09_tech_stack/04_local_environment.md)) · 버전 고정표 **37**행(정본 [09_tech_stack/03_data_infra.md](./09_tech_stack/03_data_infra.md)) · 공식 참조 **70**(정본 [03_requirements/16_official_references.md](./03_requirements/16_official_references.md)) · 위협 × 통제 **26** · 잔여 17(정본 [12_security/04_threat_model.md](./12_security/04_threat_model.md)) |
+| 기술 · 관측 · 보안 파생 수치 | 메트릭 이름 **136**(정본 [10_observability/01_metrics_catalog.md](./10_observability/01_metrics_catalog.md)) · 알림 규칙 14 · 대시보드 6(정본 [10_observability/03_dashboards_alerts.md](./10_observability/03_dashboards_alerts.md)) · 환경변수 **34**(스위치 11 + 스위치 밖 23 · 정본 [09_tech_stack/04_local_environment.md](./09_tech_stack/04_local_environment.md)) · 버전 고정표 **38**행(정본 [09_tech_stack/03_data_infra.md](./09_tech_stack/03_data_infra.md)) · 공식 참조 **70**(정본 [03_requirements/16_official_references.md](./03_requirements/16_official_references.md)) · 위협 × 통제 **26** · 잔여 17(정본 [12_security/04_threat_model.md](./12_security/04_threat_model.md)) |
 | 스택 표기 | **Next.js · NestJS · PostgreSQL 18 · ClickHouse 26.8 · Redis 8 · Docker Compose**로 통일한다. 정확 버전은 09_tech_stack에만 적는다 |
 | 단위와 시각 | ts = 측정 시각(모드 A는 Collector 폴링 시점 · 생성 모드는 생성기 시점) · ingested_at = 적재 시각 · 저장은 epoch 기준 · 표시 시점에만 Asia/Seoul로 변환 · 측정값 Float64. 정본 [11_glossary/05_units_and_time.md](./11_glossary/05_units_and_time.md) |
 

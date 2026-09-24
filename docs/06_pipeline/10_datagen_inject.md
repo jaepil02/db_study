@@ -2,6 +2,7 @@
 
 > **대상**: F-09 주입 흐름의 기전 정본 — 생성 엔진 → 모드 A~D · 한 번에 한 계층 원칙 · 모드 A 레지스터 갱신 · **모드 B 적체 검사 기전(판정량은 그룹 적체)** · 모드 C 표면 · 모드 D 백필 실행 · **모드 D 대조군 동일 행 절차** · 대조군 파티션 정리 · **SIM 지연 · 오류 주입 제어 수단** · 티어 시드 구성 · 생성기 포화 · 부하 실행 절차
 > **작성일**: 2026-09-24
+> **개정일**: 2026-09-24 — S1 실측 반영(EXP-21 기록 006 · 410a146 · EXP-39 기록 007~009 · 019e54d) — 미확인 "생성기 단독 처리량" 미확인 → **워커 1 약 590만 pps**
 > **개정일**: 2026-09-24 — 최종 정밀 검수 — 주입 계획 노출 이름 미정 → W6 판정 반영 · bulk 본문 모양 행 닫힘(07_api/09)
 > **개정일**: 2026-09-24 — W7 검수 반영 — 부하 절차 5단계 판정량의 산출식 "W6 확정 대상" → **닫힘**(consumer_lag = 그룹 lag + pending · 정본 10_observability/01)
 > **개정일**: 2026-09-24 — W6 실험 채번 반영 — 메트릭 이름 · EXP 번호 · 디스크 예산 반영(정본 10_observability/01 · 06)
@@ -204,7 +205,7 @@ F-09는 **생성기가 만든 값이 네 계층 중 하나에 들어가기까지
 
 | 항목 | 상태 | 확정 자리 |
 |------|------|------|
-| 생성기 단독 처리량 | 3계층 미확인 — 판정은 M 티어의 3배 · 원본 목표 30,000 pps | REQ-NFR-17 · AC-16 |
+| 생성기 단독 처리량 | **닫힘(S1 실측 · 기록 006 · 410a146 · 부하 실험 · M · 스위치 기본값)** — 워커 1 약 590만 pps · 판정(M 티어 3배) 성립 | REQ-NFR-17 · AC-16 |
 | 티어별 초당 Modbus 요청의 실측 · 폴링 주기 초과 여부 | 3계층 미확인 — 위 표는 구조 계산 | S5 · EXP-23(모드 A) · [../10_observability/06_experiment_catalog.md](../10_observability/06_experiment_catalog.md) |
 | 주입 계획의 파일 형식 · 노출 필드 이름 | 형식 **W6 판정** — JSON 하나 · shared zod 검증 · 검증 실패 시 기동 거부 · 경로 SIM_FAULT_PLAN · 노출 이름도 W6 판정 — sim_fault_injection_active{kind} | [../09_tech_stack/05_tooling_devops.md](../09_tech_stack/05_tooling_devops.md) · [../10_observability/01_metrics_catalog.md](../10_observability/01_metrics_catalog.md) — 노출은 sim_fault_injection_active{kind}(W6) |
 | 실행 중 주입 제어 표면의 필요 여부 | 판정 — 두지 않는다 · 필요하면 표면 판정 | [../07_api/09_datagen.md](../07_api/09_datagen.md)(W5) |

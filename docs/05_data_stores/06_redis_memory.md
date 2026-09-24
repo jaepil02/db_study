@@ -2,6 +2,7 @@
 
 > **대상**: Redis 단일 인스턴스의 Stream 엔트리 단위 설계 · 엔트리 크기와 용량 티어 · maxmemory 산정 · 프로파일별 산정(부하 실험 · 개발 · 중간) · volatile-lru 축출 대상 · **축출 연쇄** · MAXLEN과 maxmemory의 관계(ADR-21) · 컨테이너 상한 여유 · 메모리 측정 계약 — MAXLEN · maxmemory 조정값 정본
 > **작성일**: 2026-09-24
+> **개정일**: 2026-09-24 — S1 실측 반영(EXP-21 기록 006 · 410a146 · EXP-39 기록 007~009 · 019e54d) — 미확인 "엔트리 실제 크기"의 인코딩 부분 미확인 → **7,051 B(태그 500 · RANDOM_WALK) · 5,455 B(혼합)** — Redis 안 오버헤드는 S5 미확인 유지 · 도입 단락 교정
 > **개정일**: 2026-09-24 — 측정 머신 전환 · S0 구현 반영 — 머신 서술을 원본 실측 머신 · 현행 측정 머신으로 가름
 > **개정일**: 2026-09-24 — 최종 정밀 검수 — 합계 행 빈 칸 채움 · 빈 표 칸을 닫힌 어휘 해당 없음으로 · 백프레셔 하강 히스테리시스 행 닫힘(ADR-23)
 > **개정일**: 2026-09-24 — W6 실험 채번 반영 — S6 스풀 도달 문구 정정 · Pub/Sub 한도 소유 · EXP 번호(정본 10_observability/01 · 06)
@@ -9,7 +10,7 @@
 
 단일 인스턴스의 메모리는 **봉인 계열(축출 불가)과 캐시 계열(축출 가능)의 합**으로 산정한다. 봉인 계열의 상한을 캐시 예산 바깥에 먼저 떼어 두면 수집이 폭주해도 세션 · 조회 캐시가 밀려나지 않고, 그 상한을 넘기 전에 애플리케이션이 백프레셔를 건다(ADR-21). 이 문서는 그 산정과, 산정이 깨졌을 때 한 인스턴스 안에서 벌어지는 **축출 연쇄**를 고정한다.
 
-**아래 수치는 전부 원본 산정이다.** 엔트리 크기 · 캐시 예산은 원본의 어림값이고 실측 전 3계층 미확인이다. MAXLEN · maxmemory는 2계층 조정값이며 **이 문서가 값의 정본**이다. 백프레셔 임계 · 판정량의 정본은 [../04_architecture/06_backpressure_failure.md](../04_architecture/06_backpressure_failure.md), 컨테이너 메모리 상한의 정본은 [../09_tech_stack/04_local_environment.md](../09_tech_stack/04_local_environment.md)다(현행 인용 [../04_architecture/03_execution_topology.md](../04_architecture/03_execution_topology.md)).
+**아래 수치는 원본 산정이다.** 캐시 예산은 원본의 어림값이고 실측 전 3계층 미확인이다. 엔트리 크기는 인코딩 부분만 S1에서 실측했다(태그 500 RANDOM_WALK 7,051 B — 기록 009 · 019e54d · 부하 실험 · L · 스위치 기본값) — Redis 안 오버헤드는 미확인이다. MAXLEN · maxmemory는 2계층 조정값이며 **이 문서가 값의 정본**이다. 백프레셔 임계 · 판정량의 정본은 [../04_architecture/06_backpressure_failure.md](../04_architecture/06_backpressure_failure.md), 컨테이너 메모리 상한의 정본은 [../09_tech_stack/04_local_environment.md](../09_tech_stack/04_local_environment.md)다(현행 인용 [../04_architecture/03_execution_topology.md](../04_architecture/03_execution_topology.md)).
 
 **이 머신에서는 메모리가 먼저 걸린다.** 원본 실측 머신은 CPU 20스레드 · 가용 RAM 15 GB였고 현행 측정 머신(macOS)도 Docker VM 할당이 설계 요구보다 작다([../09_tech_stack/04_local_environment.md](../09_tech_stack/04_local_environment.md) §현행 측정 머신) — 둘 다 원본이 가정한 "CPU 부족 · 메모리 여유"와 반대다(원본 implementation_plan.md §2.1). 병목이 Redis maxmemory 쪽으로 쏠리므로 이 문서의 산정이 학습 목표 ②의 관찰 자리가 된다.
 
@@ -180,7 +181,7 @@ ADR-21의 메모리 쪽 계약이다. 세 장치가 서로 다른 순서로 걸�
 
 | 항목 | 상태 | 확정 자리 |
 |------|------|------|
-| 엔트리 실제 크기 · 태그당 바이트 | 3계층 미확인 — 원본 산정 약 7 KB(태그 500) · 도출 약 14 B/태그. 7 KB 엔트리는 Stream 노드 기본 크기를 넘어 노드당 엔트리 1이 될 수 있다 — 오버헤드 미확인 | S1 · S5 실측 · EXP-39 · [../10_observability/06_experiment_catalog.md](../10_observability/06_experiment_catalog.md) |
+| 엔트리 실제 크기 · 태그당 바이트 | **인코딩 부분 확정(S1 · 기록 009 · 019e54d · 부하 실험 · L · 스위치 기본값 — S · M 구성은 기록 007 · 008)** — 태그 500 엔트리 RANDOM_WALK 7,051 B(원본 산정 약 7 KB와 일치) · 혼합 5,455 B · 포인트당 약 14 B(RANDOM_WALK) · 약 11 B(혼합) — 태그 수에 비례. **Redis 안 노드 · 리스트팩 오버헤드는 미확인**(7 KB 엔트리의 노드당 엔트리 수) | S5 실측 · EXP-39 · [../10_observability/06_experiment_catalog.md](../10_observability/06_experiment_catalog.md) |
 | 캐시 계열 실제 점유 | 원본 산정 약 0.4 GB | 상동 |
 | DLQ MAXLEN의 프로파일별 값 | 원본 한 값(10000)뿐 | 이 문서 — S3 DLQ 실험 뒤 |
 | Pub/Sub 출력 버퍼 한도 | 값 소유 이전(W6) — S4 확정 | [../09_tech_stack/03_data_infra.md](../09_tech_stack/03_data_infra.md) · 메트릭 [../10_observability/01_metrics_catalog.md](../10_observability/01_metrics_catalog.md) |

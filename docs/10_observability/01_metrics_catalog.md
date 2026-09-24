@@ -2,6 +2,7 @@
 
 > **대상**: /metrics로 노출하는 메트릭 전수 — 이름 규약 · 닫힌 레이블 집합 · **스위치 상태 레이블 이름** · **컨슈머 랙 산출식 판정(가장 중요한 단일 지표)** · 계열별 전수(앱 기본 · HTTP·WS · 수집 · 적재 · 알람 · 실시간 · 조회 · 업무 · 인증 · Redis · PostgreSQL · ClickHouse · E2E · 관측 자체) · 파생 지표 식 · 선행 문서 인계 메트릭 대응 · 수집 주기 · E2E 창 · 메모리 표본 수 조회 계약 · Pub/Sub 출력 버퍼 관련 메트릭
 > **작성일**: 2026-09-24
+> **개정일**: 2026-09-24 — S1 구현 반영 — gen_worker_utilization 산출 방식 명시(작업 실행 시간 ÷ (경과 × 워커 수)) · gen_points_generated_total의 mode에 단독 실행 경로 standalone
 > **개정일**: 2026-09-24 — W7 보안 판정 반영 — aut_ratelimit_rejected_total class 값 **4 확정**(general · bulk_read · export · bulk_ingest) · 로그인 실패 계수는 신설하지 않고 http_requests_total로 대체 — 메트릭 수 불변(정본 12_security/03)
 > **원천**: 원본 architecture.md §14 · §16(커밋 ff66a37) · 원본 tech_stack.md §9(커밋 ff66a37) · 원본 data_flow.md §15 · §16(커밋 ff66a37) · 원본 implementation_plan.md §4.1 · §5 S2(커밋 ff66a37) · docs_plan.md 웨이브 인계 W6 10/01 행 · D-10 · ADR-20 · ADR-21 · ADR-22 · REQ-OBS-01~12 · [../02_features/11_metrics.md](../02_features/11_metrics.md) OBS-01~06 · [../04_architecture/06_backpressure_failure.md](../04_architecture/06_backpressure_failure.md) §판정량 · [../07_api/10_metrics.md](../07_api/10_metrics.md) #2
 
@@ -107,10 +108,10 @@
 | **backpressure_stage** | gauge | 단계 값 | publisher | 발행 경로별 백프레셔 단계 — 모드 B 단계가 Collector와 같은 판정인지 대조 | ADR-21 · 23 · [../06_pipeline/10_datagen_inject.md](../06_pipeline/10_datagen_inject.md) |
 | sim_listen_failed_ports | gauge | 포트 | 없음 | 기동 실패한 SIM 포트 수 | REQ-SIM-03 |
 | sim_fault_injection_active | gauge | 0 · 1 | kind(delay · exception) | 지금 적용 중인 주입 계획 | REQ-SIM-10 |
-| gen_points_generated_total | counter | 포인트 | mode · profile | 생성 카운트 — 무손실 판정의 분모 | AC-01 · REQ-NFR-01 |
+| gen_points_generated_total | counter | 포인트 | mode · profile | 생성 카운트 — 무손실 판정의 분모 · mode는 주입 모드 A~D와 단독 실행 경로 standalone(S1) · profile은 신호 프로파일 이름 | AC-01 · REQ-NFR-01 |
 | gen_points_dropout_total | counter | 포인트 | mode | DROPOUT이 생략한 행 | AC-01 |
 | gen_publish_halted_entries_total · gen_publish_halted_points_total | counter | 엔트리 · 포인트 | mode | 위험 단계로 발행하지 않은 양 | REQ-GEN-07 |
-| gen_worker_utilization | gauge | 0~1 | mode | 생성기 워커 스레드 이벤트 루프 사용률 — 생성기 CPU | REQ-GEN-13 |
+| gen_worker_utilization | gauge | 0~1 | mode | 생성기 워커 스레드 이벤트 루프 사용률 — 생성기 CPU · 워커는 작업 사이에 쉬므로 작업 실행 시간 ÷ (경과 × 워커 수)로 잰다 | REQ-GEN-13 |
 | gen_register_update_seconds | histogram | 초 | 없음 | 신호 생성 → 레지스터 반영(구간 #1 · 모드 A) | 지연 예산 #1 |
 
 - 검산: 행 = **20**(COL 13 + SIM 2 + GEN 5) — 이름 수는 §검산 한 자리에서 센다

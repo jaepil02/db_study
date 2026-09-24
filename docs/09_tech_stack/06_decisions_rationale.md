@@ -2,6 +2,7 @@
 
 > **대상**: 기술 선정의 근거 상세 — 원본 비교 표 흡수(NestJS 대 Python · Next.js 대 React + Vite · 차트 라이브러리 · 시계열 저장소 · 수집 버퍼) · 단일 런타임의 감수 비용과 완화책 · 전환 조건 · **채택하지 않은 기술과 버린 대안의 실패 시나리오**(원본 §13 전 행 + W6 판정분) · ADR과의 경계
 > **작성일**: 2026-09-24
+> **개정일**: 2026-09-24 — S1 실측 반영(EXP-21 기록 006 · 410a146 · EXP-39 기록 007~009 · 019e54d) — 전환 조건 ①의 판정값 미확인 → **약 590만 pps(워커 1) · 전환하지 않음**
 > **개정일**: 2026-09-24 — W7 검수 반영 — 미확인 표 웨이브 표지 (W7) 제거
 > **개정일**: 2026-09-24 — W6 실험 채번 반영 — 실험 자리 반영(정본 10_observability/01 · 06)
 > **원천**: 원본 tech_stack.md §1 · §3.1 · §3.2 · §3.3 · §3.4 · §4.1 · §4.2 · §5.2 · §5.3 · §13(커밋 ff66a37) · 원본 implementation_plan.md §2.3(커밋 ff66a37) · ADR-01 · ADR-02 · ADR-03 · ADR-04 · ADR-05 · ADR-19 · ADR-20 · D-01 · D-02 · [../04_architecture/09_decision_records.md](../04_architecture/09_decision_records.md) · [../04_architecture/08_scaling_roadmap.md](../04_architecture/08_scaling_roadmap.md) · [03_data_infra.md](./03_data_infra.md) §observability 프로파일 구성원 판정 · [05_tooling_devops.md](./05_tooling_devops.md) §마이그레이션 도구 판정
@@ -193,7 +194,7 @@
 | 항목 | 상태 | 확정 자리 |
 |------|------|------|
 | 비교 표의 처리량 · 압축률 · RPS | 원본 예상치 — 3계층 미확인 · 확정 전 임의 값 고정 금지 | [../10_observability/06_experiment_catalog.md](../10_observability/06_experiment_catalog.md)(EXP-21 · 22 · 35 · 37) · REQ-NFR |
-| 생성기 처리량(전환 조건 ①의 판정값) | 3계층 미확인 — S1 실측 | [../02_features/05_datagen.md](../02_features/05_datagen.md) GEN-09 |
+| 생성기 처리량(전환 조건 ①의 판정값) | **닫힘(S1 실측 · 기록 006 · 410a146 · 부하 실험 · M · 스위치 기본값)** — 워커 1 약 590만 pps로 M 티어 3배(3만)의 약 197배 · 전환 조건 ① 발동하지 않음 | [../02_features/05_datagen.md](../02_features/05_datagen.md) GEN-09 |
 | Prisma 드리프트 동작 | 버린 대안의 실패 근거 — 공식 참조로 재확인 | [../03_requirements/16_official_references.md](../03_requirements/16_official_references.md) |
 | Kafka 전환 실험 | 확장 로드맵 마지막 단계 | [../04_architecture/08_scaling_roadmap.md](../04_architecture/08_scaling_roadmap.md) |
 

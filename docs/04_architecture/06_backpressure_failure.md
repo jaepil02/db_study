@@ -2,6 +2,7 @@
 
 > **대상**: 백프레셔 5단계 · **판정량(미확인 적체)** · **프로파일별 임계(2계층 조정값 정본)** · **하강 히스테리시스 판정** · MAXLEN과 maxmemory의 관계 · **SW-10 off일 때 경고 단계 데드밴드 강화의 의미 판정** · 장애 시나리오 10 · degrade 원칙 · **ClickHouse 중단 시 최신값 정지**
 > **작성일**: 2026-09-24
+> **개정일**: 2026-09-24 — S1 실측 반영(EXP-39 기록 008 · 009 · 019e54d) — 엔트리 크기 미확인 → **M 2,201~2,847 B · L 5,455~7,051 B**(인코딩) — Redis 안 크기는 미확인 유지
 > **개정일**: 2026-09-24 — 최종 정밀 검수 — ADR-24 반영 대기 표기 → 반영 완료
 > **개정일**: 2026-09-24 — W6 실험 채번 반영 — 컨슈머 랙 판정 · 메트릭 이름 · EXP 번호 반영(정본 10_observability/01 · 06)
 > **개정일**: 2026-09-24 — W4 판정 반영 — 장애 #1 ClickHouse 중단에 **알람 판정 정지** 추가 · 복구 중 rt:latest 순서 역전 · DLQ 재처리 경로 미확인 → **W4 판정** — 시나리오 수 불변
@@ -124,7 +125,7 @@
 - 검산: 순서 = **3**
 - **Stream 쪽에 상한을 둔 이유 — 캐시 예산을 지키기 위해서다.** 상한을 maxmemory에만 맡기면 Stream이 캐시 · 세션 예산을 잠식해 명시적 신호가 Redis OOM이 된다. 원본 산정(부하 실험) MAXLEN 200,000 × 약 7 KB ≈ 1.4 GB + 캐시 · 세션 · 최신값 약 0.4 GB = 1.8 GB < maxmemory 2.0 GB라 정상 구성에서는 축출이 없다.
 - **정상 운전에서 Stream 점유 메모리는 적체가 아니라 MAXLEN을 따른다.** 확인된 엔트리가 트리밍 전까지 남으므로 발행 누적이 MAXLEN에 닿은 뒤로는 Stream이 늘 상한 근처를 점유한다(§판정량). 원본의 "스트림 적체가 캐시를 밀어낸다"는 연쇄는 **적체가 아니라 Stream 충전량**이 몬다 — maxmemory를 낮춘 축출 실험은 스냅샷 복원 직후(Stream이 비어 있을 때)부터 충전 곡선을 따라 관찰해야 하며, 확장 3단계 진입 조건의 상관 대상도 Stream 점유 메모리다. Stream 계열 점유에는 수집 버퍼 외에 **DLQ(stream:plc:dlq — 원 엔트리 단위로 쌓인다)** 항이 더해진다. 산정의 정본은 [../05_data_stores/06_redis_memory.md](../05_data_stores/06_redis_memory.md)다.
-- **엔트리 크기 7 KB는 설비당 태그 500(L 티어 구성) 기준이다.** M 티어(설비당 200)의 엔트리는 약 2.8 KB라 MAXLEN 200,000에 닿아도 약 0.56 GB(200,000 × 2.8 KB)다 — **M 티어 정상 구성에서는 축출 연쇄가 재현되지 않는다.** 재현 조건은 태그 500 구성 또는 maxmemory 하향이다(판정 정본 [../05_data_stores/06_redis_memory.md](../05_data_stores/06_redis_memory.md)). 실제 엔트리 크기는 미확인이다.
+- **엔트리 크기 7 KB는 설비당 태그 500(L 티어 구성) 기준이다.** M 티어(설비당 200)의 엔트리는 인코딩 실측 2,201~2,847 B(혼합 · RANDOM_WALK — 기록 008 · 019e54d · 부하 실험 · M · 스위치 기본값)라 MAXLEN 200,000에 닿아도 약 0.57 GB(200,000 × 2,847 B)다 — **M 티어 정상 구성에서는 축출 연쇄가 재현되지 않는다.** 재현 조건은 태그 500 구성 또는 maxmemory 하향이다(판정 정본 [../05_data_stores/06_redis_memory.md](../05_data_stores/06_redis_memory.md)). Redis 안 엔트리 크기(노드 · 리스트팩 오버헤드 포함)는 미확인이다.
 
 ## 장애 시나리오
 
@@ -194,7 +195,7 @@ api 컨테이너가 죽으면 조회뿐 아니라 수집 · 적재 · 판정까�
 | 최신값 갱신 주체의 최종안 · SW-11 기본값 | 잠정 A(SW-11 기본 ingest) — S6 실측 | ADR-10 · [../02_features/13_switch_matrix.md](../02_features/13_switch_matrix.md) |
 | 복구 중 rt:latest 덮어쓰기 순서 역전 | **W4 판정** — 조건부 쓰기 | [../06_pipeline/05_realtime_read.md](../06_pipeline/05_realtime_read.md)(W4) |
 | 소진 시간 · 재기동 시간 · 결측 구간 길이 | 3계층 미확인 — 미확인 · 확정 전 임의 값 고정 금지 | EXP-16 · EXP-28 · [../10_observability/06_experiment_catalog.md](../10_observability/06_experiment_catalog.md) |
-| 실제 Stream 엔트리 크기 | 미확인 — 원본 산정 약 7 KB(태그 500) | [../05_data_stores/06_redis_memory.md](../05_data_stores/06_redis_memory.md) · 실측 |
+| 실제 Stream 엔트리 크기 | 인코딩 실측 L 5,455~7,051 B · M 2,201~2,847 B(기록 008 · 009) — Redis 안 오버헤드는 미확인 | [../05_data_stores/06_redis_memory.md](../05_data_stores/06_redis_memory.md) · 실측 |
 | DLQ 엔트리의 재처리 경로 | **W4 판정** — 원 토큰 직접 삽입 절차 · 재발행 금지 | [../06_pipeline/11_backpressure_failure.md](../06_pipeline/11_backpressure_failure.md)(W4) |
 
 ## 관련 문서
