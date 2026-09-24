@@ -1,14 +1,16 @@
 # enum과 상태 머신 (03_enums_state_machines)
 
-> **대상**: db_study가 저장 · 전송 · 설정에 쓰는 닫힌 값 집합(enum) 전수와 상태 머신 3종(배치 재시도 · 알람 · 백프레셔) — enum 값 정본
+> **대상**: db_study가 저장 · 전송 · 설정에 쓰는 닫힌 값 집합(enum) 전수와 상태 머신 4종(배치 재시도 · 알람 · 백프레셔 · 작업지시) — enum 값 정본
 > **작성일**: 2026-09-24
+> **개정일**: 2026-09-24 — W3 판정 반영 — 미설계 3 → **확정**(condition_type 4 · severity 3 · work_order.status 4 · 정본 05_data_stores/01) · 전수 검산 15 + 3 → **18 + 0** · 상태 머신 3 → **4**(작업지시 · 허용 전이 4쌍) · alarm:state 필드 **7** · bad_cnt 조건식 **W3 확정 quality IN (2, 4)**
+> **개정일**: 2026-09-24 — W3 판정 반영 — 백프레셔 판정량 XLEN → **미확인 적체(그룹 lag + pending)**(ADR-21) · 하강 전이 잠정 표기 → **히스테리시스 확정**(ADR-23)
 > **개정일**: 2026-09-24 — W2 판정 반영 — CLEARING · CLEARED 이벤트 ACK 허용 조건 링크
 > **개정일**: 2026-09-24 — W2 확정 반영 — role.role_code 미설계 → **확정 3값**(OPERATOR · ENGINEER · ADMIN) · 전수 검산 14 + 4 → **15 + 3** · 모드 A SIMULATED 표지 미확인 → 판정 완료(정본 02_features/03)
 > **원천**: 원본 data_flow.md §3.2 · §4 · §8 · §8.1 · §8.2 · §11 · §11.1(커밋 ff66a37) · 원본 architecture.md §6 · §7.1 · §7.2 · §7.3 · §9.2 · §9.3 · §11.1(커밋 ff66a37) · 원본 tech_stack.md §6 · §7 · §10.1(커밋 ff66a37) · docs_plan.md 실행 계획 보정 #20
 
 이 문서는 **값의 목록과 그 값이 무엇을 일으키는가**를 고정한다. 컬럼의 타입 · 제약은 [../05_data_stores](../05_data_stores/README.md)가, 전이를 실행하는 기전은 [../06_pipeline](../06_pipeline/README.md)이 갖는다. 값을 더하거나 빼면 여기서 먼저 고치고, 값을 인용하는 컬럼 · 메트릭 · 화면이 뒤따른다.
 
-**원본에 값이 없는 enum은 값을 만들지 않는다.** 컬럼만 있고 값 집합이 없는 것은 "미설계 — {결정 문서}가 확정"으로 등재한다. 임의 값을 적으면 구현이 그 값을 정본으로 읽어 스키마 확정 전에 데이터가 쌓인다.
+**원본에 값이 없는 enum은 이 문서가 임의로 만들지 않는다.** 컬럼만 있고 값 집합이 없는 것은 "미설계 — {결정 문서}가 확정"으로 등재하고, 결정 문서가 확정한 뒤에 값을 올린다. 임의 값을 적으면 구현이 그 값을 정본으로 읽어 스키마 확정 전에 데이터가 쌓인다.
 
 ## enum 전수
 
@@ -28,12 +30,12 @@
 | 12 | alarm_event.state | alarm_event.state | 2 | 상태 머신 2 |
 | 13 | APP_ROLE | 환경변수 | 5 | 기타 enum |
 | 14 | alarm_eval.breached | alarm_eval.breached | 2 | 기타 enum |
-| 15 | alarm_rule.condition_type | alarm_rule.condition_type | 미설계 | 미설계 enum |
-| 16 | alarm_rule.severity | alarm_rule.severity · alarm_eval.severity | 미설계 | 미설계 enum |
-| 17 | work_order.status | work_order.status | 미설계 | 미설계 enum |
-| 18 | role.role_code | role.role_code | 3 | 기타 enum(W2 확정) |
+| 15 | alarm_rule.condition_type | alarm_rule.condition_type | 4 | 저장 enum(W3 확정) |
+| 16 | alarm_rule.severity | alarm_rule.severity · alarm_eval.severity | 3 | 저장 enum(W3 확정) |
+| 17 | work_order.status | work_order.status | 4 | 저장 enum(W3 확정) · 상태 머신 4 |
+| 18 | role.role_code | role.role_code | 3 | 저장 enum(W2 확정) |
 
-검산: 값 확정 15(#1~#14 · #18) + 미설계 3(#15~#17) = **18**
+검산: 값 확정 18(#1~#18) + 미설계 0 = **18**
 
 - **실험 축 중 용량 티어 · 메모리 프로파일 · 부하 시나리오는 enum이 아니다.** 코드가 분기하는 값이 아니라 측정 조건이며, 정본은 [../04_architecture/07_capacity_planning.md](../04_architecture/07_capacity_planning.md) · [../04_architecture/03_execution_topology.md](../04_architecture/03_execution_topology.md) · [../10_observability/05_load_scenarios.md](../10_observability/05_load_scenarios.md)다. 역할 스위치 SW-NN도 여기 두지 않는다 — 정본 [../02_features/13_switch_matrix.md](../02_features/13_switch_matrix.md).
 
@@ -56,7 +58,7 @@
 - **6~8은 결번이다.** 원본은 5 다음을 9로 건너뛰고 사유를 적지 않았다(사유 미확인). 이 문서는 [04_id_conventions.md](./04_id_conventions.md)의 말미 채번 규칙을 적용해 6~8을 영구 결번으로 고정한다 — 새 품질 코드는 10부터 채번한다. 빈 번호를 메우면 "quality가 9 미만이면 실데이터 품질"이라는 조건식이 새 코드의 뜻에 따라 조용히 달라진다.
 - **SIMULATED는 BAD 계열이 아니므로 알람 판정 대상이다.** 이 프로젝트의 데이터는 전부 생성기 산출이라, 9를 판정에서 빼면 알람이 한 건도 발생하지 않는다.
 - **STALE은 저장 경로가 쓰지 않는다(판정).** 원본의 조건이 "지정 주기 안에 갱신 없음"이라 새 행이 오지 않는 상황에서만 참이고, 행이 오지 않으면 쓸 행도 없다. Collector 예외 시 "해당 설비 태그가 STALE로 전환"(원본 architecture.md §17)도 조회 시점 판정의 결과로 읽는다.
-- **불일치 등재 — 롤업의 bad_cnt가 SIMULATED를 센다.** mv_tag_1m이 countIf(quality > 0)으로 bad_cnt를 만들므로(원본 architecture.md §7.2) UNCERTAIN · STALE · SIMULATED가 모두 불량으로 집계된다. 생성 데이터만 있는 이 시스템에서는 bad_cnt = cnt가 되어 지표가 무의미하다. 조건식의 확정은 [../05_data_stores/04_clickhouse_rollup.md](../05_data_stores/04_clickhouse_rollup.md)(W3)이며, 이 문서의 기준으로 bad_cnt가 셀 대상은 **BAD 계열 중 tag_raw에 저장되는 2 · 4**다.
+- **W3 확정 — bad_cnt는 quality IN (2, 4)만 센다.** 원본 mv_tag_1m은 countIf(quality > 0)으로 bad_cnt를 만들므로(원본 architecture.md §7.2) UNCERTAIN · STALE · SIMULATED가 모두 불량으로 집계된다. 생성 데이터만 있는 이 시스템에서는 bad_cnt = cnt가 되어 지표가 무의미하다. 조건식은 [../05_data_stores/04_clickhouse_rollup.md](../05_data_stores/04_clickhouse_rollup.md) §bad_cnt 조건식 판정이 **BAD 계열 중 tag_raw에 저장되는 2 · 4**로 확정했다. UNCERTAIN 가중치는 구현하지 않는다(같은 문서).
 - **불일치 등재 — UNCERTAIN의 가중치.** 원본은 "집계에서 가중치를 낮춘다"인데 mv_tag_1m은 avgState(value)로 품질과 무관하게 평균한다. 확정 전 롤업 avg는 UNCERTAIN을 GOOD과 같은 무게로 센다. 또한 Collector 디코딩 파이프라인(원본 data_flow.md §3)에 보간 · 추정 단계가 없어 1을 부여하는 주체가 미확인이다. 확정 자리는 [../05_data_stores/04_clickhouse_rollup.md](../05_data_stores/04_clickhouse_rollup.md) · [../06_pipeline/02_collect.md](../06_pipeline/02_collect.md)다.
 - **불일치 등재 — BAD_TIMEOUT의 기록 자리.** 원본 data_flow.md §3.2는 "저장하지 않고 결측 처리", 원본 architecture.md §17은 "품질 BAD_TIMEOUT 기록"이다. 이 문서는 전자를 따라 tag_raw에 행을 쓰지 않는다. 후자의 "기록"이 메트릭인지 rt:latest 갱신인지는 미확인이며 [../06_pipeline/02_collect.md](../06_pipeline/02_collect.md)(W4)가 확정한다.
 
@@ -204,6 +206,8 @@ stateDiagram-v2
 | CLEARING | 해소했으나 디바운스 미경과 | 상태 · event_id | breached 0 |
 | ACKED | 운영자가 확인한 확정 알람 | 상태 · event_id | breached 1 |
 
+- **alarm:state Hash 필드는 7이다(W3 확정)** — state · first_breach_ts · breach_count · event_id · first_clear_ts · last_value · last_ts. 시각 필드는 epoch ms 정수다. first_clear_ts는 CLEARING 디바운스의 시작, last_value · last_ts는 RATE_OF_CHANGE의 직전 값이다. 정본 [../05_data_stores/05_redis_keyspace.md](../05_data_stores/05_redis_keyspace.md).
+
 ### alarm_event.state 대응 (docs_plan #20 판정)
 
 원본에서 상태 머신은 5상태이고 alarm_event.state에 쓰이는 값은 **ACTIVE · CLEARED 둘뿐**이다(원본 data_flow.md §8 시퀀스). 이 문서는 두 값 집합을 **다른 축**으로 판정한다 — alarm_event.state는 이벤트의 **생애(열림 · 닫힘)**, 상태 머신은 **판정 진행**이다. 확인(ACK)은 생애 값이 아니라 acked_by · acked_at 컬럼이 기록한다.
@@ -227,33 +231,34 @@ stateDiagram-v2
 
 ## 상태 머신 3 — 백프레셔 5단계
 
-stream:plc:raw 길이(XLEN)가 단계를 정한다. 임계 값은 2계층 조정값이라 **정본은 [../04_architecture/06_backpressure_failure.md](../04_architecture/06_backpressure_failure.md)**이며, 아래 현행 값은 참고다(원본 architecture.md §9.3).
+**미확인 적체(컨슈머 그룹 lag + pending)**가 단계를 정한다 — **XLEN이 아니다.** XACK은 엔트리를 지우지 않아 확인된 엔트리가 MAXLEN 트리밍까지 남으므로, XLEN은 정상 운전에서도 MAXLEN까지 차오르는 충전량이다(ADR-21). 임계는 2계층 조정값이라 **정본은 [../04_architecture/06_backpressure_failure.md](../04_architecture/06_backpressure_failure.md)**이며, 아래 현행 값은 원본 수치를 적체 기준으로 옮긴 참고다(원본 architecture.md §9.3).
 
 ```mermaid
 stateDiagram-v2
     [*] --> 정상
-    정상 --> 주의: 길이가 주의 임계 이상
-    주의 --> 경고: 길이가 경고 임계 이상
-    경고 --> 위험: 길이가 위험 임계 초과 또는 XADD OOM
-    주의 --> 정상: 길이가 주의 임계 미만
-    경고 --> 주의: 길이가 경고 임계 미만
-    위험 --> 복구: 길이가 주의 임계 미만 · 스풀 잔여 있음
-    복구 --> 정상: 스풀 재발행 완료
+    정상 --> 주의: 적체가 주의 임계 이상
+    주의 --> 경고: 적체가 경고 임계 이상
+    경고 --> 위험: 적체가 위험 임계 초과 또는 XADD 실패
+    주의 --> 정상: 적체가 주의 임계 − 폭 미만이 유지 시간 지속
+    경고 --> 주의: 적체가 경고 임계 − 폭 미만이 유지 시간 지속
+    위험 --> 복구: 적체가 주의 임계 미만
+    복구 --> 위험: 적체가 위험 임계 초과 또는 XADD 실패
+    복구 --> 정상: 스풀 잔여 0
 ```
 
 | 단계 | 진입 계약 | 시스템 반응 | 계측 지표 | 현행 임계(부하 · 개발 프로파일) |
 |------|---------|-----------|---------|---------------------------|
-| 정상 | 길이 < 주의 임계 | 그대로 진행 | consumer_lag | 20,000 미만 · 5,000 미만 |
-| 주의 | 주의 임계 ≤ 길이 < 경고 임계 | 경고 알림 · Ingest 컨슈머 동시성 자동 증가 | stream_length | 20,000~100,000 · 5,000~25,000 |
-| 경고 | 경고 임계 ≤ 길이 ≤ 위험 임계 | Collector가 데드밴드를 임시 강화해 발행량 감축 | deadband_boost_active | 100,000~180,000 · 25,000~45,000 |
-| 위험 | 길이 > 위험 임계 또는 XADD OOM | Collector 스풀 전환 · datagen.stream_full/503 | spool_active · spool_bytes · stream_trimmed_unacked | 180,000 초과 · 45,000 초과 |
-| 복구 | 위험을 지난 뒤 길이 < 주의 임계 | 스풀 파일 순차 재발행 후 스풀 종료 | spool_drain_rate | 상동(정상 임계) |
+| 정상 | 적체 < 주의 임계 | 그대로 진행 | consumer_lag | 20,000 미만 · 5,000 미만 |
+| 주의 | 주의 임계 ≤ 적체 < 경고 임계 | 경고 알림 · Ingest 컨슈머 동시성 자동 증가 | stream_length | 20,000~100,000 · 5,000~25,000 |
+| 경고 | 경고 임계 ≤ 적체 ≤ 위험 임계 | Collector가 데드밴드를 임시 강화해 발행량 감축 | deadband_boost_active | 100,000~180,000 · 25,000~45,000 |
+| 위험 | 적체 > 위험 임계 또는 XADD 실패 | Collector 스풀 전환 · datagen.stream_full/503 | spool_active · spool_bytes · stream_trimmed_unacked | 180,000 초과 · 45,000 초과 |
+| 복구 | 위험을 지난 뒤 적체 < 주의 임계 | 스풀 파일 순차 재발행 후 스풀 종료 · 적체가 주의 임계 이상이면 재발행만 일시 정지 | spool_drain_rate | 상동(정상 임계) |
 
-검산: 길이 대역 4(정상 · 주의 · 경고 · 위험) + 이력 상태 1(복구) = **5**
+검산: 적체 대역 4(정상 · 주의 · 경고 · 위험) + 이력 상태 1(복구) = **5**
 
-- **복구는 길이 대역이 아니라 이력 상태다.** 진입 길이는 정상과 같지만 스풀에 재발행할 프레임이 남아 있다는 점이 다르다. 복구를 정상으로 합치면 재발행 중 늘어나는 길이가 "정상 중 급증"으로 계측되어 원인이 가려진다.
+- **복구는 길이 대역이 아니라 이력 상태다.** 진입 적체는 정상과 같지만 스풀에 재발행할 프레임이 남아 있다는 점이 다르다. 복구를 정상으로 합치면 재발행 중 늘어나는 적체가 "정상 중 급증"으로 계측되어 원인이 가려진다.
 - **개발 프로파일 임계는 MAXLEN에 비례해 줄인다.** 부하 실험 임계를 그대로 쓰면 개발 프로파일(MAXLEN 50000)에서 경고 이상에 도달할 수 없다.
-- **미확인 — 하강 전이의 이력 규칙.** 원본은 상승 조건과 복구 조건만 적었다. 위험에서 길이가 경고 대역으로 내려왔을 때 스풀을 유지하는지, 복구 중 재발행으로 길이가 주의 임계를 다시 넘으면 어디로 가는지는 [../04_architecture/06_backpressure_failure.md](../04_architecture/06_backpressure_failure.md)(W3)가 확정한다. 위 상태도의 하강 전이는 길이 대역을 그대로 따른 잠정 표기다.
+- **하강 전이는 히스테리시스를 따른다(ADR-23 — W3 판정).** 상승은 즉시, 주의 · 경고의 하강은 "진입 임계 − 폭" 미만이 유지 시간 동안 이어질 때만 한 단계씩 한다. 위험은 경고 · 주의 대역으로 내려와도 **주의 임계 미만까지 스풀을 유지**하고, 복구 중 적체가 다시 주의 임계를 넘으면 재발행만 멈춘다. 폭 · 유지 시간은 2계층 조정값이며 S6에서 정한다(정본 [../04_architecture/06_backpressure_failure.md](../04_architecture/06_backpressure_failure.md)).
 
 ## 기타 enum
 
@@ -264,18 +269,47 @@ stateDiagram-v2
 
 검산: APP_ROLE 1 + 4 = **5** · breached **2**
 
-## 미설계 enum
+## 저장 enum(W3 확정)
 
-컬럼은 원본 ERD에 있으나 값 집합이 없다. **값을 만들지 않는다.**
+원본 ERD에 컬럼만 있던 값 집합을 W3이 확정했다. 저장 형식은 text + CHECK(severity는 smallint CHECK)이며 컬럼 정본은 [../05_data_stores/01_postgresql_schema.md](../05_data_stores/01_postgresql_schema.md)다. 이 표가 값의 정본이고 CHECK는 사본이다.
 
-| enum | 원본에서 확인되는 것 | 상태 | 확정 자리 |
-|------|------------------|------|----------|
-| alarm_rule.condition_type | text 컬럼 · 조건 종류 넷(초과 · 미만 · 범위 이탈 · 변화율 — 원본 data_flow.md §8) | **미설계 — 저장 문자열 미정** | [../05_data_stores/01_postgresql_schema.md](../05_data_stores/01_postgresql_schema.md)(W3) · 판정 의미는 [../06_pipeline/08_alarm.md](../06_pipeline/08_alarm.md) |
-| alarm_rule.severity | smallint 컬럼 · alarm_eval.severity UInt8로 복사 | **미설계 — 값 범위와 뜻 미정** | [../05_data_stores/01_postgresql_schema.md](../05_data_stores/01_postgresql_schema.md)(W3) |
-| work_order.status | text 컬럼 · (line_id, status) 인덱스 | **미설계 — W3 05_data_stores/01이 확정** | [../05_data_stores/01_postgresql_schema.md](../05_data_stores/01_postgresql_schema.md)(W3) · 기능은 [../02_features/10_work_orders.md](../02_features/10_work_orders.md) |
-| role.role_code | text UK 컬럼 · 원본 컨텍스트의 사용자 유형(현장 운영자 · 엔지니어) | **OPERATOR · ENGINEER · ADMIN**(W2 확정 · 누적 아님) | [../02_features/12_permission_matrix.md](../02_features/12_permission_matrix.md) · [../01_overview/03_personas_roles.md](../01_overview/03_personas_roles.md) |
+| enum | 값 | 뜻 | 확정 근거 |
+|------|------|------|------|
+| alarm_rule.condition_type | GT · LT · OUT_OF_RANGE · RATE_OF_CHANGE | 초과(value > threshold) · 미만(value < threshold) · 범위 이탈(value < threshold_low 또는 > threshold) · 변화율(abs(Δvalue) ÷ Δts초 > threshold) | 원본 조건 종류 넷(원본 data_flow.md §8) · 판정 기전은 [../06_pipeline/08_alarm.md](../06_pipeline/08_alarm.md) |
+| alarm_rule.severity | 1 LOW · 2 MEDIUM · 3 HIGH | 클수록 심각 · alarm_eval.severity UInt8로 복사 | 알림 채널이 없어 정렬 · 필터만 바뀐다 — 숫자는 두 저장소에서 변환 없이 정렬된다 |
+| work_order.status | PLANNED · IN_PROGRESS · COMPLETED · CANCELLED | 등록 · 생산 중 · 완료 · 취소 | 상태 머신 4 |
+| role.role_code | OPERATOR · ENGINEER · ADMIN | 누적 아님 · 합집합 판정 | W2 확정 — [../02_features/12_permission_matrix.md](../02_features/12_permission_matrix.md) |
 
-- **work_order.status에 상태 인덱스가 먼저 있다는 것은 값이 조회 조건으로 쓰인다는 뜻이다.** 값이 확정되면 이 문서에 상태 머신을 더하고 [02_error_codes.md](./02_error_codes.md)에 전이 위반 코드를 채번한다.
+검산: condition_type 4 + severity 3 + status 4 + role_code 3 = **14**값
+
+- **OUT_OF_RANGE는 태그 범위(range_min · range_max)를 쓰지 않는다.** 태그 범위 밖 값은 BAD_RANGE(4)라 판정에서 빠지므로, 규칙이 자기 경계(threshold_low · threshold)를 갖는다.
+
+## 상태 머신 4 — 작업지시
+
+work_order.status의 전이다(W3 확정 · 정본 [../05_data_stores/01_postgresql_schema.md](../05_data_stores/01_postgresql_schema.md) §work_order.status 허용 전이). 표 밖 전이는 work_orders.invalid_status_transition/409로 거절한다(REQ-WRK-04).
+
+```mermaid
+stateDiagram-v2
+    [*] --> PLANNED: 등록
+    PLANNED --> IN_PROGRESS: 생산 착수
+    PLANNED --> CANCELLED: 착수 전 취소
+    IN_PROGRESS --> COMPLETED: 생산 완료
+    IN_PROGRESS --> CANCELLED: 생산 중단
+    COMPLETED --> [*]
+    CANCELLED --> [*]
+```
+
+| 상태 | 초기 · 종결 | 나가는 전이 |
+|------|------|------|
+| PLANNED | 초기 | IN_PROGRESS · CANCELLED |
+| IN_PROGRESS | 중간 | COMPLETED · CANCELLED |
+| COMPLETED | 종결 | 없음 |
+| CANCELLED | 종결 | 없음 |
+
+검산: 허용 전이 2 + 2 = **4** · 초기 1 + 중간 1 + 종결 2 = **4**상태
+
+- **종결에서 나가는 전이가 없다.** 잘못 종결한 지시는 새 작업지시로 다시 등록한다 — 되돌리면 production_log 실적이 재개분인지 추가분인지 가를 수 없다.
+- 현재 상태 확인과 쓰기는 조건부 갱신 하나로 묶는다(REQ-WRK-04). DB CHECK는 값 집합만 막고 전이 쌍은 서비스가 막는다 — 한계 등재 [../05_data_stores/02_postgresql_constraints.md](../05_data_stores/02_postgresql_constraints.md) #8.
 
 ## 관련 문서
 

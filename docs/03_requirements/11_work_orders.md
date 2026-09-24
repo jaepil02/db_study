@@ -2,13 +2,14 @@
 
 > **대상**: 업무 데이터(WRK)의 동작 계약 — ③계층 비경유(Stream 미사용 · read-your-writes) · 작업지시 CRUD와 유일 제약 · 조회 캐시와 커밋 뒤 삭제 · 작업지시 상태 전이의 구조 · 생산 실적과 생산 카운터의 분리 · **감사 대상 기준과 감사 쓰기 트랜잭션** · 감사 로그 조회 · S7 시연 최소분 — REQ-WRK-NN 채번 정본
 > **작성일**: 2026-09-24
+> **개정일**: 2026-09-24 — W3 판정 반영 — work_order.status 미설계 → **4값 · 허용 전이 4쌍 확정**(정본 05_data_stores/01 · 11_glossary/03 상태 머신 4) · 작업지시 캐시 키 모양 미정 → **cache:workorders** · BFF 서버 fetch 캐시 → **두지 않음(no-store)** · 풀 크기 소유처 09_tech_stack/03 → **05_data_stores/02**(ADR-19) · 무인증 기간 감사 행위자 → **user_id NULL**
 > **원천**: 원본 architecture.md §5 · §6 · §10.1 · §11 · §17 · §18(커밋 ff66a37) · 원본 data_flow.md §7 · §7.1 · §7.2(커밋 ff66a37) · 원본 implementation_plan.md §5 S7 · §7.4(커밋 ff66a37) · D-04 · D-11 · [../02_features/10_work_orders.md](../02_features/10_work_orders.md) WRK-01~05 · [../02_features/12_permission_matrix.md](../02_features/12_permission_matrix.md) WRK · [../11_glossary/03_enums_state_machines.md](../11_glossary/03_enums_state_machines.md) 미설계 enum work_order.status · 저장소 루트 docs_plan.md 웨이브 인계 W3 05_data_stores 행(audit_log 소유 WRK vs MST 트랜잭션 쓰기)
 
 이 문서는 **경로를 고르지 않는 분기(③계층)가 지킬 계약**과 **audit_log의 계약**을 고정한다. 기능의 존재와 경계는 [../02_features/10_work_orders.md](../02_features/10_work_orders.md)가, F-05 기전은 [../06_pipeline/07_business_crud.md](../06_pipeline/07_business_crud.md)가 갖는다. 작업지시 · 생산 실적 · 감사는 API에서 PostgreSQL로 곧장 가고 Redis Stream을 타지 않는다 — 업무 쓰기를 비동기 at-least-once 경로에 올리면 커밋 응답 직후의 재조회가 아직 적재되지 않은 값을 보고, 재시도가 트랜잭션 경계 밖에서 중복을 만든다(D-04).
 
 **후순위(S7)지만 생략 불가다(D-11).** ③이 비면 분기가 "Stream 뒤의 라우팅 테이블"로 오해되고, 감사가 빠지면 업무 쓰기와 감사 쓰기를 한 트랜잭션에 묶는 경계를 시연할 대상이 사라진다. 그래서 이 문서는 S7의 **시연 최소분**을 요구로 고정한다.
 
-**audit_log는 WRK가 소유하고 여러 도메인이 쓴다.** 마스터 변경(MST)과 알람 규칙 · 확인(ALM)은 자기 트랜잭션 안에서 audit_log에 쓴다. 그래서 **감사 대상의 기준**은 소유자인 이 문서가 정하고 각 도메인은 그 기준을 적용한다. **work_order.status의 값 집합은 미설계다(W3)** — 이 문서는 값을 만들지 않고 전이 요구를 구조로만 적는다.
+**audit_log는 WRK가 소유하고 여러 도메인이 쓴다.** 마스터 변경(MST)과 알람 규칙 · 확인(ALM)은 자기 트랜잭션 안에서 audit_log에 쓴다. 그래서 **감사 대상의 기준**은 소유자인 이 문서가 정하고 각 도메인은 그 기준을 적용한다. **work_order.status의 값 집합은 W3이 확정했다** — PLANNED · IN_PROGRESS · COMPLETED · CANCELLED 4값과 허용 전이 4쌍이다(정본 [../05_data_stores/01_postgresql_schema.md](../05_data_stores/01_postgresql_schema.md)). 이 문서는 전이 요구의 구조를 갖는다.
 
 ## 요구사항 — 업무 CRUD
 
@@ -16,8 +17,8 @@
 |------|------|------|------|------|------|------|------|
 | **REQ-WRK-01** | 작업지시 · 생산 실적 · 감사의 쓰기는 API가 PostgreSQL 트랜잭션으로 **동기 커밋한 뒤 응답한다.** Redis Stream에 발행하지 않고 Stream에서 받지 않는다. 쓰기 응답 직후의 같은 대상 조회는 새 값을 본다 | D-04 · 원본 architecture.md §5 · [../01_overview/01_purpose_learning_goals.md](../01_overview/01_purpose_learning_goals.md) ③ 비경유 확인 · WRK-01~04 | Stream에 올리면 커밋 응답 직후의 재조회가 아직 적재되지 않은 값을 보고, 재시도가 트랜잭션 밖에서 작업지시를 두 번 만든다 | CRUD 부하 중 stream:plc:raw 유입량이 CRUD 유무와 무관 · 쓰기 응답 직후 GET → 새 값 | WRK-01 · WRK-02 · WRK-03 · WRK-04 | F-05 | 해당 없음 |
 | **REQ-WRK-02** | 작업지시는 조회 · 등록 · 수정하며 order_no가 이미 있으면 거절한다. 참조하는 라인이 마스터에 없거나 형식이 어긋나면 거절하고, 경로의 작업지시가 없으면 404다 | 원본 architecture.md §6(order_no UK · line_id FK) · WRK-01 | 유일 검사를 애플리케이션 조회로만 하면 동시 등록 두 건이 모두 통과해 같은 order_no가 둘이 된다 — 판정은 DB 유일 제약 위반을 코드로 옮기는 것이다 | 같은 order_no 동시 등록 2건 → 1건 201 · 1건 409 · 없는 라인 → 400 · 없는 id → 404 | WRK-01 | F-05 | common.duplicate_key/409 · common.validation_failed/400 · common.not_found/404 |
-| **REQ-WRK-03** | 작업지시 조회는 cache-aside를 거치고 TTL이 붙는다. 쓰기는 **커밋된 뒤에** 해당 캐시를 삭제한다 — 새 값으로 덮어쓰지 않는다. 캐시 계열 실패는 PostgreSQL 직행으로 degrade한다. BFF · 브라우저 캐시를 두면 마스터와 같은 무효화 체인 ④ · ⑤단을 적용한다 | 원본 data_flow.md §7.1 · 원본 architecture.md §11 · 원본 implementation_plan.md §7.4 · WRK-01 · [../02_features/02_master.md](../02_features/02_master.md) MST-08 | 커밋 전에 지우면 그 사이 다른 요청이 옛 값을 읽어 캐시를 다시 채우고 커밋 뒤에도 낡은 값이 남는다 · 덮어쓰면 동시 갱신에서 쓰기 순서가 뒤집혀 낡은 값이 최종값이 된다 | 수정 직후 조회 → 새 값 · 롤백된 수정 → 캐시 불변 · redis 정지 중 조회 → 200 | WRK-01 | F-05 | 해당 없음 |
-| **REQ-WRK-04** | 작업지시 status 변경은 **허용 전이 표에 있는 쌍만** 허용하고, 현재 상태 확인과 쓰기를 하나의 조건부 갱신으로 묶는다. status는 일반 수정 표면으로 우회해 바꾸지 않는다. 값 집합과 허용 전이 표는 W3가 확정하며 확정 전 구현이 값을 만들지 않는다 — 구조는 §작업지시 상태 전이의 구조 | [../11_glossary/03_enums_state_machines.md](../11_glossary/03_enums_state_machines.md) 미설계 enum · 원본 architecture.md §6((line_id, status) 인덱스) · WRK-02 | 확인과 쓰기를 가르면 동시에 들어온 두 전이가 같은 이전 상태를 보고 둘 다 성공해 표 밖 전이가 생긴다 · 일반 수정으로 우회하면 전이 규칙이 표면 하나에서만 지켜진다 | (값 확정 뒤) 표 밖 전이 요청 → 거절 · 같은 이전 상태에서 서로 다른 전이 동시 2건 → 1건만 성공 · 일반 수정 본문의 status → 무시 또는 거절 | WRK-02 | F-05 | work_orders.invalid_status_transition/409 |
+| **REQ-WRK-03** | 작업지시 조회는 cache-aside를 거치고 TTL이 붙는다. 쓰기는 **커밋된 뒤에** 해당 캐시를 삭제한다 — 새 값으로 덮어쓰지 않는다. 캐시 계열 실패는 PostgreSQL 직행으로 degrade한다. 캐시 키는 cache:workorders 하나(Hash · 쓰기 뒤 키 하나 DEL)이고, **BFF 서버 fetch 캐시는 두지 않는다(no-store)** — 두면 마스터와 같은 무효화 체인 ④ · ⑤단이 필요하다 | 원본 data_flow.md §7.1 · 원본 architecture.md §11 · 원본 implementation_plan.md §7.4 · WRK-01 · [../02_features/02_master.md](../02_features/02_master.md) MST-08 | 커밋 전에 지우면 그 사이 다른 요청이 옛 값을 읽어 캐시를 다시 채우고 커밋 뒤에도 낡은 값이 남는다 · 덮어쓰면 동시 갱신에서 쓰기 순서가 뒤집혀 낡은 값이 최종값이 된다 | 수정 직후 조회 → 새 값 · 롤백된 수정 → 캐시 불변 · redis 정지 중 조회 → 200 | WRK-01 | F-05 | 해당 없음 |
+| **REQ-WRK-04** | 작업지시 status 변경은 **허용 전이 표에 있는 쌍만** 허용하고, 현재 상태 확인과 쓰기를 하나의 조건부 갱신으로 묶는다. status는 일반 수정 표면으로 우회해 바꾸지 않는다. 값 집합(4)과 허용 전이 표(4쌍)는 W3이 확정했다 — 구조는 §작업지시 상태 전이의 구조 | [../11_glossary/03_enums_state_machines.md](../11_glossary/03_enums_state_machines.md) 상태 머신 4 · 원본 architecture.md §6((line_id, status) 인덱스) · WRK-02 | 확인과 쓰기를 가르면 동시에 들어온 두 전이가 같은 이전 상태를 보고 둘 다 성공해 표 밖 전이가 생긴다 · 일반 수정으로 우회하면 전이 규칙이 표면 하나에서만 지켜진다 | 표 밖 전이 요청(예: COMPLETED → PLANNED) → 거절 · 같은 이전 상태에서 서로 다른 전이 동시 2건 → 1건만 성공 · 일반 수정 본문의 status → 무시 또는 거절 | WRK-02 | F-05 | work_orders.invalid_status_transition/409 |
 | **REQ-WRK-05** | 생산 실적은 작업지시를 참조해 recorded_at · good_qty · defect_qty를 기록 · 조회한다. **사람이 API로 입력하는 업무 데이터**이며 Stream 유래 생산 카운터로 자동 채우지 않고 한 테이블로 합치지 않는다 | [../02_features/10_work_orders.md](../02_features/10_work_orders.md) §생산 실적과 생산 카운터 · 원본 architecture.md §6 · WRK-03 | 카운터를 production_log에 섞으면 스트림 유래 값이 업무 트랜잭션 경로에 들어와 ③의 "Stream을 타지 않는다"가 거짓이 되고 ②의 생산 카운터 분기가 흐려진다 | 실적 기록 → production_log 1행 · 수집 부하 중 production_log 행 증가 0 | WRK-03 | F-05 | common.validation_failed/400 · common.not_found/404 |
 | **REQ-WRK-06** | PostgreSQL 접속 불가 시 업무 CRUD는 503으로 실패한다. **쓰기를 Stream · 큐 · 로컬 파일에 보관했다가 나중에 재생하지 않는다.** 시계열 조회는 계속 동작한다 | 원본 architecture.md §17 · 원본 data_flow.md §12.2 · WRK-01~05 | 보관 후 재생하면 사용자는 성공 응답을 받았는데 PostgreSQL에는 없는 쓰기가 생겨 read-your-writes가 깨지고 재생 순서가 원래 순서와 달라진다 | postgres 정지 → 작업지시 쓰기 503 · 재기동 뒤 자동 생성된 행 0 · 같은 구간 시계열 조회 200 | WRK-01 · WRK-02 · WRK-03 · WRK-05 | F-05 · F-10 | common.postgres_unavailable/503 |
 
@@ -71,27 +72,27 @@ REQ-WRK-07의 판정이다. 기준 하나로 도메인별 적용이 갈린다. �
 
 ## 작업지시 상태 전이의 구조
 
-값이 없는 상태에서 고정할 수 있는 것과 없는 것을 가른다. 값 · 전이 표가 확정되면 [../11_glossary/03_enums_state_machines.md](../11_glossary/03_enums_state_machines.md)에 상태 머신이 더해지고 이 표의 오른쪽 열이 채워진다.
+W3이 값 · 전이 표를 확정해 오른쪽 열이 채워졌다. 상태 머신은 [../11_glossary/03_enums_state_machines.md](../11_glossary/03_enums_state_machines.md) 상태 머신 4다.
 
-| 요소 | 이 문서가 고정하는 것 | W3 이후가 고정하는 것 | 확정 자리 |
+| 요소 | 이 문서가 고정하는 것 | W3이 고정한 것 | 확정 자리 |
 |------|------|------|------|
-| 값 집합 | 값을 만들지 않는다 | status 값 | [../05_data_stores/01_postgresql_schema.md](../05_data_stores/01_postgresql_schema.md) |
-| 허용 전이 | 표 밖 전이는 거절한다 | 허용 쌍 전수 · 초기 상태 · 종결 상태 | 상동 · [../11_glossary/03_enums_state_machines.md](../11_glossary/03_enums_state_machines.md) |
+| 값 집합 | 값을 만들지 않는다 | **PLANNED · IN_PROGRESS · COMPLETED · CANCELLED**(4) | [../05_data_stores/01_postgresql_schema.md](../05_data_stores/01_postgresql_schema.md) |
+| 허용 전이 | 표 밖 전이는 거절한다 | **PLANNED → IN_PROGRESS · PLANNED → CANCELLED · IN_PROGRESS → COMPLETED · IN_PROGRESS → CANCELLED**(4쌍) · 초기 PLANNED · 종결 COMPLETED · CANCELLED | 상동 · [../11_glossary/03_enums_state_machines.md](../11_glossary/03_enums_state_machines.md) |
 | 경합 | 확인과 쓰기를 한 조건부 갱신으로 묶는다 | 해당 없음 | 이 문서 |
 | 우회 금지 | 일반 수정 표면으로 status를 바꾸지 않는다 | 일반 수정 본문의 status를 무시할지 거절할지 | [../07_api/08_work_orders.md](../07_api/08_work_orders.md)(W5) |
 | 위반 응답 | 409 · work_orders.invalid_status_transition/409 | 해당 없음 — 채번 완료 | [../11_glossary/02_error_codes.md](../11_glossary/02_error_codes.md)(리드) |
 | 감사 | 상태 변경은 감사 대상 | 해당 없음 | 이 문서 REQ-WRK-07 |
 
 - 검산: 요소 = 값 · 전이 · 경합 · 우회 · 위반 응답 · 감사 = **6**
-- **(line_id, status) 인덱스가 먼저 있다는 것은 status가 조회 조건이라는 뜻이다**(원본 architecture.md §6). 값이 확정되기 전에 구현이 임시 값으로 행을 쌓으면 인덱스가 그 임시 값으로 채워져 확정 뒤 이관이 필요하다.
+- **(line_id, status) 인덱스가 먼저 있다는 것은 status가 조회 조건이라는 뜻이다**(원본 architecture.md §6). 값 집합이 확정됐으므로 구현은 CHECK 4값으로 시작한다 — 임시 값으로 행을 쌓지 않는다.
 
 ## 조회 계약 — 2계층 조정값
 
 | 조정값 | 읽는 자리 · 키 모양 | 기준 시점 | 금지된 대체 동작 | 부재 시 | 현행 참고 · 소유처 |
 |------|------|------|------|------|------|
-| 작업지시 조회 캐시 TTL | 작업지시 캐시 키(모양 미정) | 캐시 쓰기 시 | TTL 없는 쓰기 · 쓰기 뒤 삭제 생략 | 기동 거부 | 60초 · [../05_data_stores/05_redis_keyspace.md](../05_data_stores/05_redis_keyspace.md) |
+| 작업지시 조회 캐시 TTL | cache:workorders(Hash · 첫 채움 기준 만료) | 캐시 쓰기 시 | TTL 없는 쓰기 · 쓰기 뒤 삭제 생략 | 기동 거부 | 60초 · [../05_data_stores/05_redis_keyspace.md](../05_data_stores/05_redis_keyspace.md) |
 | 캐시 호출 타임아웃 | 캐시 계열 래퍼 | 호출마다 | 예외 전파 | 래퍼 기본 동작 | 50 ms · 상동 |
-| PostgreSQL 커넥션 풀 크기 | api in-process 풀 | 기동 시 | 요청마다 새 커넥션 | 기동 거부 | 20 · [../09_tech_stack/03_data_infra.md](../09_tech_stack/03_data_infra.md) |
+| PostgreSQL 커넥션 풀 크기 | api in-process 풀 | 기동 시 | 요청마다 새 커넥션 | 기동 거부 | 20 · [../05_data_stores/02_postgresql_constraints.md](../05_data_stores/02_postgresql_constraints.md)(ADR-19) |
 | audit_log 보존 | 파티션 · 보존 정책 | 정책 적용 시 | 행 단위 삭제 표면 | 삭제하지 않음 | 미정 · [../05_data_stores/08_retention_lifecycle.md](../05_data_stores/08_retention_lifecycle.md) |
 
 - 검산: 조정값 = 캐시 TTL · 타임아웃 · 풀 · 보존 = **4**
@@ -138,13 +139,13 @@ REQ-WRK-07의 판정이다. 기준 하나로 도메인별 적용이 갈린다. �
 
 | 항목 | 원본에서 확인되는 것 | 상태 | 확정 자리 |
 |------|------|------|------|
-| work_order.status 값 · 허용 전이 | text 컬럼 · (line_id, status) 인덱스 | 미설계(W1 등재) | [../05_data_stores/01_postgresql_schema.md](../05_data_stores/01_postgresql_schema.md)(W3) |
+| work_order.status 값 · 허용 전이 | text 컬럼 · (line_id, status) 인덱스 | **W3 확정** — 4값 · 4쌍 | [../05_data_stores/01_postgresql_schema.md](../05_data_stores/01_postgresql_schema.md) |
 | 상태 전이 위반 에러 코드 | 이 문서가 409 · work_orders 네임스페이스로 판정 | **채번 완료** — work_orders.invalid_status_transition/409 · 조건이 허용 전이 표에 대해 정의되므로 값 집합과 무관하게 성립한다 | [../11_glossary/02_error_codes.md](../11_glossary/02_error_codes.md)(리드) |
-| **S4~S6 무인증 기간의 감사 행위자** | 마스터 쓰기는 S4부터 audit_log에 쓰는데 인증은 S7이다 · audit_log.user_id는 user_account 참조다 | **신규 미확인** — 행위자 없는 감사 행을 허용할지 시드 계정으로 채울지 원본에 없다 | [../05_data_stores/01_postgresql_schema.md](../05_data_stores/01_postgresql_schema.md) · [../05_data_stores/09_migrations_seed.md](../05_data_stores/09_migrations_seed.md)(W3) |
+| **S4~S6 무인증 기간의 감사 행위자** | 마스터 쓰기는 S4부터 audit_log에 쓰는데 인증은 S7이다 · audit_log.user_id는 user_account 참조다 | **W3 판정** — user_id NULL = 무인증 기간의 행위 · 시드 계정으로 채우지 않는다 · S7 이후 NULL은 한계 등재 #4 | [../05_data_stores/01_postgresql_schema.md](../05_data_stores/01_postgresql_schema.md) · [../05_data_stores/09_migrations_seed.md](../05_data_stores/09_migrations_seed.md)(W3) |
 | 업무 CRUD p95 | 원본 목표 100 ms 이하(4 vCPU 가정) · 지연 예산 80 ms | 미확인 — 확정 전 임의 값 고정 금지 | [13_nonfunctional.md](./13_nonfunctional.md) |
 | 생산 실적 · 감사 조회 표면 | 원본 API 표에 work-orders 하나뿐이다 | 표면 미설계 | [../07_api/08_work_orders.md](../07_api/08_work_orders.md)(W5) |
 | 생산 카운터와 production_log의 구분 기전 | 원본에 기전이 없다 | 미설계 | [../06_pipeline/04_routing.md](../06_pipeline/04_routing.md)(W4) |
-| 작업지시 캐시 키 모양 · BFF 캐시 여부 | TTL 60초만 있다 | 미설계 | [../05_data_stores/05_redis_keyspace.md](../05_data_stores/05_redis_keyspace.md)(W3) · [../06_pipeline/07_business_crud.md](../06_pipeline/07_business_crud.md)(W4) |
+| 작업지시 캐시 키 모양 · BFF 캐시 여부 | TTL 60초만 있다 | **W3 판정** — cache:workorders · BFF no-store. 기전은 W4 | [../05_data_stores/05_redis_keyspace.md](../05_data_stores/05_redis_keyspace.md) · [../06_pipeline/07_business_crud.md](../06_pipeline/07_business_crud.md)(W4) |
 
 ## 관련 문서
 

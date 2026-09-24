@@ -30,9 +30,9 @@
 | 학습 목표 | **2축** — ① 컬럼형 vs RDB를 측정으로 안다 ② Redis 중간 계층에서 성격별 분기를 경험한다 |
 | 도메인 | **11개** — AUT · MST · COL · SIM · GEN · ING · TSQ · RLT · ALM · WRK · OBS(제어 6 · 데이터 4 · 관측 1) |
 | 분기 계층 | **3계층** — ① 원시값 ② 알람 · 실적 ③ 업무 CRUD |
-| 역할 스위치 | **10종** — SW-01~SW-10(Redis 역할 9 + 수집 1). 정본 [../02_features/13_switch_matrix.md](../02_features/13_switch_matrix.md) |
+| 역할 스위치 | **11종** — SW-01~SW-11(Redis 역할 10 + 수집 1). 정본 [../02_features/13_switch_matrix.md](../02_features/13_switch_matrix.md) |
 | 학습 단계 | S0~S7 — 완성 순서(Phase 0~5)와 학습 순서는 다르다. 학습 순서의 정본은 [05_priorities_roadmap.md](./05_priorities_roadmap.md) |
-| 제품·학습 결정 | **12** — D-01~D-12 · 채번 정본 [06_design_decisions.md](./06_design_decisions.md) |
+| 제품·학습 결정 | **13** — D-01~D-13 · 채번 정본 [06_design_decisions.md](./06_design_decisions.md) |
 | 실행 환경 | 로컬 머신 1대 · Docker Compose 컨테이너 4개 + 호스트 웹 · 127.0.0.1 바인드 · 배포 없음 |
 
 ## 관련 문서

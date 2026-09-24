@@ -2,6 +2,7 @@
 
 > **대상**: 알람(ALM · NestJS alarms 모듈) 기능 목록 · 목적이 다른 세 쓰기 · 기능별 경계 · 의존 도메인 · 실패 시 보이는 것 — 기능 ID ALM-NN 채번 정본
 > **작성일**: 2026-09-24
+> **개정일**: 2026-09-24 — W3 판정 반영 — condition_type · severity 미설계 → **확정**(4값 · 1~3) · 담당자 배정 → **컬럼 두지 않음**(정본 05_data_stores/01)
 > **개정일**: 2026-09-24 — W2 요구사항 판정 반영 — ACK 허용 조건(state ACTIVE · acked_at NULL) · alarms.ack_not_allowed/409 · 규칙 변경과 확인은 감사 대상(REQ-WRK-07)
 > **원천**: 원본 data_flow.md §8 · §8.1 · §8.2 · §6.3 · §15 · §17(커밋 ff66a37) · 원본 architecture.md §4 · §5 · §6 · §7.3 · §8.1 · §8.2 · §10.1 · §11(커밋 ff66a37) · 원본 implementation_plan.md §5 S7 · §7.3(커밋 ff66a37) · 저장소 루트 docs_plan.md 보정 #20 · D-04 · D-11 · [../11_glossary/03_enums_state_machines.md](../11_glossary/03_enums_state_machines.md) 상태 머신 2
 
@@ -15,7 +16,7 @@ ALM은 **분기 ②계층이 실제로 실행되는 자리**다. 한 스트림�
 
 | 기능 ID | 기능명 | 설명 | 단계 | 흐름 | 스위치 | 표면 | 저장소 |
 |------|------|------|------|------|------|------|------|
-| **ALM-01** | 알람 규칙 관리 | 태그별 규칙(조건 종류 · 임계값 · debounce_ms · 심각도 · enabled)을 조회 · 등록 · 수정 · 비활성화한다. 변경을 커밋하면 cache:alarmrules를 **즉시 삭제**한다 — 삭제하지 않으면 바뀐 임계값이 캐시 TTL만큼 판정에 반영되지 않는다. 쓰기 주체는 엔지니어 역할이다([12_permission_matrix.md](./12_permission_matrix.md)). 조건 종류 · 심각도의 저장 값은 미설계다 | S7 | F-05 | 해당 없음 | 07_api/07_alarms | PostgreSQL alarm_rule · Redis cache:alarmrules |
+| **ALM-01** | 알람 규칙 관리 | 태그별 규칙(조건 종류 · 임계값 · debounce_ms · 심각도 · enabled)을 조회 · 등록 · 수정 · 비활성화한다. 변경을 커밋하면 cache:alarmrules를 **즉시 삭제**한다 — 삭제하지 않으면 바뀐 임계값이 캐시 TTL만큼 판정에 반영되지 않는다. 쓰기 주체는 엔지니어 역할이다([12_permission_matrix.md](./12_permission_matrix.md)). 조건 종류는 GT · LT · OUT_OF_RANGE · RATE_OF_CHANGE, 심각도는 1~3이다(W3 확정) | S7 | F-05 | 해당 없음 | 07_api/07_alarms | PostgreSQL alarm_rule · Redis cache:alarmrules |
 | **ALM-02** | 규칙 캐시 | 활성 규칙 목록을 cache:alarmrules에 둔다(현행 300초 + 변경 시 즉시 삭제). 미스면 PostgreSQL에서 읽어 채운다. 판정마다 PostgreSQL을 읽지 않으려는 캐시다 | S7 | F-06 | 해당 없음 | 표면 없음 — ALM-03의 내부 단계 | Redis cache:alarmrules |
 | **ALM-03** | 디바운스 판정 | Ingest가 넘긴 배치의 행마다 규칙 조건(초과 · 미만 · 범위 이탈 · 변화율)을 평가하고 상태 머신(NORMAL · PENDING · ACTIVE · CLEARING · ACKED)을 alarm:state:{rule_id}에 갱신한다. **BAD 계열(2 · 4)은 판정에서 빼고 SIMULATED(9)는 판정한다** — 이 시스템의 데이터는 전부 생성 데이터라 9를 빼면 알람이 한 건도 나지 않는다. 상태 조회는 **배치 단위로 관련 규칙만 한 번에** 한다(보정 7.3) | S7 | F-06 | 해당 없음 | 표면 없음 — ING-09가 호출 | Redis alarm:state |
 | **ALM-04** | 이벤트 확정 | PENDING → ACTIVE에서 alarm_event에 행을 열고(state ACTIVE) event_id를 alarm:state에 둔다. 해제가 디바운스를 지나 확정되면 행을 닫는다(state CLEARED · cleared_at). **PostgreSQL 쓰기가 실패하면 alarm:state를 PENDING으로 되돌리고 다음 판정 주기에 다시 시도한다** — 진실은 alarm_event다 | S7 | F-06 | 해당 없음 | 표면 없음 — ALM-03의 후속 | PostgreSQL alarm_event(월 파티션) |
@@ -94,9 +95,9 @@ ALM은 **분기 ②계층이 실제로 실행되는 자리**다. 한 스트림�
 
 | 항목 | 원본에서 확인되는 것 | 상태 | 확정 자리 |
 |------|------|------|------|
-| condition_type · severity 값 | 조건 종류 넷 · smallint 심각도 | 미설계(W1 등재) | [../05_data_stores/01_postgresql_schema.md](../05_data_stores/01_postgresql_schema.md)(W3) |
+| condition_type · severity 값 | 조건 종류 넷 · smallint 심각도 | **W3 확정** — GT · LT · OUT_OF_RANGE · RATE_OF_CHANGE · 1 LOW · 2 MEDIUM · 3 HIGH | [../05_data_stores/01_postgresql_schema.md](../05_data_stores/01_postgresql_schema.md) |
 | 확인이 alarm:state를 ACKED로 바꾸는 주체 | 확인은 API가 PostgreSQL에 쓴다 | 미확인(W1 등재) | [../06_pipeline/08_alarm.md](../06_pipeline/08_alarm.md)(W4) |
-| 담당자 배정 | "확인 · 해제 · 담당자 배정 등 상태 갱신이 필요"(원본 data_flow.md §8.2) | **신규 불일치** — alarm_event에 담당자 컬럼이 없다(원본 architecture.md §6). 기능을 두지 않았다 | [../05_data_stores/01_postgresql_schema.md](../05_data_stores/01_postgresql_schema.md)(W3) |
+| 담당자 배정 | "확인 · 해제 · 담당자 배정 등 상태 갱신이 필요"(원본 data_flow.md §8.2) | **W3 판정** — 담당자 컬럼을 두지 않는다. 배정 기능이 없고 갱신은 확인 · 해제 둘로 닫는다 | [../05_data_stores/01_postgresql_schema.md](../05_data_stores/01_postgresql_schema.md) |
 | 규칙 관리 · 판정 이력 분석 표면 | API 표에 알람은 이벤트 목록 · 확인 둘뿐이다 | **신규 — 표면 미설계** | [../07_api/07_alarms.md](../07_api/07_alarms.md)(W5) |
 | 판정 구간 지연 예산 | 원본 지연 예산표에 알람 판정 구간이 없다(보정 7.3) | 미확인 — 확정 전 임의 값 고정 금지 | [../04_architecture/05_latency_budget.md](../04_architecture/05_latency_budget.md)(W3) |
 | 규칙 변경의 감사 기록 | 업무 데이터 변경은 감사 대상이다(원본 architecture.md §18) | **W2 판정 완료** — 규칙 변경 · 확인은 대상 · 판정 경로의 시스템 쓰기는 대상 아님 | [../03_requirements/10_alarms.md](../03_requirements/10_alarms.md) |

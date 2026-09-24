@@ -2,6 +2,7 @@
 
 > **대상**: 학습자 · 실험 수행자 · 신규 합류자 — db_study가 무엇을 배우려고 만드는 시스템인지, 그 배움을 무엇으로 판정하는지
 > **작성일**: 2026-09-24
+> **개정일**: 2026-09-24 — SW-11 LATEST_VALUE_WRITER 신설 반영(D-13 · 사용자 확정) — 스위치 10 → **11**
 > **원천**: 원본 tech_stack.md §1 · §5.1 · §5.2 · §5.3(커밋 ff66a37) · 원본 implementation_plan.md §1 · §3 · §4 · §5(커밋 ff66a37) · 원본 data_flow.md §8.2(커밋 ff66a37) · 저장소 루트 docs_plan.md(Context · 학습 목표를 문서 구조로 구현하는 방법 · 실행 계획 보정 #2) · [06_design_decisions.md](./06_design_decisions.md) D-01 · D-04 · D-05 · D-06 · [../README.md](../README.md) 고정 기준
 
 db_study는 PLC 대용량 시계열과 업무 데이터를 Redis 중간 계층에서 갈라 ClickHouse와 PostgreSQL에 나눠 싣는 **로컬 전용 학습 시스템**이다. 이 문서는 학습 목표 2축의 정본이다 — 축마다 무엇을 묻고, 무엇을 산출하고, 어떤 경로로 재고, 무엇을 보면 배웠다고 판정하는지를 고정한다.
@@ -129,7 +130,7 @@ db_study는 PLC 대용량 시계열과 업무 데이터를 Redis 중간 계층�
 
 ## 두 축을 관통하는 역할 스위치
 
-스위치는 Redis의 각 역할(과 대조군 · 데드밴드)을 끄고 켜서 기여분을 분리하는 손잡이다. **채번 · 기본값 · off 동작 · 교체되는 포트의 정본은 [../02_features/13_switch_matrix.md](../02_features/13_switch_matrix.md)다.** 아래는 축과의 관계만 보이는 요약이다. 결정은 D-06 · D-08이다.
+스위치는 Redis의 각 역할(과 대조군 · 데드밴드 · 최신값 갱신 주체)을 끄고 켜서 기여분을 분리하는 손잡이다. **채번 · 기본값 · off 동작 · 교체되는 포트의 정본은 [../02_features/13_switch_matrix.md](../02_features/13_switch_matrix.md)다.** 아래는 축과의 관계만 보이는 요약이다. 결정은 D-06 · D-08이다.
 
 | ID | 스위치 | 분류 | off일 때 | 측정 대상 | 축 ① | 축 ② |
 |------|------|------|------|------|------|------|
@@ -143,8 +144,9 @@ db_study는 PLC 대용량 시계열과 업무 데이터를 Redis 중간 계층�
 | SW-08 | INGEST_IDEMPOTENCY | 멱등 | dedup 토큰 미전달 | 재시도 중복 | 해당 없음 | 버퍼 역할의 at-least-once |
 | SW-09 | CONTROL_TABLE_ENABLED | 대조군 | PostgreSQL 대조군 미적재 | 목표 ①의 실행 | **핵심** | 해당 없음 |
 | SW-10 | COLLECTOR_DEADBAND | 수집 | 데드밴드 비활성 | 전송량 · 행 수 | ClickHouse 행 수 · 압축률을 바꾼다 | Stream 유입량을 바꾼다 |
+| SW-11 | LATEST_VALUE_WRITER | 최신값 결합 | (구현 선택) ingest 기본 · collector 대안 | ClickHouse 중단 중 최신값 갱신 지속 | 해당 없음 | **핵심** — Redis 최신값이 OLAP 적재 경로에 묶이는가(D-13) |
 
-- 검산: 백프레셔 1 + 캐시 4 + 팬아웃 2 + 멱등 1 + 대조군 1 + 수집 1 = **10**
+- 검산: 백프레셔 1 + 캐시 4 + 팬아웃 2 + 멱등 1 + 대조군 1 + 수집 1 + 최신값 결합 1 = **11**
 - **SW-10이 두 축에 동시에 걸리는 것이 스위치로 남긴 이유다.** 데드밴드는 ClickHouse에 쌓이는 행 수와 코덱 효율(목표 ①)과 Stream 유입량(목표 ②)을 함께 바꾸므로, 스위치에서 빼면 그 상태가 기록되지 않는 측정이 된다(D-08).
 - **스위치는 런타임 if가 아니라 DI로 주입되는 구현체다.** 조회 경로에 분기를 흩뿌리면 분기 자체가 측정 대상 코드에 섞인다 — 제약의 정본은 [../04_architecture/02_module_boundaries.md](../04_architecture/02_module_boundaries.md)다. 그래서 전환은 재기동 절차이고 화면은 상태를 표시할 뿐이다([../08_screen/07_experiment_console.md](../08_screen/07_experiment_console.md)).
 - **계측 없는 스위치는 장식이다.** 스위치 상태는 /api/v1/health와 /metrics 레이블로 노출되고 모든 측정 기록에 병기된다.

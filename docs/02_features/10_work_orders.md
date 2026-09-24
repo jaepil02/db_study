@@ -2,6 +2,7 @@
 
 > **대상**: 업무 데이터(WRK · NestJS work-orders 모듈) 기능 목록 · 감사 로그의 소유와 쓰기 · 기능별 경계 · 의존 도메인 · 실패 시 보이는 것 — 기능 ID WRK-NN 채번 정본
 > **작성일**: 2026-09-24
+> **개정일**: 2026-09-24 — W3 판정 반영 — work_order.status 미설계 → **4값 · 허용 전이 4쌍 확정** · 작업지시 캐시 키 → **cache:workorders · BFF no-store**(정본 05_data_stores/01 · 05)
 > **개정일**: 2026-09-24 — W2 요구사항 판정 반영 — 알람 규칙 변경 · 확인을 감사 대상으로 확정(REQ-WRK-07) · 상태 전이 위반 코드 invalid_status_transition/409
 > **원천**: 원본 architecture.md §5 · §6 · §11 · §18(커밋 ff66a37) · 원본 data_flow.md §7 · §7.1 · §7.2(커밋 ff66a37) · 원본 tech_stack.md §5.1(커밋 ff66a37) · 원본 implementation_plan.md §5 S7(커밋 ff66a37) · D-04 · D-11 · [../01_overview/04_domain_map.md](../01_overview/04_domain_map.md) 트랜잭션 공유 경계 · [../11_glossary/03_enums_state_machines.md](../11_glossary/03_enums_state_machines.md) 미설계 enum
 
@@ -18,7 +19,7 @@ WRK는 **분기 ③계층 — 경로를 고르지 않는 분기 — 의 시연 �
 | 기능 ID | 기능명 | 설명 | 단계 | 흐름 | 스위치 | 표면 | 저장소 |
 |------|------|------|------|------|------|------|------|
 | **WRK-01** | 작업지시 관리 | 라인에 배정된 작업지시(order_no · product_code · target_qty · planned_start · planned_end · status)를 조회 · 등록 · 수정한다. order_no는 유일하다. 조회는 캐시(현행 60초)를 거치고 쓰기는 커밋 뒤에 캐시를 삭제한다. BFF를 거친다 — 웹 오리진 하나로 요청이 모여 쿠키 · CORS가 단순해진다 | S7 | F-05 | 해당 없음 | 07_api/08_work_orders | PostgreSQL work_order · Redis cache 계열 |
-| **WRK-02** | 작업지시 상태 관리 | 작업지시의 status를 바꾼다. (line_id, status) 인덱스가 먼저 있다는 것은 status가 조회 조건으로 쓰인다는 뜻이다. **status 값 집합은 미설계다** — 값이 확정되면 상태 머신과 전이 위반 코드가 뒤따른다 | S7 | F-05 | 해당 없음 | 07_api/08_work_orders | PostgreSQL work_order |
+| **WRK-02** | 작업지시 상태 관리 | 작업지시의 status를 바꾼다. (line_id, status) 인덱스가 먼저 있다는 것은 status가 조회 조건으로 쓰인다는 뜻이다. **status 값은 PLANNED · IN_PROGRESS · COMPLETED · CANCELLED 4값 · 허용 전이 4쌍이다(W3 확정)** — 상태 머신은 [../11_glossary/03_enums_state_machines.md](../11_glossary/03_enums_state_machines.md) 상태 머신 4 | S7 | F-05 | 해당 없음 | 07_api/08_work_orders | PostgreSQL work_order |
 | **WRK-03** | 생산 실적 기록 | 작업지시별 실적(recorded_at · good_qty · defect_qty)을 기록하고 조회한다. **사람이 API로 입력하는 업무 데이터**다 — Stream에서 오는 ②계층의 생산 카운터와 다른 데이터다(§생산 실적과 생산 카운터) | S7 | F-05 | 해당 없음 | 07_api/08_work_orders | PostgreSQL production_log |
 | **WRK-04** | 감사 로그 기록 | 업무 데이터 변경마다 행위자 · 시각 · 동작 · 대상 테이블 · before · after(jsonb)를 **변경과 같은 트랜잭션에서** audit_log에 쓴다. 쓰는 주체는 변경을 일으킨 도메인(MST · WRK)이고 테이블 소유는 WRK다. 트랜잭션을 가르면 변경은 커밋됐는데 감사가 빠지는 창이 생긴다 | S7(MST 쓰기는 S4) | F-05 | 해당 없음 | 표면 없음 — 쓰기 표면의 트랜잭션 안 단계 | PostgreSQL audit_log |
 | **WRK-05** | 감사 로그 조회 | 관리자가 변경 이력(audit_log · 태그 변경은 tag_master_history)을 조회한다. **원본 API 표에 이 조회 표면이 없다** — 관리 화면의 "변경 이력 확인"(W1 [../01_overview/03_personas_roles.md](../01_overview/03_personas_roles.md))이 요구한다 | S7 | F-05 | 해당 없음 | 07_api/08_work_orders(W5 신설 판정) | PostgreSQL audit_log(읽기) |
@@ -58,7 +59,7 @@ WRK는 **분기 ③계층 — 경로를 고르지 않는 분기 — 의 시연 �
 | 기능 ID | 하지 않는 일 | 그 일의 주인 |
 |------|------|------|
 | WRK-01~03 | Stream에 발행하지 않는다 · Stream에서 받지 않는다 | 해당 없음 — ③계층의 정의 |
-| WRK-02 | 상태 값을 정하지 않는다 | [../05_data_stores/01_postgresql_schema.md](../05_data_stores/01_postgresql_schema.md)(W3) |
+| WRK-02 | 상태 값을 정하지 않는다 | [../05_data_stores/01_postgresql_schema.md](../05_data_stores/01_postgresql_schema.md) — W3 확정 |
 | WRK-03 | 설비 카운터 값으로 실적을 자동 채우지 않는다 | §생산 실적과 생산 카운터 |
 | WRK-04 | 다른 도메인의 변경을 대신 기록하지 않는다 — 변경을 일으킨 도메인이 자기 트랜잭션에서 쓴다 | MST-04 · 05 · 06 |
 | WRK-05 | 시계열 변경을 보여 주지 않는다 — 시계열은 불변이라 변경 이력이 없다 | 해당 없음 |
@@ -80,7 +81,7 @@ WRK는 **분기 ③계층 — 경로를 고르지 않는 분기 — 의 시연 �
 | order_no 중복 | 쓰기 거절 | common.duplicate_key/409 | WRK-01 |
 | 없는 작업지시 | 거절 | common.not_found/404 | WRK-01 · 02 · 03 |
 | 형식 위반 | 거절 | common.validation_failed/400 | WRK-01 · 03 |
-| 작업지시 상태 전이 위반 | **work_orders.invalid_status_transition/409** — 조건은 허용 전이 표에 대해 정의되므로 값 집합(W3)과 무관하게 성립 | [../03_requirements/11_work_orders.md](../03_requirements/11_work_orders.md) REQ-WRK-04 | WRK-02 |
+| 작업지시 상태 전이 위반 | **work_orders.invalid_status_transition/409** — 허용 전이 4쌍 밖이면 거절 | [../03_requirements/11_work_orders.md](../03_requirements/11_work_orders.md) REQ-WRK-04 | WRK-02 |
 | 감사 쓰기 실패 | 변경 전체가 롤백된다 — 같은 트랜잭션이다 | common.postgres_unavailable/503(접속 불가일 때) | WRK-04 |
 | PostgreSQL 접속 불가 | 업무 CRUD만 실패 · 시계열 조회는 계속 | common.postgres_unavailable/503 | WRK-01~05 |
 
@@ -98,11 +99,11 @@ WRK는 **분기 ③계층 — 경로를 고르지 않는 분기 — 의 시연 �
 
 | 항목 | 상태 | 확정 자리 |
 |------|------|------|
-| work_order.status 값 · 전이 | 미설계(W1 등재) | [../05_data_stores/01_postgresql_schema.md](../05_data_stores/01_postgresql_schema.md)(W3) · 전이 위반 코드 [../11_glossary/02_error_codes.md](../11_glossary/02_error_codes.md) |
+| work_order.status 값 · 전이 | **W3 확정** — 4값 · 4쌍 | [../05_data_stores/01_postgresql_schema.md](../05_data_stores/01_postgresql_schema.md) · 전이 위반 코드 [../11_glossary/02_error_codes.md](../11_glossary/02_error_codes.md) |
 | 생산 실적 · 감사 조회 표면 | 원본 API 표에 work-orders 하나뿐이다 | [../07_api/08_work_orders.md](../07_api/08_work_orders.md)(W5) |
 | 생산 카운터와 production_log의 구분 기전 | W1 인계 미설계 | [../06_pipeline/04_routing.md](../06_pipeline/04_routing.md)(W4) |
 | audit_log 소유와 다중 쓰기 | 한계 등재 대상 | [../05_data_stores/02_postgresql_constraints.md](../05_data_stores/02_postgresql_constraints.md)(W3) |
-| 작업지시 캐시 키 모양 | TTL만 있다(원본 architecture.md §11 — 60초) | [../05_data_stores/05_redis_keyspace.md](../05_data_stores/05_redis_keyspace.md)(W3) |
+| 작업지시 캐시 키 모양 | **W3 확정** — cache:workorders · BFF 서버 fetch 캐시 없음(no-store) | [../05_data_stores/05_redis_keyspace.md](../05_data_stores/05_redis_keyspace.md) |
 
 ## 관련 문서
 

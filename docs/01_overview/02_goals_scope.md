@@ -2,6 +2,7 @@
 
 > **대상**: 전원 — db_study가 무엇을 만들고 무엇을 만들지 않는가, 그리고 만들지 않는 것이 측정에 남기는 한계
 > **작성일**: 2026-09-24
+> **개정일**: 2026-09-24 — SW-11 LATEST_VALUE_WRITER 신설 반영(D-13 · 사용자 확정) — 스위치 10 → **11**
 > **원천**: 원본 tech_stack.md §1 · §3.4 · §10.6 · §13(커밋 ff66a37) · 원본 architecture.md §2 · §17 · §18 · §19(커밋 ff66a37) · 원본 implementation_plan.md §2(커밋 ff66a37) · [06_design_decisions.md](./06_design_decisions.md) D-01 · D-02 · D-11 · [../README.md](../README.md) 고정 기준 · 전역 불변식
 
 db_study의 범위는 **학습 목표 2축(D-01)을 측정으로 닫는 데 필요한 것**으로 정해진다. 기능이 많아서 들어오는 것도, 현실적이어서 들어오는 것도 없다 — 두 축 중 하나의 비교 수치를 만드는 데 기여하거나, 그 비교가 성립하기 위한 전제(수집 경로 · 계측 · 롤백)이거나, 로컬이어도 생략하면 안 되는 방어선이면 In이다.
@@ -34,7 +35,7 @@ db_study의 범위는 **학습 목표 2축(D-01)을 측정으로 닫는 데 필�
 | 저장소 | PostgreSQL 18 · ClickHouse 25.8 · Redis 8(단일 인스턴스) + **PostgreSQL 대조군 테이블** | 목표 ①의 비교 상대와 목표 ②의 세 목적지 | [../05_data_stores/README.md](../05_data_stores/README.md) · D-05 |
 | 3계층 분기 | 원시값 · 알람과 실적 · 업무 CRUD의 목적지 판정과 기전 | 목표 ②의 대상 그 자체 | [../04_architecture/04_storage_split.md](../04_architecture/04_storage_split.md) · D-04 |
 | 데이터 흐름 | F-01~F-10(수집부터 백프레셔와 장애까지) | 분기가 일어나는 경로와 degrade 경로 | [../06_pipeline/01_flow_inventory.md](../06_pipeline/01_flow_inventory.md) |
-| 역할 스위치 | SW-01~SW-10과 그 계측 | 두 축의 공통 손잡이 | [../02_features/13_switch_matrix.md](../02_features/13_switch_matrix.md) · D-06 |
+| 역할 스위치 | SW-01~SW-11과 그 계측 | 두 축의 공통 손잡이 | [../02_features/13_switch_matrix.md](../02_features/13_switch_matrix.md) · D-06 |
 | 테스트 데이터 | 신호 프로파일 · 주입 모드 A~D · 시드 고정 · 백필 · 품질 코드 SIMULATED | 실장비가 없으므로 **생성기의 품질이 곧 실험의 품질**이다 | [../02_features/05_datagen.md](../02_features/05_datagen.md) |
 | 부하 · 장애 실험 | k6 부하 시나리오 · 장애 주입 · 실험 기록 | 병목과 축출 연쇄를 재현한다 | [../10_observability/05_load_scenarios.md](../10_observability/05_load_scenarios.md) · [../10_observability/06_experiment_catalog.md](../10_observability/06_experiment_catalog.md) |
 | 화면 | 실시간 대시보드 · 트렌드 분석 · 알람 콘솔 · 관리 화면군 · 실험 콘솔 | 측정 결과와 분기 결과를 사람이 보는 자리 | [../08_screen/README.md](../08_screen/README.md) |

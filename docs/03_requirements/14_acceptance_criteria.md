@@ -2,6 +2,7 @@
 
 > **대상**: db_study가 "동작한다" · "그 단계를 마쳤다" · "학습 목표를 산출했다"고 말할 수 있는 조건 — 흐름 검증 체크리스트 · 학습 단계 S0~S7 합격 판정 · 학습 목표 산출물(대조군 역전 지점 · 축출 연쇄 · 스위치 on/off 비교) · 롤업 부동소수 허용 오차 판정 · 캐시 정합성 판정 — **AC-NN 채번 정본**
 > **작성일**: 2026-09-24
+> **개정일**: 2026-09-24 — SW-11 LATEST_VALUE_WRITER 신설 반영(D-13 · 사용자 확정) — 스위치 10 → **11**
 > **원천**: 원본 data_flow.md §12.3 · §13 · §15 · §17(커밋 ff66a37) · 원본 implementation_plan.md §2.4 · §5 · §5.1 · §7.1 · §7.2 · §7.4 · §8(커밋 ff66a37) · 원본 architecture.md §8.4 · §14 · §16 · §17(커밋 ff66a37) · 원본 tech_stack.md §14(커밋 ff66a37) · 저장소 루트 docs_plan.md 웨이브 인계 W2 행(롤업 대 원시 부동소수 허용 오차) · D-05 · D-10 · D-11 · D-12 · [../01_overview/05_priorities_roadmap.md](../01_overview/05_priorities_roadmap.md) 진입 조건과 합격 판정 · [../01_overview/01_purpose_learning_goals.md](../01_overview/01_purpose_learning_goals.md) 산출물과 성공 판정 · [../11_glossary/05_units_and_time.md](../11_glossary/05_units_and_time.md) 부동소수와 오차 허용 비교
 
 이 문서는 **AC-NN의 유일한 채번 자리**다. 원천은 셋이다 — ① 원본 흐름 검증 체크리스트 13행(원본 data_flow.md §17) ② 학습 단계 S0~S7의 합격 판정(정본 [../01_overview/05_priorities_roadmap.md](../01_overview/05_priorities_roadmap.md)) ③ 두 학습 목표의 산출물(정본 [../01_overview/01_purpose_learning_goals.md](../01_overview/01_purpose_learning_goals.md)). 같은 검증이 두 원천에 나타나면 AC를 하나만 두고 대응 검산 표가 가리킨다 — 단계 판정 "무손실"과 체크리스트 "수집 무손실"은 같은 AC다.
@@ -129,12 +130,12 @@ W1이 이 문서로 넘긴 값이다(11_glossary/05 · 웨이브 인계 W2 행).
 | **AC-40** | SW-06 on/off | 같은 발행 부하로 SW-06 on · off · api 인스턴스 1 | 발행 → 수신 지연이 on/off 쌍으로 **기록** · 두 조건의 수신 프레임 내용 **동일** | F-06 · F-07 | RLT-05 · RLT-08 · ALM-06 · ING-08 | [09_realtime.md](./09_realtime.md) · [10_alarms.md](./10_alarms.md) | S4 |
 | **AC-41** | SW-07 on/off | 같은 갱신 부하로 SW-07 기본값 · 0 | 연결당 초당 프레임 · nodejs_eventloop_lag가 쌍으로 **기록**(원본 예상치 초당 5,000 → 10 프레임 — 미확인) | F-07 | RLT-06 | [09_realtime.md](./09_realtime.md) | S4 |
 | **AC-42** | SW-10 off/on | 신호 프로파일별로 SW-10 off · on | 전송량 · tag_raw 행 수 · 압축률이 프로파일별 쌍으로 **기록**(원본 예상치 전송률 3~100% — 미확인) | F-01 | COL-06 · GEN-01 | [04_collector.md](./04_collector.md) | S3 |
-| **AC-43** | 역할별 on/off 차이 완결 | 스위치 10종의 on/off 기록을 모은다 | 10종 **전부** off · on 쌍이 4요소 · 3회 중앙값과 함께 존재 · 한쪽만 잰 스위치 0 | 해당 없음 — 횡단 | OBS-06 | [12_metrics.md](./12_metrics.md) · [01_global_rules.md](./01_global_rules.md) | S6 |
+| **AC-43** | 역할별 on/off 차이 완결 | 스위치 전수(정본 02_features/13)의 on/off 기록을 모은다 | 전수 **전부** off · on 쌍이 4요소 · 3회 중앙값과 함께 존재 · 한쪽만 잰 스위치 0 | 해당 없음 — 횡단 | OBS-06 | [12_metrics.md](./12_metrics.md) · [01_global_rules.md](./01_global_rules.md) | S6 |
 | **AC-44** | 목표 ① 비교 축별 수치표 | AC-29와 같은 용량 단계에서 비교 축을 잰다 | 비교 축 **6축 전부**가 같은 용량 단계에서 양 저장소 값을 갖는다 — 쿼리 시간만 있고 저장 비용 축이 빈 표는 불합격 | F-02 · F-09 | ING-11 · GEN-10 | [07_ingest.md](./07_ingest.md) · [13_nonfunctional.md](./13_nonfunctional.md) | S5 |
 | **AC-45** | 신호 프로파일별 압축 대조 | RANDOM_WALK와 혼합 프로파일을 각각 적재해 압축률 측정 | 두 조건의 압축률이 **기록**되고 용량 판단에는 보수적인 쪽을 쓴다 | F-09 · F-08 | GEN-01 · GEN-08 | [06_datagen.md](./06_datagen.md) | S5 |
 
 - 검산: 학습 목표 산출 AC = AC-39~45 = **7** · 문서 전체 AC = 13 + 25 + 7 = **45**(AC-01~45 · 결번 없음)
-- **스위치 on/off 비교 AC** = SW-01 AC-33 · SW-02 AC-18 · SW-03 AC-39 · SW-04 AC-24 · SW-05 AC-25 · SW-06 AC-40 · SW-07 AC-41 · SW-08 AC-20 · SW-09 AC-21 · AC-29 · SW-10 AC-42 — 스위치 10 중 비교 AC 있음 10 · 누락 0 = **10**(SW-09는 적재 AC-21과 측정 AC-29 둘)
+- **스위치 on/off 비교 AC** = SW-01 AC-33 · SW-02 AC-18 · SW-03 AC-39 · SW-04 AC-24 · SW-05 AC-25 · SW-06 AC-40 · SW-07 AC-41 · SW-08 AC-20 · SW-09 AC-21 · AC-29 · SW-10 AC-42 · SW-11 AC-34 — 스위치 11 중 비교 AC 있음 11 · 누락 0 = **11**(SW-09는 적재 AC-21과 측정 AC-29 둘 · SW-11은 두 구현값 비교)
 
 ## 원본 체크리스트 → AC 대응 검산
 

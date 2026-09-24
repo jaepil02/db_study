@@ -2,7 +2,7 @@
 
 > **대상**: db_study의 측정 체계 — 메트릭 전수 · 계측 지점 · 대시보드와 알림 · 실험 프로토콜 · 부하 시나리오 · 실험 전수 · 로컬 측정 한계
 > **작성일**: 2026-09-23
-> **원천**: [../README.md](../README.md)(측정 기록 불변식 · 스위치 10) · 원본 architecture.md §14 · §16 · 원본 tech_stack.md §8 · §9 · §10.6 · 원본 data_flow.md §11.3 · §15 · §16 · 원본 implementation_plan.md §2.4 · §4 · §5 · §8(커밋 ff66a37) · docs_plan 학습 목표 1(대조군 실험)
+> **원천**: [../README.md](../README.md)(측정 기록 불변식 · 스위치 11) · 원본 architecture.md §14 · §16 · 원본 tech_stack.md §8 · §9 · §10.6 · 원본 data_flow.md §11.3 · §15 · §16 · 원본 implementation_plan.md §2.4 · §4 · §5 · §8(커밋 ff66a37) · docs_plan 학습 목표 1(대조군 실험)
 
 "무엇을 어떻게 재는가"에 답하는 폴더다. **실험 ID EXP-NN을 채번**하며 채번 자리는 [06_experiment_catalog.md](./06_experiment_catalog.md)다. 이 시스템의 최우선 목표가 측정 가능성이므로, 이 폴더는 부록이 아니라 설계의 도착점이다 — 다른 폴더의 "미확인" 수치가 전부 여기의 실험으로 확정된다.
 

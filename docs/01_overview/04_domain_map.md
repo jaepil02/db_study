@@ -2,6 +2,7 @@
 
 > **대상**: 전 설계자 · 신규 합류자 — 11도메인이 어느 NestJS 모듈 · 평면 · 위치에 앉고, 서로 어떤 경계로 이어지며, 각 폴더에서 어디가 비는가
 > **작성일**: 2026-09-24
+> **개정일**: 2026-09-24 — W3 판정 반영 — SIM · OBS APP_ROLE 배정(ADR-22) · GEN · ALM 역할 분할 서술
 > **개정일**: 2026-09-24 — W2 판정 반영 — 인가 간선 AUT → GEN 추가(부하 주입 표면은 환경변수 게이트 + 인증) · 인가 5 → **6** · 간선 17 → **18** · GEN · OBS 인가 미정 불릿을 판정 결과로 교체
 > **원천**: 원본 architecture.md §4 · §5 · §6 · §8.2 · §11(커밋 ff66a37) · 원본 tech_stack.md §3.1 · §3.3 · §10.1 · §11(커밋 ff66a37) · 원본 data_flow.md §1 · §2 · §7 · §7.2 · §8 · §11(커밋 ff66a37) · 원본 implementation_plan.md §6 · §7.3(커밋 ff66a37) · 저장소 루트 docs_plan.md(도메인 벡터 · 보정 #11 · #12 · #13) · [../README.md](../README.md) 고정 기준(도메인 · 도메인 공백)
 
@@ -16,19 +17,19 @@
 | 1 | AUT | 인증·인가 | auth | 제어 | api 컨테이너 · apps/api/src/modules/auth | api | 로그인 · 토큰 갱신 · 로그아웃 · 역할 기반 인가 · 레이트 리밋 |
 | 2 | MST | 마스터 데이터 | master | 제어 | 상동 · modules/master | api | 사이트 · 라인 · 설비 · Modbus 접속 설정 · 태그 마스터 · 캐시 무효화 체인 |
 | 3 | COL | 수집 | collector | 데이터 | 상동 · modules/collector | collector | Modbus 폴링 · 디코딩 · 품질 판정 · 데드밴드 · Stream 발행 · 스풀 |
-| 4 | SIM | 시뮬레이션 | plc-sim | 데이터 | 상동 · modules/plc-sim · 루프백 포트 대역 | **원본 미지정** — W3 확정 | Modbus TCP 서버 응답 · 레지스터 Buffer · 지연 · 오류 주입 |
+| 4 | SIM | 시뮬레이션 | plc-sim | 데이터 | 상동 · modules/plc-sim · 루프백 포트 대역 | **collector**(COL · GEN 모드 A와 동거 필수 — ADR-22) | Modbus TCP 서버 응답 · 레지스터 Buffer · 지연 · 오류 주입 |
 | 5 | GEN | 데이터 생성 | datagen | 데이터 | 상동 · modules/datagen · worker_threads | datagen | 신호 프로파일 생성 · 주입 모드 A~D · 백필 · 부하 주입 표면 |
 | 6 | ING | 적재·분기 | ingest | 데이터 | 상동 · modules/ingest · 컨슈머 N개 | worker | Stream 소비 · 배치 적재 · 멱등 · 재시도 · DLQ · 최신값 갱신 · 분기 실행 · 대조군 동시 적재 |
 | 7 | TSQ | 시계열 조회 | timeseries | 제어 | 상동 · modules/timeseries | api | 시계열 조회 · 해상도 자동 선택 · 캐시 · 스탬피드 방지 · 다운샘플 · 내보내기 |
 | 8 | RLT | 실시간 | realtime | 제어 | 상동 · modules/realtime | api | 최신값 조회 · WebSocket 게이트웨이 · 스로틀 병합 |
 | 9 | ALM | 알람 | alarms | 제어 | 상동 · modules/alarms | **worker**(판정은 Ingest 후처리로 함께 확장) | 규칙 · 디바운스 판정 · 세 저장소 쓰기 · 확인 |
 | 10 | WRK | 업무 데이터 | work-orders | 제어 | 상동 · modules/work-orders | api | 작업지시 · 생산 실적 · 감사 로그 |
-| 11 | OBS | 관측 | metrics | 관측 | 상동 · modules/metrics | **원본 미지정** — W3 확정 | /metrics 통합 노출 · 저장소 메트릭 수집 · 헬스체크 |
+| 11 | OBS | 관측 | metrics | 관측 | 상동 · modules/metrics | **전 역할**(저장소 통계 수집은 api 역할에서만 — ADR-22) | /metrics 통합 노출 · 저장소 메트릭 수집 · 헬스체크 |
 
 ### 검산
 
 - 평면별: 제어 6(AUT · MST · TSQ · RLT · ALM · WRK) + 데이터 4(COL · SIM · GEN · ING) + 관측 1(OBS) = **11**
-- APP_ROLE 값은 all(기본) · api · worker · collector · datagen이다. 도메인 → 역할 배정은 원본 architecture.md §4의 확장 방식 열에서 읽었고, SIM · OBS는 원본이 배정하지 않았다 — 배정의 정본은 [../04_architecture/02_module_boundaries.md](../04_architecture/02_module_boundaries.md)(W3)다.
+- APP_ROLE 값은 all(기본) · api · worker · collector · datagen이다. 도메인 → 역할 배정의 정본은 [../04_architecture/02_module_boundaries.md](../04_architecture/02_module_boundaries.md)(ADR-22)이며, 원본이 배정하지 않았던 SIM은 collector(루프백 바인드 · 레지스터 Buffer를 프로세스 안에서 갱신하므로 COL · GEN 모드 A와 한 컨테이너), OBS는 전 역할(저장소 통계는 api 역할에서만)로 W3이 판정했다. GEN은 기능별(모드 A collector · 모드 B datagen · 모드 C 표면 api), ALM은 표면 api · 판정 worker로 갈린다.
 - **웹(Next.js)은 도메인이 아니다.** 호스트 프로세스이며 모듈이 아니라 표면의 소비자다. BFF 경로는 [../07_api/01_conventions.md](../07_api/01_conventions.md)가 소유한다.
 
 ## 평면 분류와 실행 위치가 어긋나는 도메인

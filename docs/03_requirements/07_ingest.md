@@ -2,6 +2,7 @@
 
 > **대상**: 적재·분기(ING · NestJS ingest 모듈)의 동작 계약 — Stream 소비 · 배치 플러시 · ClickHouse 삽입 · 멱등 · XACK · 재시도 · DLQ · PEL 회수 · 다중 컨슈머 · 최신값 · 알람 전달 · 3계층 분기 실행 · 대조군 동시 적재 · 롤업 발동 · 백프레셔 대응 · 관측 — REQ-ING-NN 채번 정본
 > **작성일**: 2026-09-24
+> **개정일**: 2026-09-24 — W3 판정 반영 — 롤업 객체 귀속 잠정 ING → **ING 확정**
 > **원천**: 원본 architecture.md §5 · §7.1 · §7.2 · §7.5 · §9 · §9.1 · §9.2 · §9.3 · §14 · §17(커밋 ff66a37) · 원본 data_flow.md §4 · §4.1 · §4.2 · §4.3 · §8.2 · §10.2 · §12.2 · §12.3 · §12.4 · §15 · §17(커밋 ff66a37) · 원본 tech_stack.md §5.3(커밋 ff66a37) · 원본 implementation_plan.md §4.1 · §5 S3 · S6 · S7 · §7.1 · §7.2 · §7.3 · §7.5(커밋 ff66a37) · D-04 · D-05 · D-12 · [../02_features/06_ingest.md](../02_features/06_ingest.md) ING-01~13 · [../02_features/13_switch_matrix.md](../02_features/13_switch_matrix.md) · [01_global_rules.md](./01_global_rules.md) REQ-GLB-04~07 · 11 · 12
 
 이 문서는 ING 기능 13개의 동작 계약을 고정한다. ING는 Stream에서 배치를 꺼내 저장소에 확정하고 그 자리에서 데이터를 성격별 목적지로 가른다. 학습 목표 두 축의 **실행 자리**가 모두 여기 있다 — 목표 ②의 3계층 분기 실행(REQ-ING-14)과 목표 ①의 대조군 동시 적재(REQ-ING-15)다.
@@ -123,7 +124,7 @@ ING 요구가 깨질 때 무엇이 보이는지를 모은다. 에러 코드 표�
 | DLQ 재처리 경로 | DLQ 이동 · 알림까지만 | [../06_pipeline/11_backpressure_failure.md](../06_pipeline/11_backpressure_failure.md)(W4) |
 | fan-in 배치의 토큰 재료 · SW-01 off 토큰 재료 | **신규 미확인** — REQ-ING-06이 결정성만 요구한다 | [../06_pipeline/03_ingest_batch.md](../06_pipeline/03_ingest_batch.md)(W4) |
 | 최신값 덮어쓰기의 순서 역전 | **신규 미확인** — 원본은 "항상 덮어쓰기"(원본 architecture.md §10.1)이고 컨슈머 간 순서는 보장하지 않는다(REQ-GLB-07). 두 컨슈머가 같은 설비의 배치를 역순으로 확인하면 더 오래된 값이 rt:latest에 남을 수 있다 — ts 비교 덮어쓰기 여부가 없다 | [../06_pipeline/05_realtime_read.md](../06_pipeline/05_realtime_read.md)(W4) |
-| 롤업 객체의 도메인 귀속 | 잠정 ING | [../05_data_stores/README.md](../05_data_stores/README.md)(W3) |
+| 롤업 객체의 도메인 귀속 | **W3 확정 — ING** | [../05_data_stores/04_clickhouse_rollup.md](../05_data_stores/04_clickhouse_rollup.md) |
 | 계층별 쓰기 계수 · 대조군 실패 계수의 메트릭 이름 | **신규 미확인** — REQ-ING-14 · 15 · 18이 요구한다 | [../10_observability/01_metrics_catalog.md](../10_observability/01_metrics_catalog.md)(W6) |
 | Stream 대기 · 삽입 · MV 지연 · 소진 시간 | 3계층 미확인 — 미확인 · 확정 전 임의 값 고정 금지 | [13_nonfunctional.md](./13_nonfunctional.md) REQ-NFR-04 · 16 |
 

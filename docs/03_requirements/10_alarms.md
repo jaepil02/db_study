@@ -2,6 +2,7 @@
 
 > **대상**: 알람(ALM)의 동작 계약 — 규칙 관리와 캐시 무효화 · 규칙 변경 감사 · 판정 대상 품질 · 배치 단위 상태 조회 · 디바운스 상태 머신 · 목적이 다른 세 쓰기와 부분 실패 · 발행 · 이벤트 조회 · 확인(ACK) 허용 조건 · 판정 이력 분석 · S7 생략 불가 — REQ-ALM-NN 채번 정본
 > **작성일**: 2026-09-24
+> **개정일**: 2026-09-24 — W3 판정 반영 — condition_type · severity 미설계 → **확정**(GT · LT · OUT_OF_RANGE · RATE_OF_CHANGE · 1 LOW · 2 MEDIUM · 3 HIGH · 정본 05_data_stores/01) · 담당자 배정 → **컬럼 두지 않음**
 > **원천**: 원본 data_flow.md §8 · §8.1 · §8.2 · §6.3 · §9.2 · §13 · §17(커밋 ff66a37) · 원본 architecture.md §6 · §7.3 · §10.1 · §11 · §18(커밋 ff66a37) · 원본 implementation_plan.md §5 S7 · §7.3 · §7.5(커밋 ff66a37) · 저장소 루트 docs_plan.md 보정 #20 · 웨이브 인계 W2 · W2b 행 · D-04 · D-11 · [../02_features/09_alarms.md](../02_features/09_alarms.md) ALM-01~09 · [../02_features/12_permission_matrix.md](../02_features/12_permission_matrix.md) ALM · [../11_glossary/03_enums_state_machines.md](../11_glossary/03_enums_state_machines.md) 상태 머신 2 · alarm_event.state 대응
 
 이 문서는 **알람 판정 한 건이 세 저장소로 갈라질 때 각 쓰기가 지킬 계약**을 고정한다. 기능의 존재와 경계는 [../02_features/09_alarms.md](../02_features/09_alarms.md)가, 판정 기전은 [../06_pipeline/08_alarm.md](../06_pipeline/08_alarm.md)가, 상태 값과 alarm_event.state 대응은 [../11_glossary/03_enums_state_machines.md](../11_glossary/03_enums_state_machines.md)가 갖는다. 이 문서는 그 대응을 다시 정의하지 않고 **준수 여부를 검증 가능한 요구로 옮긴다** — alarm_event.state는 ACTIVE · CLEARED 둘이고 확인은 acked_by · acked_at이 기록한다.
@@ -17,7 +18,7 @@
 | **REQ-ALM-01** | 규칙은 조회 · 등록 · 수정 · 비활성화만 한다. **물리 삭제 표면을 두지 않는다** — 규칙을 끄는 수단은 enabled 거짓이다 | 원본 architecture.md §6(alarm_event.rule_id 참조) · ALM-01 | 규칙을 지우면 그 규칙이 연 과거 alarm_event 행이 참조를 잃어 오탐 분석에서 어느 임계값이 이벤트를 만들었는지 복원할 수 없다 | 규칙 삭제 요청 경로 부재 확인 · 비활성화 후 과거 이벤트 조회 → 규칙 조인 성공 | ALM-01 | F-05 | 해당 없음 |
 | **REQ-ALM-02** | 규칙 쓰기가 **커밋된 뒤에만** cache:alarmrules를 삭제한다. 새 값으로 덮어쓰지 않고 지운다 | 원본 architecture.md §10.1 · 원본 data_flow.md §7.1 · ALM-01 · ALM-02 | 삭제하지 않으면 바뀐 임계값이 캐시 TTL만큼 판정에 반영되지 않는다 · 커밋 전에 지우면 그 사이 판정이 옛 규칙으로 캐시를 다시 채워 영구히 낡은 값이 남는다 | 임계값 수정 직후 배치 → 새 임계값으로 판정(alarm_eval 대조) · 롤백된 수정 → 캐시 불변 | ALM-01 · ALM-02 | F-05 · F-06 | 해당 없음 |
 | **REQ-ALM-03** | 규칙의 등록 · 수정 · 비활성화는 **같은 트랜잭션에서** audit_log에 행위자 · 동작 · before · after를 쓴다 — 판정 §감사 대상 판정 | 원본 architecture.md §18 · 이 문서 판정 · [11_work_orders.md](./11_work_orders.md) 감사 계약 | 감사가 없으면 오탐 분석에서 alarm_eval의 판정 변화가 임계값 변경 때문인지 데이터 때문인지 가를 수 없다 · 트랜잭션을 가르면 규칙은 바뀌었는데 감사가 빠지는 창이 생긴다 | 규칙 수정 1건 → audit_log 1행(before · after 대조) · audit_log 쓰기 강제 실패 → 규칙 변경도 롤백 | ALM-01 | F-05 | common.postgres_unavailable/503 |
-| **REQ-ALM-04** | 규칙 본문이 형식을 어기거나 참조 태그가 마스터에 없으면 거절한다. condition_type · severity의 허용 값 집합은 미설계이며 값이 확정되기 전에 구현이 임의 값을 허용 목록으로 굳히지 않는다 | 원본 architecture.md §6 · [../11_glossary/03_enums_state_machines.md](../11_glossary/03_enums_state_machines.md) 미설계 enum · ALM-01 | 임의 값을 먼저 굳히면 스키마 확정 전에 그 값으로 규칙 행이 쌓여 확정 값과 어긋난 행을 이관해야 한다 | 필수 누락 · 없는 태그 참조 → 400 | ALM-01 | F-05 | common.validation_failed/400 |
+| **REQ-ALM-04** | 규칙 본문이 형식을 어기거나 참조 태그가 마스터에 없으면 거절한다. 허용 값은 condition_type GT · LT · OUT_OF_RANGE · RATE_OF_CHANGE(OUT_OF_RANGE만 threshold_low 필수) · severity 1~3이다(W3 확정) | 원본 architecture.md §6 · [../11_glossary/03_enums_state_machines.md](../11_glossary/03_enums_state_machines.md) 저장 enum(W3 확정) · ALM-01 | 허용 값 밖 조건을 받으면 판정기가 모르는 조건의 규칙이 저장되어 그 규칙은 영원히 발생하지 않는다 · 하한 없는 OUT_OF_RANGE는 한쪽 경계만 판정한다 | 필수 누락 · 없는 태그 참조 · 허용 값 밖 condition_type · severity · 하한 없는 OUT_OF_RANGE → 400 | ALM-01 | F-05 | common.validation_failed/400 |
 | **REQ-ALM-05** | 판정은 cache:alarmrules의 활성 규칙 목록을 쓰고 미스일 때만 PostgreSQL에서 읽어 채운다. 캐시 쓰기에는 TTL이 붙는다 | 원본 data_flow.md §8 · 원본 architecture.md §10.1 · 원본 implementation_plan.md §7.5 · ALM-02 | 판정마다 PostgreSQL을 읽으면 초당 판정 수만큼 업무 DB 조회가 생겨 수집 처리량이 PostgreSQL 커넥션 풀에 묶인다 | 판정 부하 중 pg_stat_statements의 규칙 조회 횟수가 캐시 미스 횟수와 같음 | ALM-02 | F-06 | 해당 없음 |
 
 - 검산: 이 표의 REQ = REQ-ALM-01~05 = **5**
@@ -175,10 +176,10 @@ W1이 넘긴 인계다. 확인 표면은 PostgreSQL 행만 보고 판정하며 R
 |------|------|------|------|
 | 확인 거절 에러 코드 | 이 문서가 409 · alarms 네임스페이스 한 코드로 판정 | **채번 완료** — alarms.ack_not_allowed/409 | [../11_glossary/02_error_codes.md](../11_glossary/02_error_codes.md)(리드) |
 | 확인이 alarm:state를 바꾸는 주체 · CLEARING 중 확인의 Redis 전이 | 확인은 API가 PostgreSQL에 쓴다 | 미확인(W1 등재) | [../06_pipeline/08_alarm.md](../06_pipeline/08_alarm.md)(W4) |
-| condition_type · severity 값 | 조건 종류 넷 · smallint 심각도 | 미설계 | [../05_data_stores/01_postgresql_schema.md](../05_data_stores/01_postgresql_schema.md)(W3) |
+| condition_type · severity 값 | 조건 종류 넷 · smallint 심각도 | **W3 확정** — 4값 · 1~3 | [../05_data_stores/01_postgresql_schema.md](../05_data_stores/01_postgresql_schema.md) |
 | 판정 구간 지연 예산 · 초당 판정 처리량 | 원본 지연 예산표에 알람 구간이 없다 | 미확인 — 확정 전 임의 값 고정 금지 | [../04_architecture/05_latency_budget.md](../04_architecture/05_latency_budget.md) · [13_nonfunctional.md](./13_nonfunctional.md) |
 | 비활성 태그의 알람 규칙 | 원본에 없다 | 미설계(W2a 등재) | [../06_pipeline/08_alarm.md](../06_pipeline/08_alarm.md)(W4) |
-| 담당자 배정 | "담당자 배정 등 상태 갱신"(원본 data_flow.md §8.2) · 컬럼 없음 | 신규 불일치(W2a 등재) | [../05_data_stores/01_postgresql_schema.md](../05_data_stores/01_postgresql_schema.md)(W3) |
+| 담당자 배정 | "담당자 배정 등 상태 갱신"(원본 data_flow.md §8.2) · 컬럼 없음 | **W3 판정** — 컬럼을 두지 않는다(배정 기능 없음) | [../05_data_stores/01_postgresql_schema.md](../05_data_stores/01_postgresql_schema.md)(W3) |
 | 규칙 관리 · 판정 이력 분석 표면 | API 표에 이벤트 목록 · 확인 둘뿐이다 | 표면 미설계 | [../07_api/07_alarms.md](../07_api/07_alarms.md)(W5) |
 
 ## 관련 문서

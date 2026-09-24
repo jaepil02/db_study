@@ -2,7 +2,7 @@
 
 > **대상**: db_study 11도메인의 기능 목록 · 권한 매트릭스 · Redis 역할 스위치 매트릭스
 > **작성일**: 2026-09-23
-> **원천**: [../README.md](../README.md)(도메인 11 · 스위치 10) · [../01_overview/04_domain_map.md](../01_overview/04_domain_map.md) · 원본 architecture.md §4 · §6 · §11 · 원본 data_flow.md §3~§12 · 원본 tech_stack.md §6 · §7 · 원본 implementation_plan.md §4(커밋 ff66a37)
+> **원천**: [../README.md](../README.md)(도메인 11 · 스위치 11) · [../01_overview/04_domain_map.md](../01_overview/04_domain_map.md) · 원본 architecture.md §4 · §6 · §11 · 원본 data_flow.md §3~§12 · 원본 tech_stack.md §6 · §7 · 원본 implementation_plan.md §4(커밋 ff66a37)
 
 "무슨 기능이 있는가"에 답하는 폴더다. 도메인 파일 11본이 NestJS 모듈과 1:1로 대응하며, 각 파일이 그 도메인의 **기능 ID {도메인}-NN을 채번**한다. 동작의 계약(입력 · 규칙 · 실패)은 이 폴더가 아니라 [../03_requirements](../03_requirements/README.md)가 갖는다 — 여기는 기능의 존재와 경계만 고정한다.
 
@@ -24,7 +24,7 @@
 | [10_work_orders.md](./10_work_orders.md) | WRK — 작업지시 · 생산 실적 · 감사 로그 | architecture §5 · §6 | W2 |
 | [11_metrics.md](./11_metrics.md) | OBS — /metrics 통합 노출 · 저장소 메트릭 수집 · 헬스체크 | architecture §14 · tech_stack §9 | W2 |
 | [12_permission_matrix.md](./12_permission_matrix.md) | 횡단 — 역할 × 기능 권한 매트릭스 | architecture §6(role · user_role) · §18 | W2 |
-| [13_switch_matrix.md](./13_switch_matrix.md) | ★ **SW-NN 채번 정본** — 스위치 10종 · 기본값 · off 동작 · 측정 대상 · 교체되는 포트 · 관련 기능 ID | implementation_plan §4 · docs_plan 스위치 표 | W2 |
+| [13_switch_matrix.md](./13_switch_matrix.md) | ★ **SW-NN 채번 정본** — 스위치 11종 · 기본값 · off 동작 · 측정 대상 · 교체되는 포트 · 관련 기능 ID | implementation_plan §4 · docs_plan 스위치 표 | W2 |
 
 검산: 도메인 11 + 횡단 2 + README 1 = **14**. 파일 번호 14 이상은 쓰지 않는다.
 
@@ -37,7 +37,7 @@
 | 도메인 | **11개** — 파일 번호 01~11이 AUT · MST · COL · SIM · GEN · ING · TSQ · RLT · ALM · WRK · OBS 순서와 같다 |
 | 기능 ID | **91** — AUT 7 · MST 9 · COL 9 · SIM 5 · GEN 10 · ING 13 · TSQ 9 · RLT 9 · ALM 9 · WRK 5 · OBS 6. 채번 자리는 각 도메인 파일의 기능 목록 표 · 세는 자리는 [12_permission_matrix.md](./12_permission_matrix.md) §검산 |
 | 역할 | **3** — OPERATOR · ENGINEER · ADMIN(누적 아님 · 합집합 판정) |
-| 역할 스위치 | **10종** — SW-01 REDIS_STREAM_BUFFER · SW-02 REDIS_LATEST_CACHE · SW-03 REDIS_QUERY_CACHE · SW-04 CACHE_KEY_TIME_SNAP · SW-05 CACHE_STAMPEDE_LOCK · SW-06 REDIS_PUBSUB_FANOUT · SW-07 WS_THROTTLE_MS · SW-08 INGEST_IDEMPOTENCY · SW-09 CONTROL_TABLE_ENABLED · SW-10 COLLECTOR_DEADBAND. 검산: 백프레셔 1 + 캐시 4 + 팬아웃 2 + 멱등 1 + 대조군 1 + 수집 1 = **10**. 기본값 on 8 · off 2(SW-09 · SW-10) |
+| 역할 스위치 | **11종** — SW-01 REDIS_STREAM_BUFFER · SW-02 REDIS_LATEST_CACHE · SW-03 REDIS_QUERY_CACHE · SW-04 CACHE_KEY_TIME_SNAP · SW-05 CACHE_STAMPEDE_LOCK · SW-06 REDIS_PUBSUB_FANOUT · SW-07 WS_THROTTLE_MS · SW-08 INGEST_IDEMPOTENCY · SW-09 CONTROL_TABLE_ENABLED · SW-10 COLLECTOR_DEADBAND · SW-11 LATEST_VALUE_WRITER. 검산: 백프레셔 1 + 캐시 4 + 팬아웃 2 + 멱등 1 + 대조군 1 + 수집 1 + 최신값 결합 1 = **11**. 기본값 on 8 · off 2(SW-09 · SW-10) · 구현 선택 1(SW-11 = ingest) |
 | 스위치 구현 제약 | 스위치는 런타임 분기가 아니라 **DI로 주입되는 구현체**다(포트 하나에 구현 둘). 모듈 초기화 시 선택하므로 **전환은 재기동이 필요하다.** 제약의 정본 [../04_architecture/02_module_boundaries.md](../04_architecture/02_module_boundaries.md) |
 | 표면 없는 도메인 | COL · SIM · ING은 외부 API 표면이 없다. 기능은 있으나 호출 주체가 내부 모듈이다 |
 

@@ -2,6 +2,7 @@
 
 > **대상**: 수집(COL · NestJS collector 모듈) 기능 목록 · 기능별 경계 · 의존 도메인 · 실패 시 보이는 것 · 모드 A의 SIMULATED 표지 판정 — 기능 ID COL-NN 채번 정본
 > **작성일**: 2026-09-24
+> **개정일**: 2026-09-24 — W3 판정 반영 — 백프레셔 판정량 XLEN → 그룹 적체(ADR-21) · COL-08의 SW-10 off 상호작용은 무동작으로 닫힘(ADR-24)
 > **원천**: 원본 tech_stack.md §3.4 · §6 · §7(커밋 ff66a37) · 원본 data_flow.md §3 · §3.1 · §3.2 · §3.3 · §12.1 · §14.1 · §17(커밋 ff66a37) · 원본 architecture.md §3 · §4 · §9 · §9.3 · §17(커밋 ff66a37) · 원본 implementation_plan.md §4.1 · §5 S2 · S3 · S6 · §7.2 · §7.5(커밋 ff66a37) · D-08 · [../11_glossary/03_enums_state_machines.md](../11_glossary/03_enums_state_machines.md) 품질 코드 · [13_switch_matrix.md](./13_switch_matrix.md) SW-01 · SW-10
 
 COL은 **PLC 레지스터를 정규화된 포인트로 바꿔 Stream 입구에 놓는 도메인**이다. 설비마다 Modbus 연결을 하나씩 열고, 스캔 그룹별로 폴링하고, 레지스터를 디코딩 · 품질 판정 · 데드밴드 필터를 거쳐 스캔 사이클 하나를 Stream 엔트리 하나로 발행한다(원본 data_flow.md §3). DB에 직접 쓰지 않고 Ingest를 직접 부르지 않는다 — 수집과 적재 사이에는 반드시 Stream이 있다(전역 불변식 "비동기 경계").
@@ -20,7 +21,7 @@ COL은 **PLC 레지스터를 정규화된 포인트로 바꿔 Stream 입구에 �
 | **COL-04** | 디코딩 · 공학 단위 변환 | 워드 순서 적용 → 타입 변환 → eng = raw × scale + offset_value 순서로 값을 만든다. S2는 FLOAT32 · ABCD만, S3에서 data_type 7종 · word_order 4종 전부. **word_order가 틀려도 예외가 나지 않는다** — 엉뚱한 유한값으로 풀리고 범위 판정(COL-05)에서만 드러난다 | S2 · S3 | F-01 | 해당 없음 | 표면 없음 — 내부 모듈 | 없음 |
 | **COL-05** | 품질 판정 | 값마다 품질 코드를 단다 — 범위 밖 BAD_RANGE(4) · Modbus 예외 응답 BAD_COMM(2) · 타임아웃 BAD_TIMEOUT(3 — **행을 만들지 않는다**) · 시뮬레이션 설비의 정상 값 SIMULATED(9) · 실설비의 정상 값 GOOD(0). 시뮬레이션 설비 판정과 코드 우선순위는 §모드 A의 SIMULATED 표지 판정이 고정한다. S2는 GOOD · SIMULATED만 | S2 · S3 | F-01 | 해당 없음 | 표면 없음 — 내부 모듈 | 없음 |
 | **COL-06** | 데드밴드 필터 | 직전 전송값 대비 변화량이 tag_master.deadband(공학 단위 절대값)보다 작으면 전송을 생략한다. **원본 파형을 잃으므로 성능 측정은 데드밴드 비활성으로 하고 효과는 별도 실험으로 잰다** — 두 조건을 섞으면 처리량 수치가 의미를 잃는다(원본 data_flow.md §3.3). SW-10이 켜고 끈다 | S3 | F-01 | SW-10 | 표면 없음 — 내부 모듈 | 없음 |
-| **COL-07** | 인코딩 · Stream 발행 | 스캔 사이클 하나를 MessagePack 컬럼 배열 엔트리 하나(스키마 버전 v · 설비 d · 시퀀스 s · 기준 시각 t0 · 태그 tg · 오프셋 dt · 값 va · 품질 q)로 만들어 stream:plc:raw에 XADD한다. 같은 파이프라인에 XLEN을 실어 매 사이클 길이를 확인한다 — 이것이 백프레셔 1차 신호의 원천이다. SW-01 off면 Stream 대신 Ingest를 프로세스 안에서 직접 부른다(실험 전용) | S2 | F-01 · F-02 | SW-01 | 표면 없음 — 내부 모듈 | Redis stream:plc:raw |
+| **COL-07** | 인코딩 · Stream 발행 | 스캔 사이클 하나를 MessagePack 컬럼 배열 엔트리 하나(스키마 버전 v · 설비 d · 시퀀스 s · 기준 시각 t0 · 태그 tg · 오프셋 dt · 값 va · 품질 q)로 만들어 stream:plc:raw에 XADD한다. 같은 파이프라인에 컨슈머 그룹 적체(lag + pending) 조회를 실어 매 사이클 확인한다 — 이것이 백프레셔 1차 신호의 원천이다. **XLEN은 판정량이 아니다**(확인된 엔트리가 MAXLEN까지 남는 충전량 — ADR-21). SW-01 off면 Stream 대신 Ingest를 프로세스 안에서 직접 부른다(실험 전용) | S2 | F-01 · F-02 | SW-01 | 표면 없음 — 내부 모듈 | Redis stream:plc:raw |
 | **COL-08** | 발행량 감축 | 백프레셔 **경고** 단계에서 데드밴드를 임시로 강화해 발행량을 줄이고 deadband_boost_active를 켠다. 임계는 2계층 조정값이며 정본은 [../04_architecture/06_backpressure_failure.md](../04_architecture/06_backpressure_failure.md) | S6 | F-10 | SW-10(상호작용 미확인) | 표면 없음 — 내부 모듈 | 없음 |
 | **COL-09** | 스풀 전환과 재발행 | 백프레셔 **위험** 단계(길이 > 위험 임계)이거나 XADD가 실패하면(OOM · 연결 끊김) spooldata 볼륨의 /app/spool에 길이 접두 + MessagePack 프레임을 쌓고 spool_active를 켠다. 복구 단계에서 프레임을 앞에서부터 순차 재발행한다. Stream 엔트리와 포맷이 같아 재발행에 변환 코드가 없다 | S6 | F-10 | 해당 없음 | 표면 없음 — 내부 모듈 | spooldata 볼륨(저장소 밖) · Redis stream:plc:raw |
 
@@ -122,7 +123,7 @@ COL은 에러 코드를 내지 않는다. 아래는 전부 품질 코드 · 메�
 | BAD_TIMEOUT "기록"의 자리(원본 architecture.md §17) | W1 판정 — 행을 쓰지 않는다. 메트릭인지 최신값 갱신인지 미확인 | 상동 |
 | FLOAT64 4워드 순서 · 레지스터 비트 BOOL | W1 등재 미확인 | 상동 |
 | UNCERTAIN(1) 부여 주체 | 디코딩 파이프라인에 보간 단계가 없다 | 상동 |
-| SW-10 off와 경고 단계 데드밴드 강화(COL-08)의 관계 | **신규 미확인** — 데드밴드가 꺼진 상태에서 "강화"가 태그별 설정값 적용인지 무동작인지 원본에 없다. 무동작이면 개발 · 측정 기본 구성에서 경고 단계의 반응이 비어 있다 | [../04_architecture/06_backpressure_failure.md](../04_architecture/06_backpressure_failure.md)(W3) |
+| SW-10 off와 경고 단계 데드밴드 강화(COL-08)의 관계 | **W3 판정 완료 — 무동작**(ADR-24). 강화는 태그 설정값 × 계수이므로 데드밴드가 꺼진 구성에서는 강화할 값이 없다. 경고 단계의 반응이 비는 것은 결함이 아니라 성능 측정을 데드밴드 0으로 하는 규칙의 결과다 | [../04_architecture/06_backpressure_failure.md](../04_architecture/06_backpressure_failure.md) |
 | 실행 중 마스터 변경의 반영 | **신규 미확인** — 기동 시 1회 로드뿐이다 | [../06_pipeline/02_collect.md](../06_pipeline/02_collect.md)(W4) |
 | 갭 허용 크기 · 타임아웃 · 재시도 값 | 2계층 조정값 — 원본 현행 갭 최대 20 레지스터 · 타임아웃 3초 | 상동 · [../05_data_stores/01_postgresql_schema.md](../05_data_stores/01_postgresql_schema.md) |
 

@@ -26,7 +26,7 @@
 
 ## ADR 선점표
 
-W3 착수 전 리드가 번호를 선점한다. 05_data_stores를 쓰는 팀원이 04_architecture와 동시에 이 번호를 인용하기 때문이다. 결정 본문의 정본은 [09_decision_records.md](./09_decision_records.md)이며, 제목은 본문 작성 때 다듬을 수 있지만 **번호와 주제는 바꾸지 않는다.** 새 결정은 ADR-22부터 말미에 채번한다.
+W3 착수 전 리드가 번호를 선점한다. 05_data_stores를 쓰는 팀원이 04_architecture와 동시에 이 번호를 인용하기 때문이다. 결정 본문의 정본은 [09_decision_records.md](./09_decision_records.md)이며, 제목은 본문 작성 때 다듬을 수 있지만 **번호와 주제는 바꾸지 않는다.** 새 결정은 ADR-26부터 말미에 채번한다.
 
 | ADR | 주제 | 원천 | 주 인용처 |
 |-----|------|------|----------|
@@ -50,9 +50,13 @@ W3 착수 전 리드가 번호를 선점한다. 05_data_stores를 쓰는 팀원�
 | ADR-18 | named volume · 호스트 포트 127.0.0.1 바인드 | architecture §3 · tech_stack §10.3 · §10.4 | 04/03 · 12_security/05 |
 | ADR-19 | PostgreSQL 커넥션은 api in-process 풀 · PgBouncer 유예 | architecture §6 · tech_stack §5.1 · §13 | 05/02 · 04/08 |
 | ADR-20 | 관측 스택은 선택 프로파일 · 스크레이프 창구는 /metrics 하나 | architecture §14 · tech_stack §9 · §13 | 10_observability/01 · 09_tech_stack/03 |
-| ADR-21 | 백프레셔 1차 신호는 애플리케이션 XLEN 검사 · MAXLEN을 maxmemory보다 먼저 건다 | architecture §9.3 · data_flow §12.1 | 04/06 · 05/06 |
+| ADR-21 | 백프레셔 1차 신호는 애플리케이션 적체 검사(그룹 lag + pending — XLEN이 아니다) · MAXLEN을 maxmemory보다 먼저 건다 | architecture §9.3 · data_flow §12.1 | 04/06 · 05/06 |
+| ADR-22 | APP_ROLE 배정 — SIM · GEN 모드 A는 collector 동거 · OBS 전 역할 · ALM 표면 api · 판정 worker | W3 신설 · 인계 | 04/02 · 01_overview/04 |
+| ADR-23 | 백프레셔 하강 히스테리시스 | W3 신설 · 인계 | 04/06 · 11_glossary/03 |
+| ADR-24 | SW-10 off면 경고 단계 데드밴드 강화는 무동작 | W3 신설 · 인계 | 04/06 · 02_features/03 |
+| ADR-25 | CPU 바운드 단계의 piscina worker_threads 격리 | architecture §4 · tech_stack §3.3 | 04/02 · 04/05 |
 
-검산: 선점 ADR-01~ADR-21 = **21**(결번 없음). 주제별 분류는 [09_decision_records.md](./09_decision_records.md)가 정한다
+검산: 선점 ADR-01~ADR-21 **21** + W3 신설 ADR-22~25 **4** = **25**(결번 없음). 주제별 분류는 [09_decision_records.md](./09_decision_records.md)가 정한다
 
 ## 고정 기준 (축약)
 
@@ -65,7 +69,7 @@ W3 착수 전 리드가 번호를 선점한다. 05_data_stores를 쓰는 팀원�
 | 백프레셔 | **5단계**(정상 · 주의 · 경고 · 위험 · 복구). 임계는 2계층 조정값이며 프로파일별 값의 정본은 [06_backpressure_failure.md](./06_backpressure_failure.md) |
 | 용량 티어 | **4개**(S · M · M+ · L) |
 | 확장 단계 | **4단계**(역할 분리 · api 다중 인스턴스 · Redis 분리 · 큐 교체). 각 단계는 실측 진입 조건으로만 진입한다 |
-| 기술 결정 | ADR-NN — 채번 정본 [09_decision_records.md](./09_decision_records.md). 수치는 W3 채번 후 올린다 |
+| 기술 결정 | **25** — ADR-01~25 · 현행 24 · 잠정 1(ADR-10) · 채번 정본 [09_decision_records.md](./09_decision_records.md) |
 | 보정 결정 | 원본 implementation_plan §7의 보정 5건(배치 트리거 · 최신값 소유 · 알람 조회 상한 · 무효화 체인 · TTL 강제)은 ADR로 결정을 고정하고 각 정본에 반영한다 |
 
 ## 관련 문서

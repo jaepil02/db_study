@@ -2,6 +2,8 @@
 
 > **대상**: 적재·분기(ING · NestJS ingest 모듈) 기능 목록 · 3계층 분기 실행 · 대조군 동시 적재 · 기능별 경계 · 실패 시 보이는 것 — 기능 ID ING-NN 채번 정본
 > **작성일**: 2026-09-24
+> **개정일**: 2026-09-24 — W3 판정 반영 — 롤업 객체(tag_1m · tag_1h · tag_1d · MV 3) 도메인 귀속 잠정 ING → **ING 확정**(정본 05_data_stores/04 §도메인 귀속 판정)
+> **개정일**: 2026-09-24 — W3 판정 반영 — ING-13 컨슈머 증설의 효과 범위를 ADR-09(단일 flusher)에 맞춰 한정
 > **원천**: 원본 architecture.md §5 · §7.1 · §7.2 · §9 · §9.1 · §9.2 · §9.3 · §17(커밋 ff66a37) · 원본 data_flow.md §4 · §4.1 · §4.2 · §4.3 · §8 · §8.2 · §10 · §12.3 · §12.4 · §14.1(커밋 ff66a37) · 원본 tech_stack.md §5.3(커밋 ff66a37) · 원본 implementation_plan.md §4.1 · §5 S2 · S3 · S6 · §7.1 · §7.2 · §7.3(커밋 ff66a37) · 저장소 루트 docs_plan.md(학습 목표 1 · 2) · D-04 · D-05 · D-12 · [13_switch_matrix.md](./13_switch_matrix.md)
 
 ING는 **Stream에서 배치를 꺼내 저장소에 확정하고, 그 자리에서 데이터를 성격별 목적지로 가르는 도메인**이다. 배치 누적 · 멱등 삽입 · 재시도 · DLQ · PEL 회수로 at-least-once를 지키고(원본 architecture.md §9), 삽입이 확정된 배치를 최신값 · 실시간 팬아웃 · 알람 판정으로 넘긴다. 학습 목표 두 축의 **실행 자리**가 모두 여기 있다 — 목표 ②의 3계층 분기 실행(ING-10)과 목표 ①의 대조군 동시 적재(ING-11)다.
@@ -27,8 +29,8 @@ ING는 **Stream에서 배치를 꺼내 저장소에 확정하고, 그 자리에�
 | **ING-09** | 알람 판정 전달 | 삽입이 확정된 배치의 행 배열을 같은 프로세스 안 **직접 호출**로 ALM 판정(ALM-03)에 넘긴다. **Stream 경계 원칙의 유일한 의도된 예외**다 — 알람은 배치의 후처리이고 재처리 단위가 배치와 같아 별도 큐가 필요 없다(보정 7.3). 예외 근거의 정본은 [../04_architecture/02_module_boundaries.md](../04_architecture/02_module_boundaries.md) | S7 | F-06 | 해당 없음 | 표면 없음 — 내부 모듈 | 없음 — 호출 |
 | **ING-10** | 3계층 분기 실행 | Stream에서 온 배치를 성격별 목적지로 보낸다 — ① 태그 원시값은 ClickHouse tag_raw로만(ING-03) ② 알람 판정은 ALM의 세 쓰기로(ING-09) · 생산 카운터는 기전 미설계 ③ 업무 쓰기는 **Stream에 오지 않는다** — ING는 ③을 받지 않는 것으로 분기에 참여한다. 계층별 쓰기 결과(행 수 · 판정 수)를 계측해 분기 대조표의 원천을 만든다. **기전 상세는 W4 [../06_pipeline/04_routing.md](../06_pipeline/04_routing.md) 몫이다** | S3(①) · S7(②) | F-02 · F-06 | 해당 없음 | 표면 없음 — 내부 모듈 | ClickHouse tag_raw · 호출(ALM) |
 | **ING-11** | 대조군 동시 적재 | SW-09 on에서 **같은 배치**를 PostgreSQL plc_tag_raw_control에도 삽입한다. 따로 적재하면 행 집합이 달라 두 저장소의 쿼리 결과 자체를 대조할 수 없다. **기본은 off**다 — on이 기본이면 모든 삽입 처리량 수치에 대조군 비용이 섞인다. 설계 정본은 [../05_data_stores/10_olap_vs_rdb_control.md](../05_data_stores/10_olap_vs_rdb_control.md), 동시 적재 기전은 W4 [../06_pipeline/04_routing.md](../06_pipeline/04_routing.md) 몫이다 | S3 | F-02 | SW-09 | 표면 없음 — 내부 모듈 | PostgreSQL plc_tag_raw_control |
-| **ING-12** | 롤업 캐스케이드 발동 | tag_raw 삽입이 mv_tag_1m → mv_tag_1h → mv_tag_1d를 연쇄 발동해 별도 배치 잡 없이 롤업을 완성한다. MV는 삽입 블록만 보고 원자성이 없어 MV 삽입 실패를 무시하지 않도록 설정하고 불일치 구간을 재계산한다. 롤업 객체의 도메인 귀속은 잠정 ING(W3 확정) | S3 | F-08 | 해당 없음 | 표면 없음 — 내부 모듈 | ClickHouse tag_1m · tag_1h · tag_1d · MV 3 |
-| **ING-13** | 백프레셔 대응 · 적체 소진 | ClickHouse가 멈추면 XACK을 보류해 엔트리를 PEL에 둔다. **주의** 단계에서 컨슈머 동시성을 자동으로 늘리고, 복구 뒤에는 소진 모드로 배치를 키워(현행 참고 — 100,000행) 적체를 빼낸다. 소진 시간이 복구 목표의 판정 지표다 | S6 | F-10 | 해당 없음 | 표면 없음 — 내부 모듈 | Redis stream:plc:raw |
+| **ING-12** | 롤업 캐스케이드 발동 | tag_raw 삽입이 mv_tag_1m → mv_tag_1h → mv_tag_1d를 연쇄 발동해 별도 배치 잡 없이 롤업을 완성한다. MV는 삽입 블록만 보고 원자성이 없어 MV 삽입 실패를 무시하지 않도록 설정하고 불일치 구간을 재계산한다. 롤업 객체는 ING 소유다(W3 확정 — [../05_data_stores/04_clickhouse_rollup.md](../05_data_stores/04_clickhouse_rollup.md)) | S3 | F-08 | 해당 없음 | 표면 없음 — 내부 모듈 | ClickHouse tag_1m · tag_1h · tag_1d · MV 3 |
+| **ING-13** | 백프레셔 대응 · 적체 소진 | ClickHouse가 멈추면 XACK을 보류해 엔트리를 PEL에 둔다. **주의** 단계에서 컨슈머 동시성을 자동으로 늘리고(ADR-09 단일 flusher 뒤에는 읽기 · 디코딩 병목에만 효과가 있고 삽입 병목에는 효과가 없다), 복구 뒤에는 소진 모드로 배치를 키워(현행 참고 — 100,000행) 적체를 빼낸다. 소진 시간이 복구 목표의 판정 지표다 | S6 | F-10 | 해당 없음 | 표면 없음 — 내부 모듈 | Redis stream:plc:raw |
 
 - 검산: ING-01~13 = **13**. 단계별(첫 도입 기준) S2 4(ING-01 · 02 · 03 · 08) + S3 7(ING-04 · 05 · 06 · 07 · 10 · 11 · 12) + S6 1(ING-13) + S7 1(ING-09) = **13**
 - 표면 없음 13 = ING-01~13 전부. ING는 [12_permission_matrix.md](./12_permission_matrix.md)에서 "내부"로 센다.
@@ -118,7 +120,7 @@ ING는 에러 코드를 내지 않는다([../11_glossary/02_error_codes.md](../1
 | 생산 카운터의 분기 기전 | W1 등재 미설계 | [../06_pipeline/04_routing.md](../06_pipeline/04_routing.md)(W4) |
 | alarm_eval 삽입의 재시도 · DLQ | "Ingest 배치와 동일한 정책"(원본 data_flow.md §8.2) — 같은 DLQ Stream을 쓰는지 없다 | [../06_pipeline/08_alarm.md](../06_pipeline/08_alarm.md)(W4) |
 | DLQ 재처리 경로 | DLQ 이동과 알림까지만 있다 | [../06_pipeline/11_backpressure_failure.md](../06_pipeline/11_backpressure_failure.md)(W4) |
-| 롤업 객체의 도메인 귀속 | 잠정 ING | [../05_data_stores/README.md](../05_data_stores/README.md)(W3) |
+| 롤업 객체의 도메인 귀속 | **W3 확정 — ING** | [../05_data_stores/04_clickhouse_rollup.md](../05_data_stores/04_clickhouse_rollup.md) §도메인 귀속 판정 |
 
 ## 관련 문서
 

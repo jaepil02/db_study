@@ -2,6 +2,7 @@
 
 > **대상**: 인증·인가(AUT · NestJS auth 모듈) 기능 목록 · 기능별 경계 · 의존 도메인 · 실패 시 보이는 것 — 기능 ID AUT-NN 채번 정본
 > **작성일**: 2026-09-24
+> **개정일**: 2026-09-24 — W3 판정 반영 — 권한 캐시 키 미정 → **cache:perm:{user_id}** · sess:{session_id} → **패턴 폐지 · sess 접두 예약** · 레이트 리밋 키 → **rl:{class}:{user_id}:{unix_minute}**(정본 05_data_stores/05)
 > **개정일**: 2026-09-24 — W2 요구사항 판정 반영 — Redis 불가 시 거동 · 비활성 계정 로그인의 채번 보류를 판정 결과(token_store_unavailable/503 · invalid_credentials 재사용)로 닫는다
 > **원천**: 원본 architecture.md §2 · §6 · §8.2 · §10.1 · §11 · §11.2 · §18(커밋 ff66a37) · 원본 data_flow.md §5 · §7.2 · §9(커밋 ff66a37) · 원본 implementation_plan.md §5 S2 · S7 · §7.5(커밋 ff66a37) · D-07 · D-11 · [../01_overview/03_personas_roles.md](../01_overview/03_personas_roles.md) · [../11_glossary/02_error_codes.md](../11_glossary/02_error_codes.md) auth 네임스페이스
 
@@ -19,8 +20,8 @@ AUT는 **신원을 확인하고 표면마다 역할을 대조하는 도메인**�
 | **AUT-02** | 토큰 갱신 | BFF가 쿠키의 리프레시 토큰을 새 액세스 토큰으로 교환해 Authorization 헤더에 실어 원요청을 1회 다시 보낸다. 리프레시 키가 없으면 재로그인이다 — 폐기 · 수명 경과 외에 **메모리 압박 축출**도 원인이 된다(auth 계열은 TTL을 가진 캐시 계열이라 volatile-lru 후보다) | S7 | F-05 | 해당 없음 | 07_api/03_auth | Redis auth:refresh |
 | **AUT-03** | 로그아웃 | auth:refresh 키를 즉시 삭제해 리프레시 토큰을 폐기한다. 액세스 토큰은 무상태 JWT라 수명 만료까지 유효하다 — 즉시 무효화가 필요한 쪽을 리프레시로 몰아 Redis에 둔 이유다 | S7 | F-05 | 해당 없음 | 07_api/03_auth | Redis auth:refresh |
 | **AUT-04** | 신원 확인 | 인증이 필요한 전 REST 표면에서 Authorization 헤더의 JWT 형식 · 서명 · 만료를 검증한다. WebSocket은 핸드셰이크 뒤 **첫 메시지**로 받은 토큰을 검증한다 — 쿼리 파라미터로 받으면 토큰이 URL · 로그에 남는다. 만료와 서명 불량을 다른 코드로 가른다(만료는 갱신 1회로 복구되고 서명 불량은 복구되지 않는다) | S7 | F-03 · F-04 · F-05 · F-07 | 해당 없음 | 인증 필요 전 표면 · 07_api/11_websocket | 없음 — 무상태 검증 |
-| **AUT-05** | 역할 기반 인가 | 엔드포인트마다 NestJS Guard가 사용자의 역할 집합(user_role — 다대다)을 표면 권한과 대조한다. 권한은 합집합으로 판정한다. 사용자 권한 사본은 cache-aside(현행 300초)이며 **권한 변경 시 즉시 삭제**한다 — 삭제하지 않으면 회수한 권한이 TTL만큼 살아 있다. 권한 캐시 키 모양은 W3 확정 | S7 | F-03 · F-04 · F-05 · F-06 · F-07 · F-09 | 해당 없음 | 인가 대상 전 표면 | PostgreSQL role · user_role · Redis cache 계열(권한 사본) |
-| **AUT-06** | 레이트 리밋 | 사용자 · 토큰 기준 분당 요청 수를 rl:{user_id}:{unix_minute} INCR로 센다. **IP 기준이 아니다** — 모든 요청이 127.0.0.1에서 오므로 IP 기준은 전원을 한 사용자로 센다. timeseries/query와 export에 더 엄격히 건다(원본 architecture.md §18). 한도 값은 2계층 조정값이며 소유처는 [../12_security/03_api_surface_defense.md](../12_security/03_api_surface_defense.md) | S7 | F-03 · F-04 · F-05 | 해당 없음 | 인증 필요 전 REST 표면 | Redis rl |
+| **AUT-05** | 역할 기반 인가 | 엔드포인트마다 NestJS Guard가 사용자의 역할 집합(user_role — 다대다)을 표면 권한과 대조한다. 권한은 합집합으로 판정한다. 사용자 권한 사본은 cache-aside(현행 300초)이며 **권한 변경 시 즉시 삭제**한다 — 삭제하지 않으면 회수한 권한이 TTL만큼 살아 있다. 권한 캐시 키는 cache:perm:{user_id}다(W3 확정) | S7 | F-03 · F-04 · F-05 · F-06 · F-07 · F-09 | 해당 없음 | 인가 대상 전 표면 | PostgreSQL role · user_role · Redis cache 계열(권한 사본) |
+| **AUT-06** | 레이트 리밋 | 사용자 · 토큰 기준 분당 요청 수를 rl:{class}:{user_id}:{unix_minute} INCR로 센다(class = 한도 등급 · W3). **IP 기준이 아니다** — 모든 요청이 127.0.0.1에서 오므로 IP 기준은 전원을 한 사용자로 센다. timeseries/query와 export에 더 엄격히 건다(원본 architecture.md §18). 한도 값은 2계층 조정값이며 소유처는 [../12_security/03_api_surface_defense.md](../12_security/03_api_surface_defense.md) | S7 | F-03 · F-04 · F-05 | 해당 없음 | 인증 필요 전 REST 표면 | Redis rl |
 | **AUT-07** | 요청 출처 방어 | CORS 허용 오리진을 http://localhost:3001 **하나**로 두고 와일드카드를 금지한다. WebSocket 핸드셰이크의 Origin 헤더를 같은 목록으로 검증한다. 보안 헤더를 부여하되 HSTS는 TLS 전제라 끈다. **CORS는 S2부터 필요하다** — 웹(3001)이 api(3000)를 직결 호출하는 순간 오리진이 다르다. Origin 검증 · 보안 헤더는 S7에 붙인다 | S2(CORS) · S7 | F-03 · F-04 · F-07 | 해당 없음 | 전 REST 표면 · 07_api/11_websocket | 없음 |
 
 - 검산: AUT-01 · 02 · 03 · 04 · 05 · 06 · 07 = **7**. 단계별 S7 6(AUT-01~06) + S2 시작 1(AUT-07) = **7**
@@ -98,9 +99,9 @@ AUT는 **신원을 확인하고 표면마다 역할을 대조하는 도메인**�
 | 항목 | 원본에서 확인되는 것 | 상태 | 확정 자리 |
 |------|------|------|------|
 | 계정 · 역할 부여 경로 | user_account · role · user_role 테이블(원본 architecture.md §6) | **미설계 — 표면 없음.** 시드로만 만든다고 잠정한다 | [../05_data_stores/09_migrations_seed.md](../05_data_stores/09_migrations_seed.md)(W3) · 표면 신설 여부 [../07_api/03_auth.md](../07_api/03_auth.md)(W5) |
-| sess:{session_id} 키의 소비 기능 | 키 계열 표에 세션 JSON · TTL 1800초가 있다(원본 architecture.md §8.2) | **미확인 — 소비 기능 없음.** 인증은 JWT + 리프레시 키로 닫혀 세션 키를 읽는 기능이 원본 어디에도 없다 | [../05_data_stores/05_redis_keyspace.md](../05_data_stores/05_redis_keyspace.md)(W3) |
-| 레이트 리밋의 엔드포인트 차원 | "사용자별 + 엔드포인트별"(원본 architecture.md §18) · 키는 rl:{user_id}:{unix_minute}(원본 architecture.md §8.2) | **불일치** — 키에 엔드포인트 자리가 없어 "엔드포인트별로 엄격히"를 표현할 수 없다 | 상동 · [../12_security/03_api_surface_defense.md](../12_security/03_api_surface_defense.md) |
-| 권한 캐시 키 모양 | cache-aside 300초 · 변경 시 즉시 DEL(원본 architecture.md §10.1) | 키 이름 없음 | [../05_data_stores/05_redis_keyspace.md](../05_data_stores/05_redis_keyspace.md)(W3) |
+| sess:{session_id} 키의 소비 기능 | 키 계열 표에 세션 JSON · TTL 1800초가 있다(원본 architecture.md §8.2) | **W3 판정 — 키 패턴 폐지 · sess 접두 예약.** 인증은 JWT + 리프레시 키로 닫혀 세션 키를 읽는 기능이 없다. 접두는 캐시 계열 정책으로 남겨 세션 키가 다시 생길 때 정책이 이미 정해져 있게 한다 | [../05_data_stores/05_redis_keyspace.md](../05_data_stores/05_redis_keyspace.md) |
+| 레이트 리밋의 엔드포인트 차원 | "사용자별 + 엔드포인트별"(원본 architecture.md §18) · 키는 rl:{user_id}:{unix_minute}(원본 architecture.md §8.2) | **W3 판정** — 키를 rl:{class}:{user_id}:{unix_minute}로 바꿔 한도 등급 자리를 둔다. class 값 집합 · 등급별 한도는 미정 | 상동 · [../12_security/03_api_surface_defense.md](../12_security/03_api_surface_defense.md) |
+| 권한 캐시 키 모양 | cache-aside 300초 · 변경 시 즉시 DEL(원본 architecture.md §10.1) | **W3 확정** — cache:perm:{user_id} | [../05_data_stores/05_redis_keyspace.md](../05_data_stores/05_redis_keyspace.md) |
 | Redis 불가 시 로그인 · 갱신 · 레이트 리밋 | 세 기능의 상태가 Redis에 있다 | **W2 판정 완료** — 인증 저장소 쓰기 거절 · 레이트 리밋 통과 | [../03_requirements/02_auth.md](../03_requirements/02_auth.md) |
 
 ## 관련 문서
