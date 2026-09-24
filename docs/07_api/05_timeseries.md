@@ -2,6 +2,7 @@
 
 > **대상**: TSQ 도메인 표면 — 시계열 조회(POST /api/v1/timeseries/query) 요청 스키마 · 해상도 규칙의 표면 모양 · meta · points 열 구성 · 다운샘플 모드 · 진행 구간 분할의 호출 모양 · 원시 내보내기 스트림 · **내보내기 스트림 중단 종료 표지 판정** · 태그 상한 · 최대 포인트 수(2계층 소유)
 > **작성일**: 2026-09-24
+> **개정일**: 2026-09-24 — W7 보안 판정 반영 — 내보내기 범위 상한 미정 → **현행 참고 1일**(2계층 · 초과 400 reason range) · 등급 class export — 표면 수 불변(정본 12_security/03)
 > **개정일**: 2026-09-24 — W6 실험 채번 반영 — 메트릭 이름 반영(정본 10_observability/01 · 06)
 > **원천**: 원본 architecture.md §11 · §11.1 · §18(커밋 ff66a37) · 원본 data_flow.md §6 · §6.1 · §6.2 · §6.3 · §14.1 5단계(커밋 ff66a37) · REQ-TSQ-01~17 · ADR-25 · [../02_features/07_timeseries.md](../02_features/07_timeseries.md) TSQ-01~09 · [../06_pipeline/06_timeseries_read.md](../06_pipeline/06_timeseries_read.md) · [../06_pipeline/12_data_contract.md](../06_pipeline/12_data_contract.md) 5단계 · docs_plan.md 웨이브 인계 W5 07_api 행(내보내기 스트림 중단 종료 표지)
 
@@ -134,7 +135,7 @@ TSQ 표면은 **요청한 것이 아니라 서버가 고른 것을 돌려주는 
 | 항목 | 계약 |
 |------|------|
 | 요청 | tagIds(쉼표 구분 정수 · 상한 #1과 같다) · from · to(오프셋 포함 ISO 8601) · format(csv · parquet · 기본 csv) |
-| 범위 상한 | 2계층 미정 — 소유 [../12_security/03_api_surface_defense.md](../12_security/03_api_surface_defense.md) |
+| 범위 상한 | to − from(스냅 전 요청값) ≤ 현행 참고 **1일** — 2계층 · 소유 [../12_security/03_api_surface_defense.md](../12_security/03_api_surface_defense.md) · 초과는 common.validation_failed/400 reason range · 잘라서 내보내지 않는다 |
 | 응답 200 | 청크 스트림 · Content-Type text/csv 또는 application/vnd.apache.parquet · Content-Disposition attachment |
 | 열 | ts(epoch ms) · device_id · tag_id · value · quality — tag_raw 원시 열 그대로 · ingested_at · scan_seq는 싣지 않는다 |
 | 원천 | tag_raw — 해상도를 줄이지 않고 캐시하지 않는다 · ClickHouse FORMAT 응답을 그대로 중계 |
@@ -167,7 +168,7 @@ TSQ 표면은 **요청한 것이 아니라 서버가 고른 것을 돌려주는 
 | 항목 | 상태 | 확정 자리 |
 |------|------|------|
 | 태그 배열 상한 · 최대 포인트 수 | 2계층 · 현행 참고 50 · 2000 — 소유 이 문서 · 실측 조정은 S4 | 이 문서 |
-| 내보내기 범위 상한 · 등급별 한도 | 2계층 미정 | [../12_security/03_api_surface_defense.md](../12_security/03_api_surface_defense.md)(W7) |
+| 내보내기 범위 상한 · 등급별 한도 | **W7 닫힘** — 범위 상한 현행 참고 1일 · class export(≤ bulk_read 한도) · 한도 값 2계층 미정 | [../12_security/03_api_surface_defense.md](../12_security/03_api_surface_defense.md) |
 | 조회 p95 · 히트율 | 3계층 미확인 — 원본 목표 히트 20 ms · 미스 300 ms · 80% | [../03_requirements/13_nonfunctional.md](../03_requirements/13_nonfunctional.md) REQ-NFR-08 · 10 |
 | COUNTER 랩어라운드 구간 증가량 | 조회 시점 몫 — 이 표면은 max − min을 계산하지 않는다 · 증가량 집계 요청 필드 없음 | [../06_pipeline/04_routing.md](../06_pipeline/04_routing.md) §생산 카운터 기전 판정 |
 | 내보내기 중단 계수 이름 | **W6 판정** — tsq_export_aborted_total | [../10_observability/01_metrics_catalog.md](../10_observability/01_metrics_catalog.md) |

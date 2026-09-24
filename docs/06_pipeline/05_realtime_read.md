@@ -2,6 +2,7 @@
 
 > **대상**: F-03 · F-07의 기전 정본 — 최신값 조회 판정 트리(SW-02) · 빈 키 복원 · Redis 불가 503 · **복원 창에 행 없는 신규 설비 응답** · **tagmeta 미스 + PostgreSQL 불가 응답** · STALE 판정 계약 · **rt:latest 덮어쓰기 순서 역전 판정(복구 중 포함)** · 기동 복원 창 · SW-11 두 구현의 조회 차이 · 실시간 푸시(SW-06 · SW-07) · 스로틀 병합 · Pub/Sub 한계 · 재연결 동기화
 > **작성일**: 2026-09-24
+> **개정일**: 2026-09-24 — W7 보안 판정 반영 — 핸드셰이크 Origin 검증 S7 → **S2**(정본 12_security/03)
 > **개정일**: 2026-09-24 — W6 실험 채번 반영 — Pub/Sub 한도 소유 · 메트릭 · EXP 번호(정본 10_observability/01 · 06)
 > **개정일**: 2026-09-24 — W5 판정 반영 — 느린 구독자 절단을 둘로 가름 — 브라우저 단위 **소켓 송신 대기량 한도(4413)** · Redis Pub/Sub 출력 버퍼 한도는 **api 구독 연결 보호의 최후선** · 푸시 조정값 4 → **5** · STALE 판정 계약에 메타 없는 태그 판정 불가 행 5 → **6**
 > **원천**: 원본 data_flow.md §5 · §9 · §9.1 · §9.2 · §12.2 · §12.4 · §15(커밋 ff66a37) · 원본 architecture.md §5 · §10.1 · §17(커밋 ff66a37) · 원본 implementation_plan.md §7.2(커밋 ff66a37) · docs_plan.md 웨이브 인계 W4 06_pipeline/05 행 전부 · ADR-05 · ADR-07 · ADR-10 · ADR-13 · ADR-23 · REQ-RLT-01~18 · REQ-ING-11 · 12 · REQ-GLB-09 · 11 · [../05_data_stores/05_redis_keyspace.md](../05_data_stores/05_redis_keyspace.md) · [../05_data_stores/02_postgresql_constraints.md](../05_data_stores/02_postgresql_constraints.md) 한계 등재 #2 · [../11_glossary/05_units_and_time.md](../11_glossary/05_units_and_time.md) STALE 판정
@@ -151,7 +152,7 @@ F-03 관점의 차이만 적는다. ClickHouse 중단 재현 비교(갱신 공�
 원본 푸시 시퀀스(원본 data_flow.md §9)를 연결 한 번의 단계로 옮긴다.
 
 ```plain
-① 연결          /ws/realtime — 핸드셰이크 Origin 검증(CORS 목록과 같은 규칙) · S7부터
+① 연결          /ws/realtime — 핸드셰이크 Origin 검증(CORS 목록과 같은 규칙) · S2부터
 ② 인증          첫 메시지로 토큰 — URL 쿼리에 토큰을 받지 않는다(REQ-RLT-09)
 ③ 구독          설비 목록 → ch:rt:{device_id} SUBSCRIBE · 소켓 ↔ 설비 매핑을 인스턴스 레지스트리에
 ④ 수신          ch:rt(조건부 쓰기가 받아들인 필드) · ch:alarm(열림 · 닫힘) · ch:cacheinv(무효화 신호)

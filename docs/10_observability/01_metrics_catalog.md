@@ -2,6 +2,7 @@
 
 > **대상**: /metrics로 노출하는 메트릭 전수 — 이름 규약 · 닫힌 레이블 집합 · **스위치 상태 레이블 이름** · **컨슈머 랙 산출식 판정(가장 중요한 단일 지표)** · 계열별 전수(앱 기본 · HTTP·WS · 수집 · 적재 · 알람 · 실시간 · 조회 · 업무 · 인증 · Redis · PostgreSQL · ClickHouse · E2E · 관측 자체) · 파생 지표 식 · 선행 문서 인계 메트릭 대응 · 수집 주기 · E2E 창 · 메모리 표본 수 조회 계약 · Pub/Sub 출력 버퍼 관련 메트릭
 > **작성일**: 2026-09-24
+> **개정일**: 2026-09-24 — W7 보안 판정 반영 — aut_ratelimit_rejected_total class 값 **4 확정**(general · bulk_read · export · bulk_ingest) · 로그인 실패 계수는 신설하지 않고 http_requests_total로 대체 — 메트릭 수 불변(정본 12_security/03)
 > **원천**: 원본 architecture.md §14 · §16(커밋 ff66a37) · 원본 tech_stack.md §9(커밋 ff66a37) · 원본 data_flow.md §15 · §16(커밋 ff66a37) · 원본 implementation_plan.md §4.1 · §5 S2(커밋 ff66a37) · docs_plan.md 웨이브 인계 W6 10/01 행 · D-10 · ADR-20 · ADR-21 · ADR-22 · REQ-OBS-01~12 · [../02_features/11_metrics.md](../02_features/11_metrics.md) OBS-01~06 · [../04_architecture/06_backpressure_failure.md](../04_architecture/06_backpressure_failure.md) §판정량 · [../07_api/10_metrics.md](../07_api/10_metrics.md) #2
 
 이 문서는 **메트릭 이름의 정본**이다. 선행 문서들이 "이름은 W6"으로 넘긴 계수 · 히스토그램 · 게이지 전부를 여기서 명명하고, 어느 요구가 그 지표를 요구했는지를 원천 열에 남긴다. 계측 지점과 수집 방식은 [02_instrumentation.md](./02_instrumentation.md), 대시보드와 알림은 [03_dashboards_alerts.md](./03_dashboards_alerts.md), 실험의 판정 지표 선택은 [06_experiment_catalog.md](./06_experiment_catalog.md)가 갖는다.
@@ -185,10 +186,11 @@
 | cache_wrapper_failures_total | counter | 건 | prefix · op | CacheKeyClient가 삼킨 실패(degrade) | REQ-GLB-09 |
 | durable_wrapper_failures_total | counter | 건 | prefix | DurableKeyClient가 던진 실패 | 상동 |
 | aut_ratelimit_bypassed_total | counter | 건 | 없음 | Redis 불가 중 세지 않고 통과한 요청 | REQ-AUT-14 |
-| aut_ratelimit_rejected_total | counter | 건 | class | 한도 초과 거절 — 등급 이름 정본 [../12_security/03_api_surface_defense.md](../12_security/03_api_surface_defense.md) | REQ-AUT-14 |
+| aut_ratelimit_rejected_total | counter | 건 | class(general · bulk_read · export · bulk_ingest) | 한도 초과 거절 — 등급 이름 정본 [../12_security/03_api_surface_defense.md](../12_security/03_api_surface_defense.md) · 실험 구간 증가가 0이 아니면 그 측정 기록은 무효(관계 R2 · R4) | REQ-AUT-14 |
 | aut_token_verify_seconds | histogram | 초 | 없음 | 액세스 토큰 검증 시간(S7) — 모드 C 인증 비용 | REQ-GEN-15 · EXP-37 |
 
 - 검산: 행 = **21**
+- **로그인 실패 계수는 따로 두지 않는다(W7 판정).** http_requests_total{route="/api/v1/auth/login", method="POST", code="401"}가 곧 로그인 실패 수다 — 로그인 표면의 401은 auth.invalid_credentials 하나뿐이다([../07_api/03_auth.md](../07_api/03_auth.md) #1). 대입 흔적은 이 계수의 급증으로 본다(로그인 시도 제한을 두지 않은 판정의 관측 자리 — [../12_security/03_api_surface_defense.md](../12_security/03_api_surface_defense.md) §로그인 시도 제한 판정).
 
 ## 저장소 — Redis · PostgreSQL · ClickHouse
 

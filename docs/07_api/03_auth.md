@@ -2,6 +2,7 @@
 
 > **대상**: AUT 도메인이 소유하는 REST 표면 — 로그인 · 토큰 갱신 · 로그아웃의 요청 · 응답 · 실패 · 경로 계약 · 계정 · 역할 관리 표면의 부재 판정
 > **작성일**: 2026-09-24
+> **개정일**: 2026-09-24 — W7 보안 판정 반영 — BFF 인증 Route Handler **Origin 대조** 추가 · 미설계 3행(회전 · 로그인 시도 제한 · CORS 제외) 닫힘 — 표면 수 불변(정본 12_security/01 · 03)
 > **개정일**: 2026-09-24 — W6 실험 채번 반영 — 실험 자리 W6 결과 반영(정본 10_observability/01 · 06)
 > **원천**: 원본 architecture.md §11 · §11.2 · §18(커밋 ff66a37) · 원본 data_flow.md §7.2(커밋 ff66a37) · REQ-AUT-01~06 · 14 · 15 · 16 · 17 · D-07 · ADR-02 · [../02_features/01_auth.md](../02_features/01_auth.md) AUT-01~03 · [../02_features/12_permission_matrix.md](../02_features/12_permission_matrix.md) · [../06_pipeline/07_business_crud.md](../06_pipeline/07_business_crud.md) 인증 흐름 · [01_conventions.md](./01_conventions.md)
 
@@ -15,7 +16,7 @@ AUT는 **표면 셋만 소유하고 나머지 전 표면에 끼어드는 도메�
 
 | 항목 | 규칙 | 근거 |
 |------|------|------|
-| 경로 | 브라우저 → BFF → api만 — 직결 호출은 CORS 응답 헤더가 없어 브라우저가 응답을 읽지 못한다 | [01_conventions.md](./01_conventions.md) §BFF 경유와 직결 · REQ-AUT-04 |
+| 경로 | 브라우저 → BFF → api만 — 직결 호출은 CORS 응답 헤더가 없어 브라우저가 응답을 읽지 못한다 · **BFF 인증 Route Handler는 Origin 헤더가 http://localhost:3001이 아니면 거절한다** — SameSite는 포트를 보지 않아 localhost의 다른 웹 앱 요청에도 리프레시 쿠키가 실린다 | [01_conventions.md](./01_conventions.md) §BFF 경유와 직결 · REQ-AUT-04 · REQ-AUT-13 · [../12_security/03_api_surface_defense.md](../12_security/03_api_surface_defense.md) §BFF 인증 경로의 출처 검사 |
 | 리프레시 토큰 전달 | api ↔ BFF는 본문 refreshToken · BFF ↔ 브라우저는 httpOnly 쿠키(SameSite=Lax · Secure off · httpOnly on) | 원본 architecture.md §11.2 |
 | 액세스 토큰 | JWT · 본문 accessToken으로 발급 · 브라우저 메모리에 두고 Authorization 헤더로만 보낸다 | REQ-AUT-04 |
 | 수명 | 액세스 현행 참고 15분 · 리프레시 현행 참고 14일 — 2계층 · 소유 [../12_security/01_authn_authz.md](../12_security/01_authn_authz.md) | REQ-AUT-03 · 04 |
@@ -24,7 +25,7 @@ AUT는 **표면 셋만 소유하고 나머지 전 표면에 끼어드는 도메�
 | 감사 | 세 표면은 PostgreSQL 업무 테이블을 바꾸지 않아 audit_log 대상이 아니다 | REQ-WRK-07 |
 
 - 검산: 항목 = **7**
-- **리프레시 토큰을 회전하지 않는다.** 갱신은 같은 리프레시 토큰으로 새 액세스 토큰만 준다 — 원본 · 요구사항에 회전 계약이 없다(원본 architecture.md §11.2). 도입 여부는 [../12_security/01_authn_authz.md](../12_security/01_authn_authz.md) 리뷰 대상이다(§미확인 · 미설계 등재).
+- **리프레시 토큰을 회전하지 않는다.** 갱신은 같은 리프레시 토큰으로 새 액세스 토큰만 준다 — 원본 · 요구사항에 회전 계약이 없다(원본 architecture.md §11.2). **W7 판정 — 회전하지 않는다**(정본 [../12_security/01_authn_authz.md](../12_security/01_authn_authz.md) §회전 판정 — 회전은 탭 둘의 동시 갱신에서 정상 사용자를 로그아웃시킨다).
 
 ## 표면 요약
 
@@ -114,9 +115,9 @@ AUT는 **표면 셋만 소유하고 나머지 전 표면에 끼어드는 도메�
 
 | 항목 | 상태 | 확정 자리 |
 |------|------|------|
-| 리프레시 토큰 회전 · 재사용 탐지 | 미설계 — 원본에 없다 · 이 문서는 회전 없음으로 둔다 | [../12_security/01_authn_authz.md](../12_security/01_authn_authz.md)(W7) |
-| 로그인 시도 제한 | 레이트 리밋이 user_id 기준이라 로그인은 계수 밖이다 · IP 기준은 로컬에서 무의미 | [../12_security/03_api_surface_defense.md](../12_security/03_api_surface_defense.md)(W7) |
-| auth 표면의 CORS 제외 판정 | 이 폴더 판정 — 방어 리뷰 대상 | [../12_security/03_api_surface_defense.md](../12_security/03_api_surface_defense.md)(W7) |
+| 리프레시 토큰 회전 · 재사용 탐지 | **닫힘(W7)** — 회전하지 않는다 · 잔여(쿠키 사본의 수명 내 유효)는 보안 리뷰가 등재 | [../12_security/01_authn_authz.md](../12_security/01_authn_authz.md) |
+| 로그인 시도 제한 | **닫힘(W7)** — 두지 않는다 · 대입 속도는 비밀번호 해시 비용이 묶는다 · 잔여 등재 | [../12_security/03_api_surface_defense.md](../12_security/03_api_surface_defense.md) |
+| auth 표면의 CORS 제외 판정 | **닫힘(W7)** — 판정 유지 · BFF 인증 경로 Origin 대조를 더했다 | [../12_security/03_api_surface_defense.md](../12_security/03_api_surface_defense.md) |
 | 로그인 · 갱신 p50 · 해시 비용 | 3계층 미확인 — 확정 전 임의 값 고정 금지 · **W6 미채번**(카탈로그 39에 없다 · 필요해지면 EXP-40부터) | [../10_observability/06_experiment_catalog.md](../10_observability/06_experiment_catalog.md) |
 
 ## 관련 문서

@@ -2,6 +2,7 @@
 
 > **대상**: db_study api 컨테이너 표면 전체에 걸리는 규약 — 경로 버전 · 표면 계층 · BFF 경유와 직결의 배정(ADR-02 정본) · 인증 헤더 · 요청 검증 · 성공 본문 · **에러 봉투** · 시각 직렬화(points 시각 형식 판정) · 수치 직렬화 · 페이지네이션 · 멱등 · 캐시 헤더 · 레이트 리밋 헤더 · 응답 필드 변경 규칙 · 표면 번호 규약 · 표면 요약 표 어휘
 > **작성일**: 2026-09-24
+> **개정일**: 2026-09-24 — W7 보안 판정 반영 — 출처 방어 항목 7 → **8**(Host 헤더 허용 목록 · S2부터) · 한도 등급 class 값 확정(general · bulk_read · export · bulk_ingest) · 로그인 시도 제한 판정 인용(정본 12_security/03)
 > **원천**: 원본 architecture.md §11 · §11.1 · §11.2 · §18(커밋 ff66a37) · 원본 data_flow.md §7.2 · §14.1 5단계 · §14.2(커밋 ff66a37) · ADR-02 · ADR-12 · REQ-GLB-02 · 19 · REQ-AUT-04 · 07 · 11 · 12 · REQ-TSQ-02 · 05 · [../11_glossary/05_units_and_time.md](../11_glossary/05_units_and_time.md) · [../11_glossary/02_error_codes.md](../11_glossary/02_error_codes.md) · [../06_pipeline/12_data_contract.md](../06_pipeline/12_data_contract.md) 5단계 · [../06_pipeline/07_business_crud.md](../06_pipeline/07_business_crud.md) · docs_plan.md 웨이브 인계 W5 07_api/01 행
 
 이 문서는 도메인 문서 8본과 WebSocket 문서가 **다시 적지 않는 공통 계약**이다. 도메인 문서는 여기서 벗어나는 예외만 적고, 예외가 없으면 이 문서를 가리킨다. 에러 코드의 집합 · 조건 · HTTP 상태는 [../11_glossary/02_error_codes.md](../11_glossary/02_error_codes.md)가 정본이고, 이 문서는 그 코드를 **담는 모양**(봉투 · 헤더)만 갖는다.
@@ -55,8 +56,9 @@
 | 역할 판정 | 역할 집합의 합집합으로 표면 권한을 대조 · 권한 밖 auth.forbidden/403 | REQ-AUT-09 · [../02_features/12_permission_matrix.md](../02_features/12_permission_matrix.md) | 표면별 권한을 코드에 하드코딩하면 매트릭스와 구현이 두 정본이 된다 |
 | CORS | 허용 오리진 http://localhost:3001 하나 · 와일드카드 금지 · **S2부터** | REQ-AUT-12 | S7까지 미루면 S2 웹 화면의 직결 호출이 막힌다 |
 | 보안 헤더 | X-Content-Type-Options · Referrer-Policy 등 부여 · **HSTS 끔** · S7부터 | REQ-AUT-13 | 로컬 http에서 HSTS를 켜면 브라우저가 localhost를 https로 고정해 웹 접속이 끊긴다 |
+| Host 헤더 | 허용 목록 localhost · 127.0.0.1(포트 포함) · 컨테이너 사이 호출의 서비스명 api — 밖이면 거절 · **S2부터** | REQ-AUT-13 · [../12_security/04_threat_model.md](../12_security/04_threat_model.md) | DNS 재바인딩 페이지가 브라우저에게 같은 오리진으로 보여 CORS를 거치지 않고 응답을 읽는다 — 무인증 기간에는 전 표면이 읽힌다 |
 
-- 검산: 항목 = **7**
+- 검산: 항목 = **8**
 - **인가 단계도 503을 낼 수 있다.** 권한 사본(cache:perm:{user_id})이 없고 PostgreSQL이 멈추면 역할 판정을 할 수 없어 common.postgres_unavailable/503이다(REQ-AUT-15) — 시계열 · 최신값 표면도 예외가 아니다. 권한 사본이 있는 사용자는 PostgreSQL 중단 중에도 조회를 계속한다.
 - **공개 표면은 둘이다** — 10_metrics #1 · #2(REQ-OBS-10). 09_datagen #1은 공개가 아니라 게이트 + 인증이다. 판정 정본은 [../02_features/12_permission_matrix.md](../02_features/12_permission_matrix.md) §GEN · OBS 표면 인가다.
 
@@ -64,7 +66,7 @@
 
 | 항목 | 규칙 | 어기면 |
 |------|------|------|
-| 스키마 검증 | 모든 REST 표면이 경로 · 쿼리 · 본문을 공유 스키마(packages/shared)로 검증한다 — 위반은 common.validation_failed/400 | 로컬이라 검증을 생략하면 태그 ID 배열에 문자열이 섞여 ClickHouse 파라미터 바인딩에 도달한다(REQ-GLB-19) |
+| 스키마 검증 | 모든 REST 표면이 경로 · 쿼리 · 본문을 공유 스키마(packages/shared)로 검증한다 — 위반은 common.validation_failed/400 | 로컬이라 검증을 생략하면 태그 ID 배열에 문자열이 섞여 ClickHouse 파라미터 바인딩에 도달한다(REQ-GLB-19 · 바인딩 계약 REQ-GLB-24) |
 | 모르는 필드 | 요청 본문의 **모르는 필드는 거절한다**(400) | 오타 필드(isActve)를 무시하면 클라이언트는 비활성화가 됐다고 믿는다 |
 | 불변 필드 | 경로 식별자 · 소속(deviceId · lineId · tagId 등 도메인 문서가 불변이라 적은 필드)이 수정 본문에 오면 400 | 조용히 무시하면 이동이 된 줄 안다 |
 | 대상 없음 | 경로 식별자 · 조회 필터가 가리키는 대상이 없으면 common.not_found/404 · **쓰기 본문이 참조하는 대상**이 없으면 common.validation_failed/400(reason reference) | 본문 참조를 404로 내면 클라이언트가 경로의 자원이 없다고 읽는다(REQ-WRK-02 · REQ-ALM-04) |
@@ -191,18 +193,18 @@ Idempotency-Key 헤더를 두지 않는다 — 키를 담을 Redis 키 계열이
 
 - 검산: 헤더 = **4**
 - **헤더가 없으면 계수되지 않은 것이다.** 공개 표면 · S2~S6 무인증 표면 · Redis 불가로 통과(degrade)한 요청은 RateLimit-* 헤더를 싣지 않는다 — 통과 수는 계측으로만 센다(REQ-AUT-14). 헤더를 0으로 채우면 부하 도구가 한도 소진으로 오독한다.
-- 로그인은 user_id가 없어 계수 대상이 아니다. 로그인 시도 제한의 필요 여부는 [../12_security/03_api_surface_defense.md](../12_security/03_api_surface_defense.md)가 판정한다.
+- 로그인은 user_id가 없어 계수 대상이 아니다. **로그인 시도 제한은 두지 않는다**(판정 [../12_security/03_api_surface_defense.md](../12_security/03_api_surface_defense.md) §로그인 시도 제한 판정) — IP · 이메일 · 전역 기준이 모두 학습자 차단 · 계정 존재 누출 · 서비스 거부로 실패하고, 대입 속도는 비밀번호 해시 비용이 묶는다.
 
 ### 한도 등급이 갈리는 표면 묶음
 
-class 값의 이름은 소유처가 정한다. 이 표는 **같은 한도로 묶이면 안 되는 표면**만 가른다.
+class 값의 정본은 [../12_security/03_api_surface_defense.md](../12_security/03_api_surface_defense.md) §레이트 리밋 등급이다. 이 표는 **같은 한도로 묶이면 안 되는 표면**만 가른다.
 
 | 묶음 | 표면 | 가르는 이유 |
 |------|------|------|
-| 일반 | 아래 셋을 뺀 인증 표면 전부 | 해당 없음 |
-| 대량 조회 | 05_timeseries #1 · 07_alarms #6 | 원본 "timeseries/query에 엄격히"(원본 architecture.md §18) · 대량 스캔 읽기 예외(권한 매트릭스) |
-| 내보내기 | 05_timeseries #2 | 원본 "export에 엄격히" — 조회보다 한 요청의 스캔이 크다 |
-| 부하 주입 | 09_datagen #1 | **한도가 부하 목표보다 낮으면 429가 stream_full보다 먼저 와 HTTP 경유 수집 상한 측정이 레이트 리밋 측정이 된다** — 이 묶음의 한도는 실험 부하 위에 둔다 |
+| 일반 — general | 아래 셋을 뺀 인증 표면 전부 | 해당 없음 |
+| 대량 조회 — bulk_read | 05_timeseries #1 · 07_alarms #6 | 원본 "timeseries/query에 엄격히"(원본 architecture.md §18) · 대량 스캔 읽기 예외(권한 매트릭스) |
+| 내보내기 — export | 05_timeseries #2 | 원본 "export에 엄격히" — 조회보다 한 요청의 스캔이 크다 |
+| 부하 주입 — bulk_ingest | 09_datagen #1 | **한도가 부하 목표보다 낮으면 429가 stream_full보다 먼저 와 HTTP 경유 수집 상한 측정이 레이트 리밋 측정이 된다** — 이 묶음의 한도는 실험 부하 위에 둔다 |
 
 - 검산: 묶음 = **4**
 

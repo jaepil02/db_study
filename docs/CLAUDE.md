@@ -98,7 +98,7 @@
 
 기능 · REQ · 흐름 · 화면 · API 표면 · 테이블 · 에러 코드 · 스위치를 추가·변경·삭제하면 같은 변경 단위에서 아래를 함께 고친다.
 
-- [03_requirements/15_traceability.md](./03_requirements/15_traceability.md) — 기능 ↔ REQ ↔ 흐름 ↔ 화면 ↔ API ↔ 테이블 전수 매핑(미매핑 0 · 유령 0 보장). 대응이 없으면 빈 칸이 아니라 닫힌 어휘(해당 없음 · 내부 모듈 · 표면 없음)로 적는다
+- [03_requirements/15_traceability.md](./03_requirements/15_traceability.md) — 기능 ↔ REQ ↔ 흐름 ↔ 화면 ↔ API ↔ 테이블 전수 매핑(미매핑 0 · 유령 0 보장). 대응이 없으면 빈 칸이 아니라 닫힌 어휘 4(해당 없음 · 내부 모듈 · 표면 없음 · 화면 없음(API 전용))로 적는다
 - [08_screen/02_traceability.md](./08_screen/02_traceability.md) — 기능 → 화면 매핑과 파생 집계
 - [11_glossary/02_error_codes.md](./11_glossary/02_error_codes.md) — 에러 코드 정본. [07_api/02_errors.md](./07_api/02_errors.md) 미러는 뒤따라 갱신한다
 

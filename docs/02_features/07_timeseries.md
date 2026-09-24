@@ -2,6 +2,7 @@
 
 > **대상**: 시계열 조회(TSQ · NestJS timeseries 모듈) 기능 목록 · 기능별 경계 · 스위치 교체 · 의존 도메인 · 실패 시 보이는 것 — 기능 ID TSQ-NN 채번 정본
 > **작성일**: 2026-09-24
+> **개정일**: 2026-09-24 — W7 보안 판정 반영 — 내보내기 범위 상한 · 등급 닫힘(정본 12_security/03)
 > **개정일**: 2026-09-24 — W2 요구사항 판정 반영 — ClickHouse 불가 시 조회 응답(clickhouse_unavailable/503)의 채번 보류를 닫는다
 > **원천**: 원본 architecture.md §7.2 · §7.4 · §8.2 · §10 · §10.1 · §10.2 · §10.3 · §11 · §11.1 · §17 · §18(커밋 ff66a37) · 원본 data_flow.md §6 · §6.1 · §6.2 · §6.3 · §14.1 · §16(커밋 ff66a37) · 원본 implementation_plan.md §4.1 · §4.3 · §5 S2 · S4(커밋 ff66a37) · [13_switch_matrix.md](./13_switch_matrix.md) SW-03 · SW-04 · SW-05 · [../11_glossary/03_enums_state_machines.md](../11_glossary/03_enums_state_machines.md) 조회 해상도 · 집계 함수
 
@@ -110,7 +111,7 @@ TSQ-01 한 요청이 지나는 단계다. 기전 정본은 [../06_pipeline/06_ti
 | ClickHouse 불가 시 조회 응답 | ClickHouse 중단 시 적재가 XACK를 보류한다는 것뿐이다 | **W2 판정 완료** — clickhouse_unavailable/503 | [../03_requirements/08_timeseries.md](../03_requirements/08_timeseries.md) |
 | 해상도별 응답 시간 · 히트율 | 원본 예상치(원본 data_flow.md §6.1 · 원본 architecture.md §16) | 미확인 — 확정 전 임의 값 고정 금지 | [../03_requirements/13_nonfunctional.md](../03_requirements/13_nonfunctional.md) · [../10_observability/06_experiment_catalog.md](../10_observability/06_experiment_catalog.md) |
 | p95 집계의 롤업 대조 | TDigest는 근사다 — 부동소수 허용 오차로 대조하지 않는다(W1) | 대조 기준 미정 | [../03_requirements/14_acceptance_criteria.md](../03_requirements/14_acceptance_criteria.md)(W2) |
-| 내보내기의 레이트 리밋 한도 · 범위 상한 | "엄격히"만 있다(원본 architecture.md §18) | 2계층 조정값 미정 | [../12_security/03_api_surface_defense.md](../12_security/03_api_surface_defense.md) |
+| 내보내기의 레이트 리밋 한도 · 범위 상한 | "엄격히"만 있다(원본 architecture.md §18) | **W7 닫힘** — 범위 상한 현행 참고 1일 · class export · 한도 값 2계층 미정(관계식 고정) | [../12_security/03_api_surface_defense.md](../12_security/03_api_surface_defense.md) |
 
 ## 관련 문서
 

@@ -2,6 +2,7 @@
 
 > **대상**: 로컬 머신 1대의 요구사항 · 원본 실측 환경(WSL2 · 20스레드 · 가용 RAM) · WSL2 메모리 조정 · **컨테이너 메모리 상한(정본)** · 메모리 프로파일 2 + 조건부 중간 · 대조 실험 메모리 조건 · networkingMode=mirrored · **환경변수 목록(정본)** · 기동 · 정지 · 스냅샷 명령 · 아카이브 위치 · 착수 전 조정
 > **작성일**: 2026-09-24
+> **개정일**: 2026-09-24 — W7 보안 판정 반영 — 비밀 환경변수 **9** 등재(비밀 하나 = 변수 하나) · 환경변수 25 → **34** · 접속 문자열 비밀번호 자리는 변수 치환 · 웹 개발 서버 호스트 이름 **127.0.0.1** 명시(정본 12_security/02 · 05)
 > **원천**: 원본 tech_stack.md §10.1 · §10.2 · §10.3 · §10.5(커밋 ff66a37) · 원본 implementation_plan.md §2 · §2.1~§2.5 · §9(커밋 ff66a37) · 원본 architecture.md §3 · §13(커밋 ff66a37) · D-02 · D-10 · ADR-08 · ADR-18 · ADR-22 · REQ-TEC-01 · 04 · 07 · 08 · 13 · 14 · 웨이브 인계 W6 09_tech_stack 행(DATAGEN_BULK_ENABLED 등재 · health run 환경변수 이름 · 컨테이너 메모리 상한) · [../04_architecture/03_execution_topology.md](../04_architecture/03_execution_topology.md) · [../07_api/10_metrics.md](../07_api/10_metrics.md) run 필드 · [../07_api/09_datagen.md](../07_api/09_datagen.md) 게이트 · [../02_features/13_switch_matrix.md](../02_features/13_switch_matrix.md)
 
 실행 단위의 모양(컨테이너 4 · 기동 순서 · 볼륨 4 · CPU 가중 · cpuset)은 [../04_architecture/03_execution_topology.md](../04_architecture/03_execution_topology.md)가 갖는다. 이 문서는 그 구성이 올라가는 **머신과 그 머신 위의 조정값** — 컨테이너 메모리 상한 · 프로파일 채택 조건 · 환경변수 이름 · 기동 명령 — 을 갖는다. **컨테이너 메모리 상한과 환경변수 목록은 이 문서가 정본이다**(REQ-TEC-07 · 07_api/10 · 07_api/09가 이 문서를 가리킨다).
@@ -141,11 +142,13 @@ swap=8GB
 | Node 런타임 | UV_THREADPOOL_SIZE | 정수 | 프로파일 파일이 준다 | 프로세스 시작 | libuv 스레드 풀 | 해당 없음 — 현행 참고 값의 소유는 04_architecture/03 |
 | 워커 풀 | **WORKER_POOL_SIZE** | 정수 1 이상 | 프로파일 파일이 준다 | 기동 시 1회 | piscina 풀 크기(ADR-25) | 워커 수가 기록에 없으면 S1 워커 1 · 2 · 4 비교가 섞인다 |
 | SIM 주입 계획 | **SIM_FAULT_PLAN** | 주입 계획 파일 경로 | 없음 — 주입 없음 | 기동 시 1회 | SIM 지연 · 오류 주입(06_pipeline/10) · 형식 [05_tooling_devops.md](./05_tooling_devops.md) | 파일이 형식 검증에 실패하면 기동 거부 — 일부만 적용되면 계획과 실제 주입이 어긋난다 |
-| 저장소 접속 | **POSTGRES_URL · CLICKHOUSE_URL · REDIS_URL** | 서비스명 DNS 기반 접속 문자열 | .env.example의 로컬 값 | 기동 시 1회 | 각 클라이언트 | 자격 증명이 들어 있어 .env를 커밋하지 않는다(REQ-TEC-14) |
+| 저장소 접속 | **POSTGRES_URL · CLICKHOUSE_URL · REDIS_URL** | 서비스명 DNS 기반 접속 문자열 — **비밀번호 자리는 아래 비밀 변수를 Compose 변수 치환으로 참조한다** | .env.example의 로컬 값(호스트 · 포트 · DB 이름 · 계정 이름) · 비밀번호 자리는 치환식 | 기동 시 1회 | 각 클라이언트 | 자격 증명이 들어 있어 .env를 커밋하지 않는다(REQ-TEC-14) · 비밀번호를 문자열에 직접 적으면 같은 비밀이 두 변수에 나뉘어 바꿀 때 한쪽이 남는다 |
+| 비밀 | **JWT_SIGNING_KEY · POSTGRES_ADMIN_PASSWORD · APP_OWNER_PASSWORD · APP_RW_PASSWORD · CH_READER_PASSWORD · CLICKHOUSE_PASSWORD · REDIS_PASSWORD · SEED_USER_PASSWORD · GRAFANA_ADMIN_PASSWORD** | 비밀 값 — 비밀 목록 정본 [../12_security/02_secrets_config.md](../12_security/02_secrets_config.md)의 9종과 1:1 | 없음 — .env.example에는 자리표시만 | 기동 시 1회(migrate · seed는 실행 시 1회) | 서명 키 api · 관리자 비밀번호 postgres 이미지 초기화 · app_owner migrate · app_rw 접속 문자열 치환과 migrate 역할 생성 · ch_reader ClickHouse 설정 파일과 migrate · ClickHouse · Redis 비밀번호 이미지 초기화와 접속 문자열 치환 · 학습자 seed · Grafana 이미지 | 비었거나 자리표시와 같으면 **기동 거부** — 허용하면 모든 환경이 같은 서명 키 · 같은 저장소 비밀번호로 돈다 · 서명 키는 256비트 무작위 미만이면 거부 · 공개 접두(NEXT_PUBLIC_) 이름을 쓰지 않는다 |
 | 웹 | **API_BASE_URL · NEXT_PUBLIC_API_BASE_URL** | BFF 서버 측 · 브라우저 직결 api 주소 | http://127.0.0.1:3000 · http://localhost:3000 | 웹 기동 시 | BFF fetch · 브라우저 직결(ADR-02) | 브라우저 쪽을 BFF 주소로 두면 고빈도 요청이 1홉 늘어난다 |
 
-- 검산: 표 행 = **12** · 이름 수 = 1 + 11 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 3 + 2 = **25** — 스위치 11 + 스위치 밖 14(APP_ROLE · DATAGEN_BULK_ENABLED · MEMORY_PROFILE · CAPACITY_TIER · COMMIT_HASH · NODE_OPTIONS · UV_THREADPOOL_SIZE · WORKER_POOL_SIZE · SIM_FAULT_PLAN · POSTGRES_URL · CLICKHOUSE_URL · REDIS_URL · API_BASE_URL · NEXT_PUBLIC_API_BASE_URL) = **25**
-- **이 표에서 이름을 새로 정한 것은 이 문서의 판정이다** — MEMORY_PROFILE · CAPACITY_TIER · COMMIT_HASH(health run 주입 · 인계 W5 07_api 행) · WORKER_POOL_SIZE · SIM_FAULT_PLAN · 접속 3 · 웹 2. 원본 이름은 APP_ROLE · NODE_OPTIONS · UV_THREADPOOL_SIZE이고, DATAGEN_BULK_ENABLED는 07_api/09가 판정했다.
+- 검산: 표 행 = **13** · 이름 수 = 1 + 11 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 3 + 9 + 2 = **34** — 스위치 11 + 스위치 밖 23(APP_ROLE · DATAGEN_BULK_ENABLED · MEMORY_PROFILE · CAPACITY_TIER · COMMIT_HASH · NODE_OPTIONS · UV_THREADPOOL_SIZE · WORKER_POOL_SIZE · SIM_FAULT_PLAN · POSTGRES_URL · CLICKHOUSE_URL · REDIS_URL · 비밀 9 · API_BASE_URL · NEXT_PUBLIC_API_BASE_URL) = **34**
+- **이 표에서 이름을 새로 정한 것은 이 문서의 판정이다** — MEMORY_PROFILE · CAPACITY_TIER · COMMIT_HASH(health run 주입 · 인계 W5 07_api 행) · WORKER_POOL_SIZE · SIM_FAULT_PLAN · 접속 3 · 웹 2. 원본 이름은 APP_ROLE · NODE_OPTIONS · UV_THREADPOOL_SIZE이고, DATAGEN_BULK_ENABLED는 07_api/09가, 비밀 9는 W7 보안 리뷰([../12_security/02_secrets_config.md](../12_security/02_secrets_config.md))가 판정했다.
+- **비밀 하나 = 변수 하나다.** migrate는 app_owner 비밀번호를 치환한 접속으로 돌고(api는 이 값을 읽지 않는다 — 런타임이 DDL 권한을 갖지 않게), 역할을 만들 때 APP_RW_PASSWORD · CH_READER_PASSWORD를 읽는다. 저장소 이미지의 초기화 변수 이름은 이미지가 정하므로 Compose 파일이 이 이름을 이미지 변수로 옮긴다.
 - **환경변수는 전부 기동 시 1회만 읽는다.** 전환은 환경변수 변경과 재기동뿐이다(D-06 · ADR-08). 실행 중에 다시 읽는 변수를 하나라도 두면 "재기동 없이 바뀌는 조건"이 생겨 기록의 조건 칸이 실제 실행과 어긋난다.
 - **MEMORY_PROFILE의 값은 프로파일 Compose 파일이 함께 준다.** 사람이 따로 적지 않는다 — 상한과 이름이 한 파일에서 나와야 둘이 어긋나지 않는다(§기동 · 정지 명령).
 - **memoryLimitMb는 환경변수가 아니다.** cgroup의 실제 상한을 읽는다(07_api/10) — 환경변수로 받으면 프로파일 이름과 같은 출처가 되어 대조가 무의미하다.
@@ -159,7 +162,7 @@ swap=8GB
 ① 프로파일 기동     docker compose -f compose.yml -f compose.load.yml up -d      ← 개발은 compose.dev.yml · 중간은 compose.mid.yml
 ② 상태 확인         docker compose ps                                              ← 4개 모두 healthy
 ③ 스키마 · 시드     task migrate → task seed                                        ← 빈 볼륨일 때만
-④ 웹               pnpm dev(웹 패키지 · 3001)
+④ 웹               pnpm dev(웹 패키지 · 호스트 이름 127.0.0.1 · 3001)                 ← 호스트 이름 인자 필수
 ⑤ 확인             curl 127.0.0.1:3000/api/v1/health                               ← run 4필드 · switches 11 확인
 ⑥ 관측(선택)        docker compose --profile observability up -d
 ⑦ 스위치 전환       .env 수정 → docker compose up -d api                           ← api만 재생성 · 저장소 유지
@@ -167,6 +170,7 @@ swap=8GB
 ```
 
 - **프로파일은 Compose 덮어쓰기 파일 하나로 고른다.** 파일 하나가 컨테이너 상한 · 컨테이너 안 설정 포함 파일 · MEMORY_PROFILE · WORKER_POOL_SIZE · NODE_OPTIONS를 함께 준다 — 값이 파일 셋에 흩어지면 프로파일 전환이 한 값을 빠뜨린다.
+- **④의 호스트 이름 인자가 웹 3001의 127.0.0.1 바인드를 강제하는 유일한 자리다.** 웹은 Compose 밖의 호스트 프로세스라 ports 규칙이 닿지 않는다 — 인자 없이 띄우면 개발 서버가 모든 인터페이스에 뜰 수 있고, LAN 기기가 BFF를 거쳐 127.0.0.1:3000의 api에 닿는다([../12_security/05_local_exposure.md](../12_security/05_local_exposure.md) §웹 개발 서버의 바인드). 인자는 웹 패키지의 개발 스크립트에 박아 사람이 매번 치지 않게 한다.
 - **⑦은 api만 재생성한다.** 저장소까지 재시작하면 Redis AOF 재생 · ClickHouse 파트 적재가 스위치 전환 측정에 섞인다. 전환 절차의 화면 쪽 안내는 [../08_screen/07_experiment_console.md](../08_screen/07_experiment_console.md)다.
 - **볼륨을 지우는 정지 명령(down -v)은 task snapshot 뒤에만 쓴다**(REQ-TEC-08). 데이터를 전부 지우므로 실험 편의로 쓰면 기준 데이터셋이 사라진다.
 - 덮어쓰기 파일 이름은 설계 계약이며 파일 이름 형식은 구현이 정한다.
@@ -206,7 +210,7 @@ swap=8GB
 | 대조 조건 메모리 3.5 GB · 3.5 GB | W6 초기 판정 — 대조 정본과 정합 필요 | [../05_data_stores/10_olap_vs_rdb_control.md](../05_data_stores/10_olap_vs_rdb_control.md) |
 | 역할 분리 시 컨테이너별 상한 | 미설계 — 원본은 all 기준으로만 산정 | [../04_architecture/08_scaling_roadmap.md](../04_architecture/08_scaling_roadmap.md) 1단계 진입 시 |
 | WSL 설정 지시자 · Compose 리소스 제한 문법 | 공식 참조 재확인 대기 | [../03_requirements/16_official_references.md](../03_requirements/16_official_references.md)(W7) |
-| 비밀 환경변수(토큰 서명 키 등)의 이름 | 미설계 — 비밀 취급은 보안 리뷰 | [../12_security/02_secrets_config.md](../12_security/02_secrets_config.md)(W7) |
+| 비밀 환경변수(토큰 서명 키 등)의 이름 | **W7 닫힘** — 비밀 9 등재 · 이 문서 §환경변수 | [../12_security/02_secrets_config.md](../12_security/02_secrets_config.md) |
 
 ## 관련 문서
 

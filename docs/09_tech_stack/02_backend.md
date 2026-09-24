@@ -2,6 +2,7 @@
 
 > **대상**: api 컨테이너의 런타임 구성 — NestJS + Fastify 어댑터 · 단일 런타임(ADR-01) · 모듈 11과 라이브러리 배정 · 데이터 평면 라이브러리(@clickhouse/client · ioredis · pg · modbus-serial · jsmodbus · msgpackr · piscina · prom-client)의 역할과 사용 제약 · piscina 워커 풀(ADR-25) · 스위치 11종의 환경변수와 DI 주입(ADR-08) · 스위치 밖 환경변수의 백엔드 쪽 읽기 규칙 · 요청 압축 · 보안 헤더
 > **작성일**: 2026-09-24
+> **개정일**: 2026-09-24 — W7 보안 판정 반영 — 비밀 환경변수 이름 · 해시 알고리즘 · 레이트 리밋 등급 미설계 3항목 닫힘(정본 12_security/01 · 02 · 03)
 > **개정일**: 2026-09-24 — W6 실험 채번 반영 — 실험 자리 반영(정본 10_observability/01 · 06)
 > **원천**: 원본 tech_stack.md §2 · §3 · §3.1 · §3.3 · §5.2 · §5.3 · §6 · §9 · §10.4 · §12(커밋 ff66a37) · 원본 implementation_plan.md §4.1 · §4.3(커밋 ff66a37) · ADR-01 · ADR-04 · ADR-08 · ADR-13 · ADR-19 · ADR-22 · ADR-25 · [../02_features/13_switch_matrix.md](../02_features/13_switch_matrix.md)(스위치 이름 정본) · [../04_architecture/02_module_boundaries.md](../04_architecture/02_module_boundaries.md)(포트 · 구현 이름 정본) · [04_local_environment.md](./04_local_environment.md)(환경변수 정본)
 
@@ -150,8 +151,8 @@ ADR-25의 결정 아래 piscina 풀의 운용 규칙이다. **워커 수의 값�
 | @clickhouse/client의 zstd 요청 압축 지원 | 신규 미확인 — 원본은 "zstd 또는 gzip"(런타임 하한은 버전 고정표) | 착수 시 공식 참조 · [03_data_infra.md](./03_data_infra.md) |
 | HTTP 처리량 비교(Fastify 대 대안) | 원본 예상치만 — 미확인 · 확정 전 임의 값 고정 금지 | [06_decisions_rationale.md](./06_decisions_rationale.md) · **W6 미채번** — 프레임워크 교체 비교는 실험 카탈로그 밖 · 이 스택의 HTTP 상한은 EXP-22 · EXP-37 |
 | 워커 수별 생성기 처리량 | 3계층 미확인 — 확정 전 임의 값 고정 금지 | S1 · [../10_observability/06_experiment_catalog.md](../10_observability/06_experiment_catalog.md) |
-| 비밀 환경변수 이름 · 비밀번호 해시 알고리즘 | 미설계 | [../12_security/02_secrets_config.md](../12_security/02_secrets_config.md) · [../12_security/01_authn_authz.md](../12_security/01_authn_authz.md)(W7) |
-| 레이트 리밋 등급 이름 · 한도 | 미설계 | [../12_security/03_api_surface_defense.md](../12_security/03_api_surface_defense.md)(W7) |
+| 비밀 환경변수 이름 · 비밀번호 해시 알고리즘 | **W7 닫힘** — 비밀 9 이름은 [04_local_environment.md](./04_local_environment.md) §환경변수 · 알고리즘 Argon2id(라이브러리 행은 [03_data_infra.md](./03_data_infra.md) 버전 고정표) | [../12_security/02_secrets_config.md](../12_security/02_secrets_config.md) · [../12_security/01_authn_authz.md](../12_security/01_authn_authz.md) |
+| 레이트 리밋 등급 이름 · 한도 | **W7 닫힘** — class general · bulk_read · export · bulk_ingest · 한도는 관계식 고정 · 값 2계층 미정 | [../12_security/03_api_surface_defense.md](../12_security/03_api_surface_defense.md) |
 
 ## 관련 문서
 

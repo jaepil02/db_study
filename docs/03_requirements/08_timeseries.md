@@ -2,6 +2,7 @@
 
 > **대상**: 시계열 조회(TSQ)의 동작 계약 — 요청 검증 · 해상도 자동 선택과 보정 · 응답 형태 · 롤업 읽기 · 태그 메타 부착 · 캐시 키 정규화 · 캐시 적재와 degrade · 스탬피드 방지 · 진행 구간 분할 · 원시 내보내기 · ClickHouse 불가 시 응답 · 인가와 레이트 리밋 — REQ-TSQ-NN 채번 정본
 > **작성일**: 2026-09-24
+> **개정일**: 2026-09-24 — W7 보안 판정 반영 — 내보내기 범위 상한 현행 참고 **1일** · class export 반영 — REQ 수 불변(정본 12_security/03)
 > **개정일**: 2026-09-24 — W6 실험 채번 반영 — 이벤트 루프 p95 메트릭 이름 통일(정본 10_observability/01 · 06)
 > **원천**: 원본 architecture.md §10 · §10.1 · §10.2 · §10.3 · §11 · §11.1 · §12 · §17 · §18(커밋 ff66a37) · 원본 data_flow.md §6 · §6.1 · §6.2 · §6.3 · §12.2 · §16(커밋 ff66a37) · 원본 implementation_plan.md §4.3 · §5 S4 · §7.5(커밋 ff66a37) · D-06 · D-10 · [../02_features/07_timeseries.md](../02_features/07_timeseries.md) TSQ-01~09 · [../02_features/13_switch_matrix.md](../02_features/13_switch_matrix.md) SW-03 · SW-04 · SW-05 · [../11_glossary/02_error_codes.md](../11_glossary/02_error_codes.md) · [../11_glossary/05_units_and_time.md](../11_glossary/05_units_and_time.md)
 
@@ -64,7 +65,7 @@
 | TTL 지터 | 캐시 계열 래퍼가 가산 | 쓰기 시 | 호출자별 지터 계산 | 래퍼 기본 동작 | ±20% · [../05_data_stores/05_redis_keyspace.md](../05_data_stores/05_redis_keyspace.md) |
 | 캐시 호출 타임아웃 | 캐시 계열 래퍼 | 호출마다 | 무기한 대기 · 예외 전파 | 래퍼 기본 동작 | 50 ms · 상동 |
 | 재구성 락 만료 · 대기 간격 · 재시도 횟수 | lock:rebuild:{hash} | 미스 시 | 만료 없는 락 · 무한 대기 | 기동 거부 | 5000 ms · 50 ms × 3회 · [../06_pipeline/06_timeseries_read.md](../06_pipeline/06_timeseries_read.md) |
-| 내보내기 한도 · 범위 상한 | 레이트 리밋 키 | 분 창 | 조회 표면 한도 공유 | 기동 거부 | 미정 · [../12_security/03_api_surface_defense.md](../12_security/03_api_surface_defense.md) |
+| 내보내기 한도 · 범위 상한 | 레이트 리밋 키 rl:export:{user_id}:{unix_minute} · 범위는 요청 to − from | 분 창 · 요청 수신 시 | 조회 표면 한도 공유 · 범위를 잘라 내보내기 | 기동 거부 | 범위 1일 · 한도 미정(관계식 R1) · [../12_security/03_api_surface_defense.md](../12_security/03_api_surface_defense.md) |
 
 - 검산: 조정값 = 태그 상한 · 최대 포인트 · TTL 구간 · 지터 · 타임아웃 · 락 · 내보내기 = **7**
 - **해상도 경계(1시간 · 7일 · 90일)는 이 표에 없다.** 1계층 구조값이라 REQ-TSQ-03이 평문으로 고정하고, 바뀌면 캐시 키 정규화와 롤업 보존 기간이 함께 움직인다.

@@ -2,6 +2,7 @@
 
 > **대상**: db_study의 기술 결정 — ADR-01~25 · 결정 색인 · 분류 검산 · 상태 · 원본 보정 5건 대응 · D-NN과의 경계 — ADR-NN 채번 정본
 > **작성일**: 2026-09-24
+> **개정일**: 2026-09-24 — W7 보안 판정 반영 — ADR-18 버린 대안 ② 문구 정정 — "인증 없는 DB 포트" → **비밀번호 한 겹만 남은 DB 포트**(세 저장소 모두 비밀번호 필수) — ADR 수 · 상태 불변(정본 12_security/02 · 05)
 > **개정일**: 2026-09-24 — W6 실험 채번 반영 — 후속 판정 등재 W6 결과 반영(정본 10_observability/01 · 06)
 > **개정일**: 2026-09-24 — W4 판정 반영 — ADR-09 파급 산술 보정 — M · M+ 모두 초당 1회 → **M 초당 1회 · M+ 초당 2회 · L 초당 10회**(현행 R 50,000) · M+ 배치 100,000행 → **50,000행** — ADR 수 · 상태 불변
 > **원천**: 원본 tech_stack.md §1 · §2 · §3 · §4.1 · §5 · §10 · §13(커밋 ff66a37) · 원본 architecture.md §1 · §3 · §4 · §6 · §7.1 · §7.4 · §8 · §9 · §12 · §14 · §17 · §19(커밋 ff66a37) · 원본 data_flow.md §4 · §7 · §8 · §9 · §12.1(커밋 ff66a37) · 원본 implementation_plan.md §2.3 · §4.3 · §7(커밋 ff66a37) · D-01~D-12([../01_overview/06_design_decisions.md](../01_overview/06_design_decisions.md)) · [README.md](./README.md) ADR 선점표 · docs_plan 학습 목표 1 · 웨이브 인계 W3 행
@@ -203,7 +204,7 @@
 
 - **맥락**: 로컬에서 psql · clickhouse-client · redis-cli로 저장소를 직접 만지는 것이 학습에 필요하고, Docker Desktop의 호스트 디렉터리 마운트는 파일 공유 계층을 거친다(원본 architecture.md §3 · 원본 tech_stack.md §10.3 · §10.4).
 - **결정**: 볼륨은 **named volume 4개**(pgdata · chdata · redisdata · spooldata)이고 호스트 디렉터리를 마운트하지 않는다. 호스트 publish는 **전부 127.0.0.1에 바인드**하고 PlcSim 포트는 publish하지 않는다.
-- **버린 대안**: ① **bind mount** — DB 랜덤 I/O가 파일 공유 계층을 지나 느려져 디스크 계층 수치가 측정 대상이 아닌 계층을 잰다. ② **0.0.0.0 바인드** — 같은 네트워크의 기기에 인증 없는 DB 포트가 그대로 열린다. ③ **저장소 포트 비공개(컨테이너 안 CLI만)** — 학습 도구(DBeaver 등)를 붙일 수 없고, 매 확인이 컨테이너 진입이 되어 관찰 비용이 커진다.
+- **버린 대안**: ① **bind mount** — DB 랜덤 I/O가 파일 공유 계층을 지나 느려져 디스크 계층 수치가 측정 대상이 아닌 계층을 잰다. ② **0.0.0.0 바인드** — 같은 네트워크의 기기에 DB 포트가 그대로 열린다. 세 저장소 모두 비밀번호를 요구하지만([../12_security/02_secrets_config.md](../12_security/02_secrets_config.md)) 방어가 비밀번호 한 겹만 남아 LAN의 어느 기기든 대입 · 인증 우회 결함의 표적이 된다. ③ **저장소 포트 비공개(컨테이너 안 CLI만)** — 학습 도구(DBeaver 등)를 붙일 수 없고, 매 확인이 컨테이너 진입이 되어 관찰 비용이 커진다.
 - **파급**: 호스트에서 스풀 파일을 직접 볼 수 없어 컨테이너 안에서 확인한다. 127.0.0.1 바인드는 LAN 노출만 막고 같은 머신의 다른 프로세스는 막지 않는다 — 잔여 [../12_security/05_local_exposure.md](../12_security/05_local_exposure.md). 정본 [03_execution_topology.md](./03_execution_topology.md).
 
 ## ADR-19 — PostgreSQL 커넥션은 api in-process 풀

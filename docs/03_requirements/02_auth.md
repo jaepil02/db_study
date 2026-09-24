@@ -2,13 +2,14 @@
 
 > **대상**: 인증·인가(AUT · NestJS auth 모듈)의 동작 계약 — 로그인 · 토큰 수명과 보관 · 갱신 · 폐기 · 신원 확인 · 역할 인가 · 레이트 리밋 · 요청 출처 방어 · 저장소 장애 시 거동 — REQ-AUT-NN 채번 정본
 > **작성일**: 2026-09-24
+> **개정일**: 2026-09-24 — W7 보안 판정 반영 — REQ-AUT-13에 WebSocket Origin 검증 S7 → **S2** · **BFF 인증 경로 Origin 대조** · **Host 헤더 허용 목록** 추가 · 레이트 리밋 class 값 집합 · 토큰 수명 미정 행 닫힘 — REQ 수 불변(정본 12_security/01 · 03)
 > **개정일**: 2026-09-24 — W6 실험 채번 반영 — 메트릭 이름 반영(정본 10_observability/01 · 06)
 > **개정일**: 2026-09-24 — W3 판정 반영 — 레이트 리밋 키 rl:{user_id}:{unix_minute} → **rl:{class}:{user_id}:{unix_minute}**(엔드포인트 차원 = 한도 등급) · 권한 캐시 키 미정 → **cache:perm:{user_id}** · sess:{session_id} → **패턴 폐지 · sess 접두 예약**(정본 05_data_stores/05)
 > **원천**: 원본 architecture.md §2 · §6 · §8 · §8.2 · §10.1 · §11 · §11.2 · §17 · §18(커밋 ff66a37) · 원본 tech_stack.md §10.4(커밋 ff66a37) · 원본 implementation_plan.md §5 S7 · §7.5(커밋 ff66a37) · D-02 · D-07 · [../02_features/01_auth.md](../02_features/01_auth.md) AUT-01~07 · [../02_features/12_permission_matrix.md](../02_features/12_permission_matrix.md) · [../11_glossary/02_error_codes.md](../11_glossary/02_error_codes.md) auth · common 네임스페이스 · [01_global_rules.md](./01_global_rules.md) REQ-GLB-08 · 09 · 19
 
 이 문서는 AUT 기능 7개가 **어떻게 동작하고 어떻게 실패하는가**를 고정한다. 기능의 존재와 경계는 [../02_features/01_auth.md](../02_features/01_auth.md), 역할 값과 역할 × 기능 대응은 [../02_features/12_permission_matrix.md](../02_features/12_permission_matrix.md), 토큰 수명 · 한도 값의 정본은 [../12_security/01_authn_authz.md](../12_security/01_authn_authz.md) · [../12_security/03_api_surface_defense.md](../12_security/03_api_surface_defense.md)가 갖는다. 여기서는 수명과 한도를 **값이 아니라 조회 계약**으로만 쓴다.
 
-**인증은 S7에 온다**(D-07). S2~S6의 표면은 무인증이며 127.0.0.1 바인드 안에 있다. 이 문서의 요구 중 REQ-AUT-12(CORS)만 S2부터 적용되고 나머지는 S7에 적용된다 — 적용 시점이 다른 두 수치를 같은 조건으로 비교하지 않는 계약은 REQ-AUT-16이 갖는다.
+**인증은 S7에 온다**(D-07). S2~S6의 표면은 무인증이며 127.0.0.1 바인드 안에 있다. 이 문서의 요구 중 REQ-AUT-12(CORS)와 REQ-AUT-13의 출처 검사(WebSocket Origin · Host 헤더)는 S2부터 적용되고 나머지는 S7에 적용된다 — 적용 시점이 다른 두 수치를 같은 조건으로 비교하지 않는 계약은 REQ-AUT-16이 갖는다.
 
 **AUT의 상태 셋 중 둘이 Redis 캐시 계열에 있다**(auth:refresh · rl). 캐시 계열의 실패 전략은 degrade(REQ-GLB-09)지만 **auth:refresh에는 우회할 원천 DB가 없다.** 이 비대칭이 웨이브 인계 "Redis 중단 시 로그인 · 갱신 · 레이트 리밋"을 판정하는 축이며 §Redis 장애 시 거동 판정이 닫는다.
 
@@ -40,7 +41,7 @@
 |------|------|------|------|------|------|------|------|
 | **REQ-AUT-11** | 레이트 리밋은 사용자 · 토큰 기준 분당 요청 수를 rl:{class}:{user_id}:{unix_minute} INCR로 세고 키에 TTL을 단다 — class는 한도 등급(엔드포인트 묶음)이다. **IP 기준으로 세지 않는다.** 한도 초과는 common.rate_limited/429다. 한도 값은 2계층 조정값이며 소유 [../12_security/03_api_surface_defense.md](../12_security/03_api_surface_defense.md). timeseries/query · export에 더 엄격한 한도는 class 자리로 표현한다 — class 값 집합과 등급별 한도는 같은 소유처가 정한다 | 원본 architecture.md §8.2 · §11.2 · §18 | IP 기준이면 모든 요청이 127.0.0.1에서 오므로 **전원을 한 사용자로 세어** 한 사용자의 폭주가 모두를 막는다. TTL 없는 rl 키는 분마다 쌓여 캐시 예산을 잠식한다 | 두 계정으로 동시에 한도 직전까지 요청해 서로 영향이 없는지 · rl 키 TTL 양수 조회 · 한도 초과 요청 → 429 | AUT-06 | F-03 · F-04 · F-05 | common.rate_limited/429 |
 | **REQ-AUT-12** | CORS 허용 오리진은 http://localhost:3001 **하나**이며 와일드카드를 금지한다. S2부터 적용한다 — 웹(3001)이 api(3000)를 직결하는 순간 오리진이 다르다 | 원본 architecture.md §11.2 · §18 · 원본 tech_stack.md §10.4 | 와일드카드를 쓰면 같은 머신 브라우저의 임의 페이지가 로그인된 사용자 권한으로 api를 부른다. S7까지 미루면 S2 수직 슬라이스의 웹 1페이지가 직결 호출에서 막힌다 | 다른 Origin 헤더로 사전 요청 → 허용 헤더 없음 확인 · S2 웹 화면의 직결 호출 성공 | AUT-07 | F-03 · F-04 · F-07 | 해당 없음 — 브라우저 차단 |
-| **REQ-AUT-13** | WebSocket 핸드셰이크의 Origin을 CORS 허용 목록과 같은 목록으로 검증한다. 보안 헤더(X-Content-Type-Options · Referrer-Policy 등)를 부여하되 HSTS는 끈다. 앞단 프록시가 없으므로 이 방어는 전부 api가 수행한다 | 원본 architecture.md §11.2 · §18 · 원본 tech_stack.md §10.4 | Origin을 검증하지 않으면 CORS가 막는 오리진이 WebSocket으로는 실시간 데이터를 받는다. 로컬 http에서 HSTS를 켜면 브라우저가 localhost를 https로 고정해 웹 접속이 끊긴다 | 허용 밖 Origin으로 WebSocket 연결 → 종료 · 응답 헤더 조회(HSTS 없음 · 나머지 있음) | AUT-07 | F-07 | 해당 없음 — 연결 종료 |
+| **REQ-AUT-13** | 요청 출처를 세 자리에서 검증한다 — ① WebSocket 핸드셰이크의 Origin을 CORS 허용 목록과 같은 목록으로 검증한다(**S2부터** — 토큰이 필요 없는 검사다) ② BFF의 인증 Route Handler(로그인 · 갱신 · 로그아웃 대행)는 Origin 헤더가 http://localhost:3001이 아니면 거절한다(S7) ③ api는 Host 헤더를 허용 목록(localhost · 127.0.0.1 — 포트 포함 · 컨테이너 사이 호출의 서비스명 api)과 대조하고 밖이면 거절한다(**S2부터**). 보안 헤더(X-Content-Type-Options · Referrer-Policy 등)를 부여하되 HSTS는 끈다(S7). 앞단 프록시가 없으므로 이 방어는 전부 api · BFF가 수행한다 | 원본 architecture.md §11.2 · §18 · 원본 tech_stack.md §10.4 · [../12_security/03_api_surface_defense.md](../12_security/03_api_surface_defense.md) §WebSocket · §BFF 인증 경로의 출처 검사 · [../12_security/04_threat_model.md](../12_security/04_threat_model.md) §통제가 생긴 위협 | Origin을 검증하지 않으면 CORS가 막는 오리진이 WebSocket으로는 실시간 데이터를 받는다 — S7까지 미루면 S2~S6 내내 같은 머신 브라우저의 아무 페이지나 실시간 프레임을 받는다. BFF가 Origin을 보지 않으면 SameSite가 포트를 보지 않아 localhost의 다른 웹 앱 요청에 리프레시 쿠키가 실려 학습자가 임의로 로그아웃된다. Host를 보지 않으면 DNS 재바인딩 페이지가 브라우저에게 같은 오리진으로 보여 무인증 기간의 응답을 읽는다. 로컬 http에서 HSTS를 켜면 브라우저가 localhost를 https로 고정해 웹 접속이 끊긴다 | 허용 밖 Origin으로 WebSocket 연결 → 4403(S2 커밋에서도) · 다른 Origin으로 BFF 로그아웃 경로 호출 → 거절 · 쿠키 유지 · Host를 임의 도메인으로 바꾼 api 요청 → 거절 · 응답 헤더 조회(HSTS 없음 · 나머지 있음) | AUT-07 | F-05 · F-07 | 해당 없음 — 연결 종료 · 요청 거절 |
 
 ## 요구사항 — 저장소 장애 · 적용 범위
 
@@ -112,12 +113,12 @@ Redis 접속 불가
 
 | 항목 | 상태 | 확정 자리 |
 |------|------|------|
-| 레이트 리밋의 엔드포인트 차원 | **W3 판정** — 키 rl:{class}:{user_id}:{unix_minute}로 한도 등급 자리를 둔다. class 값 집합 · 등급별 한도는 미정 | [../12_security/03_api_surface_defense.md](../12_security/03_api_surface_defense.md)(W7) |
+| 레이트 리밋의 엔드포인트 차원 | **닫힘(W7)** — 키 rl:{class}:{user_id}:{unix_minute} · class 값 general · bulk_read · export · bulk_ingest · 한도는 관계식 R1~R4 고정 · 값 2계층 미정 | [../12_security/03_api_surface_defense.md](../12_security/03_api_surface_defense.md) |
 | 권한 캐시 키 모양 | **W3 확정** — cache:perm:{user_id} | [../05_data_stores/05_redis_keyspace.md](../05_data_stores/05_redis_keyspace.md) |
 | sess:{session_id} 소비 기능 | **W3 판정** — 키 패턴 폐지 · sess 접두는 캐시 계열 예약으로 유지(세션 키가 다시 생길 때 정책이 이미 정해져 있게) | [../05_data_stores/05_redis_keyspace.md](../05_data_stores/05_redis_keyspace.md) |
 | WebSocket 인증 실패 · Origin 불일치 종료 코드 | 미정 | [../07_api/11_websocket.md](../07_api/11_websocket.md)(W5) |
 | Redis 불가 중 레이트 리밋 통과 계수의 메트릭 이름 | **W6 판정** — aut_ratelimit_bypassed_total | [../10_observability/01_metrics_catalog.md](../10_observability/01_metrics_catalog.md) |
-| 토큰 수명 · 한도 값 | 2계층 조정값 — 현행 액세스 15분 · 리프레시 14일(원본 architecture.md §11.2) | [../12_security/01_authn_authz.md](../12_security/01_authn_authz.md) · [../12_security/03_api_surface_defense.md](../12_security/03_api_surface_defense.md) |
+| 토큰 수명 · 한도 값 | **닫힘(W7)** — 수명 정본 12_security/01(현행 참고 액세스 15분 · 리프레시 14일 · 리프레시는 발급 시점 기준 · 슬라이딩 금지) · 한도 정본 12_security/03 | [../12_security/01_authn_authz.md](../12_security/01_authn_authz.md) · [../12_security/03_api_surface_defense.md](../12_security/03_api_surface_defense.md) |
 
 ## 관련 문서
 

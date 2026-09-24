@@ -2,6 +2,7 @@
 
 > **대상**: 저장소 3종(PostgreSQL · ClickHouse · Redis)의 이미지 · 확장 · 설정 파일의 모양 · ClickHouse 서버 timezone 판정 · pg_partman 미리 만들기 · TTL 머지 주기 · Compose healthcheck와 health 타임아웃의 관계 · **observability 프로파일 구성원 판정(보정 #17)** · **버전 고정표(버전 문자열의 유일한 기재처)**
 > **작성일**: 2026-09-24
+> **개정일**: 2026-09-24 — W7 보안 판정 반영 — Redis 설정 바인드 · 보호 모드 행에 **requirepass 필수** 명시 · 버전 고정표에 Argon2id 해시 라이브러리 행 추가 35 → **36**(백엔드 12 → **13** · 미고정 10 → **11**)(정본 12_security/01 · 02)
 > **개정일**: 2026-09-24 — W6 실험 채번 반영 — EXP 번호 반영(정본 10_observability/01 · 06)
 > **원천**: 원본 tech_stack.md §2 · §5 · §9 · §10.1 · §10.4 · §12(커밋 ff66a37) · 원본 architecture.md §3 · §7.5 · §13 · §14(커밋 ff66a37) · 원본 implementation_plan.md §2.1 · §9(커밋 ff66a37) · ADR-03 · ADR-05 · ADR-18 · ADR-19 · ADR-20 · docs_plan 실행 계획 보정 #17 · 웨이브 인계 W6 09_tech_stack 행(ClickHouse 서버 timezone · pg_partman 미리 만들기 · TTL 머지 주기 · healthcheck timeout) · [../05_data_stores/01_postgresql_schema.md](../05_data_stores/01_postgresql_schema.md) · [../05_data_stores/03_clickhouse_schema.md](../05_data_stores/03_clickhouse_schema.md) · [../07_api/10_metrics.md](../07_api/10_metrics.md) §저장소 확인과 타임아웃 판정
 
@@ -120,7 +121,7 @@ infra/clickhouse/
 | maxmemory-policy | volatile-lru 고정 | ADR-05 | 기본 정책(noeviction)이면 캐시 팽창만으로 XADD가 실패해 백프레셔가 캐시 때문에 발동한다 |
 | appendonly · appendfsync | yes · everysec | ADR-05 · 05_data_stores/06 | 재기동 시 미소비 Stream 엔트리 · PEL이 사라진다 |
 | client-output-buffer-limit pubsub | 명시 값 필수 · 값 미정 | 이 문서(값) · [../03_requirements/09_realtime.md](../03_requirements/09_realtime.md)(계약) | 기본값을 쓰면 느린 구독 연결이 끊기는 기준이 설계 밖에서 정해진다 — **기본값 사용 금지** |
-| 바인드 · 보호 모드 | 컨테이너 네트워크 안 접속 · 호스트 publish는 127.0.0.1 | ADR-18 | 해당 없음 — publish 주소가 안전장치다(12_security/05) |
+| 바인드 · 보호 · 인증 | 컨테이너 네트워크 안 접속 · 호스트 publish는 127.0.0.1 · **requirepass 필수**(값 REDIS_PASSWORD — 설정 파일에 값을 쓰지 않고 기동 인자로 주입) | ADR-18 · [../12_security/02_secrets_config.md](../12_security/02_secrets_config.md) | 127.0.0.1 바인드는 LAN만 막는다 — 비밀번호가 없으면 같은 머신의 어느 프로세스든 6379에 붙어 봉인 계열을 FLUSH한다(12_security/05) |
 
 - 검산: 설정 = **5**
 - **Pub/Sub 출력 버퍼 한도는 값이 정해지지 않았다.** 계약은 "WebSocket 게이트웨이의 소켓 송신 대기량 한도보다 늦게 끊는다"다 — Redis가 먼저 끊으면 api 구독 연결 하나가 끊겨 모든 브라우저의 실시간 값이 한꺼번에 멈추고, 게이트웨이가 먼저 끊으면 느린 브라우저 하나만 끊긴다(07_api/11 소켓 단위 종료). 값은 S4에서 소켓 송신 대기량 한도와 같은 변경 단위로 정한다(§미확인 · 미설계 등재).
@@ -195,6 +196,7 @@ docs_plan 실행 계획 보정 #17을 닫는다. 원본 넷이 서로 다른 구
 | 백엔드 | piscina | 5.x | 부 버전까지 | worker_threads 풀(ADR-25) | 재확인 대기 |
 | 백엔드 | prom-client | 15.x | 부 버전까지 | /metrics | 재확인 대기 |
 | 백엔드 | 보안 헤더 플러그인(helmet 계열) | 원본 미기재 | 부 버전까지 | 보안 헤더 | 미고정 |
+| 백엔드 | 비밀번호 해시 라이브러리(Argon2id) | 원본 미기재 — 알고리즘은 12_security/01 판정 | 부 버전까지 | 로그인 · seed(REQ-AUT-01) | 미고정 |
 | 프론트엔드 | Next.js | 15.x | 부 버전까지 | 웹 · BFF | 재확인 대기 |
 | 프론트엔드 | uPlot | 1.6 | 부 버전까지 | 실시간 · 트렌드 차트 | 재확인 대기 |
 | 프론트엔드 | Apache ECharts | 5.5 | 부 버전까지 | 분석 · 비교 차트 | 재확인 대기 |
@@ -211,7 +213,7 @@ docs_plan 실행 계획 보정 #17을 닫는다. 원본 넷이 서로 다른 구
 | 관측 | Prometheus | 3.x | 부 버전 태그 | observability 프로파일 | 재확인 대기 |
 | 관측 | Grafana | 12.x | 부 버전 태그 | observability 프로파일 | 재확인 대기 |
 
-- 검산: 행 = 런타임 3 + 저장소 3 + 저장소 확장 2 + 백엔드 12 + 프론트엔드 6 + 공유 1 + 도구 5 + 부하 1 + 관측 2 = **35** · 상태 재확인 대기 24 + 미고정 10 + 해당 없음 1 = **35**
+- 검산: 행 = 런타임 3 + 저장소 3 + 저장소 확장 2 + 백엔드 13 + 프론트엔드 6 + 공유 1 + 도구 5 + 부하 1 + 관측 2 = **36** · 상태 재확인 대기 24 + 미고정 11 + 해당 없음 1 = **36**
 - **원본 고정표에서 뺀 행 1** — Prisma(원본 "pg + Prisma")는 마이그레이션 도구 판정에서 채택하지 않았다([05_tooling_devops.md](./05_tooling_devops.md) §마이그레이션 도구 판정 · [06_decisions_rationale.md](./06_decisions_rationale.md)). 원본의 pg 행은 남았다.
 - **원본에 없던 행 2** — pg-copy-streams(대조군 COPY가 스트림 복사를 요구) · 보안 헤더 플러그인(원본 tech_stack.md §10.4가 이름만 적음). 둘 다 미고정이다.
 - **고정 단위가 "부 버전까지"인 이유** — 메이저만 고정하면 부 버전 갱신이 설치 시점마다 달라 같은 커밋의 두 설치가 다른 코드를 받는다. 잠금 파일이 패치까지 고정하고, 이 표는 잠금 파일을 갱신할 때 넘지 않을 경계를 준다.

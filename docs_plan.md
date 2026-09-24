@@ -1,9 +1,9 @@
 # docs/ 설계 문서군 구축 계획
 
-> **상태**: W6 완료(2026-09-24) · W7 착수 대기
+> **상태**: W7 진행 중(2026-09-24) — 12_security 5본 · 15 추적성 · 16 공식 참조(68행) 완료 · 다음은 w7-review 전수 검수
 > **완료된 것**: 실행 계획 확정(아래 "실행 계획 보정" 절) · docs/ 12폴더 재생성 · W0 14본(docs/README.md · docs/CLAUDE.md · 폴더 README 12본 골격판) · 린트 .omc/docs_lint.py 오류 0건 · W1 11본(11_glossary 5 · 01_overview 6) — 에러 코드 14 · D-01~D-12 · W2a 13본(02_features) — 기능 91 · SW 10 · 역할 3 · W2b 14본(03_requirements 01~14) — REQ 228 · AC 45 · 에러 코드 19 · W3 20본(04_architecture 9 · 05_data_stores 11) — ADR 25 · SW 11(D-13) · 키 패턴 18 · 봉인 26 · W4 12본(06_pipeline) — F-01~F-10 · 분기 기전 19행 · 한계 등재 17 · W5 18본(07_api 11 · 08_screen 7) — API 표면 43 · 화면 10 · 에러 22 · 린트 표 열 수 검사 추가 · W6 13본(09_tech_stack 6 · 10_observability 7) — 관측 구성원 2 · 환경변수 25 · 버전 고정표 35행 · EXP 39
 > **다음 작업**: W6 커밋 → W7 — w7-security(12_security 01~05) → 리드 03_requirements/15 · 16 → w7-review 전수 검수 → 결함 수정 · 이관 누락 대조 · --final 린트 · 루트 4본 삭제 · 루트 README 교체 · 최종 커밋
-> **팀원 누적**: 12 / 15 — w1-glossary · w1-overview · w2-features · w2-req-a · w2-req-b · w3-arch · w3-stores · w4-pipeline · w5-api · w5-screen(종료) · w6-stack · w6-obs(종료). 남은 3 중 W7에 2(w7-security · w7-review)
+> **팀원 누적**: 13 / 15 — w1-glossary · w1-overview · w2-features · w2-req-a · w2-req-b · w3-arch · w3-stores · w4-pipeline · w5-api · w5-screen(종료) · w6-stack · w6-obs(종료) · w7-security(종료) = 13. 남은 2 중 w7-review 1
 > **참고**: 기존 루트 4본(architecture.md · data_flow.md · tech_stack.md · implementation_plan.md)은 **W7까지 삭제하지 않는다** — 이관 누락을 검증할 원본이 필요하다
 
 ## 실행 계획 보정 (2026-09-23 확정)
@@ -82,6 +82,8 @@ W1 w1-glossary 판정 · 미확인 — 행선지 웨이브가 확정한다.
 | W3 04_architecture/02 · 09 | SIM · OBS의 APP_ROLE 배정 · 보정 7.2 결정 시점(S3 전 잠정안 + 교체 가능한 포트 · S6 실측으로 최종) |
 | W3 05_data_stores | 롤업 테이블 · MV 도메인 귀속(잠정 ING) · audit_log 소유(WRK) vs MST 트랜잭션 쓰기 — 한계 등재(05/02) |
 | W4 06_pipeline/04 | ②계층 "생산 카운터"(스트림 유래)와 production_log(WRK CRUD)의 구분과 분기 기전 |
+
+W7 처리(12_security): 레이트 리밋 class 4(general · bulk_read · export · bulk_ingest) · 한도 관계식 R1~R4(1계층) · 로그인 시도 제한 없음(잔여) · 내보내기 범위 상한 현행 1일 · DATAGEN_BULK_ENABLED true 기동 경고 로그 · WS 종료 코드 8 유지 · sess 예약 유지(한계) · Argon2id · 리프레시 회전 없음 · 비밀 9 · 세 저장소 비밀번호 필수 · WS Origin S2부터 · Host 허용 목록 · 웹 3001 바인드는 기동 인자 · REQ-GLB-24 파라미터 바인딩 신설(REQ 228 → 229) · 환경변수 25 → 34 · 버전 고정표 35 → 36 · 위협 × 통제 26 · 잔여 17 — W7 12 행 닫혔다. w7-review 몫: 03_requirements/02 미설계 표 "WS 종료 코드 미정(W5)" 낡은 행.
 
 W6 처리(10_observability): 실험 39(EXP-01~39 · 대조군 01~05 · 신설 EXP-40부터) · 메트릭 이름 136 · 알림 14 · 대시보드 6 · 컨슈머 랙 = 그룹 lag + pending · 스위치 상태 레이블 obs_switch_info · 기계 판독 블록(json 펜스 · schema measurement/v1) · 스위치 → EXP 누락 0 · AC 45/45 · REQ-NFR 18/18 · 조합 제약 7 → 9(SW-10 on · SW-11 collector 모드 A 전용) · 선행 문서 59본 EXP · 메트릭 이름 반영 · 이벤트 루프 p95 이름 nodejs_eventloop_lag_p95_seconds(버전 고정 때 prom-client 문서 확인) · REQ-OBS-06 레이블 집합에 설비 · 05/06 S6 스풀 전환은 L만 · cpuset datagen 행(잠정) · AC-19 문구 보정 · 대조 격자 6단계는 보존 7일에서 수행 불가(05/10) — W6 10 행 전부 닫혔다. **미결(확장 판정)**: ADR-09 배치 안 C(async_insert)가 적재 코드 경로를 바꾸면 스위치 신설 판정이 필요하다(현행 EXP-34 조건 칸 처리). 신규 미확인 행선지: 생성기 포화 CPU 임계(EXP-21 → 10/05) · 스파이크 지속·계단 폭(EXP-24 · 23) · 메모리 표본 오차(EXP-39) · 관측 간섭(EXP-38) · 편차 20% 적합성(첫 10기록) · 구조화 로그 보관 · 기록 블록 생성 도구 · 대시보드 정의 형식 · 시나리오 파일 형식(09/05) · 히스토그램 버킷 경계(코드 착수).
 

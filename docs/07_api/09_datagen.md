@@ -2,6 +2,7 @@
 
 > **대상**: GEN 도메인 표면 — 모드 C 부하 주입 POST /api/v1/ingest/bulk의 게이트(환경변수 이름) · 인증 · 요청 본문(엔트리 계약 변환) · 백프레셔 거절 datagen.stream_full/503 · 부분 수용 · 레이트 리밋 등급 · **생성기 실행 제어 표면 판정** · **실행 중 주입 제어 표면 필요 여부 판정**
 > **작성일**: 2026-09-24
+> **개정일**: 2026-09-24 — W7 보안 판정 반영 — 게이트 true 기동 시 **경고 로그 1줄** · 레이트 리밋 class **bulk_ingest** · 한도 관계 R2 — 표면 수 불변(정본 12_security/02 · 03)
 > **개정일**: 2026-09-24 — W6 실험 채번 반영 — EXP 번호 · 기록 칸 반영(정본 10_observability/01 · 06)
 > **개정일**: 2026-09-24 — W6 판정 반영 — DATAGEN_BULK_ENABLED를 환경변수 정본(09_tech_stack/04)에 등재했다
 > **원천**: 원본 architecture.md §9.3 · §11 · §18(커밋 ff66a37) · 원본 data_flow.md §11 · §11.1 · §12.1 · §14.1(커밋 ff66a37) · REQ-GEN-02 · 05 · 08 · 09 · 15 · REQ-GLB-10 · 21 · REQ-AUT-16 · ADR-21 · ADR-23 · D-06 · D-07 · [../02_features/05_datagen.md](../02_features/05_datagen.md) GEN-07 · [../02_features/12_permission_matrix.md](../02_features/12_permission_matrix.md) §GEN · OBS 표면 인가 · [../06_pipeline/10_datagen_inject.md](../06_pipeline/10_datagen_inject.md) §모드 C 표면 · §SIM 주입 제어 · [../06_pipeline/12_data_contract.md](../06_pipeline/12_data_contract.md) 3단계 · docs_plan.md 실행 계획 보정 #11 · 웨이브 인계 W5 07_api 행(생성기 실행 제어 · 실행 중 주입 제어)
@@ -16,10 +17,10 @@ GEN이 가진 표면은 **하나뿐이다.** 모드 C 부하 주입 표면(GEN-0
 
 | 항목 | 규칙 | 근거 |
 |------|------|------|
-| 게이트 | 환경변수 **DATAGEN_BULK_ENABLED** — 기본 false · true일 때만 라우트가 존재 · 전환은 재기동 | REQ-GEN-08 · 이 문서 판정(이름) |
+| 게이트 | 환경변수 **DATAGEN_BULK_ENABLED** — 기본 false · true일 때만 라우트가 존재 · 전환은 재기동 · **true로 기동하면 SW-01 off와 같은 방식으로 기동 경고 로그 1줄을 남긴다**(health 본문은 바꾸지 않는다) | REQ-GEN-08 · 이 문서 판정(이름) · [../12_security/02_secrets_config.md](../12_security/02_secrets_config.md) §부하 주입 표면 게이트 |
 | 인증 | S7부터 인증 필수 · **역할 무관**(역할 1개 이상) · S5 모드 C 측정은 무인증 | 권한 매트릭스 §GEN · OBS 표면 인가 · REQ-AUT-16 |
 | 경로 | 기계 호출(k6 · datagen 컨테이너) → api — 브라우저 · BFF가 부르지 않는다 | [01_conventions.md](./01_conventions.md) §BFF 경유와 직결 |
-| 레이트 리밋 | 부하 주입 등급 — **한도를 실험 부하 위에 둔다** | [01_conventions.md](./01_conventions.md) §한도 등급이 갈리는 표면 묶음 |
+| 레이트 리밋 | 부하 주입 등급 class **bulk_ingest** — **한도를 실험 부하 위에 둔다**(관계 R2 · [../12_security/03_api_surface_defense.md](../12_security/03_api_surface_defense.md)) | [01_conventions.md](./01_conventions.md) §한도 등급이 갈리는 표면 묶음 |
 | 적체 검사 | XADD 전 stream:plc:raw 미확인 적체(그룹 lag + pending — XLEN이 아니다) · 백프레셔 **위험** 단계면 거절 · Collector 스풀 전환 · 모드 B 발행 중단과 같은 판정량 · 같은 임계 | ADR-21 · REQ-GEN-09 · [../04_architecture/06_backpressure_failure.md](../04_architecture/06_backpressure_failure.md) |
 | 품질 | 모든 행 quality 9(SIMULATED) — 다른 값은 400 | REQ-GEN-02 · REQ-GLB-18 |
 | 주입 모드 | 한 번에 한 모드 — 모드 C 실행 중 다른 모드를 돌리지 않는다(표면이 막지는 않는다) | REQ-GEN-05 |
@@ -132,10 +133,10 @@ GEN이 가진 표면은 **하나뿐이다.** 모드 C 부하 주입 표면(GEN-0
 | 항목 | 상태 | 확정 자리 |
 |------|------|------|
 | 요청당 엔트리 상한 · 본문 크기 상한 | 2계층 미정 — 소유 이 문서 · S5 실측으로 정한다 | 이 문서 · [../10_observability/05_load_scenarios.md](../10_observability/05_load_scenarios.md) · EXP-37 |
-| 부하 주입 등급 한도 값 · class 이름 | 2계층 미정 — 조건만 이 문서 | [../12_security/03_api_surface_defense.md](../12_security/03_api_surface_defense.md)(W7) |
+| 부하 주입 등급 한도 값 · class 이름 | **W7 닫힘** — class bulk_ingest · 한도 관계 R2(≥ 모드 C 실험 부하의 분당 요청 수) · 값 2계층 미정(요청당 엔트리 상한 확정 뒤) | [../12_security/03_api_surface_defense.md](../12_security/03_api_surface_defense.md) |
 | 게이트 상태의 기록 자리 | health 본문에 싣지 않는다(스위치가 아니다) · 모드 C 측정 기록의 실험 조건 칸에 사람이 적는다 | [../10_observability/04_experiment_protocol.md](../10_observability/04_experiment_protocol.md) §조건 칸(게이트 · SIM 주입 계획) |
 | 모드 C 처리량 · 인증 비용 | 3계층 미확인 — 확정 전 임의 값 고정 금지 · 인증 비용은 S7 기록의 aut_token_verify_seconds | EXP-37 · [../10_observability/06_experiment_catalog.md](../10_observability/06_experiment_catalog.md) |
-| 게이트 환경변수 이름 등재 | 이 문서 판정 DATAGEN_BULK_ENABLED — **W6 등재 완료**(환경변수 정본 · 스위치 목록 밖) · 보안 리뷰는 W7 | [../09_tech_stack/04_local_environment.md](../09_tech_stack/04_local_environment.md) · [../12_security/02_secrets_config.md](../12_security/02_secrets_config.md)(W6 · W7) |
+| 게이트 환경변수 이름 등재 | 이 문서 판정 DATAGEN_BULK_ENABLED — **W6 등재 완료**(환경변수 정본 · 스위치 목록 밖) · **W7 보안 리뷰 닫힘** — 게이트 유지 · 기동 경고 추가 | [../09_tech_stack/04_local_environment.md](../09_tech_stack/04_local_environment.md) · [../12_security/02_secrets_config.md](../12_security/02_secrets_config.md)(W6 · W7) |
 
 ## 관련 문서
 

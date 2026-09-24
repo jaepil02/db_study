@@ -2,6 +2,7 @@
 
 > **대상**: Redis 단일 인스턴스의 영역 접두 9 · 키 패턴 전수 · 값 모양 · TTL 조회 계약 · 네이밍 · 계열별 실패 전략 · Pub/Sub 채널 3 · **봉인 표** · 키 계열별 래퍼 강제(ADR-13) · 키 인계 판정 — Redis 키 패턴 채번 정본
 > **작성일**: 2026-09-24
+> **개정일**: 2026-09-24 — W7 보안 판정 반영 — rl class 후보 3 → **확정 4**(general · bulk_read · export · bulk_ingest) · auth:refresh 식별자 = **토큰의 암호학적 요약값**(원문 비저장) — 키 패턴 · 봉인 칸 수 불변(정본 12_security/01 · 03)
 > **개정일**: 2026-09-24 — W4 판정 반영 — rt:latest 조건부 쓰기(새 ts ≥ 저장 ts) · DurableKeyClient 조건부 쓰기 스크립트 노출 · ch:rt 발행자 ING → **SW-11 쓰기 주체** · DLQ 값에 원 배치 토큰 · 재처리 그룹 grp:dlq · alarm:state 쓰기 주체 판정기 단독 · 체인 번호 6단 표기 · 미확인 4행 W4 판정 — 키 패턴 · 봉인 칸 수 불변
 > **원천**: 원본 architecture.md §5 · §8 · §8.1 · §8.2 · §8.3 · §10.1 · §10.3 · §11 · §11.2 · §17 · §18(커밋 ff66a37) · 원본 tech_stack.md §5.3(커밋 ff66a37) · 원본 data_flow.md §3 · §4 · §5 · §6 · §6.2 · §7 · §7.1 · §8 · §12.2(커밋 ff66a37) · 원본 implementation_plan.md §4.1 · §7.4 · §7.5(커밋 ff66a37) · docs_plan.md 이식 패턴 ② 봉인 표 · 보정 #5 · 웨이브 인계 W3 05_data_stores/05 행 전부 · ADR-05 · ADR-10 · ADR-12 · ADR-13 · [../README.md](../README.md) 고정 기준 Redis 영역 접두
 
@@ -61,7 +62,7 @@ TTL 없이 만들지 않는다. 사라져도 원천(PostgreSQL · ClickHouse)에
 | **lock:rebuild:q:{sha1}** | String | 소유자 토큰(UUID) · SET NX PX | 소유자 검증 Lua로 해제 | TSQ-05 | 조회 캐시 재구성 락 |
 | **lock:rebuild:rt:{device_id}** | String | 상동 | 상동 | RLT-04 | 최신값 빈 키 복원 락 |
 | **rl:{class}:{user_id}:{unix_minute}** | String | INCR 계수 | 분 창 만료 | AUT-06 | class = 한도 등급 |
-| auth:refresh:{refresh_token_id} | String | user_id | 로그아웃 시 DEL | AUT-01~03 | rt: 접두 금지(원본 개명) |
+| auth:refresh:{refresh_token_id} | String | user_id | 로그아웃 시 DEL | AUT-01~03 | rt: 접두 금지(원본 개명) · **refresh_token_id = 토큰의 암호학적 요약값 — 원문을 키에 쓰지 않는다**(12_security/01) |
 
 - **목록 캐시를 Hash 하나에 모으는 이유** — 목록 조회는 범위 · 필터 조합마다 결과가 달라 키가 여럿 생기는데, 쓰기 한 건이 그 전부를 무효화해야 한다. 키를 흩으면 무효화에 패턴 검색(KEYS)이 필요하고 KEYS는 금지다. Hash 하나면 DEL 한 번이 조합 전부를 지운다. 만료는 EXPIRE NX로 **첫 채움 시점 기준**이라 어떤 조합도 TTL보다 오래 낡지 않는다.
 - **lock:rebuild를 두 하위 공간으로 가른다.** 원본은 조회 캐시 락(쿼리 해시)과 최신값 복원 락(설비)을 같은 lock:rebuild:{…}에 두었다 — 식별자 공간이 겹치면 우연히 같은 문자열을 가진 두 락이 서로를 막는다(REQ-RLT-05 · REQ-TSQ-12).
@@ -211,7 +212,7 @@ ADR-13(보정 7.5)의 계약이다. 인터페이스 이름과 책임만 적는�
 | 1 | cache:tagmeta 단일 Hash(원본 data_flow.md §3 · §5) vs 태그별 키(원본 architecture.md §8.2) | **태그별 키 cache:tagmeta:{tag_id}.** 무효화 단위 = 쓰기 단위(태그 하나 · 원본 data_flow.md §7도 DEL cache:tagmeta:3401) · 축출 단위 = 태그 하나. 설비 단위 조회는 파이프라인 다건 HGETALL 1왕복 | 단일 Hash — 태그 하나를 고쳐도 전체를 DEL해 모든 Collector · 최신값 조회가 동시에 미스를 내고 PostgreSQL로 몰린다. 축출도 통째라 메모리 압박 한 번에 메타 전체가 사라진다 |
 | 2 | sess:{session_id} 소비 기능 없음 | **키 패턴 폐지 · sess 접두는 예약으로 유지.** 인증은 JWT + auth:refresh로 닫혔다 | 유지 — 쓰는 기능이 없는 TTL 키 규칙이 구현에 "세션 저장소가 있다"는 오해를 준다 |
 | 3 | lock:job:rollup 소비자 없음(롤업은 MV) | **폐지.** 재도입 조건 = 체이닝 깊이 3을 넘는 롤업을 배치 잡으로 옮길 때([04_clickhouse_rollup.md](./04_clickhouse_rollup.md)) | 유지 — 백필 · 재계산이 이 락을 "단일 실행 보장"으로 빌려 쓰며 뜻이 흐려진다 |
-| 4 | rl 키에 엔드포인트 자리 없음(원본 architecture.md §18 "엔드포인트별") | **rl:{class}:{user_id}:{unix_minute}** — class는 한도 등급(기본 · 조회 · 내보내기 후보). class 값 집합과 한도는 [../12_security/03_api_surface_defense.md](../12_security/03_api_surface_defense.md) | 엔드포인트 경로를 키에 — 경로 파라미터마다 키가 생겨 한도가 식별자 단위로 쪼개진다 |
+| 4 | rl 키에 엔드포인트 자리 없음(원본 architecture.md §18 "엔드포인트별") | **rl:{class}:{user_id}:{unix_minute}** — class는 한도 등급 — **general · bulk_read · export · bulk_ingest**(W7 확정). class 값 집합과 한도의 정본은 [../12_security/03_api_surface_defense.md](../12_security/03_api_surface_defense.md) | 엔드포인트 경로를 키에 — 경로 파라미터마다 키가 생겨 한도가 식별자 단위로 쪼개진다 |
 | 5 | lock:rebuild 식별자 공간 충돌(쿼리 해시 vs 설비) | **lock:rebuild:q:{sha1} · lock:rebuild:rt:{device_id}** 두 하위 공간 | 같은 공간 — 두 종류의 락이 이름으로 구분되지 않아 만료 값도 하나로 묶인다 |
 | 6 | 작업지시 BFF 캐시 키 | **Redis는 cache:workorders(Hash · 키 하나 DEL). BFF 서버 fetch 캐시는 두지 않는다(no-store)** — ③계층의 read-your-writes가 BFF 캐시로 깨지지 않게 | BFF 캐시 유지 — 쓰기 응답 직후 목록이 최대 revalidate 창만큼 옛 값이다. 막으려면 태그 무효화 ④단을 작업지시에도 걸어야 해 체인이 넓어진다 |
 | 7 | **rt:seq:{device_id} 소비자 없음(신규)** | **폐지.** 스캔 일련번호는 tag_raw.scan_seq · Stream 필드 s가 갖고, 갱신 확인은 rt:latest의 ts(STALE 판정)가 한다 | 유지 — 봉인 키는 축출되지 않으므로 아무도 읽지 않는 키가 설비 수만큼 영구히 남는다 |
@@ -228,7 +229,7 @@ ADR-13(보정 7.5)의 계약이다. 인터페이스 이름과 책임만 적는�
 | 항목 | 상태 | 확정 자리 |
 |------|------|------|
 | lock:rebuild:rt 만료 값 | 계약만 — 복원 쿼리 타임아웃 이상. 복원 쿼리 시간은 3계층 미확인 | S2 실측 뒤 이 문서 |
-| rl class 값 집합 · 등급별 한도 | 키 모양만 확정 | [../12_security/03_api_surface_defense.md](../12_security/03_api_surface_defense.md)(W7) |
+| rl class 값 집합 · 등급별 한도 | **W7 닫힘** — class 4 확정 · 한도는 관계식 고정 · 값 2계층 미정 | [../12_security/03_api_surface_defense.md](../12_security/03_api_surface_defense.md) |
 | DLQ 재처리 경로 · alarm_eval DLQ가 같은 stream:plc:dlq인지 | **W4 판정** — 원 토큰 직접 삽입 절차 · grp:dlq · alarm_eval은 DLQ에 격리하지 않는다 | [../06_pipeline/11_backpressure_failure.md](../06_pipeline/11_backpressure_failure.md) · [../06_pipeline/08_alarm.md](../06_pipeline/08_alarm.md)(W4) |
 | ACK가 alarm:state를 바꾸는 주체 | **W4 판정** — 판정기 단독 · 해소 첫 감지 때 acked_at 조회 | [../06_pipeline/08_alarm.md](../06_pipeline/08_alarm.md)(W4) |
 | rt:latest 덮어쓰기의 ts 비교 | **W4 판정** — 조건부 쓰기 · 한계 등재 [02_postgresql_constraints.md](./02_postgresql_constraints.md) #2 갱신 | [../06_pipeline/05_realtime_read.md](../06_pipeline/05_realtime_read.md)(W4) |

@@ -2,6 +2,7 @@
 
 > **대상**: RLT 도메인 REST 표면 — 설비 전체 최신값 · 단일 태그 최신값의 요청 · 응답 모양 · STALE 표시 · 빈 목록 표지 · 메타 비움 표지 · 응답 판정(200 · 404 · 503) · **설비 전체 200(메타 비움) · 단일 태그 common.postgres_unavailable/503 판정의 표면 반영** · WebSocket 재연결 동기화의 REST 쪽 계약
 > **작성일**: 2026-09-24
+> **개정일**: 2026-09-24 — W7 보안 판정 반영 — 재연결 폭주와 일반 등급 한도의 관계 닫힘 — 관계 R3(정본 12_security/03)
 > **개정일**: 2026-09-24 — W6 실험 채번 반영 — EXP 번호 반영(정본 10_observability/01 · 06)
 > **개정일**: 2026-09-24 — W5 판정 반영 — 미확인 "폴링 빈도 대 한도"를 **재연결 폭주 대 한도**로 좁힘(화면은 WebSocket 연결 중 폴링하지 않는다) · 공통 규약 레이트 리밋 행 정렬 — 표면 수 불변
 > **개정일**: 2026-09-24 — W5 판정 반영 — 메타 없는 태그 STALE 판정 불가 행이 기전 정본(06_pipeline/05 STALE 판정 계약)에 반영됨 — 표면 수 불변
@@ -153,7 +154,7 @@ WebSocket이 끊겼다 다시 붙은 직후 클라이언트는 구독한 설비�
 |------|------|------|
 | 최신값 조회 p95 · 복원 지연 | 3계층 미확인 — 원본 목표 10 ms · 복원 원본 예상치 50~150 ms · SW-02 off 원본 예상치 30~150 ms | [../03_requirements/13_nonfunctional.md](../03_requirements/13_nonfunctional.md) REQ-NFR-07 · EXP-07 · [../10_observability/06_experiment_catalog.md](../10_observability/06_experiment_catalog.md) |
 | 메타 조회 실패 시 STALE 판정 불가 | **반영됨** — 기전 정본 STALE 판정 계약 행 | [../06_pipeline/05_realtime_read.md](../06_pipeline/05_realtime_read.md) |
-| 재연결 폭주와 일반 등급 한도의 관계 | 2계층 미정 — 화면은 WebSocket 연결 중 폴링하지 않으므로 호출은 첫 로드 · 재연결 동기화뿐이다 · 남는 위험은 api 재기동 뒤 재연결 폭주에서 사용자 하나가 구독 설비 수만큼 #1을 몰아 부르는 것 — 백오프 상한이 시각을 흩지만 사용자당 계수는 흩지 못한다 | [../12_security/03_api_surface_defense.md](../12_security/03_api_surface_defense.md)(W7) |
+| 재연결 폭주와 일반 등급 한도의 관계 | **W7 닫힘** — 관계 R3: general 한도 ≥ 사용자당 동시 연결 수 × 연결당 구독 설비 상한 + 화면 첫 로드 호출 수 · 구독 설비 상한(11_websocket)을 바꾸면 general 한도를 같은 변경 단위에서 다시 계산한다 · 백오프 상한이 시각을 흩고 R3이 사용자당 계수를 받는다 | [../12_security/03_api_surface_defense.md](../12_security/03_api_surface_defense.md) |
 
 ## 관련 문서
 
