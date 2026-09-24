@@ -32,7 +32,7 @@
 
 | 항목 | 기준 |
 |------|------|
-| PostgreSQL | 업무 **14** + 대조군 **1** = **15** 테이블(부모 테이블 기준 — 도구 관리 테이블 · 자식 파티션 제외) · FK 15 · UNIQUE 8 · 결합 CHECK 8 · 인덱스 9 · 한계 등재 17행 |
+| PostgreSQL | 업무 **14** + 대조군 **1** = **15** 테이블(부모 테이블 기준 — 도구 관리 테이블 · 자식 파티션 제외) · FK 15 · UNIQUE 8 · 결합 CHECK 8 · 인덱스 9 · 한계 등재 19행 |
 | ClickHouse | 테이블 **5** · MV **3** · Dictionary **1** |
 | Redis | 단일 인스턴스 · volatile-lru · 영역 접두 **9**(봉인 3 + 캐시 5 + 채널 1 · sess는 예약) · 활성 키 패턴 **18** · 봉인 표 통제 칸 **26** |
 | 보존 · TTL · MAXLEN | 2계층 조정값 — 보존 정본 [08_retention_lifecycle.md](./08_retention_lifecycle.md) · 키별 TTL 정본 [05_redis_keyspace.md](./05_redis_keyspace.md) · MAXLEN과 메모리 정본 [06_redis_memory.md](./06_redis_memory.md) |

@@ -2,6 +2,7 @@
 
 > **대상**: 기능 · 화면 · 권한 설계자 — db_study를 누가 어떤 목적으로 쓰는가, 각자 어느 화면과 어느 경로로 어느 저장소에 닿는가
 > **작성일**: 2026-09-24
+> **개정일**: 2026-09-24 — W5 판정 반영 — 페르소나별 작업 표의 화면 열을 파일명 → **화면 코드**(08_screen 인벤토리)로 · 알람 확인 경로 브라우저 → api → **BFF 경유 no-store**(07_api/01) · 요청 경로 표에 알람 행 추가(요청 유형 6 → **7**) · 미확정 등재 "화면 코드 채번 전"을 닫는다
 > **개정일**: 2026-09-24 — W2 확정 반영 — 페르소나별 권한 역할 채움(OPERATOR · ADMIN · ENGINEER · 실험 수행자는 역할 없음) · 미확정 등재 3행(역할 값 · 알람 규칙 권한 · 실험 콘솔 권한)을 닫는다. 정본 02_features/12
 > **원천**: 원본 architecture.md §2 · §6 · §11 · §11.2 · §18(커밋 ff66a37) · 원본 data_flow.md §7.2 · §8.1 · §8.2(커밋 ff66a37) · 원본 implementation_plan.md §5 S0 · S2 · S7(커밋 ff66a37) · [01_purpose_learning_goals.md](./01_purpose_learning_goals.md) · [06_design_decisions.md](./06_design_decisions.md) D-01 · D-02 · D-11
 
@@ -28,11 +29,11 @@
 
 | 작업 | 화면 | 요청 경로 | 닿는 저장소 | 분기 계층 |
 |------|------|------|------|------|
-| 설비 전체 태그 최신값 보기 | 03_realtime_dashboard | 브라우저 → api 직결 | Redis rt:latest | ① 사본(진실은 ClickHouse) |
-| 실시간 트렌드 받기 | 03_realtime_dashboard | 브라우저 → api WebSocket 직결 | Redis Pub/Sub ch:rt | ① |
-| 태그 STALE · 통신 이상 인지 | 03_realtime_dashboard | 상동 | Redis rt:latest의 품질 필드 | ① |
-| 알람 발생 · 해제 받기 | 05_alarm_console | WebSocket 직결 | Redis Pub/Sub ch:alarm | ② |
-| 알람 확인(ack) | 05_alarm_console | 브라우저 → api | PostgreSQL alarm_event | ② 확정 이벤트 |
+| 설비 전체 태그 최신값 보기 | DSH-REALTIME | 브라우저 → api 직결 | Redis rt:latest | ① 사본(진실은 ClickHouse) |
+| 실시간 트렌드 받기 | DSH-REALTIME | 브라우저 → api WebSocket 직결 | Redis Pub/Sub ch:rt | ① |
+| 태그 STALE · 통신 이상 인지 | DSH-REALTIME | 상동 | Redis rt:latest의 품질 필드 | ① |
+| 알람 발생 · 해제 받기 | ALM-CONSOLE | WebSocket 직결 | Redis Pub/Sub ch:alarm | ② |
+| 알람 확인(ack) | ALM-CONSOLE | 브라우저 → BFF → api(no-store) | PostgreSQL alarm_event | ② 확정 이벤트 |
 
 - **운영자의 화면은 거의 전부 Redis만 본다.** 운영자가 체감하는 "시스템이 느리다"는 대개 Redis 역할 스위치 하나의 상태로 설명된다 — SW-02 off면 최신값이 ClickHouse 점조회로 떨어지고, SW-07이 0이면 프레임이 폭증한다.
 - **알람 확인은 운영자가 한다**(원본 data_flow.md §8.1 상태 머신의 확인 전이). 확인 기록의 진실은 PostgreSQL alarm_event이며 Redis alarm:state가 아니다.
@@ -41,10 +42,10 @@
 
 | 작업 | 화면 | 요청 경로 | 닿는 저장소 | 분기 계층 |
 |------|------|------|------|------|
-| 로그인 · 토큰 갱신 | 06_master_admin | 브라우저 → Next.js BFF → api | PostgreSQL user_account · Redis auth · sess | ③ |
-| 사이트 · 라인 · 설비 · 태그 마스터 관리 | 06_master_admin | BFF 경유 | PostgreSQL · 커밋 이후 캐시 무효화 · Dictionary 재적재 | ③(ClickHouse는 Dictionary로만 닿는다) |
-| 작업지시 · 생산 실적 관리 | 06_master_admin | BFF 경유 | PostgreSQL work_order · production_log | ③ |
-| 변경 이력 확인 | 06_master_admin | BFF 경유 | PostgreSQL audit_log · tag_master_history | ③ |
+| 로그인 · 토큰 갱신 | AUTH-LOGIN | 브라우저 → Next.js BFF → api | PostgreSQL user_account · Redis auth · sess | ③ |
+| 사이트 · 라인 · 설비 · 태그 마스터 관리 | ADM-MASTER | BFF 경유 | PostgreSQL · 커밋 이후 캐시 무효화 · Dictionary 재적재 | ③(ClickHouse는 Dictionary로만 닿는다) |
+| 작업지시 · 생산 실적 관리 | ADM-WORKORDER | BFF 경유 | PostgreSQL work_order · production_log | ③ |
+| 변경 이력 확인 | ADM-AUDIT | BFF 경유 | PostgreSQL audit_log · tag_master_history | ③ |
 
 - **관리자의 쓰기는 Stream을 타지 않는다.** 이것이 분기 ③계층 — 경로를 고르지 않는 분기 — 의 시연 자리다(D-11). 관리자가 태그 스케일을 바꾸면 새 tag_id가 발급되고 이전 태그는 비활성화된다(전역 불변식 "불변 사실 기록").
 - **마스터 변경은 네 저장소 층을 건드린다** — PostgreSQL 커밋 → Redis 캐시 삭제 → Pub/Sub 전파 → ClickHouse Dictionary 재적재(원본 data_flow.md §7.1). 관리자 한 번의 저장이 운영자 · 엔지니어 화면의 태그명까지 바꾸는 경로이며, 확장된 무효화 체인의 정본은 [../06_pipeline/07_business_crud.md](../06_pipeline/07_business_crud.md)다.
@@ -53,10 +54,10 @@
 
 | 작업 | 화면 | 요청 경로 | 닿는 저장소 | 분기 계층 |
 |------|------|------|------|------|
-| 시간 범위 트렌드 조회 | 04_trend_analysis | 브라우저 → api 직결 | Redis cache:q → 미스 시 ClickHouse 롤업 또는 원시 | ① |
-| 원시 데이터 내보내기 | 04_trend_analysis | 직결 · 스트리밍 | ClickHouse | ① |
-| 알람 판정 이력 분석 | 05_alarm_console | 직결 | ClickHouse alarm_eval | ② 판정 전수 |
-| 알람 규칙 조정 | 05_alarm_console | BFF 경유 | PostgreSQL alarm_rule · 캐시 즉시 무효화 | ② 규칙(원천) |
+| 시간 범위 트렌드 조회 | ANL-TREND | 브라우저 → api 직결 | Redis cache:q → 미스 시 ClickHouse 롤업 또는 원시 | ① |
+| 원시 데이터 내보내기 | ANL-TREND | 직결 · 스트리밍 | ClickHouse | ① |
+| 알람 판정 이력 분석 | ALM-RULES | 직결 | ClickHouse alarm_eval | ② 판정 전수 |
+| 알람 규칙 조정 | ALM-RULES | BFF 경유(no-store) | PostgreSQL alarm_rule · 캐시 즉시 무효화 | ② 규칙(원천) |
 
 - **엔지니어는 해상도를 고르지 않는다.** 조회 범위에 따라 서버가 raw · 1m · 1h · 1d 중 하나를 고른다 — 원시 1년치 요청이 ClickHouse를 마비시키는 사고를 서버가 구조로 막기 위해서다. 원시가 꼭 필요하면 내보내기로 간다.
 - **알람 규칙은 ENGINEER가 고친다(W2 판정).** 원본은 주체를 정하지 않았고, 판정 전수를 분석해 임계값을 조정하는 쪽이 엔지니어이므로 규칙 변경을 ENGINEER에, 알람 확인(ACK)을 OPERATOR에 둔다. 정본 [../02_features/12_permission_matrix.md](../02_features/12_permission_matrix.md).
@@ -66,12 +67,12 @@
 | 작업 | 도구 · 화면 | 요청 경로 | 닿는 저장소 | 학습 목표 |
 |------|------|------|------|------|
 | 저장소 수동 실습(PEL 관찰 등) | redis-cli · psql · clickhouse-client | 호스트 CLI → 127.0.0.1 저장소 포트 | 전부 | ②(at-least-once의 실체) |
-| 스위치 조건 설정 · 재기동 | 환경변수 · Compose 재기동 · 07_experiment_console(상태 확인) | 호스트 셸 | 해당 없음 | ① · ② |
+| 스위치 조건 설정 · 재기동 | 환경변수 · Compose 재기동 · EXP-CONSOLE(주입 구현 확인) | 호스트 셸 | 해당 없음 | ① · ② |
 | 부하 주입 | k6(호스트 프로세스) · 생성기 주입 모드 | 호스트 → api · 부하 주입 표면 | Redis Stream · ClickHouse | ① · ② |
 | 계측 관찰 | observability 프로파일 대시보드 · /metrics 직접 덤프 | 호스트 → api /metrics | 해당 없음 | ① · ② |
 | 스냅샷 · 복원 | Taskfile 스냅샷 · 복원 | 호스트 셸 | 볼륨 전체 | 전제(같은 초기 상태) |
-| 대조 쿼리 실행 | psql · clickhouse-client · 07_experiment_console | 호스트 CLI · 직결 | PostgreSQL 대조군 · ClickHouse tag_raw | ① |
-| 결과 기록 | docs/measurements · 07_experiment_console | 파일 · 화면 | 해당 없음 | ① · ② |
+| 대조 쿼리 실행 | psql · clickhouse-client · EXP-COMPARE(역전 지점 표시) | 호스트 CLI · 직결 | PostgreSQL 대조군 · ClickHouse tag_raw | ① |
+| 결과 기록 | docs/measurements · EXP-CONSOLE(기록 조건 블록) | 파일 · 화면 | 해당 없음 | ① · ② |
 
 - **실험 수행자의 화면 밖 작업이 화면 안 작업보다 많다.** 스위치는 환경변수 + DI 초기화 선택이라 화면에서 바꿀 수 없고(D-06), 실험 콘솔은 상태 표시 · 실행 기록 · 비교만 한다. 콘솔에 토글을 기대하면 설계를 버그로 오해한다.
 - **정밀 측정 세션에서는 관측 대시보드를 끈다.** 관측 스택이 측정 대상과 같은 CPU를 쓰므로 그 동안의 수치는 상대 비교용이다([../10_observability/04_experiment_protocol.md](../10_observability/04_experiment_protocol.md)).
@@ -84,10 +85,13 @@
 |------|------|------|------|
 | 로그인 · 토큰 갱신 | 브라우저 → BFF → api | 전원 | **httpOnly 리프레시 쿠키를 서버에서만 다룬다** — BFF가 남는 가장 중요한 이유 |
 | 마스터 · 작업지시 CRUD | BFF 경유 | 관리자 | 저빈도 · 요청 오리진이 하나로 모여 쿠키 · CORS가 단순해진다 |
+| 알람 이벤트 · 확인 · 규칙 | BFF 경유 · no-store | 운영자 · 엔지니어 | 확인 직후 목록이 BFF 캐시의 옛 목록이면 확인한 알람이 미확인으로 남는다 — 실시간 표시는 WebSocket 알람 푸시가 맡는다([../07_api/01_conventions.md](../07_api/01_conventions.md)) |
 | 최신값 폴링 · 시계열 조회 | 브라우저 → api 직결 | 운영자 · 엔지니어 | 고빈도 요청에 중계 1홉을 더할 이유가 없다 |
 | WebSocket 실시간 | 직결 | 운영자 | BFF가 중계할 필요가 없다. 토큰은 첫 메시지로 보낸다(URL에 남기지 않는다) |
 | 저장소 직접 접속 | 호스트 CLI → 127.0.0.1 저장소 포트 | 실험 수행자 | 상태를 손으로 확인하는 것이 학습 수단이다 |
 | 웹 → DB 직접 | **금지** | 없음 | 커넥션을 api 한 곳으로 일원화하고 인가를 우회하는 경로를 만들지 않는다 |
+
+- 검산: 요청 유형 = **7** · BFF 경유 3 + 직결 2 + 호스트 CLI 1 + 금지 1
 
 ## 페르소나 × 분기 계층
 
@@ -145,7 +149,7 @@
 
 | 항목 | 상태 | 확정 자리 |
 |------|------|------|
-| 화면 코드({표면}-{의미}) | 채번 전 — 이 문서는 파일명으로만 가리킨다 | [../08_screen/README.md](../08_screen/README.md)(W5) |
+| 화면 코드({표면}-{의미}) | **닫힘** — W5 채번(화면 10) · 이 문서의 화면 열은 코드로 표기한다 | [../08_screen/README.md](../08_screen/README.md) |
 
 ## 관련 문서
 

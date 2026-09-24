@@ -2,6 +2,7 @@
 
 > **대상**: 실시간(RLT · NestJS realtime 모듈) 기능 목록 · 기능별 경계 · 스위치 교체 · 의존 도메인 · 실패 시 보이는 것 — 기능 ID RLT-NN 채번 정본
 > **작성일**: 2026-09-24
+> **개정일**: 2026-09-24 — W5 판정 반영 — RLT-07 느린 구독자 절단 — 브라우저 단위 소켓 송신 대기량 한도 · Redis 출력 버퍼는 api 구독 연결 보호의 최후선으로 가름 — 기능 수 불변
 > **개정일**: 2026-09-24 — W4 판정 반영 — RLT-09 무효화 체인 ⑤단 → **⑥단**(6단 번호 표기) — 기능 수 불변
 > **원천**: 원본 data_flow.md §2 · §5 · §7.2 · §9 · §9.1 · §9.2 · §12.2 · §16 · §17(커밋 ff66a37) · 원본 architecture.md §5 · §8.1 · §8.2 · §11 · §11.2 · §17(커밋 ff66a37) · 원본 implementation_plan.md §4.1 · §5 S2 · S4 · §7.2 · §7.4(커밋 ff66a37) · [13_switch_matrix.md](./13_switch_matrix.md) SW-02 · SW-06 · SW-07 · [../11_glossary/05_units_and_time.md](../11_glossary/05_units_and_time.md) STALE 판정
 
@@ -21,7 +22,7 @@ RLT는 **"지금 값"을 ClickHouse에 닿지 않고 돌려주는 도메인**이
 | **RLT-04** | 빈 키 복원과 503 | **키만 비어 있으면**(재시작 직후 복원 전 · 신규 설비) ClickHouse에서 태그별 최신 1행을 최근 창(현행 10분) argMax로 복원하고 lock:rebuild로 설비당 1회만 실행한 뒤 결과를 Redis에 워밍해 200을 낸다. **Redis에 접속할 수 없으면** 이 폴백을 타지 않고 503을 낸다 | S2 · S6 | F-03 · F-10 | 해당 없음 | 07_api/06_realtime | ClickHouse tag_raw(읽기) · Redis rt:latest · lock:rebuild |
 | **RLT-05** | WebSocket 구독 | /ws/realtime 연결 뒤 첫 메시지로 인증하고(AUT-04), 구독 메시지로 받은 설비 목록에 대해 ch:rt:{device_id}를 구독한다. 소켓 ↔ 설비 매핑은 인스턴스 안 구독 레지스트리가 갖는다. SW-06 off면 Pub/Sub 없이 Ingest가 게이트웨이를 직접 부른다(실험 전용) | S2 | F-07 | SW-06 | 07_api/11_websocket | Redis ch:rt(구독) |
 | **RLT-06** | 스로틀 병합 | 창(현행 100 ms) 안에 들어온 같은 태그의 중간값을 버리고 최종값만 한 프레임으로 보낸다. 사람 눈은 초당 10회 이상의 숫자 변화를 읽지 못한다 — 그 이상은 낭비이고 브라우저 탭을 멈춘다. SW-07이 창 크기이며 0이면 무제한 전송이다 | S4 | F-07 | SW-07 | 07_api/11_websocket | 없음 — 메모리 |
-| **RLT-07** | 연결 관리 · 재연결 동기화 | 주기 ping(현행 30초)에 pong이 연속으로 오지 않으면(현행 3회) 소켓을 닫고 구독을 정리한다. 느린 구독자는 Redis Pub/Sub 출력 버퍼 한도로 강제 절단한다. 클라이언트는 지수 백오프로 재연결하고 **재연결 직후 REST 최신값을 1회 읽어** 끊긴 동안의 공백을 메운다 — Pub/Sub은 전달을 보장하지 않는다 | S4 | F-07 · F-03 | 해당 없음 | 07_api/11_websocket · 07_api/06_realtime | Redis ch:rt · rt:latest |
+| **RLT-07** | 연결 관리 · 재연결 동기화 | 주기 ping(현행 30초)에 pong이 연속으로 오지 않으면(현행 3회) 소켓을 닫고 구독을 정리한다. 느린 브라우저는 게이트웨이의 소켓 송신 대기량 한도로 그 소켓만 절단하고(4413), Redis Pub/Sub 출력 버퍼 한도는 api 구독 연결 보호의 최후선으로 둔다(W5). 클라이언트는 지수 백오프로 재연결하고 **재연결 직후 REST 최신값을 1회 읽어** 끊긴 동안의 공백을 메운다 — Pub/Sub은 전달을 보장하지 않는다 | S4 | F-07 · F-03 | 해당 없음 | 07_api/11_websocket · 07_api/06_realtime | Redis ch:rt · rt:latest |
 | **RLT-08** | 알람 푸시 | ch:alarm을 구독해 알람 발생 · 해제 이벤트를 연결된 클라이언트에 브로드캐스트한다 | S7 | F-06 · F-07 | SW-06 | 07_api/11_websocket | Redis ch:alarm(구독) |
 | **RLT-09** | 무효화 신호 중계 | 마스터 쓰기 뒤의 캐시 무효화 신호를 WebSocket으로 브라우저에 전달해 브라우저 쿼리 캐시를 무효화하게 한다(무효화 체인 ⑥단 — 6단 번호 정본 [../06_pipeline/07_business_crud.md](../06_pipeline/07_business_crud.md)). ch:cacheinv에 구독자를 더하는 것만으로 된다(원본 implementation_plan.md §7.4) | S4 | F-05 | 해당 없음 | 07_api/11_websocket | Redis ch:cacheinv(구독) |
 
@@ -87,7 +88,7 @@ RLT-04의 두 갈래다. 같은 "값이 없다"가 반대의 응답을 만든다
 | 설비 · 태그가 마스터에 없음 | 거절 | common.not_found/404 | RLT-01 · 02 |
 | ClickHouse 중단(최신값 갱신 주체가 Ingest인 현행) | **대시보드가 멈춘다** — 값은 그대로이고 STALE 경고가 붙는다 | STALE 비율 | RLT-03 |
 | 수집 정지 · 생성 모드의 과거 ts | STALE 경고 | STALE 비율 | RLT-03 |
-| 느린 구독자 | 강제 절단 · 클라이언트 재연결 | WebSocket 연결 수 · 종료 수 | RLT-07 |
+| 느린 구독자 | 그 소켓만 절단(4413) · 클라이언트 재연결 — 출력 버퍼 한도 초과면 인스턴스 전원 푸시 중단(4503) | WebSocket 연결 수 · 종료 수 | RLT-07 |
 | WebSocket 인증 실패 · Origin 불일치 | 연결 종료 — HTTP 코드가 아니다 | 종료 코드 정본 [../07_api/11_websocket.md](../07_api/11_websocket.md) | RLT-05 |
 | 스로틀 창 0(SW-07 off) | 프레임 폭증 · 이벤트 루프 지연 | 초당 프레임 · nodejs_eventloop_lag | RLT-06 |
 

@@ -2,6 +2,7 @@
 
 > **대상**: F-06 판정 흐름의 기전 정본 — 확정 배치 인계 · **판정을 flusher 흐름에서 기다리는가 판정(직렬 판정기 · 인계 깊이 1)** · 규칙 조회 · 배치 단위 상태 조회(ADR-11) · 행 평가 순서 · 조건 평가와 **RATE_OF_CHANGE 경계** · 디바운스 전이와 세 쓰기의 순서 · 부분 실패(PostgreSQL이 진실) · **ACK 시 alarm:state 갱신 주체 · CLEARING 중 ACK 전이** · alarm_eval 재시도 · 격리 · **비활성 태그 규칙** · 판정 경로 직렬성 · 규칙 시드
 > **작성일**: 2026-09-24
+> **개정일**: 2026-09-24 — W5 판정 반영 — 미확인 표에 2행 등재 — 알람 확인의 ch:alarm 미전파 · alarm_eval 분석 무효 구간 기록 자리 미설계(행선지 W6 10_observability/01)
 > **원천**: 원본 data_flow.md §8 · §8.1 · §8.2 · §15(커밋 ff66a37) · 원본 implementation_plan.md §7.3(커밋 ff66a37) · docs_plan.md 웨이브 인계 W4 06_pipeline/08 행 전부 · ADR-06 · ADR-11 · ADR-22 · ADR-25 · D-01 · D-04 · REQ-ALM-01~20 · REQ-ING-13 · REQ-GLB-04 · 13 · [../11_glossary/03_enums_state_machines.md](../11_glossary/03_enums_state_machines.md) 상태 머신 2 · alarm_event.state 대응 · [../05_data_stores/05_redis_keyspace.md](../05_data_stores/05_redis_keyspace.md) alarm:state 필드 7 · [../05_data_stores/01_postgresql_schema.md](../05_data_stores/01_postgresql_schema.md) alarm_rule · alarm_event · [../04_architecture/05_latency_budget.md](../04_architecture/05_latency_budget.md) 알람 판정 구간
 
 F-06은 **확정된 배치의 행이 판정되어 목적이 다른 세 저장소에 쓰이기까지**다. 분기 ②계층이 실제로 갈라지는 자리이며(D-01), Ingest → Alarm 직접 호출은 **Stream 경계 원칙의 의도된 유일한 예외**다 — 판정은 배치의 후처리이고 재처리 단위가 배치와 같다(ADR-11 · [../04_architecture/02_module_boundaries.md](../04_architecture/02_module_boundaries.md) §경계 예외).
@@ -208,6 +209,8 @@ CLEARING 중 확인의 전이다. 상태도에 CLEARING → ACKED 전이가 없�
 | 비활성 태그의 열린 이벤트를 닫는 수단 | 등재만 — 범위 밖 | [../02_features/09_alarms.md](../02_features/09_alarms.md)(리드) |
 | ACKED 파생 표기 · alarm_eval 격리 문구 정합 | 판정 — 선행 문서 갱신 필요 | [../11_glossary/03_enums_state_machines.md](../11_glossary/03_enums_state_machines.md) · [../03_requirements/10_alarms.md](../03_requirements/10_alarms.md)(W4 반영) |
 | 인계 대기 · 판정 무효 구간 · 전이 수 메트릭 이름 | 미정 | [../10_observability/01_metrics_catalog.md](../10_observability/01_metrics_catalog.md)(W6) |
+| 알람 확인(ACK)의 실시간 전파 | **미설계**(W5 등재) — ch:alarm은 열림 · 닫힘만 싣고 확인은 싣지 않는다 · 다른 운영자 화면의 확인 표시는 이벤트 목록 캐시 TTL(현행 참고 30초)만큼 늦다 | [../10_observability/01_metrics_catalog.md](../10_observability/01_metrics_catalog.md)(W6) · [../07_api/07_alarms.md](../07_api/07_alarms.md) #2 |
+| alarm_eval 분석 무효 구간의 기록 자리 | **미설계**(W5 등재) — 소진 배치의 ts 범위를 "기록한다"만 있고 테이블 · 키 · 메트릭 중 어디인지 없다 · 판정 이력 분석 표면이 빈 버킷을 "판정 없음"과 "기록 실패"로 가르지 못한다 | [../10_observability/01_metrics_catalog.md](../10_observability/01_metrics_catalog.md)(W6) · [../07_api/07_alarms.md](../07_api/07_alarms.md) #6 |
 
 ## 관련 문서
 

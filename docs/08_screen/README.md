@@ -2,6 +2,7 @@
 
 > **대상**: db_study 웹(Next.js)의 화면 — 명세 표준 · 기능 추적성 · 실시간 대시보드 · 트렌드 분석 · 알람 콘솔 · 관리 화면 · 실험 콘솔
 > **작성일**: 2026-09-23
+> **개정일**: 2026-09-24 — W5 완성판 — 화면 10 확정(추가 0) · 기능 → 화면 91 누락 0 · GEN 화면 없음 · 대조군 역전 지점은 BFF 파일 읽기
 > **원천**: [../README.md](../README.md) · [../01_overview/03_personas_roles.md](../01_overview/03_personas_roles.md) · 원본 tech_stack.md §4 · 원본 data_flow.md §6.3 · §7.2 · §9.1 · 원본 implementation_plan.md §4 · §5 S2(커밋 ff66a37)
 
 "사람이 무엇을 보는가"에 답하는 폴더다. **화면 코드 {표면}-{의미}를 채번**하며 채번 자리는 이 README의 화면 인벤토리다. 화면은 데이터를 소유하지 않는다 — 모든 수치는 07_api 표면을 거쳐 오고, 화면 명세는 어느 표면을 어떤 빈도로 부르는지와 상태 4행(로딩 · 빈 값 · 오류 · 정상)을 고정한다.
@@ -22,7 +23,7 @@
 
 검산: 표준 · 추적성 2 + 화면 문서 5 + README 1 = **8**
 
-## 화면 인벤토리 선점
+## 화면 인벤토리
 
 W5 착수 전 리드가 화면 코드를 선점한다. 07_api를 쓰는 팀원이 표면 설명에 화면 코드를 동시에 인용하기 때문이다. **이 표가 화면 코드의 채번 자리**이며, 새 화면은 표 말미에 추가하고 코드를 재사용하지 않는다. 표면 접두는 6이다 — AUTH(인증) · DSH(실시간) · ANL(분석) · ALM(알람) · ADM(관리) · EXP(실험).
 
@@ -39,7 +40,7 @@ W5 착수 전 리드가 화면 코드를 선점한다. 07_api를 쓰는 팀원�
 | EXP-CONSOLE | 실험 콘솔(스위치 상태 표시 · 생성기 · 메트릭 요약 · 전환 절차 안내) | [07_experiment_console.md](./07_experiment_console.md) | 실험 수행자 | OBS · GEN |
 | EXP-COMPARE | 실험 비교(on/off · 구현값 비교 · 대조군 역전 지점) | [07_experiment_console.md](./07_experiment_console.md) | 실험 수행자 | OBS |
 
-검산: 선점 화면 **10** — AUTH 1 + DSH 1 + ANL 1 + ALM 2 + ADM 3 + EXP 2 = **10**
+검산: 화면 **10** — AUTH 1 + DSH 1 + ANL 1 + ALM 2 + ADM 3 + EXP 2 = **10**
 
 ## 고정 기준 (축약)
 
@@ -47,9 +48,10 @@ W5 착수 전 리드가 화면 코드를 선점한다. 07_api를 쓰는 팀원�
 
 | 항목 | 기준 |
 |------|------|
-| 화면 코드 | {표면}-{의미}(예: DSH-REALTIME). 표면 접두 목록과 화면 수는 W5 인벤토리 채번 후 이 표와 루트 README에 올린다 |
-| 도메인 공백 | COL · SIM · ING은 전용 화면이 없다 — 산출물은 대시보드 · 실험 콘솔의 메트릭으로만 보인다. AUT의 로그인과 WRK의 작업지시는 06_master_admin이 담는다. GEN(생성기 실행)과 OBS(메트릭)는 잠정 07_experiment_console 귀속이며 W5가 명시한다 |
-| 경로 분리 | 저빈도 조회는 BFF 경유, 최신값 · 시계열 · WebSocket은 api 직결 — 정본 [../07_api/01_conventions.md](../07_api/01_conventions.md) |
+| 화면 코드 | **10** — 표면 접두 6(AUTH 1 · DSH 1 · ANL 1 · ALM 2 · ADM 3 · EXP 2). 채번 자리는 §화면 인벤토리 · 세는 기준은 화면 명세 H2 블록 수 |
+| 기능 → 화면 | 화면 있음 42 + 내부 모듈 27 + 표면 없음 21 + 화면 없음(API 전용) 1 = **91** · 누락 0(정본 [02_traceability.md](./02_traceability.md)) |
+| 도메인 공백 | COL · SIM · ING은 전용 화면이 없다 — 산출물은 대시보드 · 실험 콘솔의 메트릭으로만 보인다. **GEN도 화면이 없다**(생성기 실행 제어 표면을 두지 않는다 — 산출은 EXP-CONSOLE 메트릭으로만 보인다). OBS는 EXP-CONSOLE · EXP-COMPARE가 담는다. AUT의 로그인과 WRK의 작업지시는 06_master_admin이 담는다 |
+| 경로 분리 | 저빈도 조회는 BFF 경유, 최신값 · 시계열 · WebSocket은 api 직결 — 정본 [../07_api/01_conventions.md](../07_api/01_conventions.md) · 화면이 부르는 health · /metrics는 BFF 경유 · EXP-COMPARE의 대조군 역전 지점은 BFF가 docs/measurements를 읽기 전용으로 읽는다(api 표면 없음) |
 | 실험 콘솔 접근 | 인증 사용자 전원 · **표시 전용** — 정본 [../02_features/12_permission_matrix.md](../02_features/12_permission_matrix.md) |
 | 차트 | uPlot 주력 · ECharts 보조. 서버 다운샘플이 1차 방어선이고 차트는 2차 방어선이다 |
 

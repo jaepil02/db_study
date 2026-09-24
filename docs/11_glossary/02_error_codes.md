@@ -2,6 +2,7 @@
 
 > **대상**: db_study api 컨테이너의 REST 표면이 반환하는 에러 코드 전수 — 채번 정본
 > **작성일**: 2026-09-24
+> **개정일**: 2026-09-24 — W5 표면 판정 반영 — 에러 코드 19 → **22종**(master.reissue_source_inactive/409 · alarms.eval_store_unavailable/503 · work_orders.production_log_not_allowed/409 신설) · common.duplicate_key 대상 · common.postgres_unavailable 인가 단계 표면 · invalid_status_transition fromStatus 경합 조건 보강
 > **개정일**: 2026-09-24 — W4 판정 반영 — datagen.stream_full 조건 스트림 길이 → **미확인 적체**(ADR-21) · common.postgres_unavailable 표면에 최신값 단일 태그 추가 · common.rate_limited 키 표기 rl:{class}:{user_id}:{unix_minute} — 코드 수 불변
 > **개정일**: 2026-09-24 — W2 요구사항 판정으로 채번 보류 8건을 닫는다 — 에러 코드 14 → **19종**(auth.token_store_unavailable/503 · master.scale_change_forbidden/409 · timeseries.clickhouse_unavailable/503 · alarms.ack_not_allowed/409 · work_orders.invalid_status_transition/409 신설) · 코드 보유 네임스페이스 5 → **8** · 재사용 1 · 코드 없음 2
 > **원천**: 원본 architecture.md §9.3 · §11 · §11.1 · §11.2 · §17(커밋 ff66a37) · 원본 data_flow.md §5 · §7.2 · §12.1 · §12.2(커밋 ff66a37) · 원본 architecture.md §6 ERD 유일 제약 · docs_plan.md 실행 계획 보정 #11 · #12 · [04_id_conventions.md](./04_id_conventions.md) 에러 코드 형식
@@ -64,9 +65,9 @@
 |------|:----:|----------|----------|---------------|
 | common.validation_failed | 400 | 요청 본문 · 쿼리가 스키마를 어긴다 — 타입 불일치 · 필수 누락 · 허용값 밖(interval이 raw · 1m · 1h · 1d가 아님 · aggregations가 5종 밖 · from · to가 ISO 8601이 아님). 원본 architecture.md §11.1 | 전 REST 표면 | 요청을 고친다. 같은 요청의 재시도 금지 |
 | common.not_found | 404 | 경로의 식별자가 가리키는 대상이 마스터에 없다(설비 · 태그 · 알람 이벤트 · 작업지시). **rt:latest 키가 비어 있는 것은 여기가 아니다** — 설비가 마스터에 있으면 ClickHouse 복원 경로를 탄다(원본 data_flow.md §5) | [../07_api/04_master.md](../07_api/04_master.md) · [../07_api/06_realtime.md](../07_api/06_realtime.md) · [../07_api/07_alarms.md](../07_api/07_alarms.md) · [../07_api/08_work_orders.md](../07_api/08_work_orders.md) | 식별자를 확인한다 |
-| common.duplicate_key | 409 | 유일 제약 컬럼에 이미 있는 값을 쓴다 — tag_master.tag_code · work_order.order_no(원본 architecture.md §6 ERD의 UK) | [../07_api/04_master.md](../07_api/04_master.md) · [../07_api/08_work_orders.md](../07_api/08_work_orders.md) | 다른 값으로 다시 요청한다 |
+| common.duplicate_key | 409 | 유일 제약 컬럼에 이미 있는 값을 쓴다 — tag_master.tag_code · work_order.order_no(원본 architecture.md §6 ERD의 UK) · site.site_code · production_line(site_id, line_code) · device.device_code(05_data_stores/02 UNIQUE) | [../07_api/04_master.md](../07_api/04_master.md) · [../07_api/08_work_orders.md](../07_api/08_work_orders.md) | 다른 값으로 다시 요청한다 |
 | common.rate_limited | 429 | 사용자 · 토큰 기준 분당 요청 수가 한도를 넘었다. 판정 키는 rl:{class}:{user_id}:{unix_minute} INCR이며(키 모양 정본 [../05_data_stores/05_redis_keyspace.md](../05_data_stores/05_redis_keyspace.md)) **IP 기준이 아니다** — 모든 요청이 127.0.0.1에서 오므로 IP 기준은 전원을 한 사용자로 센다(원본 architecture.md §11.2). 한도 값은 2계층 조정값이며 소유처는 [../12_security/03_api_surface_defense.md](../12_security/03_api_surface_defense.md) | 전 REST 표면 | 다음 분 창까지 기다린다 |
-| common.postgres_unavailable | 503 | PostgreSQL에 접속할 수 없어 업무 읽기 · 쓰기가 실패한다. 시계열 조회는 영향을 받지 않는다 — Dictionary가 마지막 적재 값을 유지한다(원본 architecture.md §17). 최신값 단일 태그 조회는 태그 → 설비 해석(cache:tagmeta 미스)이 PostgreSQL에 막히면 이 코드다 — 설비 전체 조회는 값을 내고 메타만 비운다(W4 판정 · [../06_pipeline/05_realtime_read.md](../06_pipeline/05_realtime_read.md)) | 업무 CRUD 표면 · 로그인 · 최신값 단일 태그([../07_api/06_realtime.md](../07_api/06_realtime.md)) | 백오프 후 다시 요청한다 |
+| common.postgres_unavailable | 503 | PostgreSQL에 접속할 수 없어 업무 읽기 · 쓰기가 실패한다. 시계열 조회는 영향을 받지 않는다 — Dictionary가 마지막 적재 값을 유지한다(원본 architecture.md §17). 최신값 단일 태그 조회는 태그 → 설비 해석(cache:tagmeta 미스)이 PostgreSQL에 막히면 이 코드다 — 설비 전체 조회는 값을 내고 메타만 비운다(W4 판정 · [../06_pipeline/05_realtime_read.md](../06_pipeline/05_realtime_read.md)) | 업무 CRUD 표면 · 로그인 · 인가 단계(권한 캐시 미스 — 인증 표면 전부 · REQ-AUT-15) · 최신값 단일 태그([../07_api/06_realtime.md](../07_api/06_realtime.md)) | 백오프 후 다시 요청한다 |
 
 ### auth — 인증 · 인가
 
@@ -87,6 +88,7 @@
 | 코드 | HTTP | 발생 조건 | 발생 표면 | 클라이언트 대응 |
 |------|:----:|----------|----------|---------------|
 | **master.scale_change_forbidden** | 409 | 기존 태그의 scale · offset_value를 바꾸는 PATCH다. 스케일 변경은 새 tag_id 발급이므로 기존 행 수정으로 받지 않는다(원본 architecture.md §12 · REQ-MST-07) | [../07_api/04_master.md](../07_api/04_master.md) | 새 태그 발급 동작으로 다시 요청한다 |
+| **master.reissue_source_inactive** | 409 | 새 태그 발급(reissue)의 원본 태그가 이미 비활성이다 — 비활성 태그에서 다시 발급하면 계보가 갈라진다(W5 판정 · [../07_api/04_master.md](../07_api/04_master.md) #7) | [../07_api/04_master.md](../07_api/04_master.md) | 현재 활성 후속 태그에서 발급한다 |
 
 ### timeseries — 시계열 조회
 
@@ -110,12 +112,14 @@
 | 코드 | HTTP | 발생 조건 | 발생 표면 | 클라이언트 대응 |
 |------|:----:|----------|----------|---------------|
 | **alarms.ack_not_allowed** | 409 | 확인 대상 행이 state CLEARED이거나 acked_at이 이미 채워져 있다. 두 경우는 대응이 같아 한 코드로 묶는다. CLEARING 중인 열린 행은 확인할 수 있다(REQ-ALM-14) | [../07_api/07_alarms.md](../07_api/07_alarms.md) | 목록을 다시 읽는다. 같은 요청의 재시도 금지 |
+| **alarms.eval_store_unavailable** | 503 | 판정 전수 분석 조회(alarm_eval) 중 ClickHouse 접속 불가 · 타임아웃이다. **timeseries.clickhouse_unavailable을 빌려 쓰지 않는다** — 네임스페이스는 표면 소유 도메인을 따른다(W5 판정 · [../07_api/07_alarms.md](../07_api/07_alarms.md) #6) | [../07_api/07_alarms.md](../07_api/07_alarms.md) | 백오프 후 다시 요청한다 |
 
 ### work_orders — 작업지시
 
 | 코드 | HTTP | 발생 조건 | 발생 표면 | 클라이언트 대응 |
 |------|:----:|----------|----------|---------------|
-| **work_orders.invalid_status_transition** | 409 | 현재 status에서 허용 전이 표 밖의 status로 바꾸려 한다(REQ-WRK-04). 조건은 전이 표에 대해 정의되므로 status 값 집합(W3 확정)과 무관하게 코드가 성립한다 | [../07_api/08_work_orders.md](../07_api/08_work_orders.md) | 현재 상태를 다시 읽고 허용 전이로 요청한다 |
+| **work_orders.invalid_status_transition** | 409 | 현재 status에서 허용 전이 표 밖의 status로 바꾸려 한다(REQ-WRK-04). 조건은 전이 표에 대해 정의되므로 status 값 집합(W3 확정)과 무관하게 코드가 성립한다. 요청의 fromStatus가 현재 status와 다를 때(동시 전이 경합)도 이 코드다 | [../07_api/08_work_orders.md](../07_api/08_work_orders.md) | 현재 상태를 다시 읽고 허용 전이로 요청한다 |
+| **work_orders.production_log_not_allowed** | 409 | 작업지시가 IN_PROGRESS가 아닐 때 생산 실적을 기록하려 한다(W5 판정 · [../07_api/08_work_orders.md](../07_api/08_work_orders.md) #7) | [../07_api/08_work_orders.md](../07_api/08_work_orders.md) | 작업지시 상태를 확인하고 진행 중인 지시에만 기록한다 |
 
 ### datagen — 부하 주입
 
@@ -129,12 +133,12 @@
 
 ## 종수 산정 기준
 
-**전수는 19종 · 네임스페이스 9(정의) · 8(코드 보유)**다. 세는 자리는 이 절 하나이며 다른 절은 이 수를 다시 세지 않는다.
+**전수는 22종 · 네임스페이스 9(정의) · 8(코드 보유)**다. 세는 자리는 이 절 하나이며 다른 절은 이 수를 다시 세지 않는다.
 
 | 산출 축 | 내역 | 합 |
 |--------|------|:--:|
-| 네임스페이스별 | common 5 · auth 6 · master 1 · timeseries 2 · realtime 1 · alarms 1 · work_orders 1 · datagen 2 · metrics 0 | 5 + 6 + 1 + 2 + 1 + 1 + 1 + 2 = **19** |
-| HTTP 상태별 | 400 2(validation_failed · too_many_tags) · 401 4 · 403 1 · 404 2(not_found · bulk_disabled) · 409 4(duplicate_key · scale_change_forbidden · ack_not_allowed · invalid_status_transition) · 429 1 · 503 5(postgres_unavailable · token_store_unavailable · clickhouse_unavailable · latest_unavailable · stream_full) | 2 + 4 + 1 + 2 + 4 + 1 + 5 = **19** |
+| 네임스페이스별 | common 5 · auth 6 · master 2 · timeseries 2 · realtime 1 · alarms 2 · work_orders 2 · datagen 2 · metrics 0 | 5 + 6 + 2 + 2 + 1 + 2 + 2 + 2 = **22** |
+| HTTP 상태별 | 400 2(validation_failed · too_many_tags) · 401 4 · 403 1 · 404 2(not_found · bulk_disabled) · 409 6(duplicate_key · scale_change_forbidden · reissue_source_inactive · ack_not_allowed · invalid_status_transition · production_log_not_allowed) · 429 1 · 503 6(postgres_unavailable · token_store_unavailable · clickhouse_unavailable · latest_unavailable · eval_store_unavailable · stream_full) | 2 + 4 + 1 + 2 + 6 + 1 + 6 = **22** |
 | 네임스페이스 정의 | 표면 있는 도메인 8(auth · master · timeseries · realtime · alarms · work_orders · datagen · metrics) + common 1 | 8 + 1 = **9** |
 | 코드 보유 네임스페이스 | common · auth · master · timeseries · realtime · alarms · work_orders · datagen — metrics만 0 | **8** |
 
@@ -174,6 +178,8 @@ W1이 원본에 실패 동작이 없어 보류한 후보 8건은 W2 요구사항
 | 작업지시 상태 전이 위반 | 허용 전이 표 밖 거절 | **work_orders.invalid_status_transition/409 신설** | [../03_requirements/11_work_orders.md](../03_requirements/11_work_orders.md) REQ-WRK-04 |
 
 검산: 신설 5 + 재사용 1 + 코드 없음 2 = **8**
+
+W5 표면 판정이 낳은 실패 3건은 보류를 거치지 않고 표면 확정과 같은 변경 단위에서 채번했다 — master.reissue_source_inactive/409 · alarms.eval_store_unavailable/503 · work_orders.production_log_not_allowed/409.
 
 ## 관련 문서
 

@@ -2,6 +2,7 @@
 
 > **대상**: 실시간(RLT)의 동작 계약 — 최신값 읽기 · STALE 판정 · 메타 부착 · 빈 키 복원과 Redis 불가 503의 구분 · SW-02 읽기 포트 교체 · WebSocket 연결과 인증 · 스로틀 병합 · 연결 관리 · 재연결 동기화 · 알람 푸시 · 무효화 신호 중계 · ClickHouse 중단 중 최신값 정지의 표시 — REQ-RLT-NN 채번 정본
 > **작성일**: 2026-09-24
+> **개정일**: 2026-09-24 — W5 판정 반영 — REQ-RLT-12 느린 구독자 절단을 둘로 가름 — 브라우저 단위 소켓 송신 대기량 한도(4413) · Redis 출력 버퍼 한도는 api 구독 연결 보호의 최후선 · 조정값 7 → **8** — REQ 수 불변
 > **개정일**: 2026-09-24 — W4 판정 반영 — 무효화 체인 단 번호를 6단 정본(07_business_crud · ADR-12)에 맞춤(⑤단 → ⑥단)
 > **원천**: 원본 data_flow.md §5 · §7.2 · §9 · §9.1 · §9.2 · §12.2 · §12.4 · §15 · §17(커밋 ff66a37) · 원본 architecture.md §8.1 · §8.2 · §10.1 · §11 · §11.2 · §17 · §18(커밋 ff66a37) · 원본 implementation_plan.md §4.1 · §5 S2 · S6 · §7.2 · §7.4 · §7.5(커밋 ff66a37) · D-06 · [../02_features/08_realtime.md](../02_features/08_realtime.md) RLT-01~09 · [../02_features/13_switch_matrix.md](../02_features/13_switch_matrix.md) SW-02 · SW-06 · SW-07 · [../11_glossary/05_units_and_time.md](../11_glossary/05_units_and_time.md) STALE 판정 · [../11_glossary/02_error_codes.md](../11_glossary/02_error_codes.md) realtime.latest_unavailable
 
@@ -34,7 +35,7 @@
 | **REQ-RLT-09** | /ws/realtime 연결은 첫 메시지로 토큰을 받아 인증하고 **URL에 토큰을 받지 않는다.** 핸드셰이크 Origin은 CORS 허용 목록과 같은 규칙으로 검증한다. 인증 · Origin 실패는 HTTP 코드가 아니라 연결 종료로 표현한다(S7 이후) | 원본 architecture.md §11.2 · §18 · 원본 data_flow.md §9 · RLT-05 · [02_auth.md](./02_auth.md) | URL 토큰은 접근 로그 · 브라우저 기록에 남아 액세스 토큰이 유출된다 · Origin을 보지 않으면 다른 오리진의 페이지가 로그인된 브라우저로 소켓을 연다 | 쿼리 파라미터 토큰 연결 → 거절 · 허용 밖 Origin → 종료 · 종료 코드 대조([../07_api/11_websocket.md](../07_api/11_websocket.md)) | RLT-05 | F-07 | 해당 없음 — 연결 종료 |
 | **REQ-RLT-10** | 구독한 설비마다 ch:rt:{device_id}를 구독하고 소켓 ↔ 설비 매핑을 인스턴스 안 구독 레지스트리가 갖는다. 소켓이 닫히면 그 소켓의 매핑을 지우고, 구독자가 0이 된 채널은 구독을 해지한다 | 원본 data_flow.md §9 · RLT-05 · RLT-07 | 레지스트리를 정리하지 않으면 닫힌 소켓 몫의 채널 구독이 남아 Redis 출력 버퍼와 api 메모리가 연결 횟수에 비례해 새어 나간다 | 연결 · 구독 · 종료 N회 반복 → 활성 구독 채널 수가 열린 소켓의 구독 합과 일치 | RLT-05 · RLT-07 | F-07 | 해당 없음 |
 | **REQ-RLT-11** | 스로틀 창 안에 들어온 같은 태그의 중간값을 버리고 최종값만 한 프레임으로 보낸다. 창 크기는 SW-07이며 0이면 병합 없이 매 갱신을 전송한다 | 원본 data_flow.md §9 · §9.1 · RLT-06 · SW-07 | 병합이 없으면 태그 500개 · 10 Hz에서 연결당 초당 수천 프레임이 나가 브라우저 탭이 멈추고 api 이벤트 루프가 팬아웃에 묶인다 | SW-07 기본값과 0에서 같은 부하 → 연결당 초당 프레임 수 · nodejs_eventloop_lag 대조 | RLT-06 | F-07 | 해당 없음 |
-| **REQ-RLT-12** | 주기 ping에 pong이 연속으로 정해진 횟수만큼 오지 않으면 소켓을 닫고 구독을 정리한다. 느린 구독자는 Redis Pub/Sub 출력 버퍼 한도로 강제 절단된다 | 원본 data_flow.md §9 · §9.2 · RLT-07 | 죽은 소켓을 닫지 않으면 끊긴 클라이언트 몫의 프레임 생성이 계속된다 · 출력 버퍼 한도가 없으면 느린 구독자 하나가 Redis 메모리를 채워 봉인 계열 쓰기(XADD)까지 OOM으로 막는다 | 클라이언트 pong 차단 → 정해진 주기 후 연결 종료 · 수신 지연 클라이언트 → 절단 · Redis client list의 출력 버퍼 상한 확인 | RLT-07 | F-07 | 해당 없음 |
+| **REQ-RLT-12** | 주기 ping에 pong이 연속으로 정해진 횟수만큼 오지 않으면 소켓을 닫고 구독을 정리한다. 느린 브라우저는 게이트웨이의 **소켓 송신 대기량 한도**로 그 소켓만 절단한다(종료 코드 4413). Redis Pub/Sub 출력 버퍼 한도는 **api 구독 연결 보호의 최후선**이다 — 넘으면 인스턴스의 구독 연결이 끊겨 전원 푸시가 멈추므로(4503) 송신 대기량 한도가 먼저 걸리게 둔다(W5 판정) | 원본 data_flow.md §9 · §9.2 · RLT-07 · [../07_api/11_websocket.md](../07_api/11_websocket.md) | 죽은 소켓을 닫지 않으면 끊긴 클라이언트 몫의 프레임 생성이 계속된다 · 느린 브라우저를 출력 버퍼로 다루면 탭 하나의 지연이 인스턴스 전원의 푸시 중단이 된다 · 출력 버퍼 한도가 없으면 api가 채널을 못 따라갈 때 Redis 메모리를 채워 봉인 계열 쓰기(XADD)까지 OOM으로 막는다 | 클라이언트 pong 차단 → 정해진 주기 후 연결 종료 · 수신 지연 브라우저 → 그 소켓만 4413 · 다른 소켓 푸시 계속 · Redis client list의 출력 버퍼 상한 확인 | RLT-07 | F-07 | 해당 없음 |
 | **REQ-RLT-13** | 클라이언트는 끊기면 지수 백오프(상한 있음)로 재연결하고 **재연결 직후 REST 최신값을 1회 읽어** 끊긴 동안의 공백을 메운다. 서버는 끊긴 동안의 메시지를 재전송하지 않는다 | 원본 data_flow.md §9 · §9.2 · RLT-07 · [14_acceptance_criteria.md](./14_acceptance_criteria.md) WebSocket 재연결 | 동기화가 없으면 재연결 전 마지막 값이 화면에 남아 끊긴 동안의 변화가 영영 보이지 않는다 · 백오프 상한이 없으면 api 재시작 동안 전 클라이언트가 재연결 폭주를 건다 | 연결 강제 종료 후 복구 → 재연결 간격이 지수로 증가 · 재연결 직후 REST 최신값 요청 1건 · 화면 값 = rt:latest | RLT-07 | F-07 · F-03 | 해당 없음 |
 | **REQ-RLT-14** | ch:alarm을 구독해 알람 발생 · 해제 이벤트를 연결된 클라이언트에 브로드캐스트한다. **알람을 판정하지 않고 확인을 받지 않으며**, 전달 실패가 알람 확정에 영향을 주지 않는다 | 원본 data_flow.md §8 · §9.2 · RLT-08 · [10_alarms.md](./10_alarms.md) | 푸시 전달을 확정 조건으로 두면 구독자가 없는 순간의 알람이 확정되지 않는다 — Pub/Sub은 구독자 없는 메시지를 버린다 | 구독자 0에서 알람 발생 → alarm_event 행 생성 · 구독자 있을 때 → 발생 · 해제 프레임 수신 | RLT-08 | F-06 · F-07 | 해당 없음 |
 | **REQ-RLT-15** | ch:cacheinv를 구독해 마스터 쓰기 뒤의 무효화 신호를 WebSocket으로 브라우저에 전달한다. 이 채널은 SW-06의 대상이 아니다 — SW-06 off에서도 구독을 유지한다 | 원본 implementation_plan.md §7.4 · RLT-09 · [../02_features/13_switch_matrix.md](../02_features/13_switch_matrix.md) SW-06 판정 | 신호가 브라우저에 닿지 않으면 무효화 체인이 BFF에서 끝나 브라우저 쿼리 캐시가 staleTime만큼 옛 값을 보여 캐시 정합성 인수 기준이 반드시 실패한다 · SW-06이 이 채널까지 끄면 정합성 계약이 스위치 상태에 따라 달라진다 | 태그명 변경 → 브라우저가 신호 수신 · 다음 조회에 새 이름 · SW-06 off에서 같은 결과 | RLT-09 | F-05 | 해당 없음 |
@@ -65,9 +66,10 @@
 | 스로틀 창 | SW-07 환경변수 | 기동 시 | 런타임 토글 | 기본 on 값 | 100 ms · [../02_features/13_switch_matrix.md](../02_features/13_switch_matrix.md) |
 | ping 주기 · pong 미수신 허용 횟수 | 게이트웨이 | 연결마다 | 무기한 유지 | 기동 거부 | 30초 · 3회 · [../07_api/11_websocket.md](../07_api/11_websocket.md) |
 | 재연결 백오프 시작 · 상한 | 클라이언트 | 끊김 시 | 고정 간격 재시도 | 클라이언트 기본 | 1초 → 최대 30초 · 상동 |
-| Pub/Sub 출력 버퍼 한도 | Redis 설정 client-output-buffer-limit pubsub | 구독 연결마다 | 한도 없음 | Redis 기본값(사용 금지) | 미정 · [../09_tech_stack/03_data_infra.md](../09_tech_stack/03_data_infra.md) |
+| 소켓 송신 대기량 한도 | 게이트웨이 | 소켓마다 · 프레임 송신 시 | 한도 없음 · 출력 버퍼로 대신 절단 | 기동 거부 | 미정 · [../07_api/11_websocket.md](../07_api/11_websocket.md) |
+| Pub/Sub 출력 버퍼 한도 | Redis 설정 client-output-buffer-limit pubsub | api 구독 연결마다 | 한도 없음 | Redis 기본값(사용 금지) | 미정 · [../09_tech_stack/03_data_infra.md](../09_tech_stack/03_data_infra.md) |
 
-- 검산: 조정값 = STALE 배수 · 복원 창 · 복원 락 · 스로틀 창 · ping · 백오프 · 출력 버퍼 = **7**
+- 검산: 조정값 = STALE 배수 · 복원 창 · 복원 락 · 스로틀 창 · ping · 백오프 · 송신 대기량 · 출력 버퍼 = **8**
 - **복원 락 키의 식별자 자리가 조회 캐시와 다르다.** 조회 캐시 락은 쿼리 해시 단위이고 복원 락은 설비 단위다 — 같은 lock:rebuild 접두를 쓰므로 키 모양의 정본([../05_data_stores/05_redis_keyspace.md](../05_data_stores/05_redis_keyspace.md))이 두 식별자 공간을 가른다.
 
 ## 스위치 계약

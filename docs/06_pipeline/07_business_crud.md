@@ -2,6 +2,8 @@
 
 > **대상**: F-05 흐름의 기전 정본 — 읽기 · 쓰기 경로 · BFF 경유 기준 · **캐시 무효화 체인 6단(ADR-12)의 단계 번호 정본** · 도메인별 체인 적용 · 작업지시 no-store · 층별 옛 값의 창 · 체인 실패와 degrade · 인증 흐름의 BFF 경유 · 감사 트랜잭션
 > **작성일**: 2026-09-24
+> **개정일**: 2026-09-24 — W5 판정 반영 — 미확인 "⑥ 신호 키 → 브라우저 쿼리 키 대응"을 닫는다(08_screen/01 §무효화 신호 수신 — 신호 키 4 · staleTime 관계식) · staleTime 값만 09_tech_stack/01(W6)에 남는다 — 체인 단 수 불변
+> **개정일**: 2026-09-24 — W5 판정 반영 — 사이트 · 라인 체인 행의 "사이트 목록 사본" → **Redis 사본 없음**(② · ③ · ⑥ 없음 · ⑤만) · 목록 BFF 경유 행에 사이트 · 라인 · 태그 목록 Redis 사본 부재 명시 — 쓰기 유형 수 불변
 > **원천**: 원본 data_flow.md §7 · §7.1 · §7.2 · §17(커밋 ff66a37) · 원본 architecture.md §10.1 · §11.2 · §12(커밋 ff66a37) · 원본 implementation_plan.md §7.4(커밋 ff66a37) · docs_plan.md 보정 #5 · 웨이브 인계(작업지시 BFF 캐시 키 · 무효화 층별 반영 시간) · ADR-02 · ADR-12 · ADR-16 · ADR-19 · D-04 · REQ-GLB-12 · REQ-MST-01~14 · REQ-WRK-01~09 · REQ-AUT-14 · REQ-ALM-02 · 13 · 14 · REQ-RLT-15 · [../05_data_stores/05_redis_keyspace.md](../05_data_stores/05_redis_keyspace.md) · [../05_data_stores/07_cross_store_consistency.md](../05_data_stores/07_cross_store_consistency.md) §즉시 반영
 
 F-05는 **사람이 쓰는 업무 데이터가 PostgreSQL 트랜잭션으로 확정되고 사본들이 지워지기까지**다. 분기 ③계층의 흐름이며 **Stream을 한 번도 지나지 않는다** — 커밋 응답 직후의 재조회가 새 값을 봐야 하고(read-your-writes), 변경과 감사가 한 트랜잭션이어야 하기 때문이다(REQ-GLB-12 · [04_routing.md](./04_routing.md) §③ 업무 쓰기).
@@ -32,7 +34,7 @@ F-05는 **사람이 쓰는 업무 데이터가 PostgreSQL 트랜잭션으로 확
 | 요청 | 경로 | BFF 서버 fetch 캐시 | 이유 | 반대로 두면 |
 |------|------|------|------|------|
 | 로그인 · 토큰 갱신 · 로그아웃 | 브라우저 → BFF → api | 없음 | httpOnly 리프레시 쿠키를 서버에서만 다룬다 — **BFF가 남는 가장 중요한 이유** | 직결이면 브라우저 JS가 리프레시 토큰을 다뤄 XSS 한 번에 장기 토큰이 샌다 |
-| 설비 · 태그 · 사이트 목록 | 브라우저 → BFF → api | 있음(현행 참고 revalidate 30초) | 저빈도 · 사용자 공통 — BFF가 한 번 더 흡수한다 | 직결이면 목록 요청이 전부 api · Redis에 닿는다 |
+| 설비 · 태그 · 사이트 목록 | 브라우저 → BFF → api | 있음(현행 참고 revalidate 30초) | 저빈도 · 사용자 공통 — BFF가 흡수한다 · **사이트 · 라인 · 태그 목록은 Redis 사본을 두지 않는다**(W5 판정 — BFF가 유일한 목록 사본) | 직결이면 목록 요청이 전부 api에 닿고 사이트 · 라인 · 태그 목록은 PostgreSQL까지 간다 |
 | 마스터 쓰기 | 브라우저 → BFF → api | 쓰기 성공 시 해당 태그 무효화(⑤) | 웹 오리진 하나로 쿠키 · CORS가 단순하다 | 직결이면 BFF 캐시가 쓰기를 모르고 옛 목록을 30초 낸다 |
 | 작업지시 · 실적 · 알람 규칙 | 브라우저 → BFF → api | **no-store** | ③계층 read-your-writes — 상태 전이 직후 목록이 옛 상태면 전이 요청이 두 번 온다 | 캐시하면 체인 ⑤를 작업지시에도 걸어야 해 체인이 넓어진다 |
 | 최신값 조회 | 브라우저 → api 직결 | 해당 없음 | 초당 수 회 — 고빈도에 1홉을 더할 이유가 없다 | [05_realtime_read.md](./05_realtime_read.md) |
@@ -59,7 +61,7 @@ F-05는 **사람이 쓰는 업무 데이터가 PostgreSQL 트랜잭션으로 확
 - 검산: 단 = 커밋 1 + 커밋 뒤 5 = **6** — ADR-12와 같다 · 응답 전 3(①②③) · BFF 응답 전 1(⑤) · 응답 후 2(④⑥)
 - **④를 응답 뒤로 둔 것은 이 문서의 판정이다.** 재적재는 tag_master 전체를 다시 읽는 동기 명령이라 태그 수에 비례해 느려진다 — 응답 앞에 두면 CRUD 지연 예산(원본 목표 80 ms)에 재적재 시간이 더해진다. 대가는 커밋 직후 수백 ms 동안의 옛 이름이며, 설비 · 사이트 쓰기는 dict_tag 내용(태그 필드 · device_id)을 바꾸지 않으므로 ④를 걸지 않는다.
 - **⑤의 주체가 BFF인 이유** — Next.js 서버는 호스트 프로세스 하나이고 마스터 쓰기가 전부 BFF를 지나므로, 쓰기 성공을 본 BFF가 스스로 무효화하면 된다. **잔여 — BFF를 거치지 않은 쓰기**(k6 · 수동 호출이 api에 직결)는 ⑤가 걸리지 않아 revalidate 창만큼 옛 목록이 남는다.
-- **⑥은 쓴 사람의 브라우저에도 필요 없다 — 자기 쓰기 성공에서 로컬 무효화한다.** ⑥은 다른 사용자 화면을 위한 단이다. 신호의 키 이름 → 쿼리 키 대응은 [../08_screen/01_standards.md](../08_screen/01_standards.md)(W5)가 정한다.
+- **⑥은 쓴 사람의 브라우저에도 필요 없다 — 자기 쓰기 성공에서 로컬 무효화한다.** ⑥은 다른 사용자 화면을 위한 단이다. 신호의 키 이름 → 쿼리 키 대응은 [../08_screen/01_standards.md](../08_screen/01_standards.md) §무효화 신호 수신이 정한다(W5 닫힘).
 - ch:cacheinv는 SW-06의 대상이 아니다 — 끄면 정합성 계약이 스위치 상태에 따라 달라진다(ADR-12 파급).
 
 ### 체인 번호 대응
@@ -87,7 +89,7 @@ F-05는 **사람이 쓰는 업무 데이터가 PostgreSQL 트랜잭션으로 확
 | 태그 등록 · 수정 · 비활성화 · 스케일 변경 | cache:tagmeta:{tag_id}(발급 · 비활성화 둘 다) | cache:tagmeta:{tag_id} | 건다 | 건다 | 건다 |
 | 설비 등록 · 수정 · 비활성화 | cache:devlist:{site_id} | cache:devlist:{site_id} | 없음 | 건다 | 건다 |
 | **modbus_config 수정** | 없음 — 사본 키가 없다 | **cache:devlist:{site_id}** | 없음 | 없음 | 없음 |
-| 사이트 · 라인 | 사이트 목록 사본 | 상동 키 | 없음 | 건다 | 건다 |
+| 사이트 · 라인 | 없음 — **Redis 사본을 두지 않는다**(W5) | 없음 — 실을 키 이름이 없다 | 없음 | 건다 | 없음 — 다른 사용자 화면은 staleTime만큼 옛 목록 |
 | 알람 규칙 | cache:alarmrules | cache:alarmrules | 없음 | no-store | 건다 |
 | 알람 확인(ACK) | cache:alarmevents(키 하나) | 없음 | 없음 | no-store | 없음 — ch:alarm 목록 재조회가 맡는다 |
 | 작업지시 · 실적 | cache:workorders(키 하나) | 없음 | 없음 | **no-store** | 없음 |
@@ -96,6 +98,7 @@ F-05는 **사람이 쓰는 업무 데이터가 PostgreSQL 트랜잭션으로 확
 - 검산: 쓰기 유형 = **8**
 - **modbus_config만 바꾸는 쓰기도 ③을 낸다(이 문서 판정).** 지울 사본은 없지만 Collector가 ch:cacheinv로 접속 설정 변경을 알고 그 설비를 다시 읽는다([02_collect.md](./02_collect.md) §실행 중 마스터 변경 반영). 신호가 없으면 접속 설정 변경이 api 재기동 전까지 폴링에 반영되지 않는다.
 - **작업지시에 ③ · ⑥을 걸지 않는 이유** — Redis 목록은 Hash 키 하나라 ②로 조합 전부가 지워지고, BFF는 no-store이며, 다른 사용자 화면은 cache:workorders TTL(현행 참고 60초)만큼 늦는 것을 허용한다. ③계층의 read-your-writes는 **쓴 사람**의 보장이다.
+- **사이트 · 라인 · 태그 목록에 Redis 사본을 두지 않는다(W5 리드 판정 · 키 패턴 수 불변).** 목록은 저빈도 · 사용자 공통이라 BFF 서버 fetch 캐시가 흡수하고, Redis 사본을 더 두면 ②단의 삭제 대상만 늘고 흡수할 요청이 남지 않는다. 태그 목록 표면은 PostgreSQL을 읽고 태그 단건 · 메타 부착만 cache:tagmeta:{tag_id}를 쓴다([../07_api/04_master.md](../07_api/04_master.md)).
 - 태그 스케일 변경은 새 tag_id 발급 · 이전 태그 비활성화 · tag_master_history · audit_log가 한 트랜잭션이고(REQ-MST-07) 두 tag_id 모두 ②③을 건다.
 
 ## 작업지시 no-store와 목록 Hash
@@ -162,7 +165,7 @@ W3 판정(cache:workorders Hash · BFF no-store)의 기전이다.
 | 항목 | 상태 | 확정 자리 |
 |------|------|------|
 | 층별 반영 시간 · CRUD p95 | 3계층 미확인 — 원본 예상치 Dictionary 최대 10분(④ 생략 시) · BFF 최대 30초 · CRUD 원본 목표 100 ms | EXP(W6 채번) · REQ-NFR-09 |
-| ⑥ 신호 키 → 브라우저 쿼리 키 대응 · staleTime 값 | 미정 | [../08_screen/01_standards.md](../08_screen/01_standards.md)(W5) · [../09_tech_stack/01_frontend.md](../09_tech_stack/01_frontend.md)(W6) |
+| ⑥ 신호 키 → 브라우저 쿼리 키 대응 · staleTime 값 | **대응은 닫힘**(W5 — 신호 키 4 · staleTime은 가장 가까운 서버 층 수명 하한과 같다는 관계식) · staleTime 설정값만 미정 | [../08_screen/01_standards.md](../08_screen/01_standards.md) §무효화 신호 수신 · [../09_tech_stack/01_frontend.md](../09_tech_stack/01_frontend.md)(W6) |
 | BFF를 거치지 않은 쓰기의 ⑤ 누락 | 잔여 — revalidate 창만큼 | 한계 등재(W4 반영) |
 | 체인 번호 표기 통일(5단 → 6단) | 대응표로 읽는다 | W4 반영 |
 | 캐시 삭제 · 재적재 · 발행 실패 계수 이름 | 미정 | [../10_observability/01_metrics_catalog.md](../10_observability/01_metrics_catalog.md)(W6) |

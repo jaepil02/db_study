@@ -1,9 +1,9 @@
 # docs/ 설계 문서군 구축 계획
 
-> **상태**: W4 완료(2026-09-24) · W5 착수
-> **완료된 것**: 실행 계획 확정(아래 "실행 계획 보정" 절) · docs/ 12폴더 재생성 · W0 14본(docs/README.md · docs/CLAUDE.md · 폴더 README 12본 골격판) · 린트 .omc/docs_lint.py 오류 0건 · W1 11본(11_glossary 5 · 01_overview 6) — 에러 코드 14 · D-01~D-12 · W2a 13본(02_features) — 기능 91 · SW 10 · 역할 3 · W2b 14본(03_requirements 01~14) — REQ 228 · AC 45 · 에러 코드 19 · W3 20본(04_architecture 9 · 05_data_stores 11) — ADR 25 · SW 11(D-13) · 키 패턴 18 · 봉인 26 · W4 12본(06_pipeline) — F-01~F-10 · 분기 기전 19행 · 한계 등재 17
-> **다음 작업**: W5 — 팀원 2명(w5-api: 07_api 01~11 / w5-screen: 08_screen 01~07). 착수 전 리드가 API 문서 번호 · 화면 코드 목록 선점. 웨이브 인계 표의 W5 행 전부 포함
-> **팀원 누적**: 8 / 15 — w1-glossary · w1-overview · w2-features · w2-req-a · w2-req-b · w3-arch · w3-stores · w4-pipeline(전원 종료)
+> **상태**: W5 완료(2026-09-24) · W6 착수
+> **완료된 것**: 실행 계획 확정(아래 "실행 계획 보정" 절) · docs/ 12폴더 재생성 · W0 14본(docs/README.md · docs/CLAUDE.md · 폴더 README 12본 골격판) · 린트 .omc/docs_lint.py 오류 0건 · W1 11본(11_glossary 5 · 01_overview 6) — 에러 코드 14 · D-01~D-12 · W2a 13본(02_features) — 기능 91 · SW 10 · 역할 3 · W2b 14본(03_requirements 01~14) — REQ 228 · AC 45 · 에러 코드 19 · W3 20본(04_architecture 9 · 05_data_stores 11) — ADR 25 · SW 11(D-13) · 키 패턴 18 · 봉인 26 · W4 12본(06_pipeline) — F-01~F-10 · 분기 기전 19행 · 한계 등재 17 · W5 18본(07_api 11 · 08_screen 7) — API 표면 43 · 화면 10 · 에러 22 · 린트 표 열 수 검사 추가
+> **다음 작업**: W6 — 팀원 2명(w6-stack: 09_tech_stack 01~06 / w6-obs: 10_observability 01~07 · EXP-NN 채번). 웨이브 인계 표의 W6 행 전부 포함
+> **팀원 누적**: 10 / 15 — w1-glossary · w1-overview · w2-features · w2-req-a · w2-req-b · w3-arch · w3-stores · w4-pipeline · w5-api · w5-screen(전원 종료)
 > **참고**: 기존 루트 4본(architecture.md · data_flow.md · tech_stack.md · implementation_plan.md)은 **W7까지 삭제하지 않는다** — 이관 누락을 검증할 원본이 필요하다
 
 ## 실행 계획 보정 (2026-09-23 확정)
@@ -74,11 +74,18 @@ W1 w1-glossary 판정 · 미확인 — 행선지 웨이브가 확정한다.
 | S5 실측 · 04_architecture/07 | 배치 행 트리거 R 선택(현행 50,000 — M+ 초당 2회 · L 초당 10회 · 초당 1회를 원하면 R 상향) — 2계층 조정값 |
 | W6 | 주입 계획 파일 형식(09_tech_stack/05) · 창 닫힘 유예 · 대조군 COPY 타임아웃 · 최신값 락 실패 대기 · 스탬피드 대기 총량 < 재구성 p95 위반 가능(AC-25) · 스풀 재발행 속도 상한 · 분할 INSERT의 ingested_at 동일성 · W4 신설 메트릭 이름(10_observability/01) |
 | W7 · 확장 | worker 다중화 시 알람 판정 분할(04_architecture/08) |
+| W6 09_tech_stack | Compose healthcheck timeout > health 저장소 타임아웃(현행 1,000 ms)(09/03) · 환경변수 DATAGEN_BULK_ENABLED 등재(09/04) · alarm_eval 무효 구간 기록의 자리 · 확인(ACK) 신호 부재의 계측(10/01) |
+| W6 10_observability/04 | docs/measurements 기록의 **기계 판독 블록 형식**(EXP-COMPARE 대조군 역전 지점 패널을 BFF가 읽는다) · staleTime · gcTime · 링 버퍼 창 · 트렌드 창 · 콘솔 폴링 주기 현행값(09_tech_stack/01) |
+| W7 12_security | 레이트 리밋 등급 4(일반 · 대량 조회 · 내보내기 · 부하 주입) 이름 · 한도 — **부하 주입 등급 한도는 실험 부하 이상**(429가 stream_full보다 먼저 오면 측정 무효) · 로그인 시도 제한 · auth 표면 CORS 제외 판정 리뷰 · 내보내기 범위 상한 · DATAGEN_BULK_ENABLED(12/02) · WS 종료 코드 8종 리뷰(12/03) |
 | W6 | 스위치 상태 레이블 이름 · 스위치별 EXP 번호 · 모드 C 인증 비용은 S7 이후만 측정 가능 |
 | W2 02_features/12 | role_code 값 · 역할 수 · 알람 규칙 변경 권한 주체 · 실험 콘솔 접근 권한 · GEN · OBS 표면 인가 |
 | W3 04_architecture/02 · 09 | SIM · OBS의 APP_ROLE 배정 · 보정 7.2 결정 시점(S3 전 잠정안 + 교체 가능한 포트 · S6 실측으로 최종) |
 | W3 05_data_stores | 롤업 테이블 · MV 도메인 귀속(잠정 ING) · audit_log 소유(WRK) vs MST 트랜잭션 쓰기 — 한계 등재(05/02) |
 | W4 06_pipeline/04 | ②계층 "생산 카운터"(스트림 유래)와 production_log(WRK CRUD)의 구분과 분기 기전 |
+
+W5 처리(08_screen): 화면 10 확정 · 기능 → 화면 91 누락 0 · 인용 표면 42(bulk만 미인용) · GEN 화면 없음 · EXP-COMPARE 대조군 데이터는 BFF가 docs/measurements 읽기 · health에 커밋 · 프로파일 · 티어 노출.
+
+W5 처리(07_api): API 표면 43(원본 21 + 신설 22) · 에러 22종(신설 3) · points 측정 시각 epoch ms · 업무 시각 UTC ISO · WS subscribe 메시지 구독 · 종료 코드 8종 · 생성기 · 주입 제어 표면 없음 · 사이트 · 라인 · 태그 목록 Redis 사본 없음 · 느린 구독자는 소켓 단위 4413 · 매핑 변경 PATCH 허용 · tag-reissues 전원 읽기 · 실적 정정 범위 밖(한계 등재).
 
 W4 처리: F-01~F-10 채번(원본 §3~§12 대응 10/10) · 분기 기전 19행 = 정책 19행 · rt:latest 조건부 쓰기(ts 비교 스크립트) · fan-in 토큰 = 엔트리 ID 시각 창 정렬 배치 · flusher 최대 4배치 · 모드 A ts = 요청 블록 송신 직전 · BAD_TIMEOUT 메트릭만 · BOOL 레지스터 비트 미지원 · FC01 · FC02 시드 금지 유지 · 마스터 변경은 ch:cacheinv 구독으로 설비 단위 재로드 · ACK의 alarm:state 주체 = 판정기 · CLEARING 중 ACK Redis 전이 없음 · 비활성 태그 규칙 판정 제외 · 생산 카운터 파생 판정기 현 범위 밖 · SW-09 COPY는 flusher 안 CH 성공 뒤 · XACK 전 · DLQ 재처리 수동 · 원 토큰 직접 삽입 — W4 행은 닫혔다(MV 재실행 여부만 S0 실측 미확인).
 
