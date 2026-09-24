@@ -2,6 +2,7 @@
 
 > **대상**: 마스터 데이터(MST · NestJS master 모듈)의 동작 계약 — 사이트 · 라인 · 설비 · Modbus 접속 설정 · 태그 마스터 쓰기 · 논리 삭제 · 스케일 변경 · 캐시 무효화 체인 · Dictionary 원천 — REQ-MST-NN 채번 정본
 > **작성일**: 2026-09-24
+> **개정일**: 2026-09-24 — 최종 정밀 검수 — REQ-MST-08 해설의 dictGet 이름 소실 불일치 → W3 판정(전 행 적재)으로 닫힘 표기
 > **개정일**: 2026-09-24 — W7 검수 반영 — REQ-MST-09 실패 칸 보정 7.4 단 번호 ④ · ⑤ → **⑤ · ⑥**(6단 번호) · 미확인 3행 닫힘(dict_tag 비활성 · 쓰기 표면 · tag_master_history 컬럼) — REQ 수 불변
 > **개정일**: 2026-09-24 — W6 실험 채번 반영 — EXP 번호 · 메트릭 이름 반영(정본 10_observability/01 · 06)
 > **개정일**: 2026-09-24 — W5 판정 반영 — Modbus 매핑 변경 판정 — **PATCH 허용 + 감사 기록**(해석 교정 · 새 태그 발급 대상 아님) — REQ 수 불변
@@ -30,7 +31,7 @@
 | **REQ-MST-07** | **기존 태그의 scale · offset_value를 바꾸는 PATCH는 거절한다** — 코드는 master.scale_change_forbidden/409다. 스케일 변경은 별도의 새 태그 발급 동작으로만 한다 — 한 트랜잭션에서 ① 새 tag_id 발급 ② 이전 태그 비활성화 ③ tag_master_history에 이전 · 새 tag_id와 변경 전후 값 기록 ④ audit_log 기록. 표면 모양은 [../07_api/04_master.md](../07_api/04_master.md)(W5) | 원본 architecture.md §12 · docs_plan 보정 #15 · 웨이브 인계(태그 스케일 변경 PATCH) · REQ-GLB-14 | PATCH가 조용히 기존 행을 고치면 **과거 값의 공학 단위 의미가 바뀐다.** PATCH가 서버에서 새 태그를 만들어 주면 응답의 식별자가 요청 경로의 식별자와 달라져, 옛 tag_id를 쥔 클라이언트 · 알람 규칙이 비활성 태그를 계속 가리킨다 | 스케일 PATCH 주입 → 거절 · tag_master 불변 · 새 태그 발급 후 tag_master_history 1행 · 이전 tag_id의 tag_raw 값 불변 대조 | MST-06 | F-05 | master.scale_change_forbidden/409 |
 | **REQ-MST-08** | **비활성 태그는 조회에서 사라지지 않는다** — 식별자 조회는 200과 is_active false를 돌려주고 common.not_found/404는 마스터에 없는 식별자에만 쓴다. 비활성 태그는 Collector 폴링 대상에서 빠진다 — 실행 중 비활성화는 ch:cacheinv 신호로 다음 사이클부터 반영된다(W4). Dictionary는 is_active를 속성으로 싣고 비활성 태그도 적재한다(W3 판정) | 원본 architecture.md §7.4 · §12 · 웨이브 인계(비활성 태그 요청) · [../11_glossary/02_error_codes.md](../11_glossary/02_error_codes.md) common.not_found | 비활성 태그를 404로 내면 트렌드 화면이 과거 구간의 태그 메타를 얻을 길이 없어, 논리 삭제가 지키려던 **과거 데이터의 해석**이 조회에서 끊긴다 | 비활성 태그 식별자 조회 → 200 · is_active false · 없는 식별자 → 404 | MST-05 · MST-09 | F-04 · F-05 | common.not_found/404 |
 
-- **REQ-MST-08은 에러 코드를 새로 만들지 않는다.** 채번 보류 "비활성 태그 조회 · 수정 — 404인지 정상 응답인지"를 "존재하는 대상이므로 정상 응답"으로 닫는다. 비활성 태그의 **이름이 dictGet에서 사라지는 불일치**(dict_tag WHERE is_active)는 이 판정과 별개로 남는다 — §미확인 · 미설계 등재.
+- **REQ-MST-08은 에러 코드를 새로 만들지 않는다.** 채번 보류 "비활성 태그 조회 · 수정 — 404인지 정상 응답인지"를 "존재하는 대상이므로 정상 응답"으로 닫는다. 비활성 태그의 **이름이 dictGet에서 사라지는 불일치**(원본 dict_tag WHERE is_active)는 이 판정과 별개이며 W3가 닫았다 — dict_tag는 tag_master 전 행을 싣고 is_active를 속성으로 둔다([../05_data_stores/07_cross_store_consistency.md](../05_data_stores/07_cross_store_consistency.md) §비활성 태그 이름 판정).
 - **판정 — Modbus 매핑(function_code · address · data_type · word_order) 변경은 REQ-MST-04의 PATCH로 허용하고 REQ-MST-05의 audit_log(before · after)에 남긴다(W5 리드 판정).** 매핑은 같은 물리량을 어느 레지스터 · 어떤 형식으로 읽는가의 해석 교정이라 값의 공학 단위 뜻을 바꾸지 않는다 — 새 tag_id 발급 대상은 변환식(scale · offset_value) 변경뿐이다(REQ-MST-07). 교정 전후 구간의 경계는 감사 행의 acted_at이 가른다. 표면 계약은 [../07_api/04_master.md](../07_api/04_master.md) #5.
 
 ## 요구사항 — 캐시 무효화 체인 · Dictionary

@@ -2,6 +2,7 @@
 
 > **대상**: 알람(ALM)의 동작 계약 — 규칙 관리와 캐시 무효화 · 규칙 변경 감사 · 판정 대상 품질 · 배치 단위 상태 조회 · 디바운스 상태 머신 · 목적이 다른 세 쓰기와 부분 실패 · 발행 · 이벤트 조회 · 확인(ACK) 허용 조건 · 판정 이력 분석 · S7 생략 불가 — REQ-ALM-NN 채번 정본
 > **작성일**: 2026-09-24
+> **개정일**: 2026-09-24 — 최종 정밀 검수 — 비활성 태그 열린 알람 닫는 수단 — 리드 판정 대기 → 두지 않는다(W5 알람 강제 해제 표면 없음 판정 반영)
 > **개정일**: 2026-09-24 — W7 검수 반영 — 미확인 1행 닫힘(규칙 · 판정 이력 표면) — REQ 수 불변
 > **개정일**: 2026-09-24 — W4 판정 반영 — REQ-ALM-11 소진 시 DLQ → **격리 없음 · 분석 무효 구간 기록** · REQ-ALM-16 확인 주체 판정 · 미확인 2행 판정 · 비활성 태그 열린 이벤트 닫는 수단 미확인 행 **신설** — REQ 수 불변
 > **개정일**: 2026-09-24 — W3 판정 반영 — condition_type · severity 미설계 → **확정**(GT · LT · OUT_OF_RANGE · RATE_OF_CHANGE · 1 LOW · 2 MEDIUM · 3 HIGH · 정본 05_data_stores/01) · 담당자 배정 → **컬럼 두지 않음**
@@ -181,7 +182,7 @@ W1이 넘긴 인계다. 확인 표면은 PostgreSQL 행만 보고 판정하며 R
 | condition_type · severity 값 | 조건 종류 넷 · smallint 심각도 | **W3 확정** — 4값 · 1~3 | [../05_data_stores/01_postgresql_schema.md](../05_data_stores/01_postgresql_schema.md) |
 | 판정 구간 지연 예산 · 초당 판정 처리량 | 원본 지연 예산표에 알람 구간이 없다 | 미확인 — 확정 전 임의 값 고정 금지 | [../04_architecture/05_latency_budget.md](../04_architecture/05_latency_budget.md) · [13_nonfunctional.md](./13_nonfunctional.md) |
 | 비활성 태그의 알람 규칙 | 원본에 없다 | **W4 판정** — 판정 대상에서 뺀다(활성 규칙 = enabled ∧ 태그 활성) · 규칙 행 · alarm:state는 남긴다 | [../06_pipeline/08_alarm.md](../06_pipeline/08_alarm.md) |
-| 비활성 태그의 열린 이벤트를 닫는 수단 | 없다 | **미설계** — 시스템은 닫지 않는다(거짓 해제 방지) · 사람의 확인만 가능 | [../06_pipeline/08_alarm.md](../06_pipeline/08_alarm.md) · [../02_features/09_alarms.md](../02_features/09_alarms.md)(리드) |
+| 비활성 태그의 열린 이벤트를 닫는 수단 | 없다 | 닫힘 — 닫는 수단을 두지 않는다(W5 판정 — 알람 강제 해제 표면 없음 · [../07_api/README.md](../07_api/README.md) 원본에 없는 표면 행). 시스템은 거짓 해제를 막으려 닫지 않고 사람의 확인(ALM-08)만 남는다 · 잔여는 한계 등재 #17 | [../06_pipeline/08_alarm.md](../06_pipeline/08_alarm.md) · [../02_features/09_alarms.md](../02_features/09_alarms.md) |
 | 담당자 배정 | "담당자 배정 등 상태 갱신"(원본 data_flow.md §8.2) · 컬럼 없음 | **W3 판정** — 컬럼을 두지 않는다(배정 기능 없음) | [../05_data_stores/01_postgresql_schema.md](../05_data_stores/01_postgresql_schema.md)(W3) |
 | 규칙 관리 · 판정 이력 분석 표면 | API 표에 이벤트 목록 · 확인 둘뿐이다 | 닫힘 — 규칙 관리 · 판정 이력 표면 4 신설 — [../07_api/07_alarms.md](../07_api/07_alarms.md) | [../07_api/07_alarms.md](../07_api/07_alarms.md)(W5) |
 

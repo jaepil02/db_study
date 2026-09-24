@@ -2,6 +2,7 @@
 
 > **대상**: MST 도메인 REST 표면 — 사이트 · 라인 · 설비 · Modbus 접속 설정 · 태그 마스터의 조회와 쓰기 · 태그 논리 삭제 · 스케일 변경 새 태그 발급 · 무효화 체인 대상 키 · 원본에 없는 표면 판정(라인 · 사이트 · modbus_config 쓰기) · unit만 바꾸는 태그 수정 판정 · 재활성화 판정
 > **작성일**: 2026-09-24
+> **개정일**: 2026-09-24 — 최종 정밀 검수 — §층별 반영 시점 → §층별 옛 값의 창(없는 절 참조 교정)
 > **개정일**: 2026-09-24 — W5 판정 반영 — #7 비활성 원천 거절 → **master.reissue_source_inactive/409** · 사이트 · 라인 · 태그 목록 Redis 사본 없음(리드 판정) · Modbus 매핑 변경 PATCH 허용 + 감사(리드 판정) — 표면 수 불변
 > **원천**: 원본 architecture.md §6 · §11 · §12 · §18(커밋 ff66a37) · 원본 data_flow.md §7 · §7.1 · §7.2(커밋 ff66a37) · REQ-MST-01~15 · REQ-GLB-14 · ADR-12 · ADR-16 · [../02_features/02_master.md](../02_features/02_master.md) MST-01~06 · [../05_data_stores/01_postgresql_schema.md](../05_data_stores/01_postgresql_schema.md) · [../05_data_stores/02_postgresql_constraints.md](../05_data_stores/02_postgresql_constraints.md) · [../06_pipeline/07_business_crud.md](../06_pipeline/07_business_crud.md) 무효화 체인 · docs_plan.md 웨이브 인계 W5 07_api 행(unit만 바꾸는 태그 수정 · 원본에 없는 표면)
 
@@ -25,7 +26,7 @@ MST 표면은 **한 번의 저장이 네 사본 층을 건드리는 표면**이�
 | 단계 | 조회 S2(시드 최소분) · 쓰기 S4 · 인가 S7 | REQ-MST-01 · D-07 |
 
 - 검산: 항목 = **8**
-- **체인 실패로 요청을 실패시키지 않는 이유(B형)** — 이미 커밋된 쓰기가 실패 응답을 받으면 클라이언트가 같은 쓰기를 재시도해 tag_code 중복 409를 맞는다. 옛 사본은 TTL까지 남고 그 상한은 [../06_pipeline/07_business_crud.md](../06_pipeline/07_business_crud.md) §층별 반영 시점이 말한다.
+- **체인 실패로 요청을 실패시키지 않는 이유(B형)** — 이미 커밋된 쓰기가 실패 응답을 받으면 클라이언트가 같은 쓰기를 재시도해 tag_code 중복 409를 맞는다. 옛 사본은 TTL까지 남고 그 상한은 [../06_pipeline/07_business_crud.md](../06_pipeline/07_business_crud.md) §층별 옛 값의 창이 말한다.
 
 ## 표면 요약
 

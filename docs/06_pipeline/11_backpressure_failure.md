@@ -2,6 +2,7 @@
 
 > **대상**: F-10 흐름의 기전 정본 — 백프레셔 전파 체인(판정량 그룹 적체 · 히스테리시스 ADR-23) · 스풀 진입 · 재발행 · 종료 · 축출 연쇄 · **ClickHouse 중단 복구와 SW-11 두 구현의 차이** · Redis 중단(두 degrade 동시) · PostgreSQL 중단 · **DLQ 재처리 경로** · 재빌드 · 재시작 영향 · 장애 × 흐름 영향 행렬
 > **작성일**: 2026-09-24
+> **개정일**: 2026-09-24 — 최종 정밀 검수 — DLQ 재처리 그룹 이름 grp:dlq 반영 · MAXLEN만 미정으로 · §스풀 기동 시 잔여 → 실제 절 이름으로 교정
 > **개정일**: 2026-09-24 — W6 실험 채번 반영 — EXP 번호 반영(정본 10_observability/01 · 06)
 > **원천**: 원본 data_flow.md §12 · §12.1 · §12.2 · §12.3 · §12.4 · §13(커밋 ff66a37) · 원본 architecture.md §9.3 · §17(커밋 ff66a37) · 원본 implementation_plan.md §7.2 · §5 S6(커밋 ff66a37) · docs_plan.md 보정 #5(7.2 → 06_pipeline/11) · 웨이브 인계(DLQ 재처리 경로) · ADR-05 · ADR-09 · ADR-10 · ADR-13 · ADR-21 · ADR-23 · ADR-24 · D-13 · REQ-GLB-05 · 09 · 10 · REQ-COL-12 · 13 · REQ-ING-17 · REQ-NFR-01 · 02 · 16 · [../04_architecture/06_backpressure_failure.md](../04_architecture/06_backpressure_failure.md) 임계 · 단계 · 시나리오 정본 · [../05_data_stores/06_redis_memory.md](../05_data_stores/06_redis_memory.md)
 
@@ -184,7 +185,7 @@ ADR-10이 S6 실측으로 미룬 비교의 측정 자리다. 채번 · 기본값
 | 중단 범위 | 수집 · 적재 · 판정 · 조회 API가 동시에 멈춘다 | 단일 컨테이너 — 역할 분리(확장 1단계)의 직접 근거 | 원본 data_flow.md §12.4 |
 | 결측 구간 | 재기동 동안 SIM도 멈춰 생성 자체가 없다 — 장애가 아니라 정상 동작 | 실험 밖 결측은 재빌드 흔적으로 기록 | REQ-SIM-12 · REQ-TEC-15 |
 | 미소비 · PEL | Redis AOF로 보존 → 재기동 뒤 XREADGROUP 소진 · XAUTOCLAIM 회수 | 창 정렬 · 같은 토큰으로 재전달 무시 | REQ-GLB-05 |
-| 스풀 | named volume이라 남는다 → 기동 시 잔여가 있으면 복구 단계로 시작 | §스풀 기동 시 잔여 | 이 문서 판정 |
+| 스풀 | named volume이라 남는다 → 기동 시 잔여가 있으면 복구 단계로 시작 | §스풀 — 진입 · 재발행 · 종료의 기동 시 잔여 행 | 이 문서 판정 |
 | 최신값 | rt:latest는 AOF로 남는다 · 기동 복원이 조건부로 창 안을 보강 | [05_realtime_read.md](./05_realtime_read.md) | REQ-ING-11 |
 | 판정 | 판정 중 · 인계 슬롯의 배치(최대 2)의 판정을 잃는다 | XACK가 인계 앞이라 재전달되지 않는다 | [08_alarm.md](./08_alarm.md) |
 | 프로세스 메모리 | 창 버퍼 · 삽입 중 배치는 PEL에 있어 잃지 않는다 | XACK 전이다 | [03_ingest_batch.md](./03_ingest_batch.md) |
@@ -221,7 +222,7 @@ ADR-10이 S6 실측으로 미룬 비교의 측정 자리다. 채번 · 기본값
 | SW-11 최종안 · collector 채택 시 진실 문구 | 잠정 ingest — S6 실측 | ADR-10 · AC-34 |
 | 히스테리시스 폭 · 유지 시간 · 강화 계수 | 2계층 · 원본 값 없음 | [../04_architecture/06_backpressure_failure.md](../04_architecture/06_backpressure_failure.md) S6 · EXP-20 |
 | 스풀 재발행 속도 상한 | 2계층 · 현행 미정 — 적체를 주의 임계 위로 밀지 않는 속도 · 계측 spool_drain_rate | S6 · 이 문서 · EXP-20 |
-| DLQ 재처리 전용 그룹 이름 · DLQ MAXLEN 프로파일별 값 | 미정 | [../05_data_stores/05_redis_keyspace.md](../05_data_stores/05_redis_keyspace.md) · [../05_data_stores/06_redis_memory.md](../05_data_stores/06_redis_memory.md) |
+| DLQ 재처리 전용 그룹 이름 · DLQ MAXLEN 프로파일별 값 | 그룹 이름 닫힘 — grp:dlq(W4) · MAXLEN 프로파일별 값은 2계층 미정(원본 한 값 10000 · S3 DLQ 실험 뒤 06_redis_memory가 정한다) | [../05_data_stores/05_redis_keyspace.md](../05_data_stores/05_redis_keyspace.md) · [../05_data_stores/06_redis_memory.md](../05_data_stores/06_redis_memory.md) |
 | 장애 시나리오 #1에 알람 정지 추가 | 판정 — W4 반영 | [../04_architecture/06_backpressure_failure.md](../04_architecture/06_backpressure_failure.md) |
 
 ## 관련 문서

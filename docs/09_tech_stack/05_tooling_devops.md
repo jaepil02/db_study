@@ -2,6 +2,7 @@
 
 > **대상**: 개발 도구 구성 — pnpm workspace · Biome · tsc strict · Vitest · Supertest · Testcontainers · 품질 게이트 · **마이그레이션 도구 판정** · Taskfile 작업 6(migrate · seed · snapshot · restore · bench · docs:lint) · 리포지터리의 도구 파일 자리 · **SIM 주입 계획 파일 형식(판정)** · 착수 체크리스트의 도구 항목
 > **작성일**: 2026-09-24
+> **개정일**: 2026-09-24 — 최종 정밀 검수 — 미확인 등재에 타 문서가 넘긴 3행 수용(구조화 로그 보관 · 시나리오 파일 형식 · 비밀번호 교체 작업화)
 > **개정일**: 2026-09-24 — W7 검수 반영 — 미확인 표 웨이브 표지 (W7) 제거
 > **개정일**: 2026-09-24 — W6 실험 채번 반영 — 메트릭 이름 반영(정본 10_observability/01 · 06)
 > **원천**: 원본 tech_stack.md §5.1 · §10.3 · §10.5 · §11(커밋 ff66a37) · 원본 implementation_plan.md §2.1 · §6 · §9(커밋 ff66a37) · 원본 architecture.md §3(커밋 ff66a37) · docs_plan 실행 계획 보정 #4 · #9 · 웨이브 인계 W6 행(주입 계획 파일 형식) · ADR-01 · ADR-08 · [../01_overview/05_priorities_roadmap.md](../01_overview/05_priorities_roadmap.md) 착수 체크리스트 · 코드 착수 항목 · [../05_data_stores/09_migrations_seed.md](../05_data_stores/09_migrations_seed.md) · [../06_pipeline/10_datagen_inject.md](../06_pipeline/10_datagen_inject.md) §SIM 주입 제어
@@ -191,6 +192,9 @@ db_study/
 | Prisma 드리프트 검사의 파티션 처리 | 버린 대안의 실패 근거 — 공식 참조로 재확인 | [../03_requirements/16_official_references.md](../03_requirements/16_official_references.md) |
 | SIM 노출 필드 · 메트릭 이름 | 계획 파일 형식은 닫힘 · 노출 이름 **W6 판정** — sim_fault_injection_active{kind} | [../10_observability/01_metrics_catalog.md](../10_observability/01_metrics_catalog.md) |
 | CI 도입 | 선택 — 배포가 없다 | 도입 시 같은 게이트 명령 |
+| 구조화 로그의 보관 · 조회 수단 | 미설계 — 현행은 컨테이너 로그를 실험 수행자가 읽는다 · 무효 구간 이벤트를 기록으로 옮기는 절차만 계약 | 코드 착수 시 · [../10_observability/02_instrumentation.md](../10_observability/02_instrumentation.md) |
+| k6 시나리오 정의 파일 형식 · 조회 부하 도착률 | 미설계 — 모양 5종과 판정 지표만 계약 | 코드 착수 시 · [../10_observability/05_load_scenarios.md](../10_observability/05_load_scenarios.md) |
+| 저장소 비밀번호 교체 절차의 작업화 | 미설계 — 순서 계약만 있다 | 코드 착수 시 · [../12_security/02_secrets_config.md](../12_security/02_secrets_config.md) |
 
 ## 관련 문서
 

@@ -2,6 +2,7 @@
 
 > **대상**: 실시간(RLT · NestJS realtime 모듈) 기능 목록 · 기능별 경계 · 스위치 교체 · 의존 도메인 · 실패 시 보이는 것 — 기능 ID RLT-NN 채번 정본
 > **작성일**: 2026-09-24
+> **개정일**: 2026-09-24 — 최종 정밀 검수 — "표면 번호는 W5 몫" → 각 API 문서가 채번(W5 완료) · 최신값 갱신 주체 행 행선지 ADR(W3) → ADR-10(잠정 ingest) · SW-11 · EXP-15
 > **개정일**: 2026-09-24 — W7 검수 반영 — 미확인 2행 닫힘(구독 방식 · 푸시 조정값 소유처) — 기능 수 불변
 > **개정일**: 2026-09-24 — W6 실험 채번 반영 — EXP 번호 · 메트릭 이름 반영(정본 10_observability/01 · 06)
 > **개정일**: 2026-09-24 — W5 판정 반영 — RLT-07 느린 구독자 절단 — 브라우저 단위 소켓 송신 대기량 한도 · Redis 출력 버퍼는 api 구독 연결 보호의 최후선으로 가름 — 기능 수 불변
@@ -14,7 +15,7 @@ RLT는 **"지금 값"을 ClickHouse에 닿지 않고 돌려주는 도메인**이
 
 ## 기능 목록
 
-기능 ID는 이 표가 유일한 채번 자리다. 단계는 학습 단계(정본 [../01_overview/05_priorities_roadmap.md](../01_overview/05_priorities_roadmap.md))이고, 표면은 [../07_api](../07_api/README.md)의 문서명이다(표면 번호는 W5 몫).
+기능 ID는 이 표가 유일한 채번 자리다. 단계는 학습 단계(정본 [../01_overview/05_priorities_roadmap.md](../01_overview/05_priorities_roadmap.md))이고, 표면은 [../07_api](../07_api/README.md)의 문서명이다(표면 번호는 각 API 문서의 표면 요약 표가 채번한다).
 
 | 기능 ID | 기능명 | 설명 | 단계 | 흐름 | 스위치 | 표면 | 저장소 |
 |------|------|------|------|------|------|------|------|
@@ -111,7 +112,7 @@ RLT-04의 두 갈래다. 같은 "값이 없다"가 반대의 응답을 만든다
 |------|------|------|------|
 | 구독 방식 | API 표는 /ws/realtime?devices=1,2,3(쿼리 파라미터 · 원본 architecture.md §11), 흐름 시퀀스는 연결 뒤 subscribe 메시지(원본 data_flow.md §9) | 닫힘 — subscribe 메시지로 고정 · 쿼리 파라미터 구독을 받지 않는다 — [../07_api/11_websocket.md](../07_api/11_websocket.md) | [../07_api/11_websocket.md](../07_api/11_websocket.md)(W5) |
 | 최신값 조회 on/off 차이 | 원본 예상치 off 30~150 ms · on 0.3~1 ms | 미확인 — 확정 전 임의 값 고정 금지 | EXP-07 · [../10_observability/06_experiment_catalog.md](../10_observability/06_experiment_catalog.md) |
-| 최신값 갱신 주체 | 현행 Ingest · 대안 Collector | S6 실측 결정 | ADR(W3) |
+| 최신값 갱신 주체 | 현행 Ingest · 대안 Collector | S6 실측 결정 — ADR-10 잠정(ingest) · 교체 포트 SW-11 · 비교 실험 EXP-15 | [../04_architecture/09_decision_records.md](../04_architecture/09_decision_records.md) ADR-10 |
 | STALE 배수 · 복원 창 · ping 주기 · 스로틀 창 | 현행 참고 값만 있다 | 닫힘 — 소유처 확정: STALE 판정 계약 · 복원 창 · ping 주기 · 스로틀 창은 06_pipeline/05 §푸시 조정값 · 소켓 송신 대기량 한도는 07_api/11 — [../06_pipeline/05_realtime_read.md](../06_pipeline/05_realtime_read.md) | [../07_api/06_realtime.md](../07_api/06_realtime.md) · [../07_api/11_websocket.md](../07_api/11_websocket.md)(W5) |
 
 ## 관련 문서

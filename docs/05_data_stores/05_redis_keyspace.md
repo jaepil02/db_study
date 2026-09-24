@@ -2,6 +2,7 @@
 
 > **대상**: Redis 단일 인스턴스의 영역 접두 9 · 키 패턴 전수 · 값 모양 · TTL 조회 계약 · 네이밍 · 계열별 실패 전략 · Pub/Sub 채널 3 · **봉인 표** · 키 계열별 래퍼 강제(ADR-13) · 키 인계 판정 — Redis 키 패턴 채번 정본
 > **작성일**: 2026-09-24
+> **개정일**: 2026-09-24 — 최종 정밀 검수 — 빈 표 칸을 닫힌 어휘 해당 없음으로 채움(표 열 규약)
 > **개정일**: 2026-09-24 — W7 보안 판정 반영 — rl class 후보 3 → **확정 4**(general · bulk_read · export · bulk_ingest) · auth:refresh 식별자 = **토큰의 암호학적 요약값**(원문 비저장) — 키 패턴 · 봉인 칸 수 불변(정본 12_security/01 · 03)
 > **개정일**: 2026-09-24 — W4 판정 반영 — rt:latest 조건부 쓰기(새 ts ≥ 저장 ts) · DurableKeyClient 조건부 쓰기 스크립트 노출 · ch:rt 발행자 ING → **SW-11 쓰기 주체** · DLQ 값에 원 배치 토큰 · 재처리 그룹 grp:dlq · alarm:state 쓰기 주체 판정기 단독 · 체인 번호 6단 표기 · 미확인 4행 W4 판정 — 키 패턴 · 봉인 칸 수 불변
 > **원천**: 원본 architecture.md §5 · §8 · §8.1 · §8.2 · §8.3 · §10.1 · §10.3 · §11 · §11.2 · §17 · §18(커밋 ff66a37) · 원본 tech_stack.md §5.3(커밋 ff66a37) · 원본 data_flow.md §3 · §4 · §5 · §6 · §6.2 · §7 · §7.1 · §8 · §12.2(커밋 ff66a37) · 원본 implementation_plan.md §4.1 · §7.4 · §7.5(커밋 ff66a37) · docs_plan.md 이식 패턴 ② 봉인 표 · 보정 #5 · 웨이브 인계 W3 05_data_stores/05 행 전부 · ADR-05 · ADR-10 · ADR-12 · ADR-13 · [../README.md](../README.md) 고정 기준 Redis 영역 접두
@@ -54,8 +55,8 @@ TTL 없이 만들지 않는다. 사라져도 원천(PostgreSQL · ClickHouse)에
 |------|------|------|------|------|------|
 | cache:q:{sha1} | String | gzip 압축 JSON 조회 결과 | **TTL만** — 과거 구간은 불변 | TSQ-03 · 04 | 키 = 정규화 쿼리의 SHA-1 40자 |
 | cache:tagmeta:{tag_id} | Hash | 태그 메타 사본(device_id · tag_code · tag_name · unit · 매핑 · 범위 · is_active) | 태그 쓰기 커밋 뒤 DEL | MST-07 · COL-01 · RLT-02 · 03 | **태그별 키 판정** §인계 판정 |
-| cache:devlist:{site_id} | String | 설비 목록 JSON | 설비 쓰기 커밋 뒤 DEL | MST-02 | |
-| cache:alarmrules | String | 활성 규칙 전체 JSON | 규칙 쓰기 커밋 뒤 DEL | ALM-01 · 02 | |
+| cache:devlist:{site_id} | String | 설비 목록 JSON | 설비 쓰기 커밋 뒤 DEL | MST-02 | 해당 없음 |
+| cache:alarmrules | String | 활성 규칙 전체 JSON | 규칙 쓰기 커밋 뒤 DEL | ALM-01 · 02 | 해당 없음 |
 | **cache:perm:{user_id}** | String | 역할 집합 JSON | 역할 변경 커밋 뒤 DEL | AUT-05 | **신설 이름** — 원본은 TTL만 있었다 |
 | **cache:alarmevents** | Hash | 필드 = 정규화 목록 쿼리 SHA-1 · 값 = gzip JSON | 확인 커밋 뒤 **키 하나 DEL** | ALM-07 · 08 | **신설** — 첫 채움 기준 만료(EXPIRE NX) |
 | **cache:workorders** | Hash | 상동(작업지시 · 실적 조회) | 작업지시 · 실적 쓰기 커밋 뒤 키 하나 DEL | WRK-01 · 03 | **신설** — 상동 |
@@ -216,9 +217,9 @@ ADR-13(보정 7.5)의 계약이다. 인터페이스 이름과 책임만 적는�
 | 5 | lock:rebuild 식별자 공간 충돌(쿼리 해시 vs 설비) | **lock:rebuild:q:{sha1} · lock:rebuild:rt:{device_id}** 두 하위 공간 | 같은 공간 — 두 종류의 락이 이름으로 구분되지 않아 만료 값도 하나로 묶인다 |
 | 6 | 작업지시 BFF 캐시 키 | **Redis는 cache:workorders(Hash · 키 하나 DEL). BFF 서버 fetch 캐시는 두지 않는다(no-store)** — ③계층의 read-your-writes가 BFF 캐시로 깨지지 않게 | BFF 캐시 유지 — 쓰기 응답 직후 목록이 최대 revalidate 창만큼 옛 값이다. 막으려면 태그 무효화 ④단을 작업지시에도 걸어야 해 체인이 넓어진다 |
 | 7 | **rt:seq:{device_id} 소비자 없음(신규)** | **폐지.** 스캔 일련번호는 tag_raw.scan_seq · Stream 필드 s가 갖고, 갱신 확인은 rt:latest의 ts(STALE 판정)가 한다 | 유지 — 봉인 키는 축출되지 않으므로 아무도 읽지 않는 키가 설비 수만큼 영구히 남는다 |
-| 8 | **권한 캐시 키 모양(신규 · AUT-05)** | cache:perm:{user_id} | |
+| 8 | **권한 캐시 키 모양(신규 · AUT-05)** | cache:perm:{user_id} | 해당 없음 |
 | 9 | **알람 이벤트 목록 캐시 키(신규 · ALM-07)** | cache:alarmevents(Hash) | 조합별 흩은 키 — 확인 한 건의 무효화에 KEYS가 필요하다 |
-| 10 | alarm:state 최초 위반 시각의 형식(W1 판정 확정 자리) | epoch ms 정수 · 필드 7로 확장 | |
+| 10 | alarm:state 최초 위반 시각의 형식(W1 판정 확정 자리) | epoch ms 정수 · 필드 7로 확장 | 해당 없음 |
 
 - 검산: 판정 = **10** · 원본 키 폐지 3(#2 · #3 · #7) · 늘어난 키 패턴 4(#5 분할 1 · #6 cache:workorders · #8 cache:perm · #9 cache:alarmevents)
 - 원본 키 패턴 수와의 대조 — 원본 17(봉인 §8.1 5 + 캐시 §8.2 9 + 채널 3) − 폐지 3 + 분할 1(lock:rebuild) + 신설 3(cache:perm · cache:alarmevents · cache:workorders) = **18** = §영역 접두 표의 활성 수

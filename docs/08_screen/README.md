@@ -2,6 +2,7 @@
 
 > **대상**: db_study 웹(Next.js)의 화면 — 명세 표준 · 기능 추적성 · 실시간 대시보드 · 트렌드 분석 · 알람 콘솔 · 관리 화면 · 실험 콘솔
 > **작성일**: 2026-09-23
+> **개정일**: 2026-09-24 — 최종 정밀 검수 — EXP-CONSOLE 주 도메인 OBS · GEN → OBS(GEN은 간접 표시 — 02_traceability와 일치)
 > **개정일**: 2026-09-24 — W5 완성판 — 화면 10 확정(추가 0) · 기능 → 화면 91 누락 0 · GEN 화면 없음 · 대조군 역전 지점은 BFF 파일 읽기
 > **원천**: [../README.md](../README.md) · [../01_overview/03_personas_roles.md](../01_overview/03_personas_roles.md) · 원본 tech_stack.md §4 · 원본 data_flow.md §6.3 · §7.2 · §9.1 · 원본 implementation_plan.md §4 · §5 S2(커밋 ff66a37)
 
@@ -37,7 +38,7 @@ W5 착수 전 리드가 화면 코드를 선점한다. 07_api를 쓰는 팀원�
 | ADM-MASTER | 마스터 관리(사이트 · 라인 · 설비 · Modbus 설정 · 태그) | [06_master_admin.md](./06_master_admin.md) | 관리자 | MST |
 | ADM-WORKORDER | 작업지시 · 생산 실적 | [06_master_admin.md](./06_master_admin.md) | 관리자 | WRK |
 | ADM-AUDIT | 감사 로그 조회 | [06_master_admin.md](./06_master_admin.md) | 관리자 | WRK |
-| EXP-CONSOLE | 실험 콘솔(스위치 상태 표시 · 생성기 · 메트릭 요약 · 전환 절차 안내) | [07_experiment_console.md](./07_experiment_console.md) | 실험 수행자 | OBS · GEN |
+| EXP-CONSOLE | 실험 콘솔(스위치 상태 표시 · 생성기 · 메트릭 요약 · 전환 절차 안내) | [07_experiment_console.md](./07_experiment_console.md) | 실험 수행자 | OBS(GEN 산출은 간접 표시 — 주 화면 아님) |
 | EXP-COMPARE | 실험 비교(on/off · 구현값 비교 · 대조군 역전 지점) | [07_experiment_console.md](./07_experiment_console.md) | 실험 수행자 | OBS |
 
 검산: 화면 **10** — AUTH 1 + DSH 1 + ANL 1 + ALM 2 + ADM 3 + EXP 2 = **10**

@@ -2,6 +2,7 @@
 
 > **대상**: PostgreSQL 업무 테이블 14의 컬럼 · 타입 · 컬럼 제약 · 도메인 소유 · tag_master_history 설계 · 저장 enum 값 집합 확정(condition_type · severity · work_order.status) · 인계 판정(site.timezone · 알람 담당자 · 무인증 기간 감사 행위자) · 튜닝 파라미터와 조정값 소유처 — 테이블명 · 컬럼명 채번 정본
 > **작성일**: 2026-09-24
+> **개정일**: 2026-09-24 — 최종 정밀 검수 — 빈 표 칸을 닫힌 어휘 해당 없음으로 채움(표 열 규약) · 미확인 등재 3행 닫힘(enum 반영 · RATE_OF_CHANGE 경계 · 비활성 태그 규칙)
 > **개정일**: 2026-09-24 — W7 검수 반영 — 미확인 1행 닫힘(실적 기록 상태 조건) — 테이블 수 불변
 > **개정일**: 2026-09-24 — W7 보안 판정 반영 — password_hash 알고리즘 미기재 → **Argon2id**(PHC 자기 기술 문자열 · 컬럼 형 불변)(정본 12_security/01)
 > **원천**: 원본 architecture.md §5 · §6 · §12 · §13 · §18(커밋 ff66a37) · 원본 tech_stack.md §5.1 · §10.2(커밋 ff66a37) · 원본 data_flow.md §7 · §8 · §8.2(커밋 ff66a37) · 원본 implementation_plan.md §2.3(커밋 ff66a37) · docs_plan.md 보정 #15 · 웨이브 인계 W3 05_data_stores/01 행 · ADR-16 · ADR-19 · D-04 · D-11 · [../README.md](../README.md) 고정 기준 PostgreSQL 테이블
@@ -19,12 +20,12 @@
 | # | 테이블 | 소유 도메인 | 분기 계층 | 원본 예상 규모 | 수명 | 비고 |
 |:-:|------|:---------:|:-------:|------------|------|------|
 | 1 | site | MST | ③ | 수백 행 | 무기한 · 물리 삭제 없음 | timezone 컬럼 판정 §인계 판정 |
-| 2 | production_line | MST | ③ | 수백 행 | 상동 | |
-| 3 | device | MST | ③ | 수백 행 | 상동 · is_active 논리 삭제 | |
+| 2 | production_line | MST | ③ | 수백 행 | 상동 | 해당 없음 |
+| 3 | device | MST | ③ | 수백 행 | 상동 · is_active 논리 삭제 | 해당 없음 |
 | 4 | modbus_config | MST | ③ | 수백 행 | device와 1:1 | host 루프백 = 시뮬레이션 설비 |
 | 5 | tag_master | MST | ③ | 수천~수만 행 | 무기한 · tag_id 영구 보존 | 시스템 전체의 메타 원천 |
 | 6 | tag_master_history | MST | ③ | 스케일 변경 횟수 | 무기한 · 추가 전용 | **보정 #15 신설** |
-| 7 | alarm_rule | ALM | ③ | 수백 행 | 무기한 · enabled로 비활성 | |
+| 7 | alarm_rule | ALM | ③ | 수백 행 | 무기한 · enabled로 비활성 | 해당 없음 |
 | 8 | alarm_event | ALM | ② | 월 수만 행 | 월 파티션 · 보존 정본 08 | ②계층의 PostgreSQL 쓰기 |
 | 9 | user_account | AUT | ③ | 수백 행 | 무기한 | 시드로만 생성 |
 | 10 | role | AUT | ③ | 3행 | 고정 | 값 OPERATOR · ENGINEER · ADMIN |
@@ -61,18 +62,18 @@
 
 | 테이블 | 컬럼 | 타입 | 컬럼 제약 | NULL 뜻 · 설명 |
 |------|------|------|------|------|
-| site | site_id | integer | PK · IDENTITY ALWAYS | |
+| site | site_id | integer | PK · IDENTITY ALWAYS | 해당 없음 |
 | site | site_code | text | NOT NULL · UNIQUE | 사람이 읽는 코드 |
-| site | site_name | text | NOT NULL | |
+| site | site_name | text | NOT NULL | 해당 없음 |
 | site | timezone | text | NOT NULL · DEFAULT 'Asia/Seoul' · **CHECK = 'Asia/Seoul'** | 판정 §인계 판정 — 표시 · 달력 경계와 같은 값만 허용 |
-| production_line | line_id | integer | PK · IDENTITY ALWAYS | |
-| production_line | site_id | integer | NOT NULL · FK site | |
+| production_line | line_id | integer | PK · IDENTITY ALWAYS | 해당 없음 |
+| production_line | site_id | integer | NOT NULL · FK site | 해당 없음 |
 | production_line | line_code | text | NOT NULL · UNIQUE(site_id, line_code) | 원본은 유일 제약이 없다 — 사이트 안 유일로 신설 |
-| production_line | line_name | text | NOT NULL | |
+| production_line | line_name | text | NOT NULL | 해당 없음 |
 | device | device_id | integer | PK · IDENTITY ALWAYS | ClickHouse device_id UInt32의 원천 |
-| device | line_id | integer | NOT NULL · FK production_line | |
-| device | device_code | text | NOT NULL · UNIQUE | |
-| device | device_name | text | NOT NULL | |
+| device | line_id | integer | NOT NULL · FK production_line | 해당 없음 |
+| device | device_code | text | NOT NULL · UNIQUE | 해당 없음 |
+| device | device_name | text | NOT NULL | 해당 없음 |
 | device | vendor · model | text | NULL 허용 | NULL = 미기재 — 시뮬레이션 설비는 비워 둔다 |
 | device | is_active | boolean | NOT NULL · DEFAULT true | 논리 삭제(REQ-MST-02) |
 | modbus_config | device_id | integer | PK · FK device | 설비 1:1 |
@@ -82,11 +83,11 @@
 | modbus_config | timeout_ms · retry_count | integer · smallint | NOT NULL · CHECK 양수 · 0 이상 | 원본 값 없음 — 설비별 설정 |
 | modbus_config | max_regs_per_request | smallint | NOT NULL · CHECK 1~125 | FC03 요청당 상한 125([../11_glossary/03_enums_state_machines.md](../11_glossary/03_enums_state_machines.md)) |
 | tag_master | tag_id | integer | PK · IDENTITY ALWAYS | **영구 보존 · 재사용 금지** — 갱신 금지 트리거 [02_postgresql_constraints.md](./02_postgresql_constraints.md) |
-| tag_master | device_id | integer | NOT NULL · FK device | |
+| tag_master | device_id | integer | NOT NULL · FK device | 해당 없음 |
 | tag_master | tag_code | text | NOT NULL · UNIQUE | 비활성 태그도 코드를 점유한다 |
 | tag_master | tag_name | text | NOT NULL | dictGet이 조회 시점에 붙인다 |
-| tag_master | function_code | smallint | NOT NULL · CHECK IN (1, 2, 3, 4) | |
-| tag_master | address | integer | NOT NULL · CHECK 0~65535 | |
+| tag_master | function_code | smallint | NOT NULL · CHECK IN (1, 2, 3, 4) | 해당 없음 |
+| tag_master | address | integer | NOT NULL · CHECK 0~65535 | 해당 없음 |
 | tag_master | data_type | text | NOT NULL · CHECK 7값 | UINT16 · INT16 · UINT32 · INT32 · FLOAT32 · FLOAT64 · BOOL |
 | tag_master | word_order | text | NULL 허용 · CHECK 4값 | **NULL = 워드 순서 적용 없음**(16비트 · BOOL) — 결합 규칙은 02 |
 | tag_master | scale · offset_value | numeric | NOT NULL · DEFAULT 1 · 0 | **갱신 금지** — 바뀌면 새 tag_id(REQ-MST-07) |
@@ -112,32 +113,32 @@
 | alarm_rule | severity | smallint | NOT NULL · CHECK 1~3 | §enum 값 확정 · alarm_eval.severity로 복사 |
 | alarm_rule | enabled | boolean | NOT NULL · DEFAULT true | 규칙을 끄는 유일한 수단(REQ-ALM-01) |
 | alarm_event | event_id | bigint | PK(event_id, occurred_at) · IDENTITY ALWAYS | 파티션 키를 PK에 포함해야 한다 — 02 |
-| alarm_event | rule_id | integer | NOT NULL · FK alarm_rule | |
+| alarm_event | rule_id | integer | NOT NULL · FK alarm_rule | 해당 없음 |
 | alarm_event | occurred_at | timestamptz | NOT NULL · 파티션 키 | PENDING → ACTIVE를 일으킨 판정 행의 **ts** — 벽시계가 아니다 |
 | alarm_event | cleared_at | timestamptz | NULL 허용 | NULL = 열린 이벤트. 해제를 확정한 판정 행의 ts |
 | alarm_event | trigger_value | double precision | NOT NULL | 확정 판정 행의 value — Float64 그대로 |
 | alarm_event | state | text | NOT NULL · CHECK IN ('ACTIVE', 'CLEARED') | 생애 축 2값(W1 판정) |
 | alarm_event | acked_by | integer | NULL 허용 · FK user_account | NULL = 미확인 |
 | alarm_event | acked_at | timestamptz | NULL 허용 | acked_by와 짝 — 결합 CHECK는 02 |
-| user_account | user_id | integer | PK · IDENTITY ALWAYS | |
+| user_account | user_id | integer | PK · IDENTITY ALWAYS | 해당 없음 |
 | user_account | email | text | NOT NULL · UNIQUE | 소문자 정규화 후 저장 |
 | user_account | password_hash | text | NOT NULL | 해시 알고리즘 정본 [../12_security/01_authn_authz.md](../12_security/01_authn_authz.md) |
 | user_account | is_active | boolean | NOT NULL · DEFAULT true | 비활성 계정 로그인은 auth.invalid_credentials 재사용 |
-| role | role_id | smallint | PK · IDENTITY ALWAYS | |
+| role | role_id | smallint | PK · IDENTITY ALWAYS | 해당 없음 |
 | role | role_code | text | NOT NULL · UNIQUE · CHECK 3값 | OPERATOR · ENGINEER · ADMIN — 누적 아님 |
 | user_role | user_id · role_id | integer · smallint | PK(user_id, role_id) · FK 각각 | 다대다 · 합집합 판정 |
-| work_order | order_id | bigint | PK · IDENTITY ALWAYS | |
-| work_order | line_id | integer | NOT NULL · FK production_line | |
+| work_order | order_id | bigint | PK · IDENTITY ALWAYS | 해당 없음 |
+| work_order | line_id | integer | NOT NULL · FK production_line | 해당 없음 |
 | work_order | order_no | text | NOT NULL · UNIQUE | 중복은 DB 제약 위반 → common.duplicate_key/409 |
 | work_order | product_code | text | NOT NULL | 제품 마스터 테이블은 없다 — 자유 문자열 |
-| work_order | target_qty | integer | NOT NULL · CHECK 양수 | |
-| work_order | planned_start · planned_end | timestamptz | NOT NULL · planned_end > planned_start | |
+| work_order | target_qty | integer | NOT NULL · CHECK 양수 | 해당 없음 |
+| work_order | planned_start · planned_end | timestamptz | NOT NULL · planned_end > planned_start | 해당 없음 |
 | work_order | status | text | NOT NULL · DEFAULT 'PLANNED' · CHECK 4값 | §enum 값 확정 |
-| production_log | log_id | bigint | PK · IDENTITY ALWAYS | |
-| production_log | order_id | bigint | NOT NULL · FK work_order | |
+| production_log | log_id | bigint | PK · IDENTITY ALWAYS | 해당 없음 |
+| production_log | order_id | bigint | NOT NULL · FK work_order | 해당 없음 |
 | production_log | recorded_at | timestamptz | NOT NULL | 실적 시각 — 사람이 입력한다 |
-| production_log | good_qty · defect_qty | integer | NOT NULL · CHECK 0 이상 | |
-| audit_log | audit_id | bigint | PK · IDENTITY ALWAYS | |
+| production_log | good_qty · defect_qty | integer | NOT NULL · CHECK 0 이상 | 해당 없음 |
+| audit_log | audit_id | bigint | PK · IDENTITY ALWAYS | 해당 없음 |
 | audit_log | user_id | integer | **NULL 허용** · FK user_account | **NULL = 무인증 기간(S4~S6)의 행위** — §인계 판정 |
 | audit_log | acted_at | timestamptz | NOT NULL · DEFAULT now() | 트랜잭션 시작 시각 — 같은 트랜잭션의 업무 행과 같은 값 |
 | audit_log | action | text | NOT NULL · CHECK IN ('INSERT', 'UPDATE') | 물리 DELETE 표면이 없다 — 논리 삭제 · 확인 · 상태 변경은 UPDATE |
@@ -155,7 +156,7 @@ docs_plan 보정 #15가 신설한 테이블이다. 원본은 "태그 마스터�
 
 | 컬럼 | 타입 | 컬럼 제약 | 뜻 |
 |------|------|------|------|
-| history_id | bigint | PK · IDENTITY ALWAYS | |
+| history_id | bigint | PK · IDENTITY ALWAYS | 해당 없음 |
 | old_tag_id | integer | NOT NULL · FK tag_master | 비활성화된 이전 태그 |
 | new_tag_id | integer | NOT NULL · **UNIQUE** · FK tag_master | 새로 발급된 태그 — 한 새 태그의 계보는 한 행이다 |
 | old_scale · old_offset_value | numeric | NOT NULL | 이전 태그의 공학 단위 변환식 |
@@ -234,8 +235,8 @@ REQ-WRK-04가 요구한 허용 전이 표다. 표 밖 전이는 work_orders.inva
 | maintenance_work_mem | VACUUM · 인덱스 생성 | 256MB | 원본 미기재 | 원본 미기재 | 대조군 btree 변형 인덱스 생성 시간에 직결 |
 | max_connections | 접속 주체 합 + 여유 | 100 | 상동 | 상동 | 값의 정본 [02_postgresql_constraints.md](./02_postgresql_constraints.md) §커넥션(ADR-19) — 인용 |
 | wal_compression | 디스크 쓰기 절감 | zstd | 상동 | 상동 | 대조군 비교 축 VACUUM/WAL 증폭의 측정 조건 |
-| checkpoint_timeout | 체크포인트 스파이크 완화 | 15min | 상동 | 상동 | |
-| random_page_cost | 로컬 SSD | 1.1 | 상동 | 상동 | |
+| checkpoint_timeout | 체크포인트 스파이크 완화 | 15min | 상동 | 상동 | 해당 없음 |
+| random_page_cost | 로컬 SSD | 1.1 | 상동 | 상동 | 해당 없음 |
 | timezone(DB 기본) | 달력 경계 시간대와 같게 | Asia/Seoul | 상동 | 상동 | **신설** — 월 파티션 경계 계산이 세션 시간대를 따른다(02) |
 
 - 검산: 파라미터 = **9** · 원본 8 + 신설 1(timezone)
@@ -246,9 +247,9 @@ REQ-WRK-04가 요구한 허용 전이 표다. 표 밖 전이는 work_orders.inva
 
 | 항목 | 상태 | 확정 자리 |
 |------|------|------|
-| condition_type · severity · work_order.status 값 | **이 문서가 확정** — 11_glossary/03 미설계 3행의 반영 제안 | [../11_glossary/03_enums_state_machines.md](../11_glossary/03_enums_state_machines.md)(리드 반영) |
-| RATE_OF_CHANGE의 첫 판정(직전 값 없음) · 직전 값의 BAD 행 처리 | **신규 미설계** — 판정 식의 경계 조건 | [../06_pipeline/08_alarm.md](../06_pipeline/08_alarm.md)(W4) |
-| 비활성 태그를 가리키는 alarm_rule | W2a 등재 미확인 — DB는 FK만 유지한다 | 상동 |
+| condition_type · severity · work_order.status 값 | 닫힘 — 이 문서가 확정하고 11_glossary/03이 반영했다(미설계 3 → 0) | [../11_glossary/03_enums_state_machines.md](../11_glossary/03_enums_state_machines.md) |
+| RATE_OF_CHANGE의 첫 판정(직전 값 없음) · 직전 값의 BAD 행 처리 | 닫힘(W4) — 경계 조건 판정 | [../06_pipeline/08_alarm.md](../06_pipeline/08_alarm.md) §조건 평가와 RATE_OF_CHANGE 경계 |
+| 비활성 태그를 가리키는 alarm_rule | 닫힘(W4) — DB는 FK만 유지하고 판정 경로가 비활성 태그 규칙을 처리한다 | [../06_pipeline/08_alarm.md](../06_pipeline/08_alarm.md) §비활성 태그 규칙 |
 | 생산 실적 기록 시점의 작업지시 상태 조건 | 닫힘 — IN_PROGRESS인 지시에만 기록 · 밖이면 work_orders.production_log_not_allowed/409 — [../07_api/08_work_orders.md](../07_api/08_work_orders.md) | [../07_api/08_work_orders.md](../07_api/08_work_orders.md)(W5) |
 | password_hash 알고리즘 | **W7 닫힘** — Argon2id · 알고리즘 · 파라미터 · 솔트를 담은 자기 기술 문자열 하나(text 그대로) · 비용 파라미터 값은 2계층 미정 | [../12_security/01_authn_authz.md](../12_security/01_authn_authz.md) |
 | work_mem · maintenance_work_mem의 개발 · 중간 프로파일 값 | 원본 미기재 — 산정 규칙만 | 이 문서(S5 대조 실험 전 확정) |

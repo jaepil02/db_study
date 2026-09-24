@@ -2,6 +2,7 @@
 
 > **대상**: 수집(COL · NestJS collector 모듈) 기능 목록 · 기능별 경계 · 의존 도메인 · 실패 시 보이는 것 · 모드 A의 SIMULATED 표지 판정 — 기능 ID COL-NN 채번 정본
 > **작성일**: 2026-09-24
+> **개정일**: 2026-09-24 — 최종 정밀 검수 — COL-08 스위치 칸 SW-10 상호작용 미확인 → off면 무동작(ADR-24) · GOOD(0) W1 등재 반영 완료 표기
 > **개정일**: 2026-09-24 — W4 판정 반영 — COL-01 기동 로드 원천 cache:tagmeta → **PostgreSQL**(캐시는 워밍 대상) · 실행 중 마스터 변경 ch:cacheinv 반영 · COL-09 위험 판정량 길이 → **미확인 적체** · 미확인 5행 W4 판정 반영 — 기능 수 불변
 > **개정일**: 2026-09-24 — W3 판정 반영 — 백프레셔 판정량 XLEN → 그룹 적체(ADR-21) · COL-08의 SW-10 off 상호작용은 무동작으로 닫힘(ADR-24)
 > **원천**: 원본 tech_stack.md §3.4 · §6 · §7(커밋 ff66a37) · 원본 data_flow.md §3 · §3.1 · §3.2 · §3.3 · §12.1 · §14.1 · §17(커밋 ff66a37) · 원본 architecture.md §3 · §4 · §9 · §9.3 · §17(커밋 ff66a37) · 원본 implementation_plan.md §4.1 · §5 S2 · S3 · S6 · §7.2 · §7.5(커밋 ff66a37) · D-08 · [../11_glossary/03_enums_state_machines.md](../11_glossary/03_enums_state_machines.md) 품질 코드 · [13_switch_matrix.md](./13_switch_matrix.md) SW-01 · SW-10
@@ -23,7 +24,7 @@ COL은 **PLC 레지스터를 정규화된 포인트로 바꿔 Stream 입구에 �
 | **COL-05** | 품질 판정 | 값마다 품질 코드를 단다 — 범위 밖 BAD_RANGE(4) · Modbus 예외 응답 BAD_COMM(2) · 타임아웃 BAD_TIMEOUT(3 — **행을 만들지 않는다**) · 시뮬레이션 설비의 정상 값 SIMULATED(9) · 실설비의 정상 값 GOOD(0). 시뮬레이션 설비 판정과 코드 우선순위는 §모드 A의 SIMULATED 표지 판정이 고정한다. S2는 GOOD · SIMULATED만 | S2 · S3 | F-01 | 해당 없음 | 표면 없음 — 내부 모듈 | 없음 |
 | **COL-06** | 데드밴드 필터 | 직전 전송값 대비 변화량이 tag_master.deadband(공학 단위 절대값)보다 작으면 전송을 생략한다. **원본 파형을 잃으므로 성능 측정은 데드밴드 비활성으로 하고 효과는 별도 실험으로 잰다** — 두 조건을 섞으면 처리량 수치가 의미를 잃는다(원본 data_flow.md §3.3). SW-10이 켜고 끈다 | S3 | F-01 | SW-10 | 표면 없음 — 내부 모듈 | 없음 |
 | **COL-07** | 인코딩 · Stream 발행 | 스캔 사이클 하나를 MessagePack 컬럼 배열 엔트리 하나(스키마 버전 v · 설비 d · 시퀀스 s · 기준 시각 t0 · 태그 tg · 오프셋 dt · 값 va · 품질 q)로 만들어 stream:plc:raw에 XADD한다. 같은 파이프라인에 컨슈머 그룹 적체(lag + pending) 조회를 실어 매 사이클 확인한다 — 이것이 백프레셔 1차 신호의 원천이다. **XLEN은 판정량이 아니다**(확인된 엔트리가 MAXLEN까지 남는 충전량 — ADR-21). SW-01 off면 Stream 대신 Ingest를 프로세스 안에서 직접 부른다(실험 전용) | S2 | F-01 · F-02 | SW-01 | 표면 없음 — 내부 모듈 | Redis stream:plc:raw |
-| **COL-08** | 발행량 감축 | 백프레셔 **경고** 단계에서 데드밴드를 임시로 강화해 발행량을 줄이고 deadband_boost_active를 켠다. 임계는 2계층 조정값이며 정본은 [../04_architecture/06_backpressure_failure.md](../04_architecture/06_backpressure_failure.md) | S6 | F-10 | SW-10(상호작용 미확인) | 표면 없음 — 내부 모듈 | 없음 |
+| **COL-08** | 발행량 감축 | 백프레셔 **경고** 단계에서 데드밴드를 임시로 강화해 발행량을 줄이고 deadband_boost_active를 켠다. 임계는 2계층 조정값이며 정본은 [../04_architecture/06_backpressure_failure.md](../04_architecture/06_backpressure_failure.md) | S6 | F-10 | SW-10(off면 무동작 — ADR-24) | 표면 없음 — 내부 모듈 | 없음 |
 | **COL-09** | 스풀 전환과 재발행 | 백프레셔 **위험** 단계(미확인 적체 > 위험 임계 — XLEN이 아니다)이거나 XADD가 실패하면(OOM · 연결 끊김) spooldata 볼륨의 /app/spool에 길이 접두 + MessagePack 프레임을 쌓고 spool_active를 켠다. 복구 단계에서 프레임을 앞에서부터 순차 재발행한다. Stream 엔트리와 포맷이 같아 재발행에 변환 코드가 없다 | S6 | F-10 | 해당 없음 | 표면 없음 — 내부 모듈 | spooldata 볼륨(저장소 밖) · Redis stream:plc:raw |
 
 - 검산: COL-01~09 = **9**. 단계별(첫 도입 기준) S2 5(COL-01 · 02 · 04 · 05 · 07) + S3 2(COL-03 · 06) + S6 2(COL-08 · 09) = **9**
@@ -53,7 +54,7 @@ COL은 **PLC 레지스터를 정규화된 포인트로 바꿔 Stream 입구에 �
 
 - **건강 코드(2 · 4)가 출처 코드(9)보다 앞선다.** 이 순서가 전역 불변식 "생성 데이터 구분"을 깨지 않는 이유는 출처가 **설비 단위 규칙**이라서다 — 2 · 4가 달린 행도 device_id → modbus_config.host로 출처를 복원할 수 있다.
 - **잔여 — 설비의 접속 대상이 나중에 실장비로 바뀌면 복원이 틀린다.** modbus_config는 이력을 남기지 않는다. 실장비 연결은 현 범위 밖(Out)이며, 되살아날 때 이 행이 경보가 된다.
-- **확정 전에는 모드 A 산출이 GOOD(0)으로 저장된다**는 W1 등재([../11_glossary/03_enums_state_machines.md](../11_glossary/03_enums_state_machines.md))는 이 판정으로 닫힌다 — 리드 반영 대상이다.
+- **확정 전에는 모드 A 산출이 GOOD(0)으로 저장된다**는 W1 등재([../11_glossary/03_enums_state_machines.md](../11_glossary/03_enums_state_machines.md))는 이 판정으로 닫혔고 11_glossary/03에 반영했다(W2).
 
 ## 스위치가 교체하는 것
 

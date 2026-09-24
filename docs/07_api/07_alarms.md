@@ -2,6 +2,7 @@
 
 > **대상**: ALM 도메인 REST 표면 — 알람 이벤트 목록 · 확인(ACK) · 알람 규칙 조회와 쓰기 · 판정 이력(alarm_eval) 분석 · **알람 목록 범위 기본값 판정** · 원본에 없는 표면 판정(규칙 CRUD · alarm_eval 분석)
 > **작성일**: 2026-09-24
+> **개정일**: 2026-09-24 — 최종 정밀 검수 — 확인 실시간 전파 행의 리드 판정 대기 표기 → W6 판정(전파 신호 없음) · 분석 무효 구간 해설을 W6 판정(계수 + 구조화 로그 · 응답 표지 없음)으로 갱신
 > **개정일**: 2026-09-24 — W6 실험 채번 반영 — 무효 구간 자리 · ACK 부재 계측 W6 판정(정본 10_observability/01 · 06)
 > **개정일**: 2026-09-24 — W5 판정 반영 — #6 ClickHouse 불가 채번 대기 → **alarms.eval_store_unavailable/503** · 미확인 2행 행선지를 06_pipeline/08 등재로 갱신 — 표면 수 불변
 > **원천**: 원본 architecture.md §6 · §7.3 · §11 · §18(커밋 ff66a37) · 원본 data_flow.md §6.3 · §8 · §8.1 · §8.2(커밋 ff66a37) · REQ-ALM-01~04 · 13~19 · REQ-WRK-07 · ADR-11 · ADR-12 · [../02_features/09_alarms.md](../02_features/09_alarms.md) ALM-01 · 07 · 08 · 09 · [../11_glossary/03_enums_state_machines.md](../11_glossary/03_enums_state_machines.md) 상태 머신 2 · alarm_event.state 대응 · [../06_pipeline/08_alarm.md](../06_pipeline/08_alarm.md) · [../05_data_stores/02_postgresql_constraints.md](../05_data_stores/02_postgresql_constraints.md) 인덱스 · docs_plan.md 웨이브 인계 W5 07_api 행(알람 목록 범위 기본값 · 원본에 없는 표면)
@@ -139,7 +140,7 @@
 - **평균을 내지 않고 min · max 쌍만 낸다.** 평균은 임계값 근처의 순간 초과를 지운다 — 오탐 분석의 근거가 사라진다(REQ-ALM-17 · 원본 data_flow.md §6.3).
 - **캐시하지 않는 이유** — 분석은 엔지니어가 범위를 바꿔 가며 드물게 부르고, 키 공간에 판정 이력 사본 키가 없다. 대신 대량 조회 등급 한도가 반복 스캔을 묶는다.
 - **meta.rule은 현재 규칙이다.** 차트에 겹쳐 그리는 임계선이 과거 구간에서는 그 시점의 임계값이 아닐 수 있다 — 변경 시점은 audit_log에서 읽는다.
-- **분석 무효 구간을 싣지 못한다.** 판정 전수 삽입이 재시도를 소진하면 그 ts 범위가 분석 무효 구간이 되지만([../06_pipeline/08_alarm.md](../06_pipeline/08_alarm.md)) 기록 자리가 정해지지 않아 응답에 표지를 둘 수 없다 — 빈 버킷이 "판정 없음"인지 "기록 실패"인지 가를 수 없다(§미확인 · 미설계 등재).
+- **분석 무효 구간을 싣지 못한다.** 판정 전수 삽입이 재시도를 소진하면 그 ts 범위가 분석 무효 구간이 되지만([../06_pipeline/08_alarm.md](../06_pipeline/08_alarm.md)) 그 기록 자리는 계수 alm_eval_gap_* + 구조화 로그 이벤트로 판정됐고(W6 — [../10_observability/02_instrumentation.md](../10_observability/02_instrumentation.md)) 응답에는 표지를 싣지 않는다 — 응답만으로는 빈 버킷이 "판정 없음"인지 "기록 실패"인지 가를 수 없고, 실험 기록이 로그에서 무효 구간을 옮겨 적는다(§미확인 · 미설계 등재).
 
 ## 원본에 없는 표면 판정
 
@@ -159,7 +160,7 @@
 | 항목 | 상태 | 확정 자리 |
 |------|------|------|
 | 분석 무효 구간의 기록 자리 | **W6 판정** — 테이블 · 키 · 레이블을 버리고 계수 alm_eval_gap_* + 구조화 로그 이벤트 alarm_eval_gap · #6 응답에는 무효 구간 표지를 싣지 않는다 | [../06_pipeline/08_alarm.md](../06_pipeline/08_alarm.md) · [../10_observability/02_instrumentation.md](../10_observability/02_instrumentation.md) §구간 기록 |
-| 확인의 실시간 전파 | 확인은 ch:alarm에 싣지 않는다 — 다른 화면은 목록 TTL(현행 참고 30초)만큼 늦다 · 06_pipeline/08 미확인 표 등재(리드 판정) | [../06_pipeline/08_alarm.md](../06_pipeline/08_alarm.md) · [../10_observability/02_instrumentation.md](../10_observability/02_instrumentation.md) §확인(ACK) 신호 부재의 계측(W6 판정 — alm_acks_total + 구조 관계 상한 · 전파 신호 없음) |
+| 확인의 실시간 전파 | 확인은 ch:alarm에 싣지 않는다 — 다른 화면은 목록 TTL(현행 참고 30초)만큼 늦다 · 전파 신호를 두지 않는다(W6 판정) | [../06_pipeline/08_alarm.md](../06_pipeline/08_alarm.md) · [../10_observability/02_instrumentation.md](../10_observability/02_instrumentation.md) §확인(ACK) 신호 부재의 계측(W6 판정 — alm_acks_total + 구조 관계 상한 · 전파 신호 없음) |
 | 이력 기본 범위 7일 | 2계층 현행 참고 — 소유 이 문서 | 이 문서 · S7 |
 | 목록 · 확인 p95 | 3계층 미확인 — 원본 목표 CRUD 100 ms | [../03_requirements/13_nonfunctional.md](../03_requirements/13_nonfunctional.md) |
 

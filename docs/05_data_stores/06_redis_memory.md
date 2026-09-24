@@ -2,6 +2,7 @@
 
 > **대상**: Redis 단일 인스턴스의 Stream 엔트리 단위 설계 · 엔트리 크기와 용량 티어 · maxmemory 산정 · 프로파일별 산정(부하 실험 · 개발 · 중간) · volatile-lru 축출 대상 · **축출 연쇄** · MAXLEN과 maxmemory의 관계(ADR-21) · 컨테이너 상한 여유 · 메모리 측정 계약 — MAXLEN · maxmemory 조정값 정본
 > **작성일**: 2026-09-24
+> **개정일**: 2026-09-24 — 최종 정밀 검수 — 합계 행 빈 칸 채움 · 빈 표 칸을 닫힌 어휘 해당 없음으로 · 백프레셔 하강 히스테리시스 행 닫힘(ADR-23)
 > **개정일**: 2026-09-24 — W6 실험 채번 반영 — S6 스풀 도달 문구 정정 · Pub/Sub 한도 소유 · EXP 번호(정본 10_observability/01 · 06)
 > **원천**: 원본 architecture.md §8 · §8.4 · §9.3 · §13 · §15 · §17 · §19(커밋 ff66a37) · 원본 tech_stack.md §5.3 · §10.2(커밋 ff66a37) · 원본 data_flow.md §12.1 · §14.1(커밋 ff66a37) · 원본 implementation_plan.md §2.1 · §2.3(커밋 ff66a37) · ADR-05 · ADR-21 · [05_redis_keyspace.md](./05_redis_keyspace.md) 키 패턴 · [../04_architecture/06_backpressure_failure.md](../04_architecture/06_backpressure_failure.md) 백프레셔 임계
 
@@ -51,7 +52,7 @@ Stream 엔트리를 포인트 단위가 아니라 **스캔 사이클 단위**로
 | 최신값 · 알람 상태 | rt:latest 태그 수만큼 · alarm:state 규칙 수만큼 | 캐시 예산에 포함(수 MB) | 봉인 |
 | 캐시 · 세션 · 락 · 계수 | cache · lock · rl · auth | 약 0.4 GB(최신값 포함) | 캐시 |
 | 여유 | 단편화 · 버퍼 | 약 0.2 GB → DLQ 뒤 약 0.13 GB | 없음 |
-| **합계 = maxmemory** | | **2.0 GB** | |
+| **합계 = maxmemory** | 위 다섯 행의 합 | **2.0 GB** | 해당 없음 |
 
 - 검산: 1.4 + 0.07 + 0.4 + 0.13 = **2.0 GB** · 정상 구성 봉인 + 캐시 = 1.4 + 0.07 + 0.4 = 1.87 GB < 2.0 GB → 축출 없음
 - **DLQ 항이 없던 이유는 DLQ 엔트리가 배치 통째였기 때문이다.** 배치 하나(최대 수만 행)를 엔트리 하나로 두면 MAXLEN 10000이 수 GB가 되어 산정 자체가 불가능했다 — 원 엔트리 단위 판정([05_redis_keyspace.md](./05_redis_keyspace.md))이 이 항을 닫는다.
@@ -84,8 +85,8 @@ maxmemory-policy는 **volatile-lru**다(ADR-05). TTL이 있는 키 가운데 최
 
 | 키 | 축출 후보 | 축출되면 | 복구 경로 | 누가 먼저 알아채나 |
 |------|:------:|------|------|------|
-| stream:plc:raw · dlq | 아니다 | 해당 없음 | 해당 없음 | |
-| rt:latest · alarm:state | 아니다 | 해당 없음 | 해당 없음 | |
+| stream:plc:raw · dlq | 아니다 | 해당 없음 | 해당 없음 | 해당 없음 |
+| rt:latest · alarm:state | 아니다 | 해당 없음 | 해당 없음 | 해당 없음 |
 | cache:q | 후보 | 조회 캐시 미스 → ClickHouse 집계 증가 | 다음 조회가 다시 채움 | 조회 p95 · 히트율 |
 | cache:tagmeta · devlist · alarmrules · perm | 후보 | PostgreSQL 조회 증가 | 다음 조회가 다시 채움 | pg_stat_statements 호출 수 |
 | cache:alarmevents · workorders | 후보 | 목록 조회가 PostgreSQL로 | 상동 | 상동 |
@@ -183,7 +184,7 @@ ADR-21의 메모리 쪽 계약이다. 세 장치가 서로 다른 순서로 걸�
 | DLQ MAXLEN의 프로파일별 값 | 원본 한 값(10000)뿐 | 이 문서 — S3 DLQ 실험 뒤 |
 | Pub/Sub 출력 버퍼 한도 | 값 소유 이전(W6) — S4 확정 | [../09_tech_stack/03_data_infra.md](../09_tech_stack/03_data_infra.md) · 메트릭 [../10_observability/01_metrics_catalog.md](../10_observability/01_metrics_catalog.md) |
 | 축출 시작 시점 · 히트율 하락 곡선 | 3계층 미확인 — 확정 전 임의 값 고정 금지 | 축출 연쇄 실험 EXP-18 |
-| 백프레셔 하강 히스테리시스 | 메모리 쪽 영향 없음 — 임계 정본의 몫 | [../04_architecture/06_backpressure_failure.md](../04_architecture/06_backpressure_failure.md) |
+| 백프레셔 하강 히스테리시스 | 닫힘 — ADR-23 · 메모리 쪽 영향 없음 | [../04_architecture/06_backpressure_failure.md](../04_architecture/06_backpressure_failure.md) |
 
 ## 관련 문서
 

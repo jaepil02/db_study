@@ -2,6 +2,7 @@
 
 > **대상**: 롤업 테이블 tag_1m · tag_1h · tag_1d와 MV 3(mv_tag_1m · mv_tag_1h · mv_tag_1d)의 DDL · -State/-Merge 조합자 · bad_cnt 조건식 · 일 경계 시간대 판정 · MV 제약 · 백필 절차 · 정합 검증 · 롤업 객체 도메인 귀속 판정
 > **작성일**: 2026-09-24
+> **개정일**: 2026-09-24 — 최종 정밀 검수 — 빈 표 칸을 닫힌 어휘 해당 없음으로 채움(표 열 규약) · 롤업 귀속 README 반영 대기 표기 → 반영 완료
 > **개정일**: 2026-09-24 — W7 검수 반영 — 미확인 1행 닫힘(롤업 공백 재계산 절차)
 > **원천**: 원본 architecture.md §7.2 · §11.1 · §15(커밋 ff66a37) · 원본 data_flow.md §6.1 · §10 · §10.1 · §10.2 · §10.3 · §13 · §17(커밋 ff66a37) · docs_plan.md 웨이브 인계 W3 05_data_stores/04 행 · W3 05_data_stores 행(롤업 · MV 도메인 귀속) · ADR-15 · [../11_glossary/03_enums_state_machines.md](../11_glossary/03_enums_state_machines.md) 품질 코드 · [../11_glossary/05_units_and_time.md](../11_glossary/05_units_and_time.md) 버킷 경계
 
@@ -156,7 +157,7 @@ GROUP BY bucket, device_id, tag_id;
 
 | 품질 코드 | 원본 quality > 0 | **판정 quality IN (2, 4)** | 이유 |
 |------|:------:|:------:|------|
-| 0 GOOD | 제외 | 제외 | |
+| 0 GOOD | 제외 | 제외 | 해당 없음 |
 | 1 UNCERTAIN | 셈 | **제외** | 추정값이지 불량이 아니다 — 부여 주체도 미확인 |
 | 2 BAD_COMM | 셈 | 셈 | 저장되는 BAD |
 | 3 BAD_TIMEOUT | 해당 없음 | 해당 없음 | tag_raw에 저장하지 않는다 — 결측으로 처리 |
@@ -232,7 +233,7 @@ GROUP BY bucket, device_id, tag_id;
 | GEN | 모드 D 백필이 쓴다 | 소유 아님 | 실험 도구의 쓰기다 — 절차만 실행하고 정의는 소유하지 않는다(GEN-08) |
 
 - 검산: 후보 = **3** · 소유 1(ING)
-- **도메인 공백은 바뀌지 않는다.** ING는 이미 tag_raw · 대조군을 소유하므로 소유 테이블 없음 도메인은 COL · SIM · GEN · TSQ · RLT · OBS 여섯 그대로다 — 폴더 README의 "잠정 ING"을 "ING 확정"으로 고치는 것은 리드 몫이다.
+- **도메인 공백은 바뀌지 않는다.** ING는 이미 tag_raw · 대조군을 소유하므로 소유 테이블 없음 도메인은 COL · SIM · GEN · TSQ · RLT · OBS 여섯 그대로다 — 폴더 README와 도메인 지도(01_overview/04)의 귀속 표기도 "ING 확정"으로 맞췄다.
 
 ## 정합 검증
 
@@ -241,8 +242,8 @@ GROUP BY bucket, device_id, tag_id;
 | 원시 대 분 | 구간별 count(tag_raw) 대 countMerge(cnt) FROM tag_1m | 정확 일치 | MV 삽입 실패 · 백필 공백 |
 | 분 대 시간 · 일 | countMerge 계층 간 | 정확 일치 | 상위 MV 분리 상태 · 체인 실패 |
 | avg | avg(value) 대 avgMerge(avg_v) | 상계식 이내 | 병합 순서가 아닌 실제 누락 |
-| min · max · last | 원시 대 -Merge | 정확 일치 | |
-| p95 | quantile 계열 대 quantilesTDigestMerge | 근사 허용 범위(미확인) | |
+| min · max · last | 원시 대 -Merge | 정확 일치 | 해당 없음 |
+| p95 | quantile 계열 대 quantilesTDigestMerge | 근사 허용 범위(미확인) | 해당 없음 |
 
 - 검산: 대조 = **5**
 - 대조의 실행 자리는 S3 합격 판정 · 백필 ⑥이며 인수 기준 정본은 [../03_requirements/14_acceptance_criteria.md](../03_requirements/14_acceptance_criteria.md)다.

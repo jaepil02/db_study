@@ -2,6 +2,7 @@
 
 > **대상**: ★★ 학습 목표 ②의 정책 정본 — 3계층 분기 표 · 성격 판정 기준 · 데이터 종류별 목적지와 근거 · 목적이 다른 세 쓰기(dual-write 아님 · CDC 제안 반박) · 업무 쓰기가 Stream을 타지 않는 이유 · 중복 저장의 유일한 예외 · 대조군은 계측물 · ②계층 생산 카운터 판정 · 새 데이터 종류 편입 절차
 > **작성일**: 2026-09-24
+> **개정일**: 2026-09-24 — 최종 정밀 검수 — 생산 카운터 · 대조군 COPY 기전 미설계 → W4 판정(06_pipeline/04) 반영
 > **개정일**: 2026-09-24 — W6 실험 채번 반영 — 기록 형식 W6 반영(정본 10_observability/01 · 06)
 > **원천**: 원본 architecture.md §1 · §5 · §7.3 · §8 · §12(커밋 ff66a37) · 원본 tech_stack.md §1 · §5.1 · §5.2 · §5.3(커밋 ff66a37) · 원본 data_flow.md §5 · §7 · §8 · §8.2 · §13(커밋 ff66a37) · 원본 implementation_plan.md §7.2(커밋 ff66a37) · D-01 · D-04 · D-05 · D-11 · ADR-03 · ADR-05 · ADR-10 · ADR-11 · ADR-16 · ADR-17 · [../README.md](../README.md) 고정 기준(분기 계층 · PostgreSQL 테이블 · ClickHouse 객체 · Redis 영역 접두) · 전역 불변식 · [../01_overview/01_purpose_learning_goals.md](../01_overview/01_purpose_learning_goals.md)
 
@@ -181,8 +182,8 @@
 
 | 항목 | 상태 | 확정 자리 |
 |------|------|------|
-| 생산 카운터 파생 사실의 목적지 · 판정 기전 | 미설계 — 정책(원시 표본 ① · production_log 대체 금지)만 판정 | [../06_pipeline/04_routing.md](../06_pipeline/04_routing.md)(W4) |
-| 대조군 COPY 경로의 기전 · 구간 count 대조 절차 | 의미론은 판정됨(05_data_stores/10) · 기전 미설계 | [../06_pipeline/04_routing.md](../06_pipeline/04_routing.md)(W4) · [../10_observability/04_experiment_protocol.md](../10_observability/04_experiment_protocol.md) — 격자 단계 ② 구간 count 대조(W6) |
+| 생산 카운터 파생 사실의 목적지 · 판정 기전 | 닫힘(W4) — 표본은 ① 경로 · 파생 판정기는 목적지 테이블이 생길 때까지 두지 않는다(도입 조건 4) | [../06_pipeline/04_routing.md](../06_pipeline/04_routing.md) §생산 카운터 기전 판정 |
+| 대조군 COPY 경로의 기전 · 구간 count 대조 절차 | 닫힘(W4) — flusher 안 ClickHouse 성공 뒤 COPY 1회 · 전용 커넥션 · XACK는 대조군 성패와 무관 | [../06_pipeline/04_routing.md](../06_pipeline/04_routing.md) §대조군 동시 적재 기전 · [../10_observability/04_experiment_protocol.md](../10_observability/04_experiment_protocol.md) — 격자 단계 ② 구간 count 대조(W6) |
 | 최신값 갱신 주체의 최종안 | 잠정 — S6 실측으로 확정 | ADR-10 · [06_backpressure_failure.md](./06_backpressure_failure.md) |
 | 규모 열 전 행 | 원본 산정 — 확정 전 임의 값 고정 금지 | [07_capacity_planning.md](./07_capacity_planning.md) · 실측 기록 |
 

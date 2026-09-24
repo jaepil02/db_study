@@ -2,6 +2,7 @@
 
 > **대상**: db_study 전 도메인이 전제하는 공통 계약 — 시각 의미론 · 비동기 경계 · 전달 보장 · Redis 키 계열 · 저장소 책임과 분기 · 측정과 계측 · 실행 경계 — REQ-GLB-NN 채번 정본
 > **작성일**: 2026-09-24
+> **개정일**: 2026-09-24 — 최종 정밀 검수 — REQ-GLB-05 한계의 DLQ 재처리 경로 미설계 → 06_pipeline/11 §DLQ 재처리
 > **개정일**: 2026-09-24 — W7 보안 판정 반영 — **REQ-GLB-24** 신설(쿼리 사용자 입력 파라미터 바인딩 · 문자열 연결 금지) · REQ-GLB 23 → **24** · 불변식 로컬 전용 대응 1 → **2**(정본 12_security/03)
 > **개정일**: 2026-09-24 — W6 실험 채번 반영 — 이벤트 루프 p95 메트릭 이름 통일(정본 10_observability/01 · 06)
 > **개정일**: 2026-09-24 — W6 판정 반영 — ClickHouse 서버 시간대 미확인 → **Asia/Seoul**(정본 09_tech_stack/03) · REQ 수 불변
@@ -129,7 +130,7 @@
 | REQ | 강제 주체 | 막는 것 | 못 막는 것 | 잔여가 담기는 곳 |
 |------|------|------|------|------|
 | REQ-GLB-01 | ClickHouse DEFAULT(ingested_at) · 적재 코드 | 적재 코드가 적재 시각을 위조하는 것 | 조회 코드가 ts 대신 ingested_at으로 자르는 것 — 강제 수단 없음 | 코드 검토 · REQ-GLB-01 검증 쿼리 |
-| REQ-GLB-05 | Ingest 배치 상태 머신 | 삽입 전 XACK · 격리 후 XACK 누락 | DLQ 엔트리의 재처리 — 경로 미설계 | [../06_pipeline/11_backpressure_failure.md](../06_pipeline/11_backpressure_failure.md)(W4) |
+| REQ-GLB-05 | Ingest 배치 상태 머신 | 삽입 전 XACK · 격리 후 XACK 누락 | DLQ 엔트리의 재처리 — 사람이 거는 운영 절차(원 토큰으로 tag_raw 직접 삽입 · stream:plc:raw 재발행 없음) | [../06_pipeline/11_backpressure_failure.md](../06_pipeline/11_backpressure_failure.md) §DLQ 재처리 |
 | REQ-GLB-06 | 결정적 토큰 + ClickHouse 중복 제거 윈도우 | 윈도우 안 재시도 중복 | 윈도우 밖 재삽입 · 대조군 쪽 중복 | [07_ingest.md](./07_ingest.md) REQ-ING-15 |
 | REQ-GLB-07 | 없음 — 설계 전제 | 해당 없음 | 순서 의존 집계의 도입 자체 | 한계 등재 — 순서 무관성 행 |
 | REQ-GLB-08 | 키 계열별 래퍼(타입 시스템) | 래퍼를 거친 TTL 위반 | redis-cli 수동 조작 · 래퍼를 우회한 원시 클라이언트 호출 | 봉인 표 [../05_data_stores/05_redis_keyspace.md](../05_data_stores/05_redis_keyspace.md) |

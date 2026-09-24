@@ -2,6 +2,7 @@
 
 > **대상**: api 표면 43개를 위협 관점에서 다시 읽는 리뷰 — 방어 지점 전수 · CORS 단일 오리진 · auth 표면 CORS 제외 판정 리뷰 · BFF 인증 경로의 출처 검사 · **레이트 리밋 등급(class 값 집합)과 한도 관계식(정본)** · 로그인 시도 제한 판정 · 조회 범위 강제 · **내보내기 범위 상한(정본)** · ClickHouse 파라미터 바인딩 · WebSocket Origin 검증과 종료 코드 8종 리뷰 · 보안 헤더 · 응답 비노출
 > **작성일**: 2026-09-24
+> **개정일**: 2026-09-24 — 최종 정밀 검수 — Host 대조 거절 응답 모양 판정 — common.validation_failed/400(header.host · enum) · WS는 업그레이드 전 400
 > **원천**: 원본 architecture.md §2 · §11.2 · §18(커밋 ff66a37) · 원본 tech_stack.md §10.4(커밋 ff66a37) · REQ-AUT-04 · 07 · 11 · 12 · 13 · 14 · 16 · REQ-GLB-19 · REQ-TSQ-01 · 03 · 04 · 15 · 17 · REQ-ALM-13 · REQ-GEN-08 · 09 · 15 · REQ-RLT-09 · REQ-OBS-10 · ADR-02 · [../07_api/01_conventions.md](../07_api/01_conventions.md) · [../07_api/03_auth.md](../07_api/03_auth.md) · [../07_api/05_timeseries.md](../07_api/05_timeseries.md) · [../07_api/06_realtime.md](../07_api/06_realtime.md) · [../07_api/09_datagen.md](../07_api/09_datagen.md) · [../07_api/11_websocket.md](../07_api/11_websocket.md) · [../05_data_stores/05_redis_keyspace.md](../05_data_stores/05_redis_keyspace.md) rl 계열 · docs_plan.md 웨이브 인계 W3 05_data_stores/05 행 · W6 10_observability 행 · W7 12_security 행
 
 **방어 지점은 NestJS 한 곳이다.** 프록시 · 로드 밸런서가 없으므로 CORS · 보안 헤더 · 레이트 리밋 · Origin 검증 · 입력 검증이 전부 api 코드 안에서 일어난다(원본 architecture.md §11.2 · §18). 앞단에 무언가를 끼워 넣었다가 걷어낼 일이 없다는 뜻이고, 동시에 이 계층이 빠지면 대신 막을 곳이 없다는 뜻이다.
@@ -263,7 +264,7 @@ Origin 검증과 종료 코드 8종을 방어 관점에서 다시 읽는다. 종
 | class별 한도 값 4 | 2계층 미정 — 관계식 R1~R4 고정 · 오른쪽 항 확정 뒤 이 문서에서 정한다 | 이 문서 · 오른쪽 항 [../07_api/09_datagen.md](../07_api/09_datagen.md) · [../07_api/11_websocket.md](../07_api/11_websocket.md) · EXP-37 |
 | WebSocket 연결 수 상한 | 3계층 미확인 — 확정 전 임의 값 고정 금지 | [../07_api/11_websocket.md](../07_api/11_websocket.md) · [../03_requirements/13_nonfunctional.md](../03_requirements/13_nonfunctional.md) |
 | 한도 기동 검사(관계식 위반 거부) | 계약만 — 검사 자리 미설계 | 구현 착수 시 |
-| Host 대조 거절의 응답 모양 | 미설계 — 에러 코드를 새로 만들지 않는다는 것만 정했다 · 상태 · 본문 미정 | [../07_api/01_conventions.md](../07_api/01_conventions.md) · [../11_glossary/02_error_codes.md](../11_glossary/02_error_codes.md) |
+| Host 대조 거절의 응답 모양 | 닫힘(최종 검수 판정) — 새 코드 없이 common.validation_failed/400 · fields [path header.host · reason enum(허용값 밖)] · WebSocket 핸드셰이크는 업그레이드 전에 같은 HTTP 400으로 거절한다(정상 클라이언트는 도달하지 않는 경로라 종료 코드로 원인을 알릴 대상이 없다) | [../07_api/01_conventions.md](../07_api/01_conventions.md) · [../11_glossary/02_error_codes.md](../11_glossary/02_error_codes.md) |
 
 ## 관련 문서
 

@@ -2,6 +2,7 @@
 
 > **대상**: ★ 실험 규칙 정본 — 실험 한 번의 절차 · 3회 중앙값과 편차 폐기 기준 · 구조 판정과 분포 판정 · 스냅샷과 복원 · 캐시 키 초기화 · 기준선 · 회복 관측 · 조건 칸(4요소 + 부가 조건) · 조건 분리 강제 · **측정 기록 템플릿(docs/measurements/NNN-{slug}.md)** · **기계 판독 블록 형식(EXP-COMPARE BFF가 읽는다)** · 기록 상태와 정정 · 결과를 정본 문서에 올리는 절차
 > **작성일**: 2026-09-24
+> **개정일**: 2026-09-24 — 최종 정밀 검수 — 조건 분리 규칙 7 → **8**(실시간 · STALE · E2E 실험은 현재 시각 생성만 — 03_requirements/06 · 02_features/05가 넘긴 판정 수용)
 > **원천**: 원본 implementation_plan.md §2.4 · §5 S5 · §8(커밋 ff66a37) · 원본 data_flow.md §11.3(커밋 ff66a37) · 원본 tech_stack.md §10.6 · §14(커밋 ff66a37) · 원본 architecture.md §14(커밋 ff66a37) · docs_plan.md 보정 #3 · 웨이브 인계 W6 10/04 행(기계 판독 블록) · D-10 · REQ-GLB-17 · 23 · REQ-TEC-08~13 · [../07_api/10_metrics.md](../07_api/10_metrics.md) health run · switches · [../08_screen/07_experiment_console.md](../08_screen/07_experiment_console.md) §대조군 역전 지점 · [../11_glossary/04_id_conventions.md](../11_glossary/04_id_conventions.md) §측정 기록 파일명
 
 이 문서는 **실험을 어떻게 돌리고 어떻게 적는가의 정본**이다. 무엇을 재는지는 [06_experiment_catalog.md](./06_experiment_catalog.md)가, 부하 모양은 [05_load_scenarios.md](./05_load_scenarios.md)가 갖는다. 전역 불변식 "측정 기록"(4요소 병기 · 3회 중앙값 · 편차 초과 폐기)의 기준 값이 여기 있다.
@@ -112,8 +113,9 @@ AC의 합격선은 두 종류다([../03_requirements/14_acceptance_criteria.md](
 | 개발 · 중간 프로파일 수치를 목표와 비교하지 않음 | 프로파일 칸 | 기록은 유효 · 정본 인용 불가(REQ-TEC-07) |
 | 관측 스택 on 수치는 상대 비교용 | 관측 스택 칸 | 절대값 인용 불가 |
 | 생성기 포화 구간 제외 | 생성기 CPU · 달성률 | 포화 구간 폐기([05_load_scenarios.md](./05_load_scenarios.md) §생성기 포화 판정) |
+| 실시간 화면 · STALE · E2E를 읽는 실험은 현재 시각 생성만 | 주입 모드 칸 — 모드 D(과거 ts 백필)가 아님 | 무효 — 과거 ts는 최신값을 전부 STALE로 만들고 E2E(ingested_at − ts)를 백필 기간만큼 부풀린다(11_glossary/05 · REQ-GEN 등재) |
 
-- 검산: 규칙 = **7**
+- 검산: 규칙 = **8**
 - 모드 C 인증 비용은 S7 커밋의 기록에서만 잰다 — S5 모드 C 기록과 한 비교로 묶지 않는다(REQ-GEN-15). 두 기록은 커밋 해시가 달라 비교 불성립으로 자동 판정된다.
 
 ## 측정 기록 템플릿

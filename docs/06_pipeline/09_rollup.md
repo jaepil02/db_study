@@ -2,6 +2,7 @@
 
 > **대상**: F-08 롤업 흐름의 기전 정본 — 삽입 한 번이 발동하는 MV 연쇄 · 계층별 담당 조회 · MV 실패의 감지 · **원시 성공 · MV 실패 뒤 같은 토큰 재시도의 MV 재실행 미확인과 그 대응** · **롤업 공백 구간 재계산 절차** · 늦게 도착한 데이터 · 백필(모드 D)과의 관계 · 보존 경계와 정합 대조
 > **작성일**: 2026-09-24
+> **개정일**: 2026-09-24 — 최종 정밀 검수 — p95 롤업 대조 미확인 행에 확정 수단 EXP-31 연결 · §재계산 → §롤업 공백 재계산(절 이름 교정)
 > **개정일**: 2026-09-24 — W6 실험 채번 반영 — 메트릭 이름 · EXP 번호 반영(정본 10_observability/01 · 06)
 > **원천**: 원본 data_flow.md §10 · §10.1 · §10.2 · §10.3 · §13 · §17(커밋 ff66a37) · 원본 architecture.md §7.2(커밋 ff66a37) · docs_plan.md 웨이브 인계 W4 06_pipeline 행(MV 재실행 여부) · ADR-14 · ADR-15 · REQ-ING-12 · 16 · REQ-GEN-10 · REQ-GLB-15 · REQ-TSQ-07 · [../05_data_stores/04_clickhouse_rollup.md](../05_data_stores/04_clickhouse_rollup.md) 롤업 DDL · MV 제약 8 · 백필 절차 · [../05_data_stores/03_clickhouse_schema.md](../05_data_stores/03_clickhouse_schema.md) 미확인 등재 · [../05_data_stores/08_retention_lifecycle.md](../05_data_stores/08_retention_lifecycle.md)
 
@@ -51,7 +52,7 @@ flusher INSERT plc.tag_raw(배치 · 토큰 T)
 
 - 검산: 결과 = **3**
 - **ⓐ · ⓑ를 가르는 것은 서버 설정(종속 MV의 블록 중복 제거 동작)과 버전이다**([../05_data_stores/03_clickhouse_schema.md](../05_data_stores/03_clickhouse_schema.md) 미확인 등재). S0 저장소 수동 실습에서 같은 토큰으로 두 번 삽입하되 첫 번째 MV를 강제 실패시켜 tag_1m count를 본다.
-- **판정 — 재시도로 메워진다고 가정하지 않는다.** ⓑ로 확인되기 전까지 MV 오류를 한 번이라도 본 배치는 성공하더라도 **롤업 의심 구간**으로 기록하고 §정합 대조와 §재계산이 메운다. ⓑ로 확인되면 의심 구간 기록은 계측으로만 남는다.
+- **판정 — 재시도로 메워진다고 가정하지 않는다.** ⓑ로 확인되기 전까지 MV 오류를 한 번이라도 본 배치는 성공하더라도 **롤업 의심 구간**으로 기록하고 §정합 대조와 §롤업 공백 재계산이 메운다. ⓑ로 확인되면 의심 구간 기록은 계측으로만 남는다.
 
 | 기록 | 내용 | 기록 주체 · 시점 | 쓰는 곳 |
 |------|------|------|------|
@@ -151,7 +152,7 @@ flusher INSERT plc.tag_raw(배치 · 토큰 T)
 | 원시 성공 · MV 실패 뒤 같은 토큰 재시도가 MV를 다시 실행하는가(ⓐ · ⓑ) | **미확인** — 재실행을 가정하지 않고 의심 구간 대조 · 재계산으로 메운다 | S0 실측 · 이 문서 |
 | 여러 블록으로 쪼개진 INSERT의 ingested_at 동일성 | 미확인 — 확인 전 경로 A 제한 | S0 실측 · EXP-32 |
 | MV 캐스케이드 지연 · MV가 삽입 처리량에 더하는 비용 | 3계층 미확인 — 원본 예상치 100 ms | REQ-NFR-04 |
-| p95 원시 대 롤업 허용 범위 | 3계층 미확인 | [../03_requirements/14_acceptance_criteria.md](../03_requirements/14_acceptance_criteria.md) |
+| p95 원시 대 롤업 허용 범위 | 3계층 미확인 — 확정 수단 EXP-31(원시 내 순위 오차) | [../03_requirements/14_acceptance_criteria.md](../03_requirements/14_acceptance_criteria.md) §미확인 등재 |
 | 롤업 의심 구간 · MV 오류 계수 메트릭 이름 | **W6 판정** — ing_rollup_suspect_batches_total · ing_mv_errors_total{result} | [../10_observability/01_metrics_catalog.md](../10_observability/01_metrics_catalog.md) |
 
 ## 관련 문서

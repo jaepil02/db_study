@@ -2,6 +2,7 @@
 
 > **대상**: 용량 티어 S · M · M+ · L의 정의와 원본 산정 · 정상 상태 디스크 · 파생 지표(Modbus 요청 · Stream 발행 · 삽입 횟수 · 컨슈머 · 디스크 쓰기) · **보정 7.1과 ADR-09가 무효화한 원본 산정** · 원본 산정이 빠뜨린 저장 객체 · 확정 절차
 > **작성일**: 2026-09-24
+> **개정일**: 2026-09-24 — 최종 정밀 검수 — 디스크 미산정 행을 확정 수단(EXP-35 · 디스크 예산 식)과 연결
 > **개정일**: 2026-09-24 — W7 검수 반영 — 미확인 1행 닫힘(배치 행 수 상한 · flusher 메모리)
 > **개정일**: 2026-09-24 — W6 실험 채번 반영 — EXP 번호 반영(정본 10_observability/01 · 06)
 > **개정일**: 2026-09-24 — W4 판정 반영 — 파생 지표 산술 보정 — 삽입 횟수 M 초당 1회 · M+ 초당 2회 → **2회 유지** · L 초당 10회(현행 R 50,000) · M+ 배치 100,000행 → **50,000행** · Modbus 요청은 시드 data_type이 정한다(FLOAT32면 M 초당 200회) · 지표 상태 의미 변경 1 → **2**
@@ -120,7 +121,7 @@
 |------|------|------|
 | 압축 후 행당 크기 · 롤업 행 크기 | 3계층 미확인 — 원본 산정 4 B · 약 9 B | EXP-35 · [../10_observability/06_experiment_catalog.md](../10_observability/06_experiment_catalog.md) |
 | 티어별 정상 상태 디스크 | 원본 산정 — 미확인 | 상동 |
-| tag_1d · alarm_eval · 대조군 · 관측 스택 디스크 | 미산정 | [../05_data_stores/08_retention_lifecycle.md](../05_data_stores/08_retention_lifecycle.md) · [../05_data_stores/10_olap_vs_rdb_control.md](../05_data_stores/10_olap_vs_rdb_control.md) |
+| tag_1d · alarm_eval · 대조군 · 관측 스택 디스크 | 3계층 미확인 — 행당 크기(EXP-35) 확정 뒤 산정 · 대조군은 디스크 예산 식(06_experiment_catalog 대조 실험 조정값) | [../05_data_stores/08_retention_lifecycle.md](../05_data_stores/08_retention_lifecycle.md) · [../05_data_stores/10_olap_vs_rdb_control.md](../05_data_stores/10_olap_vs_rdb_control.md) |
 | 배치당 행 수 상한 · flusher 메모리(M+ · L) | 닫힘 — 배치 행 상한은 행 트리거 R · flusher가 쥐는 배치 최대 4 · 넘으면 컨슈머가 읽기를 멈춰 적체를 Stream에 둔다(M+ · L 실측은 S5) — [../06_pipeline/03_ingest_batch.md](../06_pipeline/03_ingest_batch.md) | [../06_pipeline/03_ingest_batch.md](../06_pipeline/03_ingest_batch.md)(W4) · S5 |
 | 머지 증폭 배수 | 원본 산정 3~5배 — 미확인 | S5 |
 

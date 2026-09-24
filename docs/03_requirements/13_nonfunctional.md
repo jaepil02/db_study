@@ -2,6 +2,7 @@
 
 > **대상**: db_study의 비기능 목표(무손실 · 무중복 · 지연 예산 · 처리량 · 조회 지연 · 캐시 히트율 · WebSocket 연결 · 활성 파트 · 압축률 · 이벤트 루프 지연 · 소진 시간 · 역전 지점)와 기술 운영 계약(로컬 실행 · 127.0.0.1 바인드 · 기동 순서 · 버전 고정 · 마이그레이션 순번 · 메모리 프로파일 · 스냅샷 복원 · 측정 기록 4요소 · 3회 중앙값) — REQ-NFR-NN · REQ-TEC-NN 채번 정본 · 성능 목표치의 정본
 > **작성일**: 2026-09-24
+> **개정일**: 2026-09-24 — 최종 정밀 검수 — 알람 판정 구간 예산 행에 구간 신설 완료 · 값 EXP-30 연결
 > **개정일**: 2026-09-24 — W6 실험 채번 반영 — REQ-NFR 18행 검증 방법에 EXP 번호 · 오류율 산정 메트릭 판정 · 이벤트 루프 p95 메트릭 이름 통일(정본 10_observability/01 · 06)
 > **개정일**: 2026-09-24 — W6 판정 반영 — 중간 프로파일 정식 채택 안 함 · 관측 스택 구성원 prometheus · grafana 2(정본 09_tech_stack/03 · 04) · REQ 수 불변
 > **원천**: 원본 architecture.md §3 · §13 · §14 · §15 · §16 · §17 · §18 · §19(커밋 ff66a37) · 원본 data_flow.md §11.2 · §11.3 · §12.3 · §15 · §16 · §17(커밋 ff66a37) · 원본 tech_stack.md §1 · §5.1 · §10 · §10.1~§10.6 · §12(커밋 ff66a37) · 원본 implementation_plan.md §2 · §2.1~§2.5 · §4 · §8 · §9(커밋 ff66a37) · D-02 · D-06 · D-09 · D-10 · [../01_overview/05_priorities_roadmap.md](../01_overview/05_priorities_roadmap.md) · [01_global_rules.md](./01_global_rules.md) REQ-GLB-17 · 19 · 22 · 23
@@ -142,7 +143,7 @@ REQ-NFR을 판정할 때 수치를 어떻게 읽어야 하는지 고정한다. �
 | 항목 | 상태 | 확정 자리 |
 |------|------|------|
 | REQ-NFR 18행 전부의 확정 값 | 3계층 미확인 — 미확인 · 확정 전 임의 값 고정 금지 | [../10_observability/06_experiment_catalog.md](../10_observability/06_experiment_catalog.md) EXP-NN(§REQ-NFR → EXP 대응 검산 · 18행 전부 대응) · 실측 기록 |
-| 알람 판정 구간의 지연 예산 | **신설 · 미확인** — 원본 예산표에 구간이 없다(원본 implementation_plan.md §7.3) | [../04_architecture/05_latency_budget.md](../04_architecture/05_latency_budget.md)(W3) |
+| 알람 판정 구간의 지연 예산 | **신설 · 미확인** — 원본 예산표에 구간이 없다(원본 implementation_plan.md §7.3) · 구간 정의는 W3 완료 · 값은 EXP-30 | [../04_architecture/05_latency_budget.md](../04_architecture/05_latency_budget.md) §알람 판정 구간 — 신설 |
 | 설계된 거절을 뺀 오류율의 메트릭 산정 | **W6 판정** — http_designed_rejections_total + 파생 지표 API 오류율(설계 거절 제외) | [../10_observability/01_metrics_catalog.md](../10_observability/01_metrics_catalog.md) |
 | 중간 프로파일의 정식 채택 여부 | **W6 판정** — 정식 채택하지 않는다 · 조건부 대안 — WSL2 메모리 조정이 불가능할 때만 | [../09_tech_stack/04_local_environment.md](../09_tech_stack/04_local_environment.md) |
 | 관측 스택 구성원(prometheus · grafana · alertmanager · tempo) | **W6 판정** — 구성원 prometheus · grafana 2 · alertmanager 채택하지 않음(수신처 없음 · D-02) · tempo 현 범위 밖 · 조건부 | [../09_tech_stack/03_data_infra.md](../09_tech_stack/03_data_infra.md) |

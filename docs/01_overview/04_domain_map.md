@@ -2,6 +2,7 @@
 
 > **대상**: 전 설계자 · 신규 합류자 — 11도메인이 어느 NestJS 모듈 · 평면 · 위치에 앉고, 서로 어떤 경계로 이어지며, 각 폴더에서 어디가 비는가
 > **작성일**: 2026-09-24
+> **개정일**: 2026-09-24 — 최종 정밀 검수 — 공백 매트릭스를 폴더 README 현행 선언에 맞춤: 공백(미선언) 5 → **0**(05_data_stores COL · TSQ · RLT · OBS · 06_pipeline OBS 선언 완료) · 08_screen GEN 행 → **공백(선언)**(W5 GEN 화면 없음) · 행 23 → **22** · 공백(선언) 8 → **14** · 롤업 객체 ING 귀속 확정(W3)
 > **개정일**: 2026-09-24 — W3 판정 반영 — SIM · OBS APP_ROLE 배정(ADR-22) · GEN · ALM 역할 분할 서술
 > **개정일**: 2026-09-24 — W2 판정 반영 — 인가 간선 AUT → GEN 추가(부하 주입 표면은 환경변수 게이트 + 인증) · 인가 5 → **6** · 간선 17 → **18** · GEN · OBS 인가 미정 불릿을 판정 결과로 교체
 > **원천**: 원본 architecture.md §4 · §5 · §6 · §8.2 · §11(커밋 ff66a37) · 원본 tech_stack.md §3.1 · §3.3 · §10.1 · §11(커밋 ff66a37) · 원본 data_flow.md §1 · §2 · §7 · §7.2 · §8 · §11(커밋 ff66a37) · 원본 implementation_plan.md §6 · §7.3(커밋 ff66a37) · 저장소 루트 docs_plan.md(도메인 벡터 · 보정 #11 · #12 · #13) · [../README.md](../README.md) 고정 기준(도메인 · 도메인 공백)
@@ -96,7 +97,7 @@ flowchart LR
 
 ## 도메인 × 저장 객체
 
-각 도메인이 **소유**(스키마를 정의하고 쓰기 책임을 지는)하는 저장 객체다. 읽기만 하는 객체는 소유로 세지 않는다. **귀속은 잠정이며 정본은 [../05_data_stores](../05_data_stores/README.md)(W3)다** — 특히 롤업 테이블 · MV의 귀속은 원본이 명시하지 않았다.
+각 도메인이 **소유**(스키마를 정의하고 쓰기 책임을 지는)하는 저장 객체다. 읽기만 하는 객체는 소유로 세지 않는다. **귀속의 정본은 [../05_data_stores](../05_data_stores/README.md)다** — 원본이 명시하지 않은 롤업 테이블 · MV의 귀속은 W3가 ING로 확정했다([../05_data_stores/04_clickhouse_rollup.md](../05_data_stores/04_clickhouse_rollup.md) §도메인 귀속 판정).
 
 | 도메인 | PostgreSQL | ClickHouse | Redis |
 |------|------|------|------|
@@ -105,7 +106,7 @@ flowchart LR
 | COL | 없음 | 없음 | stream:plc:raw 발행 · 스풀 파일(저장소 밖) |
 | SIM | 없음 | 없음 | 없음 |
 | GEN | 없음 | 없음(모드 D는 tag_raw에 쓰지만 소유하지 않는다) | 없음 |
-| ING | plc_tag_raw_control(대조군) | tag_raw · tag_1m · tag_1h · tag_1d · MV 3(잠정) | rt:latest · stream:plc:dlq · 컨슈머 그룹 |
+| ING | plc_tag_raw_control(대조군) | tag_raw · tag_1m · tag_1h · tag_1d · MV 3 | rt:latest · stream:plc:dlq · 컨슈머 그룹 |
 | TSQ | 없음 | 없음 | cache:q · lock:rebuild |
 | RLT | 없음 | 없음 | 없음(ch:rt 구독 · rt:latest 읽기) |
 | ALM | alarm_rule · alarm_event | alarm_eval | alarm:state · cache:alarmrules |
@@ -113,7 +114,7 @@ flowchart LR
 | OBS | 없음 | 없음 | 없음 |
 
 - 검산(루트 README 고정 기준과의 대조): PostgreSQL AUT 3 + MST 6 + ING 1 + ALM 2 + WRK 3 = **15** · ClickHouse 테이블 ING 4 + ALM 1 = **5**. 두 값이 고정 기준(15 · 5)과 일치하므로 이 귀속표에 빠진 테이블은 없다.
-- **소유 PostgreSQL · ClickHouse 테이블이 없는 도메인이 여섯이다** — COL · SIM · GEN · TSQ · RLT · OBS. 검산: 11 − 테이블 소유 5(AUT · MST · ING · ALM · WRK) = **6**. 폴더 README가 선언한 공백은 이 중 SIM · GEN뿐이다(§폴더별 도메인 공백).
+- **소유 PostgreSQL · ClickHouse 테이블이 없는 도메인이 여섯이다** — COL · SIM · GEN · TSQ · RLT · OBS. 검산: 11 − 테이블 소유 5(AUT · MST · ING · ALM · WRK) = **6**. [../05_data_stores/README.md](../05_data_stores/README.md) 도메인 공백 행이 여섯 전부를 소유 기준으로 선언한다(§폴더별 도메인 공백).
 
 ## 도메인별 문서 좌표
 
@@ -145,7 +146,7 @@ flowchart LR
 | 행 | 도메인 전용 파일은 없고 공용 파일 안에 도메인의 행(테이블 · 흐름 · 화면)이 있다 |
 | 횡단 | 폴더가 도메인으로 나뉘지 않는다 — 도메인은 횡단 서술 안에 등장한다 |
 | 공백(선언) | 도메인이 비며 그 폴더 README가 공백을 명시한다 |
-| 공백(미선언) | 도메인이 비는데 폴더 README가 아직 명시하지 않았다 — 리드 확인 대상 |
+| 공백(미선언) | 도메인이 비는데 폴더 README가 아직 명시하지 않았다 — 발견하면 폴더 README에 선언해 공백(선언)으로 옮긴다 |
 
 | 폴더 | AUT | MST | COL | SIM | GEN | ING | TSQ | RLT | ALM | WRK | OBS |
 |------|------|------|------|------|------|------|------|------|------|------|------|
@@ -153,39 +154,40 @@ flowchart LR
 | 02_features | 파일 | 파일 | 파일 | 파일 | 파일 | 파일 | 파일 | 파일 | 파일 | 파일 | 파일 |
 | 03_requirements | 파일 | 파일 | 파일 | 파일 | 파일 | 파일 | 파일 | 파일 | 파일 | 파일 | 파일 |
 | 04_architecture | 횡단 | 횡단 | 횡단 | 횡단 | 횡단 | 횡단 | 횡단 | 횡단 | 횡단 | 횡단 | 횡단 |
-| 05_data_stores | 행 | 행 | 공백(미선언) | 공백(선언) | 공백(선언) | 행 | 공백(미선언) | 공백(미선언) | 행 | 행 | 공백(미선언) |
-| 06_pipeline | 행 | 행 | 행 | 행 | 행 | 행 | 행 | 행 | 행 | 행 | 공백(미선언) |
+| 05_data_stores | 행 | 행 | 공백(선언) | 공백(선언) | 공백(선언) | 행 | 공백(선언) | 공백(선언) | 행 | 행 | 공백(선언) |
+| 06_pipeline | 행 | 행 | 행 | 행 | 행 | 행 | 행 | 행 | 행 | 행 | 공백(선언) |
 | 07_api | 파일 | 파일 | 공백(선언) | 공백(선언) | 파일 | 공백(선언) | 파일 | 파일 | 파일 | 파일 | 파일 |
-| 08_screen | 행 | 행 | 공백(선언) | 공백(선언) | 행 | 공백(선언) | 행 | 행 | 행 | 행 | 행 |
+| 08_screen | 행 | 행 | 공백(선언) | 공백(선언) | 공백(선언) | 공백(선언) | 행 | 행 | 행 | 행 | 행 |
 | 09_tech_stack | 횡단 | 횡단 | 횡단 | 횡단 | 횡단 | 횡단 | 횡단 | 횡단 | 횡단 | 횡단 | 횡단 |
 | 10_observability | 횡단 | 횡단 | 횡단 | 횡단 | 횡단 | 횡단 | 횡단 | 횡단 | 횡단 | 횡단 | 횡단 |
 | 11_glossary | 횡단 | 횡단 | 횡단 | 횡단 | 횡단 | 횡단 | 횡단 | 횡단 | 횡단 | 횡단 | 횡단 |
 | 12_security | 파일 | 횡단 | 횡단 | 횡단 | 횡단 | 횡단 | 횡단 | 횡단 | 횡단 | 횡단 | 횡단 |
 
-세는 기준은 칸이다. 05_data_stores 행의 기준은 **소유 PostgreSQL · ClickHouse 테이블**(§도메인 × 저장 객체)이고 Redis 키만 소유한 도메인은 행으로 세지 않는다. 06_pipeline 행의 기준은 흐름 F-01~F-10의 주 경로 참여이며, AUT는 F-05의 BFF 경유 요청(로그인 · 토큰 갱신)으로 참여한다(원본 data_flow.md §7.2). 08_screen의 GEN · OBS 행은 실험 콘솔 귀속이 잠정이다(W5).
+세는 기준은 칸이다. 05_data_stores 행의 기준은 **소유 PostgreSQL · ClickHouse 테이블**(§도메인 × 저장 객체)이고 Redis 키만 소유한 도메인은 행으로 세지 않는다. 06_pipeline 행의 기준은 흐름 F-01~F-10의 주 경로 참여이며, AUT는 F-05의 BFF 경유 요청(로그인 · 토큰 갱신)으로 참여한다(원본 data_flow.md §7.2). 08_screen의 기준은 기능의 주 화면이다 — GEN은 주 화면이 없고(산출이 EXP-CONSOLE 카드에 간접 표시될 뿐이다) OBS는 EXP-CONSOLE · EXP-COMPARE가 주 화면이다(W5 확정 — [../08_screen/02_traceability.md](../08_screen/02_traceability.md)).
 
 ### 검산
 
 - 파일 = 02_features 11 + 03_requirements 11 + 07_api 8 + 12_security 1 = **31**
-- 행 = 05_data_stores 5 + 06_pipeline 10 + 08_screen 8 = **23**
+- 행 = 05_data_stores 5 + 06_pipeline 10 + 08_screen 7 = **22**
 - 횡단 = 01_overview 11 + 04_architecture 11 + 09_tech_stack 11 + 10_observability 11 + 11_glossary 11 + 12_security 10 = **65**
-- 공백(선언) = 05_data_stores 2 + 07_api 3 + 08_screen 3 = **8**
-- 공백(미선언) = 05_data_stores 4 + 06_pipeline 1 = **5**
-- 합계 31 + 23 + 65 + 8 + 5 = **132** = 12폴더 × 11도메인
+- 공백(선언) = 05_data_stores 6 + 06_pipeline 1 + 07_api 3 + 08_screen 4 = **14**
+- 공백(미선언) = **0**
+- 합계 31 + 22 + 65 + 14 + 0 = **132** = 12폴더 × 11도메인
 
-### 미선언 공백
+### 공백 선언 이력
 
-루트 README 고정 기준의 도메인 공백 행은 "COL · SIM · ING은 07_api에 표면이 없다 · SIM · GEN은 05_data_stores에 테이블이 없다"를 선언한다. 매트릭스를 채우면 선언되지 않은 공백이 더 나온다.
+W1 작성 시점에는 루트 README가 "COL · SIM · ING은 07_api에 표면이 없다 · SIM · GEN은 05_data_stores에 테이블이 없다"만 선언해 매트릭스에 미선언 공백 5칸이 나왔다. 아래 다섯은 모두 폴더 README가 선언을 마쳐 **현행 미선언 공백은 0이다.**
 
-| 폴더 | 도메인 | 비는 이유 | 선언이 필요한 자리 |
+| 폴더 | 도메인 | 비는 이유 | 선언한 자리 |
 |------|------|------|------|
-| 05_data_stores | COL | 소유 테이블 없음 — stream:plc:raw 발행과 스풀 파일뿐 | [../05_data_stores/README.md](../05_data_stores/README.md) 도메인 공백 행 |
+| 05_data_stores | COL | 소유 테이블 없음 — stream:plc:raw 발행과 스풀 파일뿐 | [../05_data_stores/README.md](../05_data_stores/README.md) 도메인 공백 행(W3) |
 | 05_data_stores | TSQ | 소유 테이블 없음 — 롤업은 읽기만 하고 cache:q · lock:rebuild 키만 소유 | 상동 |
 | 05_data_stores | RLT | 소유 저장 객체 없음 — ING가 쓴 rt:latest와 ch:rt를 읽는다 | 상동 |
 | 05_data_stores | OBS | 소유 저장 객체 없음 — 메트릭은 /metrics로 노출될 뿐 앱 저장소에 앉지 않는다 | 상동 |
-| 06_pipeline | OBS | 흐름 F-01~F-10 어디에도 주 경로로 참여하지 않는다 — 계측은 흐름이 아니라 관측 | [../06_pipeline/README.md](../06_pipeline/README.md) |
+| 06_pipeline | OBS | 흐름 F-01~F-10 어디에도 주 경로로 참여하지 않는다 — 계측은 흐름이 아니라 관측 | [../06_pipeline/README.md](../06_pipeline/README.md) 도메인 공백 행(W4) |
 
-- **05_data_stores의 공백 선언은 세는 기준을 먼저 밝혀야 한다.** "테이블이 없다"를 소유 기준으로 읽으면 여섯 도메인이 비고(§도메인 × 저장 객체), 읽기 · 쓰기 기준으로 읽으면 GEN(모드 D가 tag_raw에 쓴다)은 비지 않는다. 어느 기준으로도 SIM · GEN 둘만 비는 결과는 나오지 않는다.
+- 검산: 선언을 마친 공백 = 05_data_stores 4 + 06_pipeline 1 = **5** · 남은 미선언 **0**
+- **05_data_stores의 공백 선언은 세는 기준을 먼저 밝혔다.** "테이블이 없다"를 소유 기준으로 읽으면 여섯 도메인이 비고(§도메인 × 저장 객체), 읽기 · 쓰기 기준으로 읽으면 GEN(모드 D가 tag_raw에 쓴다)은 비지 않는다. 폴더 README는 소유 기준을 택해 여섯을 선언한다.
 
 ## 도메인 추가 · 변경 절차
 

@@ -2,6 +2,7 @@
 
 > **대상**: AUTH-LOGIN(로그인) · ADM-MASTER(사이트 · 라인 · 설비 · Modbus 접속 설정 · 태그 — 스케일 변경 = 새 태그 발급 · master.scale_change_forbidden/409) · ADM-WORKORDER(작업지시 status 4 · 허용 전이 4쌍 · work_orders.invalid_status_transition/409 · 생산 실적) · ADM-AUDIT(감사 로그 · 태그 변경 이력 조회)
 > **작성일**: 2026-09-24
+> **개정일**: 2026-09-24 — 최종 정밀 검수 — Modbus 매핑 변경 행 닫힘(07_api/04 W5 판정) · 새 태그 발급 다이얼로그 펜스 앞 도입문 추가
 > **원천**: 원본 architecture.md §6 · §11 · §11.2 · §12(커밋 ff66a37) · 원본 data_flow.md §7 · §7.1 · §7.2(커밋 ff66a37) · 원본 implementation_plan.md §5 S4 · S7 · §7.4(커밋 ff66a37) · docs_plan.md 실행 계획 보정 #13 · REQ-AUT-01~06 · 14 · 15 · 17 · REQ-MST-01~15 · REQ-WRK-01~12 · AC-06 · AC-37 · AC-38 · 기능 AUT-01 · 03 · MST-01~06 · WRK-01 · 02 · 03 · 05 · [../06_pipeline/07_business_crud.md](../06_pipeline/07_business_crud.md) · [../07_api/03_auth.md](../07_api/03_auth.md) · [../07_api/04_master.md](../07_api/04_master.md) · [../11_glossary/03_enums_state_machines.md](../11_glossary/03_enums_state_machines.md) 상태 머신 4 · [01_standards.md](./01_standards.md)
 
 이 문서는 로그인과 업무 데이터 관리 화면 넷을 담는다(보정 #13 — 08_screen에 로그인 · 작업지시 자리가 따로 없어 이 파일이 함께 소유한다). 네 화면의 공통점은 **분기 ③계층의 화면**이라는 것이다 — 쓰기는 Redis Stream을 타지 않고 PostgreSQL 트랜잭션으로 동기 커밋된 뒤 응답하며(REQ-WRK-01), 캐시 사본은 커밋 뒤에만 지워진다. 그래서 이 화면들의 계약은 속도가 아니라 **쓴 사람이 저장 직후 새 값을 보는가**(read-your-writes)다.
@@ -119,6 +120,8 @@ PATCH /api/v1/tags/{id}가 받는 필드의 세 갈래(정본 [../07_api/04_mast
 - **Modbus 매핑 4필드(functionCode · address · dataType · wordOrder) 변경은 현재 허용된다** — 다른 레지스터를 읽게 되면 같은 tag_id의 값 원천이 바뀌는데 새 태그 발급 대상인지 판정이 없다(07_api/04_master 신규 미확인). 판정 전까지 화면은 저장 전 "이 변경은 같은 tag_id의 값 원천을 바꾼다" 경고를 띄운다.
 
 ### 새 태그 발급 다이얼로그
+
+변환식 변경을 새 tag_id 발급으로 받는 다이얼로그의 입력과 검증 자리다.
 
 ```plain
 새 태그 발급 — D12-TEMP-01(온도-1 · ℃ · scale 1 · offset 0)
@@ -289,7 +292,7 @@ PATCH /api/v1/tags/{id}가 받는 필드의 세 갈래(정본 [../07_api/04_mast
 
 | 항목 | 상태 | 확정 자리 |
 |------|------|------|
-| Modbus 매핑 변경이 새 태그 발급 대상인가 | 신규 미확인(07_api/04_master 등재) — 화면은 경고만 띄운다 | [../03_requirements/03_master.md](../03_requirements/03_master.md) · 리드 |
+| Modbus 매핑 변경이 새 태그 발급 대상인가 | 닫힘 — 발급 대상이 아니다 · PATCH로 받고 감사에 남긴다(W5 판정 — 변환식 scale · offset_value만 발급 대상) · 화면은 교정 경고를 띄운다 | [../07_api/04_master.md](../07_api/04_master.md) |
 | CRUD p95 · 층별 반영 시간 | 3계층 미확인 — 원본 목표 CRUD 100 ms | [../03_requirements/13_nonfunctional.md](../03_requirements/13_nonfunctional.md) REQ-NFR-09 |
 
 ## 관련 문서

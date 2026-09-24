@@ -2,6 +2,7 @@
 
 > **대상**: 업무 데이터(WRK)의 동작 계약 — ③계층 비경유(Stream 미사용 · read-your-writes) · 작업지시 CRUD와 유일 제약 · 조회 캐시와 커밋 뒤 삭제 · 작업지시 상태 전이의 구조 · 생산 실적과 생산 카운터의 분리 · **감사 대상 기준과 감사 쓰기 트랜잭션** · 감사 로그 조회 · S7 시연 최소분 — REQ-WRK-NN 채번 정본
 > **작성일**: 2026-09-24
+> **개정일**: 2026-09-24 — 최종 정밀 검수 — CRUD p95 미확인 행에 EXP-36 연결
 > **개정일**: 2026-09-24 — W7 검수 반영 — 미확인 2행 닫힘(실적 · 감사 조회 표면 · 생산 카운터 구분) — REQ 수 불변
 > **개정일**: 2026-09-24 — W4 판정 반영 — REQ-WRK-03 · 보정 대응표 무효화 체인 ④ · ⑤단 → **⑤ · ⑥단**(6단 번호 표기) — REQ 수 불변
 > **개정일**: 2026-09-24 — W3 판정 반영 — work_order.status 미설계 → **4값 · 허용 전이 4쌍 확정**(정본 05_data_stores/01 · 11_glossary/03 상태 머신 4) · 작업지시 캐시 키 모양 미정 → **cache:workorders** · BFF 서버 fetch 캐시 → **두지 않음(no-store)** · 풀 크기 소유처 09_tech_stack/03 → **05_data_stores/02**(ADR-19) · 무인증 기간 감사 행위자 → **user_id NULL**
@@ -144,7 +145,7 @@ W3이 값 · 전이 표를 확정해 오른쪽 열이 채워졌다. 상태 머�
 | work_order.status 값 · 허용 전이 | text 컬럼 · (line_id, status) 인덱스 | **W3 확정** — 4값 · 4쌍 | [../05_data_stores/01_postgresql_schema.md](../05_data_stores/01_postgresql_schema.md) |
 | 상태 전이 위반 에러 코드 | 이 문서가 409 · work_orders 네임스페이스로 판정 | **채번 완료** — work_orders.invalid_status_transition/409 · 조건이 허용 전이 표에 대해 정의되므로 값 집합과 무관하게 성립한다 | [../11_glossary/02_error_codes.md](../11_glossary/02_error_codes.md)(리드) |
 | **S4~S6 무인증 기간의 감사 행위자** | 마스터 쓰기는 S4부터 audit_log에 쓰는데 인증은 S7이다 · audit_log.user_id는 user_account 참조다 | **W3 판정** — user_id NULL = 무인증 기간의 행위 · 시드 계정으로 채우지 않는다 · S7 이후 NULL은 한계 등재 #4 | [../05_data_stores/01_postgresql_schema.md](../05_data_stores/01_postgresql_schema.md) · [../05_data_stores/09_migrations_seed.md](../05_data_stores/09_migrations_seed.md)(W3) |
-| 업무 CRUD p95 | 원본 목표 100 ms 이하(4 vCPU 가정) · 지연 예산 80 ms | 미확인 — 확정 전 임의 값 고정 금지 | [13_nonfunctional.md](./13_nonfunctional.md) |
+| 업무 CRUD p95 | 원본 목표 100 ms 이하(4 vCPU 가정) · 지연 예산 80 ms | 미확인 — 확정 전 임의 값 고정 금지 · EXP-36 | [13_nonfunctional.md](./13_nonfunctional.md) |
 | 생산 실적 · 감사 조회 표면 | 원본 API 표에 work-orders 하나뿐이다 | 닫힘 — 실적 · 감사 조회 표면 신설 — [../07_api/08_work_orders.md](../07_api/08_work_orders.md) | [../07_api/08_work_orders.md](../07_api/08_work_orders.md)(W5) |
 | 생산 카운터와 production_log의 구분 기전 | 원본에 기전이 없다 | 닫힘 — 카운터 표본은 ① 경로 · production_log는 사람의 실적 입력 전용 — [../06_pipeline/04_routing.md](../06_pipeline/04_routing.md) | [../06_pipeline/04_routing.md](../06_pipeline/04_routing.md)(W4) |
 | 작업지시 캐시 키 모양 · BFF 캐시 여부 | TTL 60초만 있다 | **W3 판정** — cache:workorders · BFF no-store. 기전은 W4 | [../05_data_stores/05_redis_keyspace.md](../05_data_stores/05_redis_keyspace.md) · [../06_pipeline/07_business_crud.md](../06_pipeline/07_business_crud.md)(W4) |

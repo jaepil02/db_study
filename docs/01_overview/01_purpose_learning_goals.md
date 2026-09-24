@@ -2,6 +2,7 @@
 
 > **대상**: 학습자 · 실험 수행자 · 신규 합류자 — db_study가 무엇을 배우려고 만드는 시스템인지, 그 배움을 무엇으로 판정하는지
 > **작성일**: 2026-09-24
+> **개정일**: 2026-09-24 — 최종 정밀 검수 — 생산 카운터 · 대조군 COPY 기전 미설계 → W4 판정(06_pipeline/04) 반영 · 미확인 등재 5행에 EXP 번호 연결(EXP-01~05 · 35 · 07 · 18)
 > **개정일**: 2026-09-24 — W7 검수 반영 — 스위치 세는 법 역할 9 + 수집 1 → **역할 10 + 수집 1**(D-13) · 축출 연쇄의 상관 대상 스트림 길이 → **Stream 점유 메모리**(10_observability/03 판정) · 미확인 1행 닫힘(생산 카운터 기전)
 > **개정일**: 2026-09-24 — SW-11 LATEST_VALUE_WRITER 신설 반영(D-13 · 사용자 확정) — 스위치 10 → **11**
 > **원천**: 원본 tech_stack.md §1 · §5.1 · §5.2 · §5.3(커밋 ff66a37) · 원본 implementation_plan.md §1 · §3 · §4 · §5(커밋 ff66a37) · 원본 data_flow.md §8.2(커밋 ff66a37) · 저장소 루트 docs_plan.md(Context · 학습 목표를 문서 구조로 구현하는 방법 · 실행 계획 보정 #2) · [06_design_decisions.md](./06_design_decisions.md) D-01 · D-04 · D-05 · D-06 · [../README.md](../README.md) 고정 기준
@@ -111,7 +112,7 @@ db_study는 PLC 대용량 시계열과 업무 데이터를 Redis 중간 계층�
 - **이것은 dual-write가 아니라 목적이 다른 세 쓰기다.** 같은 값을 두 곳에 복제해 맞추는 것이 아니라, 세 저장소가 각각 다른 질문(다음 판정은 무엇인가 · 임계값은 적절했는가 · 누가 언제 확인했는가)에 답한다(원본 data_flow.md §8.2).
 - **부분 실패의 진실은 PostgreSQL alarm_event다.** alarm_eval 삽입이 끝내 실패해도 알람 발생 · 해제 · 통지는 정상 동작하고 튜닝용 분석 데이터만 빈다.
 - **나중에 "CDC로 두 DB를 맞추자"는 제안이 나오면 이 구분이 반론의 근거다.** CDC는 같은 사실의 사본을 맞추는 도구이고, 여기의 세 쓰기는 애초에 같은 사실이 아니다.
-- ②의 생산 카운터가 어느 판정으로 어느 저장소에 가는지는 원본에 기전이 없다 — [../06_pipeline/04_routing.md](../06_pipeline/04_routing.md)(W4)가 확정한다(§미확인 등재).
+- ②의 생산 카운터는 원본에 기전이 없었고 W4가 판정했다 — 카운터 표본은 ① 경로(tag_raw) 그대로 가고, 파생 사실(목표 수량 도달 등)은 목적지 테이블이 없어 판정기를 두지 않는다. production_log는 사람의 실적 입력 전용이다([../06_pipeline/04_routing.md](../06_pipeline/04_routing.md) §생산 카운터 기전 판정).
 
 ### 경로를 고르지 않는 것도 분기의 결과다
 
@@ -198,11 +199,11 @@ db_study는 PLC 대용량 시계열과 업무 데이터를 Redis 중간 계층�
 
 | 항목 | 원본 예상치 | 상태 | 확정 자리 |
 |------|------|------|------|
-| 쿼리별 역전 지점(행 수) | 없음 — 원본은 "1억 행 이상에서 급격히 증가"라는 일반론만 적었다 | 미확인 — 확정 전 임의 값 고정 금지 | [../10_observability/06_experiment_catalog.md](../10_observability/06_experiment_catalog.md) 대조군 실험 |
-| 삽입 처리량 비 | PostgreSQL 1만~5만 · ClickHouse 100만+ rows/s | 미확인 — 확정 전 임의 값 고정 금지 | 상동 |
-| 압축률(프로파일별) | 혼합 8~15배 · RANDOM_WALK 2~4배(원본 data_flow.md §11.2) | 미확인 — 확정 전 임의 값 고정 금지 | 상동 · [../05_data_stores/03_clickhouse_schema.md](../05_data_stores/03_clickhouse_schema.md) |
-| 최신값 조회 on/off 차이 | off 30~150 ms → on 0.3~1 ms(원본 implementation_plan.md §4.1) | 미확인 — 확정 전 임의 값 고정 금지 | 스위치별 실험(SW-02) |
-| 축출 연쇄가 시작되는 메모리 조건 | maxmemory 하향 실험 전용 시나리오(원본 architecture.md §8.4) | 미확인 — 확정 전 임의 값 고정 금지 | 장애 재현 실험 · [../05_data_stores/06_redis_memory.md](../05_data_stores/06_redis_memory.md) |
+| 쿼리별 역전 지점(행 수) | 없음 — 원본은 "1억 행 이상에서 급격히 증가"라는 일반론만 적었다 | 미확인 — 확정 전 임의 값 고정 금지 | [../10_observability/06_experiment_catalog.md](../10_observability/06_experiment_catalog.md) EXP-01~05(대조군) |
+| 삽입 처리량 비 | PostgreSQL 1만~5만 · ClickHouse 100만+ rows/s | 미확인 — 확정 전 임의 값 고정 금지 | 상동 — 비 쿼리 축은 격자 단계 기록 하나에 싣고 EXP-01~05가 공유한다 |
+| 압축률(프로파일별) | 혼합 8~15배 · RANDOM_WALK 2~4배(원본 data_flow.md §11.2) | 미확인 — 확정 전 임의 값 고정 금지 | EXP-35(프로파일별 압축) · EXP-01~05(저장소 간) · [../05_data_stores/03_clickhouse_schema.md](../05_data_stores/03_clickhouse_schema.md) |
+| 최신값 조회 on/off 차이 | off 30~150 ms → on 0.3~1 ms(원본 implementation_plan.md §4.1) | 미확인 — 확정 전 임의 값 고정 금지 | EXP-07(SW-02) |
+| 축출 연쇄가 시작되는 메모리 조건 | maxmemory 하향 실험 전용 시나리오(원본 architecture.md §8.4) | 미확인 — 확정 전 임의 값 고정 금지 | EXP-18(축출 연쇄) · [../05_data_stores/06_redis_memory.md](../05_data_stores/06_redis_memory.md) |
 | 생산 카운터의 분기 기전 | 원본에 없음 | 닫힘 — 카운터 표본은 ① 경로 그대로 · 파생 판정기는 목적지 없이 두지 않는다(도입 조건 4) — [../06_pipeline/04_routing.md](../06_pipeline/04_routing.md) | [../06_pipeline/04_routing.md](../06_pipeline/04_routing.md) |
 
 ## 관련 문서

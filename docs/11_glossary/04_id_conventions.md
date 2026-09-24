@@ -2,6 +2,7 @@
 
 > **대상**: db_study 문서군과 구현이 쓰는 모든 식별자의 형식 · 채번 규칙 · 결번 · 예약 대역 · 원본 흐름 표기 대응 — ID 규약 정본
 > **작성일**: 2026-09-24
+> **개정일**: 2026-09-24 — 최종 정밀 검수 — 빈 표 칸을 닫힌 어휘 해당 없음으로 채움(표 열 규약)
 > **개정일**: 2026-09-24 — W7 검수 반영 — 식별자 자리 예시 rl:{user_id}:{unix_minute} → **rl:{class}:{user_id}:{unix_minute}**(정본 05_data_stores/05)
 > **개정일**: 2026-09-24 — 루트 README ID 규약 표의 API 표면 형식을 {문서} #N으로 맞춘 것을 반영 — 불일치 서술을 정합 서술로 바꾼다
 > **원천**: [../README.md](../README.md) ID·표기 규약 표 상세화 · 원본 data_flow.md §1(커밋 ff66a37) 흐름 목록 · 원본 architecture.md §6 · §7 · §8.3(커밋 ff66a37) 테이블 · 키 네이밍 · docs_plan.md 실행 계획 보정 #6 · #22
@@ -88,15 +89,15 @@
 
 | 접두 | NestJS 모듈 | 에러 네임스페이스 | API 문서 | 비고 |
 |------|------------|-----------------|---------|------|
-| AUT | auth | auth | [../07_api/03_auth.md](../07_api/03_auth.md) | |
-| MST | master | master | [../07_api/04_master.md](../07_api/04_master.md) | |
+| AUT | auth | auth | [../07_api/03_auth.md](../07_api/03_auth.md) | 해당 없음 |
+| MST | master | master | [../07_api/04_master.md](../07_api/04_master.md) | 해당 없음 |
 | COL | collector | **없음** | **없음** | 내부 모듈 |
 | SIM | plc-sim | **없음** | **없음** | 내부 모듈 · 테이블 없음 |
 | GEN | datagen | datagen | [../07_api/09_datagen.md](../07_api/09_datagen.md) | 부하 주입 표면 /api/v1/ingest/bulk 소유 · 테이블 없음 |
 | ING | ingest | **없음** | **없음** | 내부 모듈 — URL에 ingest가 있어도 표면 소유자가 아니다 |
-| TSQ | timeseries | timeseries | [../07_api/05_timeseries.md](../07_api/05_timeseries.md) | |
+| TSQ | timeseries | timeseries | [../07_api/05_timeseries.md](../07_api/05_timeseries.md) | 해당 없음 |
 | RLT | realtime | realtime | [../07_api/06_realtime.md](../07_api/06_realtime.md) | WebSocket은 [../07_api/11_websocket.md](../07_api/11_websocket.md) |
-| ALM | alarms | alarms | [../07_api/07_alarms.md](../07_api/07_alarms.md) | |
+| ALM | alarms | alarms | [../07_api/07_alarms.md](../07_api/07_alarms.md) | 해당 없음 |
 | WRK | work-orders | work_orders | [../07_api/08_work_orders.md](../07_api/08_work_orders.md) | 모듈명 하이픈 → 네임스페이스 밑줄 |
 | OBS | metrics | metrics | [../07_api/10_metrics.md](../07_api/10_metrics.md) | /api/v1/health · /metrics 소유 |
 
@@ -114,7 +115,7 @@
 | ClickHouse 데이터베이스 | plc 단일 | plc.tag_raw | 객체는 항상 데이터베이스로 한정해 쓴다. 한정하지 않으면 default 데이터베이스에 같은 이름 테이블이 생겨도 오류 없이 다른 곳에 삽입된다 |
 | ClickHouse 롤업 테이블 | tag_{해상도} | tag_1m · tag_1h · tag_1d | 해상도 값 1m · 1h · 1d가 조회 요청 interval 값과 같다 — 해상도 선택 로직이 문자열 하나로 테이블을 고른다 |
 | ClickHouse MV | mv_{타깃 테이블} | mv_tag_1m | 타깃 이름을 그대로 담아 DETACH 대상을 이름만으로 찾는다(백필 절차) |
-| ClickHouse Dictionary | dict_{원천} | dict_tag | |
+| ClickHouse Dictionary | dict_{원천} | dict_tag | 해당 없음 |
 | 대조군 테이블 | {원형}_control 계열 | plc_tag_raw_control | 대조군임이 이름에서 드러나야 업무 테이블 집계(14)에 섞이지 않는다 |
 
 - 테이블 전수 · 컬럼 명세의 정본은 [../05_data_stores/01_postgresql_schema.md](../05_data_stores/01_postgresql_schema.md) · [../05_data_stores/03_clickhouse_schema.md](../05_data_stores/03_clickhouse_schema.md)다. 제약 · 인덱스 이름 규칙은 [../05_data_stores/02_postgresql_constraints.md](../05_data_stores/02_postgresql_constraints.md)가 정한다.
@@ -124,13 +125,13 @@
 | 대상 | 규칙 | 예 | 근거 · 실패 |
 |------|------|-----|-----------|
 | 키 | 영역:용도:식별자 — 콜론 계층, 앞이 넓은 범주 | rt:latest:12 · cache:q:{sha1} | 원본 architecture.md §8.3 |
-| 영역 접두 | stream · rt · alarm · cache · lock · rl · sess · auth · ch 중 하나 | | **접두 하나가 곧 TTL 정책의 경계다.** 봉인 계열 · 캐시 계열 · 채널 구분과 검산의 정본은 [../05_data_stores/05_redis_keyspace.md](../05_data_stores/05_redis_keyspace.md) |
+| 영역 접두 | stream · rt · alarm · cache · lock · rl · sess · auth · ch 중 하나 | 해당 없음 | **접두 하나가 곧 TTL 정책의 경계다.** 봉인 계열 · 캐시 계열 · 채널 구분과 검산의 정본은 [../05_data_stores/05_redis_keyspace.md](../05_data_stores/05_redis_keyspace.md) |
 | 접두 충돌 금지 | 새 용도가 기존 접두의 TTL 정책과 다르면 기존 접두를 빌리지 않는다 | 리프레시 토큰은 rt:가 아니라 auth:refresh: | 원본에서 실제로 rt:{refresh_token_id}가 최신값 계열 rt:와 겹쳐 개명됐다. 빌려 쓰면 TTL 금지 접두 아래에 TTL 키가 생겨 린트 · 래퍼가 어느 쪽 규칙도 적용하지 못한다 |
 | 식별자 자리 | 숫자 ID는 그대로 · 해시는 소문자 16진 · 시각은 epoch 정수 | rl:{class}:{user_id}:{unix_minute} | 시각을 문자열 날짜로 넣으면 시간대에 따라 같은 분이 다른 키가 된다 |
 | Pub/Sub 채널 | ch: 접두 | ch:rt:{device_id} · ch:alarm · ch:cacheinv | 키가 아니므로 TTL 대상이 아니다 |
 | 컨슈머 그룹 | grp:{소비 모듈} | grp:ingest | **키가 아니라 Stream 안의 이름이다** — 영역 접두 집계에 들지 않는다 |
 | 컨슈머 | {모듈}-{pid}-{n} | ingest-{pid}-1 | pid가 바뀌면 이전 이름의 PEL이 남는다. XAUTOCLAIM 회수가 이 이름 규칙을 전제한다 |
-| 금지 명령 | KEYS 금지 · SCAN + COUNT만 | | 단일 인스턴스에서 KEYS는 Stream 소비까지 멈춘다 |
+| 금지 명령 | KEYS 금지 · SCAN + COUNT만 | 해당 없음 | 단일 인스턴스에서 KEYS는 Stream 소비까지 멈춘다 |
 
 ## 화면 코드 · API 표면 번호 · 에러 코드
 

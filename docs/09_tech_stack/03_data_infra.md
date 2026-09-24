@@ -2,6 +2,7 @@
 
 > **대상**: 저장소 3종(PostgreSQL · ClickHouse · Redis)의 이미지 · 확장 · 설정 파일의 모양 · ClickHouse 서버 timezone 판정 · pg_partman 미리 만들기 · TTL 머지 주기 · Compose healthcheck와 health 타임아웃의 관계 · **observability 프로파일 구성원 판정(보정 #17)** · **버전 고정표(버전 문자열의 유일한 기재처)**
 > **작성일**: 2026-09-24
+> **개정일**: 2026-09-24 — 최종 정밀 검수 — §조정값 현행값 → §화면 조정값 현행값(절 이름 교정)
 > **개정일**: 2026-09-24 — W7 보안 판정 반영 — Redis 설정 바인드 · 보호 모드 행에 **requirepass 필수** 명시 · 버전 고정표에 Argon2id 해시 라이브러리 행 추가 35 → **36**(백엔드 12 → **13** · 미고정 10 → **11**)(정본 12_security/01 · 02)
 > **개정일**: 2026-09-24 — W6 실험 채번 반영 — EXP 번호 반영(정본 10_observability/01 · 06)
 > **원천**: 원본 tech_stack.md §2 · §5 · §9 · §10.1 · §10.4 · §12(커밋 ff66a37) · 원본 architecture.md §3 · §7.5 · §13 · §14(커밋 ff66a37) · 원본 implementation_plan.md §2.1 · §9(커밋 ff66a37) · ADR-03 · ADR-05 · ADR-18 · ADR-19 · ADR-20 · docs_plan 실행 계획 보정 #17 · 웨이브 인계 W6 09_tech_stack 행(ClickHouse 서버 timezone · pg_partman 미리 만들기 · TTL 머지 주기 · healthcheck timeout) · [../05_data_stores/01_postgresql_schema.md](../05_data_stores/01_postgresql_schema.md) · [../05_data_stores/03_clickhouse_schema.md](../05_data_stores/03_clickhouse_schema.md) · [../07_api/10_metrics.md](../07_api/10_metrics.md) §저장소 확인과 타임아웃 판정
@@ -167,7 +168,7 @@ docs_plan 실행 계획 보정 #17을 닫는다. 원본 넷이 서로 다른 구
 | grafana | infra/observability/ 대시보드 JSON · 데이터 소스 프로비저닝 | 데이터 소스 prometheus 하나 · 대시보드 파일 프로비저닝 | 대시보드를 손으로 만들어 커밋 해시와 대시보드 정의가 묶이지 않는다 |
 
 - 검산: 구성원 = **2**
-- **스크레이프 주기 15초는 MetricsModule 수집 주기와 같다**(원본 tech_stack.md §9). 더 짧게 긁으면 같은 값을 두 번 읽을 뿐이고 관측 부하만 는다 — 이 값이 콘솔 폴링 주기 하한의 근거다([01_frontend.md](./01_frontend.md) §조정값 현행값).
+- **스크레이프 주기 15초는 MetricsModule 수집 주기와 같다**(원본 tech_stack.md §9). 더 짧게 긁으면 같은 값을 두 번 읽을 뿐이고 관측 부하만 는다 — 이 값이 콘솔 폴링 주기 하한의 근거다([01_frontend.md](./01_frontend.md) §화면 조정값 현행값).
 - 두 구성원은 cpuset 18-19에 둔다 — 배치 정본 [../04_architecture/03_execution_topology.md](../04_architecture/03_execution_topology.md) §cpuset 배치.
 
 ## 버전 고정표

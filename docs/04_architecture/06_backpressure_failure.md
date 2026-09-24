@@ -2,6 +2,7 @@
 
 > **대상**: 백프레셔 5단계 · **판정량(미확인 적체)** · **프로파일별 임계(2계층 조정값 정본)** · **하강 히스테리시스 판정** · MAXLEN과 maxmemory의 관계 · **SW-10 off일 때 경고 단계 데드밴드 강화의 의미 판정** · 장애 시나리오 10 · degrade 원칙 · **ClickHouse 중단 시 최신값 정지**
 > **작성일**: 2026-09-24
+> **개정일**: 2026-09-24 — 최종 정밀 검수 — ADR-24 반영 대기 표기 → 반영 완료
 > **개정일**: 2026-09-24 — W6 실험 채번 반영 — 컨슈머 랙 판정 · 메트릭 이름 · EXP 번호 반영(정본 10_observability/01 · 06)
 > **개정일**: 2026-09-24 — W4 판정 반영 — 장애 #1 ClickHouse 중단에 **알람 판정 정지** 추가 · 복구 중 rt:latest 순서 역전 · DLQ 재처리 경로 미확인 → **W4 판정** — 시나리오 수 불변
 > **원천**: 원본 architecture.md §1 · §8 · §8.4 · §9.2 · §9.3 · §13 · §17(커밋 ff66a37) · 원본 data_flow.md §5 · §12.1~§12.4 · §13(커밋 ff66a37) · 원본 tech_stack.md §5.3(커밋 ff66a37) · 원본 implementation_plan.md §2.3 · §4.1 · §5 S6 · §7.2 · §7.5(커밋 ff66a37) · D-08 · ADR-05 · ADR-09 · ADR-10 · ADR-13 · ADR-21 · ADR-23 · ADR-24 · [../11_glossary/03_enums_state_machines.md](../11_glossary/03_enums_state_machines.md) 상태 머신 3 · [../03_requirements/01_global_rules.md](../03_requirements/01_global_rules.md) REQ-GLB-05 · 09 · 10
@@ -108,7 +109,7 @@
 
 - 검산: 안 = **3**
 - **B형 — 경고 단계에서 아무 반응이 없는 것은 결함이 아니다.** 경고 단계의 발행량 감축은 스풀 전에 적체를 늦추는 완화책일 뿐 안전장치가 아니다 — 안전장치는 위험 단계의 스풀이다. 반대로 스위치 상태를 어기면서 감축을 켜면 측정 조건이 기록되지 않는 결함이 되며, 그것은 스풀로도 복구되지 않는다. **파생 지침**: S6 백프레셔 재현에서 경고 반응을 관찰하려면 SW-10 on으로 별도 실행하고, 그 실행의 무손실 판정은 데드밴드 생략분을 생성 측에서 뺀다(REQ-NFR-01). 생략분 계수 메트릭은 col_deadband_skipped_total이다([../10_observability/01_metrics_catalog.md](../10_observability/01_metrics_catalog.md)).
-- 이 판정은 [../02_features/03_collector.md](../02_features/03_collector.md) COL-08과 [../02_features/13_switch_matrix.md](../02_features/13_switch_matrix.md)의 신규 미확인 행을 닫는다 — 리드 반영 대상이다.
+- 이 판정은 [../02_features/03_collector.md](../02_features/03_collector.md) COL-08과 [../02_features/13_switch_matrix.md](../02_features/13_switch_matrix.md)의 신규 미확인 행을 닫는다 — 두 문서에 반영했다(COL-08 스위치 칸 · ADR-24).
 
 ## MAXLEN과 maxmemory
 

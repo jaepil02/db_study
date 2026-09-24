@@ -2,6 +2,7 @@
 
 > **대상**: 데이터 흐름 10종의 채번 정본(F-01~F-10) — 원본 대응 · 방향 · 주 경로 · 성격 · 목표 지연 · 참여 도메인 · 관련 기능 · 스위치 · 요구사항 파일 · 기전 문서 · 전체 흐름도 · 흐름별 병목 후보 · 흐름 검증 항목 · 검산
 > **작성일**: 2026-09-24
+> **개정일**: 2026-09-24 — 최종 정밀 검수 — §멱등 토큰 → §창 정렬 배치와 결정적 토큰(없는 절 참조 교정)
 > **개정일**: 2026-09-24 — W6 실험 채번 반영 — 메트릭 이름 · EXP 번호 반영(정본 10_observability/01 · 06)
 > **원천**: 원본 data_flow.md §1 · §2 · §16 · §17(커밋 ff66a37) · 원본 architecture.md §9(커밋 ff66a37) · docs_plan.md 실행 계획 보정 #6 · #19 · ADR-06 · ADR-07 · ADR-09 · ADR-11 · [../README.md](../README.md) 고정 기준(데이터 흐름 · 도메인 공백) · [../11_glossary/04_id_conventions.md](../11_glossary/04_id_conventions.md) 원본 흐름 표기 대응 · [../02_features/13_switch_matrix.md](../02_features/13_switch_matrix.md) 관련 흐름 열 · [../02_features](../02_features/README.md) 도메인 파일 흐름 열
 
@@ -175,7 +176,7 @@ flowchart TB
 | 항목 | 검증 흐름 | 인수 기준 | 기전 자리 |
 |------|------|------|------|
 | 수집 무손실 | F-01 · F-02 | AC-01 | [03_ingest_batch.md](./03_ingest_batch.md) |
-| 중복 없음 | F-02 | AC-02 · AC-20 | [03_ingest_batch.md](./03_ingest_batch.md) §멱등 토큰 |
+| 중복 없음 | F-02 | AC-02 · AC-20 | [03_ingest_batch.md](./03_ingest_batch.md) §창 정렬 배치와 결정적 토큰 |
 | E2E 지연 | F-01 · F-02 | AC-03 | [12_data_contract.md](./12_data_contract.md) · 지연 예산 |
 | 시간대 정확성 | F-02 · F-04 | AC-04 | [12_data_contract.md](./12_data_contract.md) |
 | 롤업 정합성 | F-08 | AC-05 | [09_rollup.md](./09_rollup.md) |

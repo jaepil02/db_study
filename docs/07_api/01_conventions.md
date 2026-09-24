@@ -2,6 +2,7 @@
 
 > **대상**: db_study api 컨테이너 표면 전체에 걸리는 규약 — 경로 버전 · 표면 계층 · BFF 경유와 직결의 배정(ADR-02 정본) · 인증 헤더 · 요청 검증 · 성공 본문 · **에러 봉투** · 시각 직렬화(points 시각 형식 판정) · 수치 직렬화 · 페이지네이션 · 멱등 · 캐시 헤더 · 레이트 리밋 헤더 · 응답 필드 변경 규칙 · 표면 번호 규약 · 표면 요약 표 어휘
 > **작성일**: 2026-09-24
+> **개정일**: 2026-09-24 — 최종 정밀 검수 — Host 헤더 거절 응답 모양 명시(common.validation_failed/400 · header.host · enum)
 > **개정일**: 2026-09-24 — W7 보안 판정 반영 — 출처 방어 항목 7 → **8**(Host 헤더 허용 목록 · S2부터) · 한도 등급 class 값 확정(general · bulk_read · export · bulk_ingest) · 로그인 시도 제한 판정 인용(정본 12_security/03)
 > **원천**: 원본 architecture.md §11 · §11.1 · §11.2 · §18(커밋 ff66a37) · 원본 data_flow.md §7.2 · §14.1 5단계 · §14.2(커밋 ff66a37) · ADR-02 · ADR-12 · REQ-GLB-02 · 19 · REQ-AUT-04 · 07 · 11 · 12 · REQ-TSQ-02 · 05 · [../11_glossary/05_units_and_time.md](../11_glossary/05_units_and_time.md) · [../11_glossary/02_error_codes.md](../11_glossary/02_error_codes.md) · [../06_pipeline/12_data_contract.md](../06_pipeline/12_data_contract.md) 5단계 · [../06_pipeline/07_business_crud.md](../06_pipeline/07_business_crud.md) · docs_plan.md 웨이브 인계 W5 07_api/01 행
 
@@ -56,7 +57,7 @@
 | 역할 판정 | 역할 집합의 합집합으로 표면 권한을 대조 · 권한 밖 auth.forbidden/403 | REQ-AUT-09 · [../02_features/12_permission_matrix.md](../02_features/12_permission_matrix.md) | 표면별 권한을 코드에 하드코딩하면 매트릭스와 구현이 두 정본이 된다 |
 | CORS | 허용 오리진 http://localhost:3001 하나 · 와일드카드 금지 · **S2부터** | REQ-AUT-12 | S7까지 미루면 S2 웹 화면의 직결 호출이 막힌다 |
 | 보안 헤더 | X-Content-Type-Options · Referrer-Policy 등 부여 · **HSTS 끔** · S7부터 | REQ-AUT-13 | 로컬 http에서 HSTS를 켜면 브라우저가 localhost를 https로 고정해 웹 접속이 끊긴다 |
-| Host 헤더 | 허용 목록 localhost · 127.0.0.1(포트 포함) · 컨테이너 사이 호출의 서비스명 api — 밖이면 거절 · **S2부터** | REQ-AUT-13 · [../12_security/04_threat_model.md](../12_security/04_threat_model.md) | DNS 재바인딩 페이지가 브라우저에게 같은 오리진으로 보여 CORS를 거치지 않고 응답을 읽는다 — 무인증 기간에는 전 표면이 읽힌다 |
+| Host 헤더 | 허용 목록 localhost · 127.0.0.1(포트 포함) · 컨테이너 사이 호출의 서비스명 api — 밖이면 common.validation_failed/400(fields path header.host · reason enum)으로 거절 · WebSocket 핸드셰이크는 업그레이드 전 같은 400 · **S2부터** | REQ-AUT-13 · [../12_security/04_threat_model.md](../12_security/04_threat_model.md) | DNS 재바인딩 페이지가 브라우저에게 같은 오리진으로 보여 CORS를 거치지 않고 응답을 읽는다 — 무인증 기간에는 전 표면이 읽힌다 |
 
 - 검산: 항목 = **8**
 - **인가 단계도 503을 낼 수 있다.** 권한 사본(cache:perm:{user_id})이 없고 PostgreSQL이 멈추면 역할 판정을 할 수 없어 common.postgres_unavailable/503이다(REQ-AUT-15) — 시계열 · 최신값 표면도 예외가 아니다. 권한 사본이 있는 사용자는 PostgreSQL 중단 중에도 조회를 계속한다.

@@ -2,6 +2,7 @@
 
 > **대상**: 기능 91 전수의 요구사항 · 흐름 · 화면 · API 문서 · 저장 객체 대응 · 요구사항 229의 역방향 검산 · 흐름 10 · 화면 10 · API 문서 9 · 저장 객체 24 · AC 45 축별 검산 · 미매핑 0 · 유령 0 · 재생성 규칙
 > **작성일**: 2026-09-24
+> **개정일**: 2026-09-24 — 최종 정밀 검수 — 요구사항 열을 REQ- 접두 전체 ID로(줄인 표기가 기능 ID와 같은 모양이라 두 축이 섞인다)
 > **개정일**: 2026-09-24 — W7 검수 반영 — REQ-GLB-24 반영(요구사항 228 → **229** · 기능을 가리킴 223 → **224**) · API 열이 기능 표면의 API 문서 전부를 싣도록 재생성(RLT-07 → 11_websocket · 06_realtime)
 > **원천**: 기능 정본 [../02_features/README.md](../02_features/README.md) 도메인 파일 11본의 기능 표(흐름 · 표면 · 저장소 열) · 요구사항 정본 이 폴더 01~13의 요구사항 표(관련 기능 열) · 기능 → 화면 정본 [../08_screen/02_traceability.md](../08_screen/02_traceability.md) · AC 정본 [14_acceptance_criteria.md](./14_acceptance_criteria.md) · 저장 객체 정본 [../05_data_stores/01_postgresql_schema.md](../05_data_stores/01_postgresql_schema.md) · [../05_data_stores/03_clickhouse_schema.md](../05_data_stores/03_clickhouse_schema.md) · 원본 없음(신설)
 
@@ -35,7 +36,7 @@
 
 ## 전역 매트릭스
 
-열의 출처 — 요구사항은 요구사항 표의 관련 기능 열을 뒤집은 것, 흐름 · API · 저장 객체는 기능 표의 흐름 · 표면 · 저장소 열, 화면은 [../08_screen/02_traceability.md](../08_screen/02_traceability.md)의 분류 · 주 화면이다. 요구사항 ID는 접두 REQ-를 줄여 적는다(예: AUT-01은 REQ-AUT-01).
+열의 출처 — 요구사항은 요구사항 표의 관련 기능 열을 뒤집은 것, 흐름 · API · 저장 객체는 기능 표의 흐름 · 표면 · 저장소 열, 화면은 [../08_screen/02_traceability.md](../08_screen/02_traceability.md)의 분류 · 주 화면이다. 요구사항 ID는 접두 REQ-를 붙인 전체 ID로 적는다 — 줄이면 REQ-TSQ-01과 기능 TSQ-01이 같은 모양이 되어 두 축이 섞인다.
 
 ### AUT — 인증
 
@@ -43,13 +44,13 @@
 
 | 기능 ID | 기능명 | 요구사항 | 흐름 | 화면 | API | 저장 객체 |
 |------|------|------|------|------|------|------|
-| AUT-01 | 로그인 | AUT-01 · AUT-02 · AUT-03 · AUT-04 · AUT-14 · AUT-15 · AUT-17 · GLB-08 · TEC-05 | F-05 | AUTH-LOGIN | 03_auth | PostgreSQL user_account · user_role · Redis auth:refresh |
-| AUT-02 | 토큰 갱신 | AUT-04 · AUT-05 · AUT-14 | F-05 | AUTH-LOGIN | 03_auth | Redis auth:refresh |
-| AUT-03 | 로그아웃 | AUT-06 · AUT-14 | F-05 | AUTH-LOGIN | 03_auth | Redis auth:refresh |
-| AUT-04 | 신원 확인 | AUT-07 · AUT-08 · AUT-16 · GLB-19 | F-03 · F-04 · F-05 · F-07 | 공통 셸 | 11_websocket | 없음 — 무상태 검증 |
-| AUT-05 | 역할 기반 인가 | AUT-09 · AUT-10 · AUT-15 · AUT-16 · AUT-17 · GLB-19 | F-03 · F-04 · F-05 · F-06 · F-07 · F-09 | 공통 셸 | 인가 대상 전 표면 | PostgreSQL role · user_role · Redis cache 계열(권한 사본) |
-| AUT-06 | 레이트 리밋 | AUT-11 · AUT-14 · GLB-08 | F-03 · F-04 · F-05 | 공통 셸 | 인증 필요 전 REST 표면 | Redis rl |
-| AUT-07 | 요청 출처 방어 | AUT-12 · AUT-13 · GLB-19 · TEC-02 | F-03 · F-04 · F-07 | 공통 셸 | 11_websocket | 해당 없음 |
+| AUT-01 | 로그인 | REQ-AUT-01 · REQ-AUT-02 · REQ-AUT-03 · REQ-AUT-04 · REQ-AUT-14 · REQ-AUT-15 · REQ-AUT-17 · REQ-GLB-08 · REQ-TEC-05 | F-05 | AUTH-LOGIN | 03_auth | PostgreSQL user_account · user_role · Redis auth:refresh |
+| AUT-02 | 토큰 갱신 | REQ-AUT-04 · REQ-AUT-05 · REQ-AUT-14 | F-05 | AUTH-LOGIN | 03_auth | Redis auth:refresh |
+| AUT-03 | 로그아웃 | REQ-AUT-06 · REQ-AUT-14 | F-05 | AUTH-LOGIN | 03_auth | Redis auth:refresh |
+| AUT-04 | 신원 확인 | REQ-AUT-07 · REQ-AUT-08 · REQ-AUT-16 · REQ-GLB-19 | F-03 · F-04 · F-05 · F-07 | 공통 셸 | 11_websocket | 없음 — 무상태 검증 |
+| AUT-05 | 역할 기반 인가 | REQ-AUT-09 · REQ-AUT-10 · REQ-AUT-15 · REQ-AUT-16 · REQ-AUT-17 · REQ-GLB-19 | F-03 · F-04 · F-05 · F-06 · F-07 · F-09 | 공통 셸 | 인가 대상 전 표면 | PostgreSQL role · user_role · Redis cache 계열(권한 사본) |
+| AUT-06 | 레이트 리밋 | REQ-AUT-11 · REQ-AUT-14 · REQ-GLB-08 | F-03 · F-04 · F-05 | 공통 셸 | 인증 필요 전 REST 표면 | Redis rl |
+| AUT-07 | 요청 출처 방어 | REQ-AUT-12 · REQ-AUT-13 · REQ-GLB-19 · REQ-TEC-02 | F-03 · F-04 · F-07 | 공통 셸 | 11_websocket | 해당 없음 |
 
 - 검산: AUT 기능 = **7**
 
@@ -59,15 +60,15 @@
 
 | 기능 ID | 기능명 | 요구사항 | 흐름 | 화면 | API | 저장 객체 |
 |------|------|------|------|------|------|------|
-| MST-01 | 사이트 · 라인 관리 | GLB-24 · MST-01 · MST-14 · MST-15 · TEC-05 | F-05 | ADM-MASTER | 04_master | PostgreSQL site · production_line · Redis cache 계열 |
-| MST-02 | 설비 관리 | GLB-24 · MST-02 · MST-14 · MST-15 | F-05 | ADM-MASTER | 04_master | PostgreSQL device · Redis cache:devlist |
-| MST-03 | Modbus 접속 설정 관리 | GLB-24 · MST-03 · MST-14 · MST-15 | F-01 · F-05 | ADM-MASTER | 04_master | PostgreSQL modbus_config |
-| MST-04 | 태그 마스터 관리 | GLB-12 · GLB-24 · MST-04 · MST-05 · MST-14 · MST-15 · NFR-09 | F-05 | ADM-MASTER | 04_master | PostgreSQL tag_master · audit_log(WRK 소유) |
-| MST-05 | 태그 논리 삭제 | GLB-14 · GLB-24 · MST-05 · MST-06 · MST-08 · MST-15 | F-05 | ADM-MASTER | 04_master | PostgreSQL tag_master |
-| MST-06 | 스케일 변경 시 새 태그 발급 | GLB-14 · GLB-24 · MST-05 · MST-07 · MST-15 | F-05 | ADM-MASTER | 04_master | PostgreSQL tag_master · tag_master_history |
-| MST-07 | 태그 메타 캐시 | GLB-08 · MST-13 | F-01 · F-03 | 표면 없음 | 표면 없음 — 다른 기능의 내부 조회 | Redis cache:tagmeta |
-| MST-08 | 캐시 무효화 체인 | GLB-09 · MST-09 · MST-10 | F-05 | 표면 없음 | 표면 없음 — 쓰기 표면의 후처리 | Redis cache 계열 · ch:cacheinv · ClickHouse dict_tag |
-| MST-09 | Dictionary 원천 제공 | GLB-11 · GLB-14 · MST-08 · MST-10 · MST-11 · MST-12 · TEC-14 | F-04 · F-08 | 표면 없음 | 표면 없음 — TSQ-07이 소비 | PostgreSQL tag_master · ClickHouse dict_tag |
+| MST-01 | 사이트 · 라인 관리 | REQ-GLB-24 · REQ-MST-01 · REQ-MST-14 · REQ-MST-15 · REQ-TEC-05 | F-05 | ADM-MASTER | 04_master | PostgreSQL site · production_line · Redis cache 계열 |
+| MST-02 | 설비 관리 | REQ-GLB-24 · REQ-MST-02 · REQ-MST-14 · REQ-MST-15 | F-05 | ADM-MASTER | 04_master | PostgreSQL device · Redis cache:devlist |
+| MST-03 | Modbus 접속 설정 관리 | REQ-GLB-24 · REQ-MST-03 · REQ-MST-14 · REQ-MST-15 | F-01 · F-05 | ADM-MASTER | 04_master | PostgreSQL modbus_config |
+| MST-04 | 태그 마스터 관리 | REQ-GLB-12 · REQ-GLB-24 · REQ-MST-04 · REQ-MST-05 · REQ-MST-14 · REQ-MST-15 · REQ-NFR-09 | F-05 | ADM-MASTER | 04_master | PostgreSQL tag_master · audit_log(WRK 소유) |
+| MST-05 | 태그 논리 삭제 | REQ-GLB-14 · REQ-GLB-24 · REQ-MST-05 · REQ-MST-06 · REQ-MST-08 · REQ-MST-15 | F-05 | ADM-MASTER | 04_master | PostgreSQL tag_master |
+| MST-06 | 스케일 변경 시 새 태그 발급 | REQ-GLB-14 · REQ-GLB-24 · REQ-MST-05 · REQ-MST-07 · REQ-MST-15 | F-05 | ADM-MASTER | 04_master | PostgreSQL tag_master · tag_master_history |
+| MST-07 | 태그 메타 캐시 | REQ-GLB-08 · REQ-MST-13 | F-01 · F-03 | 표면 없음 | 표면 없음 — 다른 기능의 내부 조회 | Redis cache:tagmeta |
+| MST-08 | 캐시 무효화 체인 | REQ-GLB-09 · REQ-MST-09 · REQ-MST-10 | F-05 | 표면 없음 | 표면 없음 — 쓰기 표면의 후처리 | Redis cache 계열 · ch:cacheinv · ClickHouse dict_tag |
+| MST-09 | Dictionary 원천 제공 | REQ-GLB-11 · REQ-GLB-14 · REQ-MST-08 · REQ-MST-10 · REQ-MST-11 · REQ-MST-12 · REQ-TEC-14 | F-04 · F-08 | 표면 없음 | 표면 없음 — TSQ-07이 소비 | PostgreSQL tag_master · ClickHouse dict_tag |
 
 - 검산: MST 기능 = **9**
 
@@ -77,15 +78,15 @@
 
 | 기능 ID | 기능명 | 요구사항 | 흐름 | 화면 | API | 저장 객체 |
 |------|------|------|------|------|------|------|
-| COL-01 | 수집 정의 로드 | COL-01 · COL-15 | F-01 | 내부 모듈 | 표면 없음 — 내부 모듈 | Redis cache:tagmeta · PostgreSQL tag_master · modbus_config(읽기) |
-| COL-02 | 스캔 그룹 폴링 | COL-02 · COL-03 · COL-14 · COL-15 · GLB-02 · NFR-04 · TEC-15 | F-01 | 내부 모듈 | 표면 없음 — 내부 모듈 | 없음(PlcSim 소켓) |
-| COL-03 | 레지스터 블록 병합 | COL-04 | F-01 | 내부 모듈 | 표면 없음 — 내부 모듈 | 해당 없음 |
-| COL-04 | 디코딩 · 공학 단위 변환 | COL-05 | F-01 | 내부 모듈 | 표면 없음 — 내부 모듈 | 해당 없음 |
-| COL-05 | 품질 판정 | COL-06 · COL-07 · COL-15 · GLB-18 | F-01 | 내부 모듈 | 표면 없음 — 내부 모듈 | 해당 없음 |
-| COL-06 | 데드밴드 필터 | COL-08 · COL-15 · COL-16 | F-01 | 내부 모듈 | 표면 없음 — 내부 모듈 | 해당 없음 |
-| COL-07 | 인코딩 · Stream 발행 | COL-09 · COL-10 · COL-15 · COL-16 · GLB-03 · GLB-04 · GLB-08 · GLB-10 · GLB-16 · GLB-21 · NFR-04 | F-01 · F-02 | 내부 모듈 | 표면 없음 — 내부 모듈 | Redis stream:plc:raw |
-| COL-08 | 발행량 감축 | COL-11 · COL-15 | F-10 | 내부 모듈 | 표면 없음 — 내부 모듈 | 해당 없음 |
-| COL-09 | 스풀 전환과 재발행 | COL-12 · COL-13 · COL-15 · GLB-09 · GLB-10 · TEC-03 · TEC-06 | F-10 | 내부 모듈 | 표면 없음 — 내부 모듈 | spooldata 볼륨(저장소 밖) · Redis stream:plc:raw |
+| COL-01 | 수집 정의 로드 | REQ-COL-01 · REQ-COL-15 | F-01 | 내부 모듈 | 표면 없음 — 내부 모듈 | Redis cache:tagmeta · PostgreSQL tag_master · modbus_config(읽기) |
+| COL-02 | 스캔 그룹 폴링 | REQ-COL-02 · REQ-COL-03 · REQ-COL-14 · REQ-COL-15 · REQ-GLB-02 · REQ-NFR-04 · REQ-TEC-15 | F-01 | 내부 모듈 | 표면 없음 — 내부 모듈 | 없음(PlcSim 소켓) |
+| COL-03 | 레지스터 블록 병합 | REQ-COL-04 | F-01 | 내부 모듈 | 표면 없음 — 내부 모듈 | 해당 없음 |
+| COL-04 | 디코딩 · 공학 단위 변환 | REQ-COL-05 | F-01 | 내부 모듈 | 표면 없음 — 내부 모듈 | 해당 없음 |
+| COL-05 | 품질 판정 | REQ-COL-06 · REQ-COL-07 · REQ-COL-15 · REQ-GLB-18 | F-01 | 내부 모듈 | 표면 없음 — 내부 모듈 | 해당 없음 |
+| COL-06 | 데드밴드 필터 | REQ-COL-08 · REQ-COL-15 · REQ-COL-16 | F-01 | 내부 모듈 | 표면 없음 — 내부 모듈 | 해당 없음 |
+| COL-07 | 인코딩 · Stream 발행 | REQ-COL-09 · REQ-COL-10 · REQ-COL-15 · REQ-COL-16 · REQ-GLB-03 · REQ-GLB-04 · REQ-GLB-08 · REQ-GLB-10 · REQ-GLB-16 · REQ-GLB-21 · REQ-NFR-04 | F-01 · F-02 | 내부 모듈 | 표면 없음 — 내부 모듈 | Redis stream:plc:raw |
+| COL-08 | 발행량 감축 | REQ-COL-11 · REQ-COL-15 | F-10 | 내부 모듈 | 표면 없음 — 내부 모듈 | 해당 없음 |
+| COL-09 | 스풀 전환과 재발행 | REQ-COL-12 · REQ-COL-13 · REQ-COL-15 · REQ-GLB-09 · REQ-GLB-10 · REQ-TEC-03 · REQ-TEC-06 | F-10 | 내부 모듈 | 표면 없음 — 내부 모듈 | spooldata 볼륨(저장소 밖) · Redis stream:plc:raw |
 
 - 검산: COL 기능 = **9**
 
@@ -95,11 +96,11 @@
 
 | 기능 ID | 기능명 | 요구사항 | 흐름 | 화면 | API | 저장 객체 |
 |------|------|------|------|------|------|------|
-| SIM-01 | 설비당 Modbus TCP 서버 | GLB-19 · SIM-01 · SIM-02 · SIM-03 · SIM-07 · SIM-11 · SIM-12 · TEC-02 · TEC-15 | F-01 | 내부 모듈 | 표면 없음 — 내부 모듈 | 없음 — 메모리 |
-| SIM-02 | 레지스터 응답 | SIM-04 · SIM-05 · SIM-07 | F-01 | 내부 모듈 | 표면 없음 — 내부 모듈 | 없음 — 메모리 Buffer |
-| SIM-03 | 레지스터 런타임 갱신 | SIM-06 · SIM-11 | F-01 · F-09 | 내부 모듈 | 표면 없음 — 내부 모듈 | 없음 — 메모리 Buffer |
-| SIM-04 | 지연 주입 | SIM-08 · SIM-10 | F-01 · F-10 | 내부 모듈 | 표면 없음 — 내부 모듈 | 해당 없음 |
-| SIM-05 | 오류 주입 | SIM-09 · SIM-10 | F-01 | 내부 모듈 | 표면 없음 — 내부 모듈 | 해당 없음 |
+| SIM-01 | 설비당 Modbus TCP 서버 | REQ-GLB-19 · REQ-SIM-01 · REQ-SIM-02 · REQ-SIM-03 · REQ-SIM-07 · REQ-SIM-11 · REQ-SIM-12 · REQ-TEC-02 · REQ-TEC-15 | F-01 | 내부 모듈 | 표면 없음 — 내부 모듈 | 없음 — 메모리 |
+| SIM-02 | 레지스터 응답 | REQ-SIM-04 · REQ-SIM-05 · REQ-SIM-07 | F-01 | 내부 모듈 | 표면 없음 — 내부 모듈 | 없음 — 메모리 Buffer |
+| SIM-03 | 레지스터 런타임 갱신 | REQ-SIM-06 · REQ-SIM-11 | F-01 · F-09 | 내부 모듈 | 표면 없음 — 내부 모듈 | 없음 — 메모리 Buffer |
+| SIM-04 | 지연 주입 | REQ-SIM-08 · REQ-SIM-10 | F-01 · F-10 | 내부 모듈 | 표면 없음 — 내부 모듈 | 해당 없음 |
+| SIM-05 | 오류 주입 | REQ-SIM-09 · REQ-SIM-10 | F-01 | 내부 모듈 | 표면 없음 — 내부 모듈 | 해당 없음 |
 
 - 검산: SIM 기능 = **5**
 
@@ -109,16 +110,16 @@
 
 | 기능 ID | 기능명 | 요구사항 | 흐름 | 화면 | API | 저장 객체 |
 |------|------|------|------|------|------|------|
-| GEN-01 | 신호 프로파일 생성 | GEN-01 · GEN-13 · GLB-20 · NFR-14 | F-09 | 표면 없음 | 표면 없음 — 실행 인자 | 없음 — 메모리 |
-| GEN-02 | 품질 표지와 결측 표현 | GEN-02 · GLB-18 | F-09 | 표면 없음 | 표면 없음 — 실행 인자 | 해당 없음 |
-| GEN-03 | 시드 고정 | GEN-03 · GLB-23 | F-09 | 표면 없음 | 표면 없음 — 실행 인자 | 해당 없음 |
-| GEN-04 | 부하 티어 설정 | GEN-04 | F-09 | 표면 없음 | 표면 없음 — 실행 인자 | 해당 없음 |
-| GEN-05 | 모드 A 레지스터 갱신 | GEN-05 · GEN-06 | F-01 · F-09 | 표면 없음 | 표면 없음 — 실행 인자 | 없음(SIM Buffer) |
-| GEN-06 | 모드 B Stream 직결 | GEN-05 · GEN-07 · GLB-03 · GLB-10 · GLB-21 · NFR-06 | F-02 · F-09 | 표면 없음 | 표면 없음 — 실행 인자 | Redis stream:plc:raw |
-| GEN-07 | 모드 C 부하 주입 표면 | GEN-05 · GEN-08 · GEN-09 · GEN-15 · GLB-03 · GLB-10 · GLB-21 · NFR-06 · NFR-11 | F-09 · F-10 | 화면 없음(API 전용) | 09_datagen | Redis stream:plc:raw |
-| GEN-08 | 모드 D 백필 | GEN-05 · GEN-10 · GEN-11 · GLB-15 | F-08 · F-09 | 표면 없음 | 표면 없음 — 실행 인자 | ClickHouse tag_raw · tag_1m · tag_1h · tag_1d(쓰기 · 소유 아님) |
-| GEN-09 | 생성기 단독 처리량 실측 | GEN-12 · GEN-13 · GLB-17 · NFR-01 · NFR-17 · TEC-12 | F-09 | 표면 없음 | 표면 없음 — 실행 인자 | 해당 없음 |
-| GEN-10 | 대조군 동일 행 백필 | GEN-14 · NFR-18 | F-09 | 표면 없음 | 표면 없음 — 실행 인자 | PostgreSQL plc_tag_raw_control(쓰기 · 소유 아님) |
+| GEN-01 | 신호 프로파일 생성 | REQ-GEN-01 · REQ-GEN-13 · REQ-GLB-20 · REQ-NFR-14 | F-09 | 표면 없음 | 표면 없음 — 실행 인자 | 없음 — 메모리 |
+| GEN-02 | 품질 표지와 결측 표현 | REQ-GEN-02 · REQ-GLB-18 | F-09 | 표면 없음 | 표면 없음 — 실행 인자 | 해당 없음 |
+| GEN-03 | 시드 고정 | REQ-GEN-03 · REQ-GLB-23 | F-09 | 표면 없음 | 표면 없음 — 실행 인자 | 해당 없음 |
+| GEN-04 | 부하 티어 설정 | REQ-GEN-04 | F-09 | 표면 없음 | 표면 없음 — 실행 인자 | 해당 없음 |
+| GEN-05 | 모드 A 레지스터 갱신 | REQ-GEN-05 · REQ-GEN-06 | F-01 · F-09 | 표면 없음 | 표면 없음 — 실행 인자 | 없음(SIM Buffer) |
+| GEN-06 | 모드 B Stream 직결 | REQ-GEN-05 · REQ-GEN-07 · REQ-GLB-03 · REQ-GLB-10 · REQ-GLB-21 · REQ-NFR-06 | F-02 · F-09 | 표면 없음 | 표면 없음 — 실행 인자 | Redis stream:plc:raw |
+| GEN-07 | 모드 C 부하 주입 표면 | REQ-GEN-05 · REQ-GEN-08 · REQ-GEN-09 · REQ-GEN-15 · REQ-GLB-03 · REQ-GLB-10 · REQ-GLB-21 · REQ-NFR-06 · REQ-NFR-11 | F-09 · F-10 | 화면 없음(API 전용) | 09_datagen | Redis stream:plc:raw |
+| GEN-08 | 모드 D 백필 | REQ-GEN-05 · REQ-GEN-10 · REQ-GEN-11 · REQ-GLB-15 | F-08 · F-09 | 표면 없음 | 표면 없음 — 실행 인자 | ClickHouse tag_raw · tag_1m · tag_1h · tag_1d(쓰기 · 소유 아님) |
+| GEN-09 | 생성기 단독 처리량 실측 | REQ-GEN-12 · REQ-GEN-13 · REQ-GLB-17 · REQ-NFR-01 · REQ-NFR-17 · REQ-TEC-12 | F-09 | 표면 없음 | 표면 없음 — 실행 인자 | 해당 없음 |
+| GEN-10 | 대조군 동일 행 백필 | REQ-GEN-14 · REQ-NFR-18 | F-09 | 표면 없음 | 표면 없음 — 실행 인자 | PostgreSQL plc_tag_raw_control(쓰기 · 소유 아님) |
 
 - 검산: GEN 기능 = **10**
 
@@ -128,19 +129,19 @@
 
 | 기능 ID | 기능명 | 요구사항 | 흐름 | 화면 | API | 저장 객체 |
 |------|------|------|------|------|------|------|
-| ING-01 | Stream 소비 | GLB-03 · GLB-20 · GLB-21 · ING-01 · ING-02 · ING-18 · NFR-05 · NFR-06 | F-02 | 내부 모듈 | 표면 없음 — 내부 모듈 | Redis stream:plc:raw · 컨슈머 그룹 |
-| ING-02 | 배치 누적과 플러시 | ING-03 · ING-04 · ING-18 · NFR-04 · NFR-13 | F-02 | 내부 모듈 | 표면 없음 — 내부 모듈 | 없음 — 메모리 버퍼 |
-| ING-03 | ClickHouse 배치 삽입 | GLB-01 · GLB-02 · ING-05 · ING-18 · NFR-01 · NFR-03 · NFR-04 · NFR-13 · NFR-14 | F-02 | 내부 모듈 | 표면 없음 — 내부 모듈 | ClickHouse tag_raw |
-| ING-04 | 멱등 토큰 | GLB-06 · ING-06 · ING-18 · NFR-02 | F-02 | 내부 모듈 | 표면 없음 — 내부 모듈 | ClickHouse tag_raw |
-| ING-05 | 재시도 · 격리 · XACK | GLB-05 · GLB-06 · GLB-08 · GLB-16 · ING-07 · ING-08 · ING-18 · NFR-01 · NFR-02 | F-02 · F-10 | 내부 모듈 | 표면 없음 — 내부 모듈 | Redis stream:plc:dlq |
-| ING-06 | PEL 회수 | GLB-05 · ING-09 · ING-18 · TEC-06 | F-02 · F-10 | 내부 모듈 | 표면 없음 — 내부 모듈 | Redis 컨슈머 그룹 PEL |
-| ING-07 | 다중 컨슈머 | GLB-07 · ING-04 · ING-10 · ING-18 · NFR-05 | F-02 | 내부 모듈 | 표면 없음 — 내부 모듈 | Redis 컨슈머 그룹 |
-| ING-08 | 최신값 갱신 · 복원 | GLB-07 · GLB-08 · GLB-11 · ING-11 · ING-12 · ING-18 | F-02 · F-03 · F-07 | 내부 모듈 | 표면 없음 — 내부 모듈 | Redis rt:latest · ch:rt |
-| ING-09 | 알람 판정 전달 | GLB-04 · GLB-13 · ING-13 · ING-18 · NFR-04 | F-06 | 내부 모듈 | 표면 없음 — 내부 모듈 | 없음 — 호출 |
-| ING-10 | 3계층 분기 실행 | GLB-12 · ING-14 · ING-18 | F-02 · F-06 | 내부 모듈 | 표면 없음 — 내부 모듈 | ClickHouse tag_raw · 호출(ALM) |
-| ING-11 | 대조군 동시 적재 | GLB-11 · ING-15 · ING-18 · NFR-18 | F-02 | 내부 모듈 | 표면 없음 — 내부 모듈 | PostgreSQL plc_tag_raw_control |
-| ING-12 | 롤업 캐스케이드 발동 | GLB-15 · ING-16 · ING-18 | F-08 | 내부 모듈 | 표면 없음 — 내부 모듈 | ClickHouse tag_1m · tag_1h · tag_1d · MV 3 |
-| ING-13 | 백프레셔 대응 · 적체 소진 | GLB-05 · GLB-10 · ING-12 · ING-17 · ING-18 · NFR-16 | F-10 | 내부 모듈 | 표면 없음 — 내부 모듈 | Redis stream:plc:raw |
+| ING-01 | Stream 소비 | REQ-GLB-03 · REQ-GLB-20 · REQ-GLB-21 · REQ-ING-01 · REQ-ING-02 · REQ-ING-18 · REQ-NFR-05 · REQ-NFR-06 | F-02 | 내부 모듈 | 표면 없음 — 내부 모듈 | Redis stream:plc:raw · 컨슈머 그룹 |
+| ING-02 | 배치 누적과 플러시 | REQ-ING-03 · REQ-ING-04 · REQ-ING-18 · REQ-NFR-04 · REQ-NFR-13 | F-02 | 내부 모듈 | 표면 없음 — 내부 모듈 | 없음 — 메모리 버퍼 |
+| ING-03 | ClickHouse 배치 삽입 | REQ-GLB-01 · REQ-GLB-02 · REQ-ING-05 · REQ-ING-18 · REQ-NFR-01 · REQ-NFR-03 · REQ-NFR-04 · REQ-NFR-13 · REQ-NFR-14 | F-02 | 내부 모듈 | 표면 없음 — 내부 모듈 | ClickHouse tag_raw |
+| ING-04 | 멱등 토큰 | REQ-GLB-06 · REQ-ING-06 · REQ-ING-18 · REQ-NFR-02 | F-02 | 내부 모듈 | 표면 없음 — 내부 모듈 | ClickHouse tag_raw |
+| ING-05 | 재시도 · 격리 · XACK | REQ-GLB-05 · REQ-GLB-06 · REQ-GLB-08 · REQ-GLB-16 · REQ-ING-07 · REQ-ING-08 · REQ-ING-18 · REQ-NFR-01 · REQ-NFR-02 | F-02 · F-10 | 내부 모듈 | 표면 없음 — 내부 모듈 | Redis stream:plc:dlq |
+| ING-06 | PEL 회수 | REQ-GLB-05 · REQ-ING-09 · REQ-ING-18 · REQ-TEC-06 | F-02 · F-10 | 내부 모듈 | 표면 없음 — 내부 모듈 | Redis 컨슈머 그룹 PEL |
+| ING-07 | 다중 컨슈머 | REQ-GLB-07 · REQ-ING-04 · REQ-ING-10 · REQ-ING-18 · REQ-NFR-05 | F-02 | 내부 모듈 | 표면 없음 — 내부 모듈 | Redis 컨슈머 그룹 |
+| ING-08 | 최신값 갱신 · 복원 | REQ-GLB-07 · REQ-GLB-08 · REQ-GLB-11 · REQ-ING-11 · REQ-ING-12 · REQ-ING-18 | F-02 · F-03 · F-07 | 내부 모듈 | 표면 없음 — 내부 모듈 | Redis rt:latest · ch:rt |
+| ING-09 | 알람 판정 전달 | REQ-GLB-04 · REQ-GLB-13 · REQ-ING-13 · REQ-ING-18 · REQ-NFR-04 | F-06 | 내부 모듈 | 표면 없음 — 내부 모듈 | 없음 — 호출 |
+| ING-10 | 3계층 분기 실행 | REQ-GLB-12 · REQ-ING-14 · REQ-ING-18 | F-02 · F-06 | 내부 모듈 | 표면 없음 — 내부 모듈 | ClickHouse tag_raw · 호출(ALM) |
+| ING-11 | 대조군 동시 적재 | REQ-GLB-11 · REQ-ING-15 · REQ-ING-18 · REQ-NFR-18 | F-02 | 내부 모듈 | 표면 없음 — 내부 모듈 | PostgreSQL plc_tag_raw_control |
+| ING-12 | 롤업 캐스케이드 발동 | REQ-GLB-15 · REQ-ING-16 · REQ-ING-18 | F-08 | 내부 모듈 | 표면 없음 — 내부 모듈 | ClickHouse tag_1m · tag_1h · tag_1d · MV 3 |
+| ING-13 | 백프레셔 대응 · 적체 소진 | REQ-GLB-05 · REQ-GLB-10 · REQ-ING-12 · REQ-ING-17 · REQ-ING-18 · REQ-NFR-16 | F-10 | 내부 모듈 | 표면 없음 — 내부 모듈 | Redis stream:plc:raw |
 
 - 검산: ING 기능 = **13**
 
@@ -150,15 +151,15 @@
 
 | 기능 ID | 기능명 | 요구사항 | 흐름 | 화면 | API | 저장 객체 |
 |------|------|------|------|------|------|------|
-| TSQ-01 | 시계열 조회 | GLB-02 · GLB-07 · GLB-15 · GLB-24 · NFR-08 · TSQ-01 · TSQ-02 · TSQ-05 · TSQ-07 · TSQ-16 · TSQ-17 | F-04 | ANL-TREND | 05_timeseries | ClickHouse tag_raw · tag_1m · tag_1h · tag_1d(읽기) |
-| TSQ-02 | 해상도 자동 선택 | TSQ-03 · TSQ-04 | F-04 | ANL-TREND | 05_timeseries | ClickHouse tag_raw · tag_1m · tag_1h · tag_1d(읽기) |
-| TSQ-03 | 캐시 키 정규화 | NFR-10 · TSQ-09 · TSQ-14 | F-04 | 표면 없음 | 표면 없음 — TSQ-04의 내부 단계 | Redis cache:q |
-| TSQ-04 | 조회 결과 캐시 | GLB-09 · GLB-23 · NFR-08 · NFR-10 · TSQ-10 · TSQ-11 · TSQ-14 · TSQ-16 | F-04 | 표면 없음 | 표면 없음 — TSQ-01의 내부 단계 | Redis cache:q |
-| TSQ-05 | 스탬피드 방지 | TSQ-12 · TSQ-14 | F-04 | 표면 없음 | 표면 없음 — TSQ-01의 내부 단계 | Redis lock:rebuild |
-| TSQ-06 | 다운샘플 | GLB-20 · TSQ-06 · TSQ-07 | F-04 | ANL-TREND | 05_timeseries | 없음 — 계산 |
-| TSQ-07 | 태그 메타 부착 | GLB-14 · TSQ-08 | F-04 | ANL-TREND | 05_timeseries | ClickHouse dict_tag(읽기) |
-| TSQ-08 | 진행 구간 분할 | TSQ-13 | F-04 · F-03 | DSH-REALTIME | 05_timeseries | Redis cache:q · rt:latest(읽기) |
-| TSQ-09 | 원시 내보내기 | GLB-24 · TSQ-15 · TSQ-16 · TSQ-17 | F-04 | ANL-TREND | 05_timeseries | ClickHouse tag_raw(읽기) |
+| TSQ-01 | 시계열 조회 | REQ-GLB-02 · REQ-GLB-07 · REQ-GLB-15 · REQ-GLB-24 · REQ-NFR-08 · REQ-TSQ-01 · REQ-TSQ-02 · REQ-TSQ-05 · REQ-TSQ-07 · REQ-TSQ-16 · REQ-TSQ-17 | F-04 | ANL-TREND | 05_timeseries | ClickHouse tag_raw · tag_1m · tag_1h · tag_1d(읽기) |
+| TSQ-02 | 해상도 자동 선택 | REQ-TSQ-03 · REQ-TSQ-04 | F-04 | ANL-TREND | 05_timeseries | ClickHouse tag_raw · tag_1m · tag_1h · tag_1d(읽기) |
+| TSQ-03 | 캐시 키 정규화 | REQ-NFR-10 · REQ-TSQ-09 · REQ-TSQ-14 | F-04 | 표면 없음 | 표면 없음 — TSQ-04의 내부 단계 | Redis cache:q |
+| TSQ-04 | 조회 결과 캐시 | REQ-GLB-09 · REQ-GLB-23 · REQ-NFR-08 · REQ-NFR-10 · REQ-TSQ-10 · REQ-TSQ-11 · REQ-TSQ-14 · REQ-TSQ-16 | F-04 | 표면 없음 | 표면 없음 — TSQ-01의 내부 단계 | Redis cache:q |
+| TSQ-05 | 스탬피드 방지 | REQ-TSQ-12 · REQ-TSQ-14 | F-04 | 표면 없음 | 표면 없음 — TSQ-01의 내부 단계 | Redis lock:rebuild |
+| TSQ-06 | 다운샘플 | REQ-GLB-20 · REQ-TSQ-06 · REQ-TSQ-07 | F-04 | ANL-TREND | 05_timeseries | 없음 — 계산 |
+| TSQ-07 | 태그 메타 부착 | REQ-GLB-14 · REQ-TSQ-08 | F-04 | ANL-TREND | 05_timeseries | ClickHouse dict_tag(읽기) |
+| TSQ-08 | 진행 구간 분할 | REQ-TSQ-13 | F-04 · F-03 | DSH-REALTIME | 05_timeseries | Redis cache:q · rt:latest(읽기) |
+| TSQ-09 | 원시 내보내기 | REQ-GLB-24 · REQ-TSQ-15 · REQ-TSQ-16 · REQ-TSQ-17 | F-04 | ANL-TREND | 05_timeseries | ClickHouse tag_raw(읽기) |
 
 - 검산: TSQ 기능 = **9**
 
@@ -168,15 +169,15 @@
 
 | 기능 ID | 기능명 | 요구사항 | 흐름 | 화면 | API | 저장 객체 |
 |------|------|------|------|------|------|------|
-| RLT-01 | 설비 전체 최신값 | GLB-24 · NFR-07 · RLT-01 · RLT-06 · RLT-07 · RLT-08 · RLT-18 | F-03 | DSH-REALTIME | 06_realtime | Redis rt:latest(읽기) |
-| RLT-02 | 단일 태그 최신값 | GLB-24 · NFR-07 · RLT-02 · RLT-06 · RLT-07 · RLT-08 · RLT-18 | F-03 | DSH-REALTIME | 06_realtime | Redis rt:latest · cache:tagmeta(읽기) |
-| RLT-03 | STALE 판정 · 메타 부착 | GLB-01 · GLB-02 · RLT-03 · RLT-04 · RLT-16 | F-03 | DSH-REALTIME | 06_realtime | Redis cache:tagmeta(읽기) |
-| RLT-04 | 빈 키 복원과 503 | GLB-09 · RLT-05 · RLT-06 | F-03 · F-10 | DSH-REALTIME | 06_realtime | ClickHouse tag_raw(읽기) · Redis rt:latest · lock:rebuild |
-| RLT-05 | WebSocket 구독 | NFR-12 · RLT-09 · RLT-10 · RLT-17 · RLT-18 | F-07 | DSH-REALTIME | 11_websocket | Redis ch:rt(구독) |
-| RLT-06 | 스로틀 병합 | NFR-12 · RLT-11 | F-07 | DSH-REALTIME | 11_websocket | 없음 — 메모리 |
-| RLT-07 | 연결 관리 · 재연결 동기화 | RLT-10 · RLT-12 · RLT-13 | F-07 · F-03 | DSH-REALTIME | 11_websocket · 06_realtime | Redis ch:rt · rt:latest |
-| RLT-08 | 알람 푸시 | RLT-14 · RLT-17 | F-06 · F-07 | ALM-CONSOLE | 11_websocket | Redis ch:alarm(구독) |
-| RLT-09 | 무효화 신호 중계 | RLT-15 | F-05 | 공통 셸 | 11_websocket | Redis ch:cacheinv(구독) |
+| RLT-01 | 설비 전체 최신값 | REQ-GLB-24 · REQ-NFR-07 · REQ-RLT-01 · REQ-RLT-06 · REQ-RLT-07 · REQ-RLT-08 · REQ-RLT-18 | F-03 | DSH-REALTIME | 06_realtime | Redis rt:latest(읽기) |
+| RLT-02 | 단일 태그 최신값 | REQ-GLB-24 · REQ-NFR-07 · REQ-RLT-02 · REQ-RLT-06 · REQ-RLT-07 · REQ-RLT-08 · REQ-RLT-18 | F-03 | DSH-REALTIME | 06_realtime | Redis rt:latest · cache:tagmeta(읽기) |
+| RLT-03 | STALE 판정 · 메타 부착 | REQ-GLB-01 · REQ-GLB-02 · REQ-RLT-03 · REQ-RLT-04 · REQ-RLT-16 | F-03 | DSH-REALTIME | 06_realtime | Redis cache:tagmeta(읽기) |
+| RLT-04 | 빈 키 복원과 503 | REQ-GLB-09 · REQ-RLT-05 · REQ-RLT-06 | F-03 · F-10 | DSH-REALTIME | 06_realtime | ClickHouse tag_raw(읽기) · Redis rt:latest · lock:rebuild |
+| RLT-05 | WebSocket 구독 | REQ-NFR-12 · REQ-RLT-09 · REQ-RLT-10 · REQ-RLT-17 · REQ-RLT-18 | F-07 | DSH-REALTIME | 11_websocket | Redis ch:rt(구독) |
+| RLT-06 | 스로틀 병합 | REQ-NFR-12 · REQ-RLT-11 | F-07 | DSH-REALTIME | 11_websocket | 없음 — 메모리 |
+| RLT-07 | 연결 관리 · 재연결 동기화 | REQ-RLT-10 · REQ-RLT-12 · REQ-RLT-13 | F-07 · F-03 | DSH-REALTIME | 11_websocket · 06_realtime | Redis ch:rt · rt:latest |
+| RLT-08 | 알람 푸시 | REQ-RLT-14 · REQ-RLT-17 | F-06 · F-07 | ALM-CONSOLE | 11_websocket | Redis ch:alarm(구독) |
+| RLT-09 | 무효화 신호 중계 | REQ-RLT-15 | F-05 | 공통 셸 | 11_websocket | Redis ch:cacheinv(구독) |
 
 - 검산: RLT 기능 = **9**
 
@@ -186,15 +187,15 @@
 
 | 기능 ID | 기능명 | 요구사항 | 흐름 | 화면 | API | 저장 객체 |
 |------|------|------|------|------|------|------|
-| ALM-01 | 알람 규칙 관리 | ALM-01 · ALM-02 · ALM-03 · ALM-04 · ALM-18 · ALM-19 · ALM-20 · GLB-24 | F-05 | ALM-RULES | 07_alarms | PostgreSQL alarm_rule · Redis cache:alarmrules |
-| ALM-02 | 규칙 캐시 | ALM-02 · ALM-05 · ALM-20 | F-06 | 표면 없음 | 표면 없음 — ALM-03의 내부 단계 | Redis cache:alarmrules |
-| ALM-03 | 디바운스 판정 | ALM-06 · ALM-07 · ALM-08 · ALM-20 · GLB-01 · GLB-13 | F-06 | 표면 없음 | 표면 없음 — ING-09가 호출 | Redis alarm:state |
-| ALM-04 | 이벤트 확정 | ALM-09 · ALM-10 · ALM-16 · ALM-19 · ALM-20 · GLB-13 | F-06 | 표면 없음 | 표면 없음 — ALM-03의 후속 | PostgreSQL alarm_event(월 파티션) |
-| ALM-05 | 판정 전수 기록 | ALM-11 · ALM-20 · GLB-13 | F-06 | 표면 없음 | 표면 없음 — ALM-03의 후속 | ClickHouse alarm_eval |
-| ALM-06 | 발생 · 해제 발행 | ALM-10 · ALM-12 · ALM-20 | F-06 · F-07 | 표면 없음 | 표면 없음 — RLT-08이 전달 | Redis ch:alarm |
-| ALM-07 | 알람 이벤트 조회 | ALM-13 · ALM-18 · ALM-19 · ALM-20 · GLB-24 | F-06 | ALM-CONSOLE | 07_alarms | PostgreSQL alarm_event(읽기) |
-| ALM-08 | 알람 확인 | ALM-14 · ALM-15 · ALM-16 · ALM-18 · ALM-19 · ALM-20 · GLB-24 | F-06 | ALM-CONSOLE | 07_alarms | PostgreSQL alarm_event |
-| ALM-09 | 판정 이력 분석 | ALM-17 · ALM-20 · GLB-24 | F-06 | ALM-RULES | 07_alarms | ClickHouse alarm_eval(읽기) |
+| ALM-01 | 알람 규칙 관리 | REQ-ALM-01 · REQ-ALM-02 · REQ-ALM-03 · REQ-ALM-04 · REQ-ALM-18 · REQ-ALM-19 · REQ-ALM-20 · REQ-GLB-24 | F-05 | ALM-RULES | 07_alarms | PostgreSQL alarm_rule · Redis cache:alarmrules |
+| ALM-02 | 규칙 캐시 | REQ-ALM-02 · REQ-ALM-05 · REQ-ALM-20 | F-06 | 표면 없음 | 표면 없음 — ALM-03의 내부 단계 | Redis cache:alarmrules |
+| ALM-03 | 디바운스 판정 | REQ-ALM-06 · REQ-ALM-07 · REQ-ALM-08 · REQ-ALM-20 · REQ-GLB-01 · REQ-GLB-13 | F-06 | 표면 없음 | 표면 없음 — ING-09가 호출 | Redis alarm:state |
+| ALM-04 | 이벤트 확정 | REQ-ALM-09 · REQ-ALM-10 · REQ-ALM-16 · REQ-ALM-19 · REQ-ALM-20 · REQ-GLB-13 | F-06 | 표면 없음 | 표면 없음 — ALM-03의 후속 | PostgreSQL alarm_event(월 파티션) |
+| ALM-05 | 판정 전수 기록 | REQ-ALM-11 · REQ-ALM-20 · REQ-GLB-13 | F-06 | 표면 없음 | 표면 없음 — ALM-03의 후속 | ClickHouse alarm_eval |
+| ALM-06 | 발생 · 해제 발행 | REQ-ALM-10 · REQ-ALM-12 · REQ-ALM-20 | F-06 · F-07 | 표면 없음 | 표면 없음 — RLT-08이 전달 | Redis ch:alarm |
+| ALM-07 | 알람 이벤트 조회 | REQ-ALM-13 · REQ-ALM-18 · REQ-ALM-19 · REQ-ALM-20 · REQ-GLB-24 | F-06 | ALM-CONSOLE | 07_alarms | PostgreSQL alarm_event(읽기) |
+| ALM-08 | 알람 확인 | REQ-ALM-14 · REQ-ALM-15 · REQ-ALM-16 · REQ-ALM-18 · REQ-ALM-19 · REQ-ALM-20 · REQ-GLB-24 | F-06 | ALM-CONSOLE | 07_alarms | PostgreSQL alarm_event |
+| ALM-09 | 판정 이력 분석 | REQ-ALM-17 · REQ-ALM-20 · REQ-GLB-24 | F-06 | ALM-RULES | 07_alarms | ClickHouse alarm_eval(읽기) |
 
 - 검산: ALM 기능 = **9**
 
@@ -204,11 +205,11 @@
 
 | 기능 ID | 기능명 | 요구사항 | 흐름 | 화면 | API | 저장 객체 |
 |------|------|------|------|------|------|------|
-| WRK-01 | 작업지시 관리 | GLB-12 · GLB-24 · NFR-09 · WRK-01 · WRK-02 · WRK-03 · WRK-06 · WRK-11 · WRK-12 | F-05 | ADM-WORKORDER | 08_work_orders | PostgreSQL work_order · Redis cache 계열 |
-| WRK-02 | 작업지시 상태 관리 | GLB-24 · WRK-01 · WRK-04 · WRK-06 · WRK-11 · WRK-12 | F-05 | ADM-WORKORDER | 08_work_orders | PostgreSQL work_order |
-| WRK-03 | 생산 실적 기록 | GLB-24 · WRK-01 · WRK-05 · WRK-06 · WRK-11 · WRK-12 | F-05 | ADM-WORKORDER | 08_work_orders | PostgreSQL production_log |
-| WRK-04 | 감사 로그 기록 | WRK-01 · WRK-07 · WRK-08 · WRK-09 · WRK-12 | F-05 | 표면 없음 | 표면 없음 — 쓰기 표면의 트랜잭션 안 단계 | PostgreSQL audit_log |
-| WRK-05 | 감사 로그 조회 | GLB-24 · WRK-06 · WRK-09 · WRK-10 · WRK-12 | F-05 | ADM-AUDIT | 08_work_orders | PostgreSQL audit_log(읽기) |
+| WRK-01 | 작업지시 관리 | REQ-GLB-12 · REQ-GLB-24 · REQ-NFR-09 · REQ-WRK-01 · REQ-WRK-02 · REQ-WRK-03 · REQ-WRK-06 · REQ-WRK-11 · REQ-WRK-12 | F-05 | ADM-WORKORDER | 08_work_orders | PostgreSQL work_order · Redis cache 계열 |
+| WRK-02 | 작업지시 상태 관리 | REQ-GLB-24 · REQ-WRK-01 · REQ-WRK-04 · REQ-WRK-06 · REQ-WRK-11 · REQ-WRK-12 | F-05 | ADM-WORKORDER | 08_work_orders | PostgreSQL work_order |
+| WRK-03 | 생산 실적 기록 | REQ-GLB-24 · REQ-WRK-01 · REQ-WRK-05 · REQ-WRK-06 · REQ-WRK-11 · REQ-WRK-12 | F-05 | ADM-WORKORDER | 08_work_orders | PostgreSQL production_log |
+| WRK-04 | 감사 로그 기록 | REQ-WRK-01 · REQ-WRK-07 · REQ-WRK-08 · REQ-WRK-09 · REQ-WRK-12 | F-05 | 표면 없음 | 표면 없음 — 쓰기 표면의 트랜잭션 안 단계 | PostgreSQL audit_log |
+| WRK-05 | 감사 로그 조회 | REQ-GLB-24 · REQ-WRK-06 · REQ-WRK-09 · REQ-WRK-10 · REQ-WRK-12 | F-05 | ADM-AUDIT | 08_work_orders | PostgreSQL audit_log(읽기) |
 
 - 검산: WRK 기능 = **5**
 
@@ -218,12 +219,12 @@
 
 | 기능 ID | 기능명 | 요구사항 | 흐름 | 화면 | API | 저장 객체 |
 |------|------|------|------|------|------|------|
-| OBS-01 | 앱 메트릭 통합 노출 | GLB-16 · GLB-20 · GLB-22 · NFR-11 · NFR-15 · OBS-01 · OBS-02 · OBS-06 · OBS-07 · OBS-10 · TEC-01 · TEC-12 | 해당 없음 — 관측 | EXP-COMPARE | 10_metrics | 해당 없음 |
-| OBS-02 | 저장소 메트릭 수집 | GLB-22 · OBS-01 · OBS-03 · OBS-06 · TEC-07 | 해당 없음 — 관측 | EXP-CONSOLE | 10_metrics | 세 저장소 카탈로그(읽기) |
-| OBS-03 | 키 계열별 메모리 샘플링 | OBS-04 | 해당 없음 — 관측 | EXP-CONSOLE | 10_metrics | Redis(샘플 읽기) |
-| OBS-04 | E2E 지연 게이지 | GLB-01 · NFR-03 · OBS-05 | 해당 없음 — 관측 | EXP-CONSOLE | 10_metrics | ClickHouse tag_raw(읽기) |
-| OBS-05 | 헬스체크 | OBS-08 · OBS-09 · OBS-10 · TEC-03 | 해당 없음 — 관측 | EXP-CONSOLE | 10_metrics | 세 저장소(핑) |
-| OBS-06 | 스위치 상태 노출 | GLB-04 · GLB-16 · GLB-17 · OBS-10 · OBS-11 · OBS-12 · TEC-10 | 해당 없음 — 관측 | EXP-CONSOLE | 10_metrics | 해당 없음 |
+| OBS-01 | 앱 메트릭 통합 노출 | REQ-GLB-16 · REQ-GLB-20 · REQ-GLB-22 · REQ-NFR-11 · REQ-NFR-15 · REQ-OBS-01 · REQ-OBS-02 · REQ-OBS-06 · REQ-OBS-07 · REQ-OBS-10 · REQ-TEC-01 · REQ-TEC-12 | 해당 없음 — 관측 | EXP-COMPARE | 10_metrics | 해당 없음 |
+| OBS-02 | 저장소 메트릭 수집 | REQ-GLB-22 · REQ-OBS-01 · REQ-OBS-03 · REQ-OBS-06 · REQ-TEC-07 | 해당 없음 — 관측 | EXP-CONSOLE | 10_metrics | 세 저장소 카탈로그(읽기) |
+| OBS-03 | 키 계열별 메모리 샘플링 | REQ-OBS-04 | 해당 없음 — 관측 | EXP-CONSOLE | 10_metrics | Redis(샘플 읽기) |
+| OBS-04 | E2E 지연 게이지 | REQ-GLB-01 · REQ-NFR-03 · REQ-OBS-05 | 해당 없음 — 관측 | EXP-CONSOLE | 10_metrics | ClickHouse tag_raw(읽기) |
+| OBS-05 | 헬스체크 | REQ-OBS-08 · REQ-OBS-09 · REQ-OBS-10 · REQ-TEC-03 | 해당 없음 — 관측 | EXP-CONSOLE | 10_metrics | 세 저장소(핑) |
+| OBS-06 | 스위치 상태 노출 | REQ-GLB-04 · REQ-GLB-16 · REQ-GLB-17 · REQ-OBS-10 · REQ-OBS-11 · REQ-OBS-12 · REQ-TEC-10 | 해당 없음 — 관측 | EXP-CONSOLE | 10_metrics | 해당 없음 |
 
 - 검산: OBS 기능 = **6**
 
@@ -365,7 +366,7 @@
 
 ## AC 축
 
-정본 [14_acceptance_criteria.md](./14_acceptance_criteria.md). AC 45 각각의 관련 기능 ID 열을 기능 정본과 대조한다. 실험 대응(AC → EXP 45/45)은 [../10_observability/06_experiment_catalog.md](../10_observability/06_experiment_catalog.md) §대응 검산이 닫는다.
+정본 [14_acceptance_criteria.md](./14_acceptance_criteria.md). AC 45 각각의 관련 기능 ID 열을 기능 정본과 대조한다. 실험 대응(AC → EXP 45/45)은 [../10_observability/06_experiment_catalog.md](../10_observability/06_experiment_catalog.md) §AC → EXP 대응 검산이 닫는다.
 
 | 대조 | 수 |
 |------|:--:|

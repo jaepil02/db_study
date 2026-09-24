@@ -2,6 +2,7 @@
 
 > **대상**: 학습 목표 ① 설계 정본 — PostgreSQL 대조군 plc_tag_raw_control의 tag_raw 동형 설계(BRIN · 일자 파티션) · SW-09 동시 적재 · 삽입 실패 의미론과 멱등 수단 판정 · 동일 쿼리 5종(양쪽 SQL) · 비교 축 6 · 역전 지점 탐색 설계(행 수 격자) · 측정 조건 · EXP-01~05 예약 대역 연결
 > **작성일**: 2026-09-24
+> **개정일**: 2026-09-24 — 최종 정밀 검수 — 동시 적재 기전 행 닫힘(06_pipeline/04 W4 판정)
 > **개정일**: 2026-09-24 — W7 검수 반영 — 미확인 1행 닫힘(모드 D 대조군 동일 행 절차) — 테이블 수 불변
 > **개정일**: 2026-09-24 — W6 실험 채번 반영 — 격자 6단계 보존 판정 · 조정값 · EXP 반영(정본 10_observability/01 · 06)
 > **개정일**: 2026-09-24 — W6 판정 반영 — 대조 실험 자원 조건의 메모리 동일화 값 → ClickHouse 3.5 GB · PostgreSQL 3.5 GB(정본 09_tech_stack/04 · 합계 불변)
@@ -331,7 +332,7 @@ EXP-01~05는 대조군 동일 쿼리 5종의 예약 대역이다([../11_glossary
 | 항목 | 상태 | 확정 자리 |
 |------|------|------|
 | 쿼리별 역전 지점 · 비교 축 6의 값 | 3계층 미확인 — 확정 전 임의 값 고정 금지 | EXP-01~05 · [../03_requirements/13_nonfunctional.md](../03_requirements/13_nonfunctional.md) REQ-NFR-18 |
-| 동시 적재 기전(flusher 안의 위치 · 전용 커넥션 관리) | 저장소 계약만 확정 | [../06_pipeline/04_routing.md](../06_pipeline/04_routing.md)(W4) |
+| 동시 적재 기전(flusher 안의 위치 · 전용 커넥션 관리) | 닫힘(W4) — ClickHouse 삽입 성공 뒤 COPY 1회 · 전용 커넥션 1 · 트랜잭션 1 · XACK는 대조군 성패와 무관 | [../06_pipeline/04_routing.md](../06_pipeline/04_routing.md) §대조군 동시 적재 기전 |
 | 모드 D 구간의 대조군 같은 행 채우기 절차 | 닫힘 — §모드 D 백필과 대조군 동일 행(같은 행 벡터 · 날짜 단위 · 일마다 count 대조) — [../06_pipeline/10_datagen_inject.md](../06_pipeline/10_datagen_inject.md) | [../06_pipeline/10_datagen_inject.md](../06_pipeline/10_datagen_inject.md)(W4) |
 | 대조 실험 전용 자원 조건 | **W6 판정 반영** — 메모리 3.5 · 3.5 GB(09_tech_stack/04) · CPU 집합 크기 동일(04_architecture/03 §대조 실험 자원 조건) | [../04_architecture/03_execution_topology.md](../04_architecture/03_execution_topology.md) · [../09_tech_stack/04_local_environment.md](../09_tech_stack/04_local_environment.md) |
 | 적재 시간 · 디스크 예산(중단 규칙) | **W6 판정** — 적재 시간은 1계층 관계(경과 < 보존 − D_k) · 디스크 예산은 식 고정 · 값은 실험 시작 시 실측 | [../10_observability/06_experiment_catalog.md](../10_observability/06_experiment_catalog.md) §대조 실험 조정값 |

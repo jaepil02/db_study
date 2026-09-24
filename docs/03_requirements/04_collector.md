@@ -2,6 +2,7 @@
 
 > **대상**: 수집(COL · NestJS collector 모듈)의 동작 계약 — 정의 로드 · 폴링 · 블록 병합 · 디코딩 · 품질 판정 · SIMULATED 표지 · 데드밴드 · Stream 발행 · 발행량 감축 · 스풀 전환과 재발행 · 관측 — REQ-COL-NN 채번 정본
 > **작성일**: 2026-09-24
+> **개정일**: 2026-09-24 — 최종 정밀 검수 — 백프레셔 하강 히스테리시스 행 닫힘(ADR-23)
 > **개정일**: 2026-09-24 — W7 검수 반영 — REQ-COL-10 에러 코드 칸 메트릭 stream_length → **redis_stream_length**(정본 10_observability/01) · 미확인 1행 닫힘(SW-10 off와 경고 단계 강화) — REQ 수 불변
 > **개정일**: 2026-09-24 — W6 실험 채번 반영 — 메트릭 이름 반영(정본 10_observability/01 · 06)
 > **개정일**: 2026-09-24 — W4 판정 반영 — REQ-COL-01 기동 로드 원천 → **PostgreSQL** · 실행 중 마스터 변경 재기동 전 미반영 → **ch:cacheinv 반영** · 미확인 4행 W4 판정 반영 — REQ 수 불변
@@ -96,7 +97,7 @@ COL의 요구가 깨질 때 무엇이 보이는지를 한 표로 모은다. 에�
 | 모드 A ts 채취 시점(요청 직전 · 응답 직후) | **W4 판정** — 요청 블록 송신 직전(응답 직후 시각은 왕복 히스토그램에만) | [../06_pipeline/02_collect.md](../06_pipeline/02_collect.md) |
 | 실행 중 마스터 변경의 반영 | **W4 판정** — ch:cacheinv 구독 · REQ-COL-01 반영 | 상동 |
 | SW-10 off와 경고 단계 데드밴드 강화 | 닫힘 — ADR-24(SW-10 off면 경고 단계 데드밴드 강화는 무동작 — 스위치가 백프레셔 반응보다 우선) — [../04_architecture/06_backpressure_failure.md](../04_architecture/06_backpressure_failure.md) | [../04_architecture/06_backpressure_failure.md](../04_architecture/06_backpressure_failure.md)(W3) |
-| 백프레셔 하강 히스테리시스 | 경고 해제 · 스풀 종료 조건의 떨림 방지 없음 | 상동 |
+| 백프레셔 하강 히스테리시스 | 닫힘 — ADR-23(상승 즉시 · 하강 지연 · 위험은 주의 임계까지 스풀 유지) | [../04_architecture/06_backpressure_failure.md](../04_architecture/06_backpressure_failure.md) |
 | BAD_TIMEOUT "기록"의 자리 | **W4 판정** — 메트릭만 · 행 · 최신값 갱신 없음 | [../06_pipeline/02_collect.md](../06_pipeline/02_collect.md) |
 | FLOAT64 4워드 순서 · 레지스터 비트 BOOL | **W4 판정** — 두 축 조합 · 레지스터 비트 BOOL 미지원 | 상동 |
 | 품질 코드별 계수 · Modbus 왕복 히스토그램의 메트릭 이름 | **W6 판정** — col_points_by_quality_total · col_modbus_rtt_seconds | [../10_observability/01_metrics_catalog.md](../10_observability/01_metrics_catalog.md) |

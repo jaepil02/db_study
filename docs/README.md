@@ -2,6 +2,7 @@
 
 > **대상**: db_study 설계 정본 — PLC 대용량 시계열과 업무 데이터를 Redis 중간 계층에서 갈라 ClickHouse와 PostgreSQL에 나눠 싣는 로컬 학습 시스템의 개요 · 기능 · 요구사항 · 아키텍처 · 저장소 · 파이프라인 · API · 화면 · 기술스택 · 관측 · 용어 · 보안
 > **작성일**: 2026-09-23
+> **개정일**: 2026-09-24 — 최종 정밀 검수 — 도메인 공백 행에 08_screen 주 화면 없음 4(COL · SIM · ING · GEN) 추가 · 현재 상태에 남은 미결의 세 부류 명시(문서 판정 대기 0)
 > **개정일**: 2026-09-24 — W7 검수 반영 — 현재 상태 절을 완성 상태로 재작성(122본 · 원본 4본 삭제 · 추적은 커밋 ff66a37) · 기술 · 관측 · 보안 파생 수치 행 신설(정본 링크) · REQ 228 → **229**(GLB 24) · 웹 3001 바인드 강제 수단
 > **성격**: to-be 설계 정본이다. 구현 착수 전 상태이며, 구현과 측정이 진행되면 각 문서를 as-built로 승격하고 미확인 수치를 EXP-NN 실측 결과로 갱신한다
 > **원천**: 원본 tech_stack.md · architecture.md · data_flow.md · implementation_plan.md(커밋 ff66a37 — W7에서 삭제) · 구축 계획 docs_plan.md(저장소 루트) · 형식 규율 docs_ref/docs_ref(조직 원리만 이식 · 내용 무관)
@@ -16,6 +17,7 @@ db_study는 배포하지 않는 **로컬 전용 학습 시스템**이다. 목적
 
 - **문서군 122본 완성(2026-09-24)** — 웨이브 W0~W7로 구축했다. W0 골격 · W1 용어 · 개요 · W2 기능 · 요구사항 · W3 아키텍처 · 저장소 · W4 흐름 · W5 API · 화면 · W6 기술 스택 · 관측 · W7 보안 · 추적성 · 공식 참조 · 전수 검수. 웨이브 분담 · 착수 전 보정 결정 · 인계 이력은 저장소 루트 docs_plan.md가 갖는다.
 - **원본 설계서 4본(architecture.md · data_flow.md · tech_stack.md · implementation_plan.md)은 W7 마감 커밋에서 삭제했다.** 전 문서의 원천 줄은 원본 절을 커밋 ff66a37 기준으로 적으므로 삭제 뒤에도 git으로 추적된다.
+- **문서 판정으로 닫을 미결은 0이다(최종 정밀 검수).** 각 문서의 미확인 · 미설계 등재에 남은 행은 세 부류뿐이다 — ① 실측으로만 닫히는 3계층 미확인(EXP-NN 연결) ② 코드 착수 때 정하는 구현 세부 ③ 확장 로드맵 단계 진입 때 정하는 배분. 행선지가 문서 웨이브이거나 리드 판정 대기인 행은 없다.
 - 모든 성능 수치는 실측 전이다 — 3계층 미확인은 [10_observability/06_experiment_catalog.md](./10_observability/06_experiment_catalog.md)의 EXP-NN 실측으로만 확정한다. 공식 참조 URL은 등재만 됐고 대조는 착수 체크리스트 7번이 한다.
 
 ## 문서 지도
@@ -60,7 +62,7 @@ db_study는 배포하지 않는 **로컬 전용 학습 시스템**이다. 목적
 | 문서 폴더 | **12개** + 예외 폴더 docs/measurements 1(번호 없음 · 설계 정본 아님) |
 | 문서 파일 | **122** — 루트 2(README · CLAUDE) + 폴더 120. 폴더별(README 포함) 01 **7** · 02 **14** · 03 **17** · 04 **10** · 05 **12** · 06 **13** · 07 **12** · 08 **8** · 09 **7** · 10 **8** · 11 **6** · 12 **6**. 검산: 7 + 14 + 17 + 10 + 12 + 13 + 12 + 8 + 7 + 8 + 6 + 6 = **120** · 120 + 2 = **122**. 파일명 정본은 각 폴더 README의 파일 목차다 |
 | 도메인 | **11개** — AUT · MST · COL · SIM · GEN · ING · TSQ · RLT · ALM · WRK · OBS. NestJS 모듈과 1:1이다. 평면별 제어 6(AUT · MST · TSQ · RLT · ALM · WRK) · 데이터 4(COL · SIM · GEN · ING) · 관측 1(OBS). 검산: 6 + 4 + 1 = **11**. 정본 [01_overview/04_domain_map.md](./01_overview/04_domain_map.md) |
-| 도메인 공백 | **도메인이 특정 폴더에서 비는 것은 설계 진술이다.** 세는 기준은 **소유**다(읽기·쓰기 참여가 아니다). 07_api 표면 없음 **3** — COL · SIM · ING(내부 모듈 — 부하 주입 표면 /api/v1/ingest/bulk는 GEN 소유). 05_data_stores 소유 테이블 없음 **6** — COL · SIM · GEN · TSQ · RLT · OBS(GEN은 모드 D로 tag_raw에 쓰지만 소유하지 않는다 · 롤업 객체는 ING 귀속 — W3 확정). 06_pipeline 흐름 불참 **1** — OBS. 매트릭스 정본 [01_overview/04_domain_map.md](./01_overview/04_domain_map.md) · 각 폴더 README가 공백을 명시한다 |
+| 도메인 공백 | **도메인이 특정 폴더에서 비는 것은 설계 진술이다.** 세는 기준은 **소유**다(읽기·쓰기 참여가 아니다). 07_api 표면 없음 **3** — COL · SIM · ING(내부 모듈 — 부하 주입 표면 /api/v1/ingest/bulk는 GEN 소유). 05_data_stores 소유 테이블 없음 **6** — COL · SIM · GEN · TSQ · RLT · OBS(GEN은 모드 D로 tag_raw에 쓰지만 소유하지 않는다 · 롤업 객체는 ING 귀속 — W3 확정). 06_pipeline 흐름 불참 **1** — OBS. 08_screen 주 화면 없음 **4** — COL · SIM · ING · GEN(GEN 산출은 EXP-CONSOLE 카드에 간접 표시될 뿐이다). 매트릭스 정본 [01_overview/04_domain_map.md](./01_overview/04_domain_map.md) · 각 폴더 README가 공백을 명시한다 |
 | 학습 목표 | **2축** — ① 컬럼형 vs RDB(측정) ② Redis 중간 계층의 성격별 분기. 정본 [01_overview/01_purpose_learning_goals.md](./01_overview/01_purpose_learning_goals.md) |
 | 분기 계층 | **3계층** — ① 태그 원시값 → ClickHouse 전용 ② 알람 판정 · 생산 카운터 → 확정 이벤트 PostgreSQL · 판정 전수 ClickHouse · 핫 상태 Redis Hash로 갈라짐 ③ 회원 · 작업지시 · 감사 → PostgreSQL 전용(Redis는 캐시 · Stream을 타지 않음). 정책 정본 [04_architecture/04_storage_split.md](./04_architecture/04_storage_split.md) · 기전 정본 [06_pipeline/04_routing.md](./06_pipeline/04_routing.md) |
 | 데이터 흐름 | **10종** — F-01~F-10(수집 · 배치 적재 · 최신값 조회 · 시계열 조회 · 업무 CRUD · 알람 판정 · 실시간 푸시 · 롤업 · 테스트 데이터 주입 · 백프레셔와 장애). 정본 [06_pipeline/01_flow_inventory.md](./06_pipeline/01_flow_inventory.md) |

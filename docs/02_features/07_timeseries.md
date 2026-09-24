@@ -2,6 +2,7 @@
 
 > **대상**: 시계열 조회(TSQ · NestJS timeseries 모듈) 기능 목록 · 기능별 경계 · 스위치 교체 · 의존 도메인 · 실패 시 보이는 것 — 기능 ID TSQ-NN 채번 정본
 > **작성일**: 2026-09-24
+> **개정일**: 2026-09-24 — 최종 정밀 검수 — p95 롤업 대조 미확인 행에 확정 수단 EXP-31 연결 · "표면 번호는 W5 몫" → 각 API 문서가 채번(W5 완료)
 > **개정일**: 2026-09-24 — W7 검수 반영 — TSQ-03 · TSQ-05 키 표기 cache:q:{hash} · lock:rebuild:{hash} → **cache:q:{sha1} · lock:rebuild:q:{sha1}**(정본 05_data_stores/05) — 기능 수 불변
 > **개정일**: 2026-09-24 — W7 보안 판정 반영 — 내보내기 범위 상한 · 등급 닫힘(정본 12_security/03)
 > **개정일**: 2026-09-24 — W2 요구사항 판정 반영 — ClickHouse 불가 시 조회 응답(clickhouse_unavailable/503)의 채번 보류를 닫는다
@@ -13,7 +14,7 @@ TSQ는 **ClickHouse에 쌓인 시계열을 화면 폭에 맞게 줄여 돌려주
 
 ## 기능 목록
 
-기능 ID는 이 표가 유일한 채번 자리다. 단계는 학습 단계(정본 [../01_overview/05_priorities_roadmap.md](../01_overview/05_priorities_roadmap.md))이고, 표면은 [../07_api](../07_api/README.md)의 문서명이다(표면 번호는 W5 몫).
+기능 ID는 이 표가 유일한 채번 자리다. 단계는 학습 단계(정본 [../01_overview/05_priorities_roadmap.md](../01_overview/05_priorities_roadmap.md))이고, 표면은 [../07_api](../07_api/README.md)의 문서명이다(표면 번호는 각 API 문서의 표면 요약 표가 채번한다).
 
 | 기능 ID | 기능명 | 설명 | 단계 | 흐름 | 스위치 | 표면 | 저장소 |
 |------|------|------|------|------|------|------|------|
@@ -111,7 +112,7 @@ TSQ-01 한 요청이 지나는 단계다. 기전 정본은 [../06_pipeline/06_ti
 |------|------|------|------|
 | ClickHouse 불가 시 조회 응답 | ClickHouse 중단 시 적재가 XACK를 보류한다는 것뿐이다 | **W2 판정 완료** — clickhouse_unavailable/503 | [../03_requirements/08_timeseries.md](../03_requirements/08_timeseries.md) |
 | 해상도별 응답 시간 · 히트율 | 원본 예상치(원본 data_flow.md §6.1 · 원본 architecture.md §16) | 미확인 — 확정 전 임의 값 고정 금지 | [../03_requirements/13_nonfunctional.md](../03_requirements/13_nonfunctional.md) · [../10_observability/06_experiment_catalog.md](../10_observability/06_experiment_catalog.md) |
-| p95 집계의 롤업 대조 | TDigest는 근사다 — 부동소수 허용 오차로 대조하지 않는다(W1) | 대조 기준 미정 | [../03_requirements/14_acceptance_criteria.md](../03_requirements/14_acceptance_criteria.md)(W2) |
+| p95 집계의 롤업 대조 | TDigest는 근사다 — 부동소수 허용 오차로 대조하지 않는다(W1) | 미확인 — 확정 수단은 원시 내 순위 오차 측정(EXP-31) · AC-05는 p95를 판정에서 제외하고 기록 | [../03_requirements/14_acceptance_criteria.md](../03_requirements/14_acceptance_criteria.md) §미확인 등재 |
 | 내보내기의 레이트 리밋 한도 · 범위 상한 | "엄격히"만 있다(원본 architecture.md §18) | **W7 닫힘** — 범위 상한 현행 참고 1일 · class export · 한도 값 2계층 미정(관계식 고정) | [../12_security/03_api_surface_defense.md](../12_security/03_api_surface_defense.md) |
 
 ## 관련 문서

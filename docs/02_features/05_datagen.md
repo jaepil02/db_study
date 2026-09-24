@@ -2,6 +2,7 @@
 
 > **대상**: 데이터 생성(GEN · NestJS datagen 모듈) 기능 목록 · 주입 모드 4종 · 부하 주입 표면 · SIMULATED 표기 · 기능별 경계 · 실패 시 보이는 것 — 기능 ID GEN-NN 채번 정본
 > **작성일**: 2026-09-24
+> **개정일**: 2026-09-24 — 최종 정밀 검수 — "표면 번호는 W5 몫" → 각 API 문서가 채번(W5 완료) · 과거 ts와 STALE 행 닫힘(실험 프로토콜 규칙으로 강제)
 > **개정일**: 2026-09-24 — W7 검수 반영 — GEN-07 · 판정 주체 서술의 스트림 길이 검사 → **미확인 적체 검사**(ADR-21) · 미확인 2행 닫힘(모드 B 검사 · 모드 D 대조군 절차) — 기능 수 불변
 > **개정일**: 2026-09-24 — W6 실험 채번 반영 — EXP 번호 반영(정본 10_observability/01 · 06)
 > **개정일**: 2026-09-24 — W3 판정 반영 — 길이 검사의 판정량을 그룹 적체로 교정(ADR-21)
@@ -15,7 +16,7 @@ GEN은 **실장비가 없는 이 시스템에서 실험의 품질을 결정하�
 
 ## 기능 목록
 
-기능 ID는 이 표가 유일한 채번 자리다. 단계는 학습 단계(정본 [../01_overview/05_priorities_roadmap.md](../01_overview/05_priorities_roadmap.md))이고, 표면은 [../07_api](../07_api/README.md)의 문서명이다(표면 번호는 W5 몫).
+기능 ID는 이 표가 유일한 채번 자리다. 단계는 학습 단계(정본 [../01_overview/05_priorities_roadmap.md](../01_overview/05_priorities_roadmap.md))이고, 표면은 [../07_api](../07_api/README.md)의 문서명이다(표면 번호는 각 API 문서의 표면 요약 표가 채번한다).
 
 | 기능 ID | 기능명 | 설명 | 단계 | 흐름 | 스위치 | 표면 | 저장소 |
 |------|------|------|------|------|------|------|------|
@@ -110,7 +111,7 @@ GEN은 **실장비가 없는 이 시스템에서 실험의 품질을 결정하�
 | 모드 B의 스트림 길이 검사 | Collector는 그룹 적체(lag + pending)를 파이프라인으로 확인하고(ADR-21 — XLEN이 아니다) bulk 표면도 같은 임계에서 거절한다(원본 architecture.md §9.3) · MAXLEN은 "검사를 우회한 발행자"를 막는 최후 안전장치다 | 닫힘 — 모드 B도 XADD 전에 적체 검사 · 위험 단계면 발행 중단 · 주의 임계에서 재개(REQ-GEN-07) — [../06_pipeline/10_datagen_inject.md](../06_pipeline/10_datagen_inject.md) | [../06_pipeline/10_datagen_inject.md](../06_pipeline/10_datagen_inject.md)(W4) |
 | 생성기 실행 제어 표면 | 원본 API 표(원본 architecture.md §11)에 생성기 실행 · 정지 표면이 없다 | **근거 없음** — 07_api 목차가 "생성기 실행 제어"를 적었으나 원본에 없다. 이 문서는 표면을 만들지 않았다 | [../07_api/09_datagen.md](../07_api/09_datagen.md)(W5) · 리드 판정 |
 | 모드 D와 대조군의 동일 행 절차 | 대조군 쪽도 같은 행 집합이어야 한다(W1 [../01_overview/01_purpose_learning_goals.md](../01_overview/01_purpose_learning_goals.md)) | 닫힘 — §모드 D 백필과 대조군 동일 행(같은 행 벡터를 날짜 단위로 두 저장소에 차례로 쓰고 일마다 count 대조) — [../06_pipeline/10_datagen_inject.md](../06_pipeline/10_datagen_inject.md) | [../06_pipeline/10_datagen_inject.md](../06_pipeline/10_datagen_inject.md)(W4) |
-| 생성 모드의 과거 ts와 STALE | 시간 압축으로 과거 시각을 찍으면 최신값 화면이 전부 STALE이다(W1 [../11_glossary/05_units_and_time.md](../11_glossary/05_units_and_time.md)) | 판정식의 결과 — 실시간 화면 실험은 현재 시각으로 생성한다 | [../10_observability/04_experiment_protocol.md](../10_observability/04_experiment_protocol.md) |
+| 생성 모드의 과거 ts와 STALE | 시간 압축으로 과거 시각을 찍으면 최신값 화면이 전부 STALE이다(W1 [../11_glossary/05_units_and_time.md](../11_glossary/05_units_and_time.md)) | 닫힘 — 실시간 화면 · STALE · E2E를 읽는 실험은 현재 시각 생성만 쓴다(실험 프로토콜 §조건 분리 강제) | [../10_observability/04_experiment_protocol.md](../10_observability/04_experiment_protocol.md) |
 | 압축률 · 생성 처리량 | 원본 예상치(프로파일별 압축률 · 20 스레드 머신 미달 가능성 낮음) | 미확인 — 확정 전 임의 값 고정 금지 | EXP-35 · EXP-21 · [../10_observability/06_experiment_catalog.md](../10_observability/06_experiment_catalog.md) |
 
 ## 관련 문서

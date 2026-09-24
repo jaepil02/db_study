@@ -2,6 +2,7 @@
 
 > **대상**: F-06 판정 흐름의 기전 정본 — 확정 배치 인계 · **판정을 flusher 흐름에서 기다리는가 판정(직렬 판정기 · 인계 깊이 1)** · 규칙 조회 · 배치 단위 상태 조회(ADR-11) · 행 평가 순서 · 조건 평가와 **RATE_OF_CHANGE 경계** · 디바운스 전이와 세 쓰기의 순서 · 부분 실패(PostgreSQL이 진실) · **ACK 시 alarm:state 갱신 주체 · CLEARING 중 ACK 전이** · alarm_eval 재시도 · 격리 · **비활성 태그 규칙** · 판정 경로 직렬성 · 규칙 시드
 > **작성일**: 2026-09-24
+> **개정일**: 2026-09-24 — 최종 정밀 검수 — 비활성 태그 열린 알람 닫는 수단 — 리드 판정 대기 → 두지 않는다(W5 알람 강제 해제 표면 없음 판정 반영)
 > **개정일**: 2026-09-24 — W6 실험 채번 반영 — 메트릭 이름 · 무효 구간 자리 · ACK 부재 계측 판정(정본 10_observability/01 · 06)
 > **개정일**: 2026-09-24 — W5 판정 반영 — 미확인 표에 2행 등재 — 알람 확인의 ch:alarm 미전파 · alarm_eval 분석 무효 구간 기록 자리 미설계(행선지 W6 10_observability/01)
 > **원천**: 원본 data_flow.md §8 · §8.1 · §8.2 · §15(커밋 ff66a37) · 원본 implementation_plan.md §7.3(커밋 ff66a37) · docs_plan.md 웨이브 인계 W4 06_pipeline/08 행 전부 · ADR-06 · ADR-11 · ADR-22 · ADR-25 · D-01 · D-04 · REQ-ALM-01~20 · REQ-ING-13 · REQ-GLB-04 · 13 · [../11_glossary/03_enums_state_machines.md](../11_glossary/03_enums_state_machines.md) 상태 머신 2 · alarm_event.state 대응 · [../05_data_stores/05_redis_keyspace.md](../05_data_stores/05_redis_keyspace.md) alarm:state 필드 7 · [../05_data_stores/01_postgresql_schema.md](../05_data_stores/01_postgresql_schema.md) alarm_rule · alarm_event · [../04_architecture/05_latency_budget.md](../04_architecture/05_latency_budget.md) 알람 판정 구간
@@ -184,7 +185,7 @@ CLEARING 중 확인의 전이다. 상태도에 CLEARING → ACKED 전이가 없�
 | 스케일 변경 | 새 tag_id에는 규칙이 없다 — 엔지니어가 새로 만든다 | 규칙의 임계값은 이전 공학 단위의 값이다 | 규칙 자동 이전 — 단위가 바뀐 태그에 옛 임계값이 붙는다 |
 
 - 검산: 항목 = **5**
-- **잔여 — 비활성 태그의 열린 이벤트는 사람이 확인하기 전까지 열려 있다.** 목록은 태그 is_active를 함께 보여 "태그가 꺼져 판정이 멈춘 열린 알람"을 식별하게 한다 — 표시 모양은 [../07_api/07_alarms.md](../07_api/07_alarms.md)(W5)다. 닫는 수단을 새로 둘지는 확인 기능 범위 밖이라 등재만 한다.
+- **잔여 — 비활성 태그의 열린 이벤트는 사람이 확인하기 전까지 열려 있다.** 목록은 태그 is_active를 함께 보여 "태그가 꺼져 판정이 멈춘 열린 알람"을 식별하게 한다 — 표시 모양은 [../07_api/07_alarms.md](../07_api/07_alarms.md)다. **닫는 수단은 두지 않는다** — W5가 알람 강제 해제 표면을 두지 않기로 판정했다([../07_api/README.md](../07_api/README.md) 원본에 없는 표면 행).
 
 ## 판정 경로 직렬성
 
@@ -207,7 +208,7 @@ CLEARING 중 확인의 전이다. 상태도에 CLEARING → ACKED 전이가 없�
 | 판정 구간 A1~A6 · 알람 통지 지연 | 신설 · 3계층 미확인 — 확정 전 임의 값 고정 금지 | [../04_architecture/05_latency_budget.md](../04_architecture/05_latency_budget.md) · 실측 |
 | 판정 구간 ≤ 플러시 주기 관계의 실측 | 1계층 관계 — 값 미확인 | S7 · 인계 대기 히스토그램 |
 | worker 다중화 시 판정 분할 수단 | 미설계 — 확장 단계 | [../04_architecture/08_scaling_roadmap.md](../04_architecture/08_scaling_roadmap.md) |
-| 비활성 태그의 열린 이벤트를 닫는 수단 | 등재만 — 범위 밖 | [../02_features/09_alarms.md](../02_features/09_alarms.md)(리드) |
+| 비활성 태그의 열린 이벤트를 닫는 수단 | 닫힘 — 두지 않는다(W5 판정 — 알람 강제 해제 표면 없음) · 잔여는 한계 등재 #17 | [../07_api/README.md](../07_api/README.md) · [../05_data_stores/02_postgresql_constraints.md](../05_data_stores/02_postgresql_constraints.md) |
 | ACKED 파생 표기 · alarm_eval 격리 문구 정합 | 판정 — 선행 문서 갱신 필요 | [../11_glossary/03_enums_state_machines.md](../11_glossary/03_enums_state_machines.md) · [../03_requirements/10_alarms.md](../03_requirements/10_alarms.md)(W4 반영) |
 | 인계 대기 · 판정 무효 구간 · 전이 수 메트릭 이름 | **W6 판정** — alm_handoff_wait_seconds · alm_eval_gap_batches_total · alm_eval_gap_rows_total · alm_transitions_total | [../10_observability/01_metrics_catalog.md](../10_observability/01_metrics_catalog.md) |
 | 알람 확인(ACK)의 실시간 전파 | **미설계**(W5 등재) — ch:alarm은 열림 · 닫힘만 싣고 확인은 싣지 않는다 · 다른 운영자 화면의 확인 표시는 이벤트 목록 캐시 TTL(현행 참고 30초)만큼 늦다 | [../10_observability/02_instrumentation.md](../10_observability/02_instrumentation.md) §확인(ACK) 신호 부재의 계측(**W6 판정** — alm_acks_total + 구조 관계 상한 + EXP-33 두 브라우저 관찰 · 전파 신호는 두지 않는다) · [../07_api/07_alarms.md](../07_api/07_alarms.md) #2 |

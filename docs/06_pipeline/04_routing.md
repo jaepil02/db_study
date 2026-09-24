@@ -2,6 +2,7 @@
 
 > **대상**: ★★ 학습 목표 ②의 기전 정본 — 어느 모듈이 어떤 판정으로 어느 저장소에 쓰는가 · 분기 판정 트리 · ① 원시값 · ② 알람 판정(PostgreSQL 확정 · ClickHouse 전수 · Redis 핫 상태) · **생산 카운터 기전 판정** · ③ 업무 쓰기가 Stream을 타지 않는 경로 · 사본 쓰기(최신값 SW-11 · 캐시) · **대조군 동시 적재 기전(SW-09 · COPY 1회 · 재시도 없음)** · 모듈 × 저장소 쓰기 행렬 · 분기 계측 · 스위치별 경로 변화 · 정책 문서와의 1:1 대응 검산
 > **작성일**: 2026-09-24
+> **개정일**: 2026-09-24 — 최종 정밀 검수 — COUNTER 랩어라운드 행에 W5 판정(표면이 증가량을 계산하지 않음) 반영
 > **개정일**: 2026-09-24 — W6 실험 채번 반영 — 메트릭 이름 · 기록 형식 · COPY 타임아웃 관계(정본 10_observability/01 · 06)
 > **원천**: 원본 data_flow.md §2 · §4 · §7 · §8 · §8.2 · §13(커밋 ff66a37) · 원본 architecture.md §5 · §9(커밋 ff66a37) · 원본 implementation_plan.md §7.2 · §7.3(커밋 ff66a37) · docs_plan.md 실행 계획 보정 #4 · 웨이브 인계 W4 06_pipeline/04 행 전부 · W3 05/10 · W4 06/04 행 · D-01 · D-04 · D-05 · ADR-03 · ADR-06 · ADR-10 · ADR-11 · ADR-17 · REQ-GLB-11 · 12 · 13 · REQ-ING-10 · 14 · 15 · REQ-WRK-01 · 05 · [../04_architecture/04_storage_split.md](../04_architecture/04_storage_split.md) 정책 정본 · [../05_data_stores/10_olap_vs_rdb_control.md](../05_data_stores/10_olap_vs_rdb_control.md) 대조군 저장소 계약
 
@@ -253,7 +254,7 @@
 | 대조군 COPY 타임아웃 값 | 2계층 · 현행 미정 — 관계 COPY 타임아웃 + ClickHouse 삽입 p95 < 창 폭 W(W6 · [../10_observability/06_experiment_catalog.md](../10_observability/06_experiment_catalog.md) §대조 실험 조정값) | S3 · 이 문서 · AC-21 동시 적재 기록 |
 | 분기 대조 · 대조군 실패 계수 메트릭 이름 | **W6 판정** — ing_routed_rows_total{layer} · ing_control_copy_failures_total | [../10_observability/01_metrics_catalog.md](../10_observability/01_metrics_catalog.md) |
 | 구간 count 대조의 기록 형식 | **W6 판정** — 격자 단계 기록(절차 ②) · 기계 판독 블록 | [../10_observability/04_experiment_protocol.md](../10_observability/04_experiment_protocol.md) |
-| COUNTER 랩어라운드 조회 보정 | 조회 시점 몫 — 롤업만으로는 불가 | [06_timeseries_read.md](./06_timeseries_read.md) · [../07_api/05_timeseries.md](../07_api/05_timeseries.md)(W5) |
+| COUNTER 랩어라운드 조회 보정 | 잔여 — W5 판정: 조회 표면은 구간 증가량(max − min)을 계산하지 않는다 · 증가량 집계 요청 필드 없음 · 랩어라운드 보정은 표면이 생길 때의 몫 | [06_timeseries_read.md](./06_timeseries_read.md) · [../07_api/05_timeseries.md](../07_api/05_timeseries.md) |
 
 ## 관련 문서
 

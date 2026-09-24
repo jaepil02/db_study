@@ -2,6 +2,7 @@
 
 > **대상**: db_study api 컨테이너의 REST 표면이 반환하는 에러 코드 전수 — 채번 정본
 > **작성일**: 2026-09-24
+> **개정일**: 2026-09-24 — 최종 정밀 검수 — common.validation_failed 발생 조건에 Host 헤더 허용 목록 위반 추가(코드 수 불변)
 > **개정일**: 2026-09-24 — W7 검수 반영 — README ID 규약 예시와의 충돌 서술 → **W1에 고쳤다**로 갱신 — 코드 수 불변
 > **개정일**: 2026-09-24 — W5 표면 판정 반영 — 에러 코드 19 → **22종**(master.reissue_source_inactive/409 · alarms.eval_store_unavailable/503 · work_orders.production_log_not_allowed/409 신설) · common.duplicate_key 대상 · common.postgres_unavailable 인가 단계 표면 · invalid_status_transition fromStatus 경합 조건 보강
 > **개정일**: 2026-09-24 — W4 판정 반영 — datagen.stream_full 조건 스트림 길이 → **미확인 적체**(ADR-21) · common.postgres_unavailable 표면에 최신값 단일 태그 추가 · common.rate_limited 키 표기 rl:{class}:{user_id}:{unix_minute} — 코드 수 불변
@@ -64,7 +65,7 @@
 
 | 코드 | HTTP | 발생 조건 | 발생 표면 | 클라이언트 대응 |
 |------|:----:|----------|----------|---------------|
-| common.validation_failed | 400 | 요청 본문 · 쿼리가 스키마를 어긴다 — 타입 불일치 · 필수 누락 · 허용값 밖(interval이 raw · 1m · 1h · 1d가 아님 · aggregations가 5종 밖 · from · to가 ISO 8601이 아님). 원본 architecture.md §11.1 | 전 REST 표면 | 요청을 고친다. 같은 요청의 재시도 금지 |
+| common.validation_failed | 400 | 요청 본문 · 쿼리 · Host 헤더가 계약을 어긴다(Host는 허용 목록 밖 — path header.host · reason enum · 12_security/03) — 타입 불일치 · 필수 누락 · 허용값 밖(interval이 raw · 1m · 1h · 1d가 아님 · aggregations가 5종 밖 · from · to가 ISO 8601이 아님). 원본 architecture.md §11.1 | 전 REST 표면 | 요청을 고친다. 같은 요청의 재시도 금지 |
 | common.not_found | 404 | 경로의 식별자가 가리키는 대상이 마스터에 없다(설비 · 태그 · 알람 이벤트 · 작업지시). **rt:latest 키가 비어 있는 것은 여기가 아니다** — 설비가 마스터에 있으면 ClickHouse 복원 경로를 탄다(원본 data_flow.md §5) | [../07_api/04_master.md](../07_api/04_master.md) · [../07_api/06_realtime.md](../07_api/06_realtime.md) · [../07_api/07_alarms.md](../07_api/07_alarms.md) · [../07_api/08_work_orders.md](../07_api/08_work_orders.md) | 식별자를 확인한다 |
 | common.duplicate_key | 409 | 유일 제약 컬럼에 이미 있는 값을 쓴다 — tag_master.tag_code · work_order.order_no(원본 architecture.md §6 ERD의 UK) · site.site_code · production_line(site_id, line_code) · device.device_code(05_data_stores/02 UNIQUE) | [../07_api/04_master.md](../07_api/04_master.md) · [../07_api/08_work_orders.md](../07_api/08_work_orders.md) | 다른 값으로 다시 요청한다 |
 | common.rate_limited | 429 | 사용자 · 토큰 기준 분당 요청 수가 한도를 넘었다. 판정 키는 rl:{class}:{user_id}:{unix_minute} INCR이며(키 모양 정본 [../05_data_stores/05_redis_keyspace.md](../05_data_stores/05_redis_keyspace.md)) **IP 기준이 아니다** — 모든 요청이 127.0.0.1에서 오므로 IP 기준은 전원을 한 사용자로 센다(원본 architecture.md §11.2). 한도 값은 2계층 조정값이며 소유처는 [../12_security/03_api_surface_defense.md](../12_security/03_api_surface_defense.md) | 전 REST 표면 | 다음 분 창까지 기다린다 |

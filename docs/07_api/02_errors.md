@@ -2,6 +2,7 @@
 
 > **대상**: 에러 코드 정본의 **미러** — 코드 22종이 어느 표면(문서 #N)에서 나는가 · 표면 밖 실패 표현(헬스 503 · 스트림 중단 · WebSocket 종료 코드)의 자리 · W5 표면 판정이 낳아 정본이 채번한 코드 3종의 이력
 > **작성일**: 2026-09-24
+> **개정일**: 2026-09-24 — 최종 정밀 검수 — 미러 발생 위치에 Host 헤더 거절 추가(정본 11_glossary/02 반영)
 > **개정일**: 2026-09-24 — W5 판정 반영 — 코드 19 → **22종** 미러(master.reissue_source_inactive · alarms.eval_store_unavailable · work_orders.production_log_not_allowed 발생 표면 등재) · 채번 제안 절을 정본 채번 이력으로 전환 · 문구 보강 3건 반영 표기
 > **원천**: [../11_glossary/02_error_codes.md](../11_glossary/02_error_codes.md)(채번 정본 — 코드 · HTTP · 발생 조건 · 클라이언트 대응) · [01_conventions.md](./01_conventions.md) 에러 봉투 · 도메인 문서 8본의 표면 요약 표 · 원본 architecture.md §11 · §11.1 · §11.2(커밋 ff66a37)
 
@@ -31,7 +32,7 @@
 
 | 코드 | HTTP | 발생 표면 | 미러 비고 |
 |------|:--:|------|------|
-| common.validation_failed | 400 | 03_auth #1 · #2 · #3 · 04_master #2 · #3 · #4 · #5 · #7 · #9 · #10 · #11 · #12 · #13 · #14 · #15 · #17 · 05_timeseries #1 · #2 · 07_alarms #1 · #3 · #4 · #5 · #6 · 08_work_orders #1 · #2 · #3 · #5 · #6 · #7 · #8 · #9 · 09_datagen #1 | 쓰기 본문의 참조 대상 없음(reason reference)도 여기다 — [01_conventions.md](./01_conventions.md) §요청 검증과 성공 본문 |
+| common.validation_failed | 400 | 03_auth #1 · #2 · #3 · 04_master #2 · #3 · #4 · #5 · #7 · #9 · #10 · #11 · #12 · #13 · #14 · #15 · #17 · 05_timeseries #1 · #2 · 07_alarms #1 · #3 · #4 · #5 · #6 · 08_work_orders #1 · #2 · #3 · #5 · #6 · #7 · #8 · #9 · 09_datagen #1 | Host 헤더가 허용 목록 밖(전 표면 · WebSocket 핸드셰이크 포함 — path header.host · reason enum) · 쓰기 본문의 참조 대상 없음(reason reference)도 여기다 — [01_conventions.md](./01_conventions.md) §요청 검증과 성공 본문 |
 | common.not_found | 404 | 04_master #2 · #3 · #5 · #6 · #7 · #8 · #10 · #13 · #15 · #16 · #17 · 06_realtime #1 · #2 · 07_alarms #2 · #5 · 08_work_orders #3 · #4 · #5 · #6 · #7 | 경로 식별자 · 조회 필터의 대상 없음만 · rt:latest 빈 키는 여기가 아니다 |
 | common.duplicate_key | 409 | 04_master #4 · #5 · #7 · #9 · #10 · #12 · #13 · #14 · #15 · 08_work_orders #2 · #3 | tag_code · order_no · site_code · (site_id, line_code) · device_code UNIQUE — 정본 발생 조건 W5 보강 반영 |
 | common.rate_limited | 429 | 인증 표면 전부(S7) — 공통 4종 | 등급별 한도 [01_conventions.md](./01_conventions.md) §한도 등급이 갈리는 표면 묶음 |

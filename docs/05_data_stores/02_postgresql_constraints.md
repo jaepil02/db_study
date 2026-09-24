@@ -2,6 +2,7 @@
 
 > **대상**: PostgreSQL 업무 테이블 14의 테이블 간 제약(FK · UNIQUE · 결합 CHECK · 가드 트리거 · DB 권한) · 인덱스 · alarm_event 월 파티션 · 커넥션(ADR-19) · **한계 등재 — 어느 계층도 강제하지 않는 것**의 정본
 > **작성일**: 2026-09-24
+> **개정일**: 2026-09-24 — 최종 정밀 검수 — 빈 표 칸을 닫힌 어휘 해당 없음으로 채움(표 열 규약) · 비활성 태그 열린 알람 닫는 수단 — 리드 판정 대기 → 두지 않는다(W5 알람 강제 해제 표면 없음 판정 반영)
 > **개정일**: 2026-09-24 — W6 판정 반영 — pg_partman 미리 만들기 · 유지 작업 주기 미확인을 닫는다(도구 기본값 · 백그라운드 워커 1시간 — 정본 09_tech_stack/03)
 > **개정일**: 2026-09-24 — W5 판정 반영 — 한계 등재 신설 2행(#18 실적 이중 제출 · #19 실적 정정 수단 없음 — 강제 주체 없음) · 등재 17 → **19** · unit만 바꾸는 태그 수정 미확인 → W5 판정(허용)
 > **개정일**: 2026-09-24 — W4 판정 반영 — 한계 등재 #2 강제 주체 없음 → **조건부 쓰기** · 신설 3행(#15 소진 모드 전환 중 크래시 재전달 중복 · #16 BFF 비경유 쓰기의 무효화 누락 · #17 비활성 태그의 열린 알람 이벤트) · 등재 14 → **17** · 없음 6 · 부분 강제 8 → **11**
@@ -19,20 +20,20 @@
 
 | # | 참조하는 쪽 | 참조되는 쪽 | ON DELETE | 뜻 |
 |:-:|------|------|:------:|------|
-| 1 | production_line.site_id | site | RESTRICT | |
-| 2 | device.line_id | production_line | RESTRICT | |
+| 1 | production_line.site_id | site | RESTRICT | 해당 없음 |
+| 2 | device.line_id | production_line | RESTRICT | 해당 없음 |
 | 3 | modbus_config.device_id | device | RESTRICT | 1:1 — PK이자 FK |
 | 4 | tag_master.device_id | device | RESTRICT | **갱신 금지** — §가드 트리거 |
-| 5 | tag_master_history.old_tag_id | tag_master | RESTRICT | |
+| 5 | tag_master_history.old_tag_id | tag_master | RESTRICT | 해당 없음 |
 | 6 | tag_master_history.new_tag_id | tag_master | RESTRICT | UNIQUE와 함께 계보를 선형으로 |
 | 7 | tag_master_history.changed_by | user_account | RESTRICT | NULL 허용 |
-| 8 | alarm_rule.tag_id | tag_master | RESTRICT | |
+| 8 | alarm_rule.tag_id | tag_master | RESTRICT | 해당 없음 |
 | 9 | alarm_event.rule_id | alarm_rule | RESTRICT | 파티션 테이블에서 나가는 FK |
 | 10 | alarm_event.acked_by | user_account | RESTRICT | NULL 허용 |
-| 11 | user_role.user_id | user_account | RESTRICT | |
-| 12 | user_role.role_id | role | RESTRICT | |
-| 13 | work_order.line_id | production_line | RESTRICT | |
-| 14 | production_log.order_id | work_order | RESTRICT | |
+| 11 | user_role.user_id | user_account | RESTRICT | 해당 없음 |
+| 12 | user_role.role_id | role | RESTRICT | 해당 없음 |
+| 13 | work_order.line_id | production_line | RESTRICT | 해당 없음 |
+| 14 | production_log.order_id | work_order | RESTRICT | 해당 없음 |
 | 15 | audit_log.user_id | user_account | RESTRICT | NULL 허용 — 무인증 기간 |
 
 - 검산: FK = MST 계열 7(#1~#7) + ALM 3(#8~#10) + AUT 2(#11 · #12) + WRK 3(#13~#15) = **15** · CASCADE **0** · SET NULL **0**
@@ -45,11 +46,11 @@
 |------|------|------|------|
 | UNIQUE | site | (site_code) | 같은 코드의 두 사이트 |
 | UNIQUE | production_line | (site_id, line_code) | 한 사이트 안 라인 코드 중복 — 원본에 없던 제약 |
-| UNIQUE | device | (device_code) | |
+| UNIQUE | device | (device_code) | 해당 없음 |
 | UNIQUE | tag_master | (tag_code) | 동시 등록 두 건이 모두 통과 — 애플리케이션 조회만으로는 못 막는다 |
 | UNIQUE | tag_master_history | (new_tag_id) | 한 새 태그의 계보가 둘 |
-| UNIQUE | user_account | (email) | |
-| UNIQUE | role | (role_code) | |
+| UNIQUE | user_account | (email) | 해당 없음 |
+| UNIQUE | role | (role_code) | 해당 없음 |
 | UNIQUE | work_order | (order_no) | 동시 등록 경합(REQ-WRK-02) |
 | CHECK | tag_master | (word_order IS NULL) = (data_type IN ('UINT16', 'INT16', 'BOOL')) | 16비트 태그에 워드 순서가 붙어 디코더가 워드를 잘못 합친다 |
 | CHECK | tag_master | (data_type = 'BOOL') = (function_code IN (1, 2)) | 레지스터 영역을 비트로 읽거나 그 반대 — 레지스터 비트 BOOL은 미확인이라 막아 둔다 |
@@ -57,7 +58,7 @@
 | CHECK | alarm_rule | (threshold_low IS NOT NULL) = (condition_type = 'OUT_OF_RANGE') 이고 threshold_low < threshold | 하한 없는 범위 이탈 · 다른 조건에 남은 하한 |
 | CHECK | alarm_event | (acked_by IS NULL) = (acked_at IS NULL) | 누가 없이 언제만 있는 확인 |
 | CHECK | alarm_event | (state = 'CLEARED') = (cleared_at IS NOT NULL) 이고 cleared_at ≥ occurred_at | 열린 행에 해제 시각 · 해제가 발생보다 앞섬 |
-| CHECK | work_order | planned_end > planned_start | |
+| CHECK | work_order | planned_end > planned_start | 해당 없음 |
 | CHECK | tag_master_history | old_tag_id <> new_tag_id | 자기 자신을 계보로 가리킴 |
 
 - 검산: UNIQUE **8** + 결합 CHECK **8** = **16**
@@ -138,9 +139,9 @@ ADR-19의 저장소 쪽 계약이다. 풀 크기 · max_connections는 2계층 �
 |------|------|------|------|------|
 | api 업무 경로 | in-process 풀(pg Pool) | 20 | 요청마다 새 커넥션 금지 · prepared statement 자유 | 커넥션 생성 비용이 CRUD p95에 섞인다 |
 | 대조군 적재(SW-09 on) | **전용 커넥션 1개 — 업무 풀과 분리** | 1 | 업무 풀에서 빌리지 않는다 | 대조군 COPY가 업무 풀을 점유해 목표 ② 측정의 CRUD p95가 대조군 비용을 먹는다 |
-| ClickHouse Dictionary 소스 | ch_reader | 2 | LIFETIME 주기 조회만 | |
-| 호스트 도구 | psql · DBeaver | 나머지 | 학습용 수동 조회 | |
-| 합계 상한 | max_connections | 100 | 위 합 + 여유 | |
+| ClickHouse Dictionary 소스 | ch_reader | 2 | LIFETIME 주기 조회만 | 해당 없음 |
+| 호스트 도구 | psql · DBeaver | 나머지 | 학습용 수동 조회 | 해당 없음 |
+| 합계 상한 | max_connections | 100 | 위 합 + 여유 | 해당 없음 |
 
 - 검산: 접속 주체 = **4** · 현행 고정 상한 합 20 + 1 + 2 = 23 < 100
 - **PgBouncer를 두지 않는다(ADR-19).** 접속 주체가 api 프로세스 하나라 커넥션 폭발의 발생 조건이 성립하지 않고, 풀러가 없어 prepared statement를 제약 없이 쓴다. 도입 시점은 api 다중 인스턴스(확장 로드맵 2단계)다 — [../04_architecture/08_scaling_roadmap.md](../04_architecture/08_scaling_roadmap.md).
@@ -168,7 +169,7 @@ ADR-19의 저장소 쪽 계약이다. 풀 크기 · max_connections는 2계층 �
 | 14 | **무효화 체인 삭제 실패** | TTL만 | 막는 것 — 요청 실패로 번지는 것(degrade · REQ-MST-10). 못 막는 것 — 커밋된 마스터와 다른 **옛 사본이 TTL 동안** 남는 것 | 캐시 삭제 실패 계수 · 키별 TTL [05_redis_keyspace.md](./05_redis_keyspace.md) |
 | 15 | **소진 모드 전환 중 크래시 재전달 중복** | 창 정렬 배치 · 결정적 토큰 — **같은 모드 안에서만** 같은 배치가 된다 | 막는 것 — 재시도 · 같은 모드 안 재전달의 중복. 못 막는 것 — 정상 모드로 삽입된 창이 XACK 전 크래시 뒤 소진 모드 묶음으로 재전달(또는 그 반대)되어 토큰이 달라진 배치의 중복 | tag_id + ts 중복 조회(AC-02) · 기전 [../06_pipeline/03_ingest_batch.md](../06_pipeline/03_ingest_batch.md) §소진 모드 |
 | 16 | **BFF를 거치지 않은 쓰기의 BFF 캐시 무효화 누락** | BFF가 자기가 중계한 쓰기 성공에서만 무효화한다(체인 ⑤) | 막는 것 — BFF 경유 쓰기 뒤의 옛 목록. 못 막는 것 — k6 · 수동 호출이 api에 직결한 쓰기 뒤 revalidate 창 동안의 옛 목록 | BFF revalidate 창 · 기전 [../06_pipeline/07_business_crud.md](../06_pipeline/07_business_crud.md) §무효화 체인 6단 |
-| 17 | **비활성 태그의 열린 알람 이벤트** | 없음 — 태그 비활성화 뒤 판정이 멈춰 해소를 관측하지 못한다 | 막는 것 — 없음(거짓 해제를 막으려 시스템은 닫지 않는다). 못 막는 것 — 사람이 확인하기 전까지 열린 채 남는 이벤트 | 목록의 태그 is_active 표지 · 닫는 수단 미설계 [../06_pipeline/08_alarm.md](../06_pipeline/08_alarm.md) §비활성 태그 규칙 |
+| 17 | **비활성 태그의 열린 알람 이벤트** | 없음 — 태그 비활성화 뒤 판정이 멈춰 해소를 관측하지 못한다 | 막는 것 — 없음(거짓 해제를 막으려 시스템은 닫지 않는다). 못 막는 것 — 사람이 확인하기 전까지 열린 채 남는 이벤트 | 목록의 태그 is_active 표지 · 닫는 수단은 두지 않는다(W5 판정 — 알람 강제 해제 표면 없음) [../06_pipeline/08_alarm.md](../06_pipeline/08_alarm.md) §비활성 태그 규칙 |
 | 18 | **실적 이중 제출** | 없음 — production_log에 자연 유일 키가 없고 멱등 키를 담을 Redis 계열도 없다 | 막는 것 — 없음. 못 막는 것 — 같은 값을 두 번 제출하면 두 행이 되어 작업지시 실적 합계가 부풀려진다 | 화면의 제출 잠금 · audit_log 행 대조 · 범위 밖 판정(W5) [../02_features/10_work_orders.md](../02_features/10_work_orders.md) |
 | 19 | **실적 정정 수단 없음** | 없음 — 실적 수정 · 삭제 표면이 없고 CHECK(good_qty · defect_qty 0 이상)가 음수 보정 행을 막는다 | 막는 것 — 감사 없는 실적 변조. 못 막는 것 — 오입력 실적이 영구히 합계에 남는다 | 범위 밖 판정(W5) — 학습 목표 무관 · D-11은 존재만 요구 [../02_features/10_work_orders.md](../02_features/10_work_orders.md) · [../07_api/08_work_orders.md](../07_api/08_work_orders.md) |
 

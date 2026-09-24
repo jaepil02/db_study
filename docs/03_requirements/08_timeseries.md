@@ -2,6 +2,7 @@
 
 > **대상**: 시계열 조회(TSQ)의 동작 계약 — 요청 검증 · 해상도 자동 선택과 보정 · 응답 형태 · 롤업 읽기 · 태그 메타 부착 · 캐시 키 정규화 · 캐시 적재와 degrade · 스탬피드 방지 · 진행 구간 분할 · 원시 내보내기 · ClickHouse 불가 시 응답 · 인가와 레이트 리밋 — REQ-TSQ-NN 채번 정본
 > **작성일**: 2026-09-24
+> **개정일**: 2026-09-24 — 최종 정밀 검수 — p95 롤업 대조 미확인 행에 확정 수단 EXP-31 연결 · 스탬피드 대기 소진 행 기전 확정 대기 → 닫힘(06_pipeline/06) · 성능 미확인 행에 확정 실험 번호 연결(EXP-08 · 09 · 10)
 > **개정일**: 2026-09-24 — W7 검수 반영 — 키 표기 cache:q:{hash} · lock:rebuild:{hash} → **cache:q:{sha1} · lock:rebuild:q:{sha1}**(정본 05_data_stores/05) · 미확인 1행 닫힘(내보내기 끊김 표지) — REQ 수 불변
 > **개정일**: 2026-09-24 — W7 보안 판정 반영 — 내보내기 범위 상한 현행 참고 **1일** · class export 반영 — REQ 수 불변(정본 12_security/03)
 > **개정일**: 2026-09-24 — W6 실험 채번 반영 — 이벤트 루프 p95 메트릭 이름 통일(정본 10_observability/01 · 06)
@@ -139,13 +140,13 @@ W1이 채번 보류로 넘긴 자리다(11_glossary/02 · 02_features/07). 캐�
 
 | 항목 | 원본에서 확인되는 것 | 상태 | 확정 자리 |
 |------|------|------|------|
-| 해상도별 응답 시간(캐시 히트 · 미스) | 원본 목표 히트 20 ms · 1일 미스 300 ms 이하(4 vCPU 가정) · 원본 예상치 해상도별 20~150 ms | 미확인 — 확정 전 임의 값 고정 금지 | [13_nonfunctional.md](./13_nonfunctional.md) · [../10_observability/06_experiment_catalog.md](../10_observability/06_experiment_catalog.md) |
-| 반복 조회 히트율 | 원본 목표 80% 이상 · SW-04 off 시 0% 수렴 | 미확인 — 확정 전 임의 값 고정 금지 | 상동 · [14_acceptance_criteria.md](./14_acceptance_criteria.md) |
-| 스탬피드 on/off 쿼리 횟수 | 원본 예상치 동시 100요청 시 100회 → 1회 | 미확인 — 확정 전 임의 값 고정 금지 | [../10_observability/06_experiment_catalog.md](../10_observability/06_experiment_catalog.md) |
+| 해상도별 응답 시간(캐시 히트 · 미스) | 원본 목표 히트 20 ms · 1일 미스 300 ms 이하(4 vCPU 가정) · 원본 예상치 해상도별 20~150 ms | 미확인 — 확정 전 임의 값 고정 금지 · EXP-08 | [13_nonfunctional.md](./13_nonfunctional.md) · [../10_observability/06_experiment_catalog.md](../10_observability/06_experiment_catalog.md) |
+| 반복 조회 히트율 | 원본 목표 80% 이상 · SW-04 off 시 0% 수렴 | 미확인 — 확정 전 임의 값 고정 금지 · EXP-08 · EXP-09 | 상동 · [14_acceptance_criteria.md](./14_acceptance_criteria.md) |
+| 스탬피드 on/off 쿼리 횟수 | 원본 예상치 동시 100요청 시 100회 → 1회 | 미확인 — 확정 전 임의 값 고정 금지 · EXP-10 | [../10_observability/06_experiment_catalog.md](../10_observability/06_experiment_catalog.md) |
 | ClickHouse 불가 에러 코드 | 이 문서가 503 · timeseries 네임스페이스로 판정 | **채번 완료** — timeseries.clickhouse_unavailable/503 | [../11_glossary/02_error_codes.md](../11_glossary/02_error_codes.md)(리드) |
 | 내보내기 스트리밍 도중 끊김의 표지 | 원본에 없다 | 닫힘 — 본문에 표지를 넣지 않는다 · 중단은 종결 청크 없는 비정상 종료 · 완결은 종결 청크 — [../07_api/05_timeseries.md](../07_api/05_timeseries.md) | [../07_api/05_timeseries.md](../07_api/05_timeseries.md)(W5) |
-| 스탬피드 대기 소진 후 원천 직접 조회 | 원본은 "최대 3회"까지만 적었다 — 이 문서가 "요청자는 실패를 보지 않는다"(11_glossary/02)의 귀결로 판정 | 판정 — 기전 확정 대기 | [../06_pipeline/06_timeseries_read.md](../06_pipeline/06_timeseries_read.md)(W4) |
-| p95 롤업 대조의 근사 허용 범위 | TDigest 근사 · 부동소수 허용 오차로 비교하지 않는다(W1) | 미확인 — 확정 수단은 [14_acceptance_criteria.md](./14_acceptance_criteria.md) | [14_acceptance_criteria.md](./14_acceptance_criteria.md) |
+| 스탬피드 대기 소진 후 원천 직접 조회 | 원본은 "최대 3회"까지만 적었다 — 이 문서가 "요청자는 실패를 보지 않는다"(11_glossary/02)의 귀결로 판정 | 닫힘 — 기전 확정(W4): 락 없이 ClickHouse 직접 조회 · 결과는 NX 쓰기 · 소진 수 계수 | [../06_pipeline/06_timeseries_read.md](../06_pipeline/06_timeseries_read.md) |
+| p95 롤업 대조의 근사 허용 범위 | TDigest 근사 · 부동소수 허용 오차로 비교하지 않는다(W1) | 미확인 — 확정 수단은 원시 내 순위 오차 측정(EXP-31) | [14_acceptance_criteria.md](./14_acceptance_criteria.md) §미확인 등재 |
 
 ## 관련 문서
 

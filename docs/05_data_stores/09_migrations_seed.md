@@ -2,6 +2,7 @@
 
 > **대상**: 스키마 적용의 저장소 간 순서 · PostgreSQL 순번 마이그레이션 · ClickHouse DDL 순번 · 도구 관리 테이블 · 시드(사이트 · 라인 · 설비 · 접속 설정 · 태그 · 계정 · 역할) · 스키마 변경 절차 · 스냅샷과의 관계
 > **작성일**: 2026-09-24
+> **개정일**: 2026-09-24 — 최종 정밀 검수 — 빈 표 칸을 닫힌 어휘 해당 없음으로 채움(표 열 규약) · BOOL · FC01 · FC02 시드 금지 근거를 W4 판정으로 갱신 · 도구 관리 테이블 제외 기준의 루트 README 반영 완료 표기
 > **개정일**: 2026-09-24 — W7 검수 반영 — 미확인 2행 닫힘(티어 시드 구성 · 알람 규칙 시드)
 > **개정일**: 2026-09-24 — W7 보안 판정 반영 — 학습자 계정 비밀번호 주입 방식 닫힘 — SEED_USER_PASSWORD · Argon2id 해시 · 원문 비저장(정본 12_security/02)
 > **개정일**: 2026-09-24 — W6 판정 반영 — 마이그레이션 도구 선택 → **node-pg-migrate**(SQL 순번 파일 · Prisma Migrate 채택하지 않음 — 정본 09_tech_stack/05)
@@ -38,13 +39,13 @@
 | 대역 | 내용 | 정본 | 도구 표현 제약 |
 |------|------|------|------|
 | 001 | 확장 3 · DB 역할 3 · DB 기본 timezone Asia/Seoul | [01_postgresql_schema.md](./01_postgresql_schema.md) · [02_postgresql_constraints.md](./02_postgresql_constraints.md) | 원시 SQL — 확장 · 역할은 모델 선언으로 표현되지 않는다 |
-| 002 | MST 6 테이블 · 결합 CHECK | [01_postgresql_schema.md](./01_postgresql_schema.md) | |
-| 003 | AUT 3 테이블 | 상동 | |
+| 002 | MST 6 테이블 · 결합 CHECK | [01_postgresql_schema.md](./01_postgresql_schema.md) | 해당 없음 |
+| 003 | AUT 3 테이블 | 상동 | 해당 없음 |
 | 004 | ALM 2 테이블 · alarm_event 월 파티션(pg_partman 등록) | 상동 · [02_postgresql_constraints.md](./02_postgresql_constraints.md) | 원시 SQL — 선언적 파티션은 모델 선언 밖이다 |
-| 005 | WRK 3 테이블 | [01_postgresql_schema.md](./01_postgresql_schema.md) | |
+| 005 | WRK 3 테이블 | [01_postgresql_schema.md](./01_postgresql_schema.md) | 해당 없음 |
 | 006 | 가드 트리거 · 추가 전용 권한(REVOKE) · 인덱스 | [02_postgresql_constraints.md](./02_postgresql_constraints.md) | 원시 SQL |
 | 007 | 대조군 plc_tag_raw_control · 일 파티션 · BRIN | [10_olap_vs_rdb_control.md](./10_olap_vs_rdb_control.md) | 원시 SQL |
-| 008~ | 이후 변경 — 말미 채번 · 재배치 금지 | 변경한 문서 | |
+| 008~ | 이후 변경 — 말미 채번 · 재배치 금지 | 변경한 문서 | 해당 없음 |
 
 - 검산: 초기 대역 = 001~007 = **7** · 초기 테이블 = MST 6 + AUT 3 + ALM 2 + WRK 3 + 대조군 1 = **15**
 - **도구가 무엇이든 원시 SQL 마이그레이션을 쓸 수 있어야 한다.** 파티션 · 트리거 · 권한 · 확장 · BRIN은 ORM 모델 선언으로 표현되지 않는다 — 원본 후보(Prisma Migrate · node-pg-migrate) 중 이 제약으로 **node-pg-migrate**를 골랐다(W6 판정 · [../09_tech_stack/05_tooling_devops.md](../09_tech_stack/05_tooling_devops.md) §마이그레이션 도구 판정).
@@ -81,7 +82,7 @@ ClickHouse DDL은 순번 SQL 파일로 둔다(원본 tech_stack.md §11). 파일
 | ClickHouse | 없음 — 이력 테이블을 두지 않는다 | 해당 없음 | 해당 없음 |
 
 - 검산: 행 = **4**
-- **세는 기준은 "업무 · 실험 스키마가 선언한 부모 테이블"이다.** 자식 파티션과 도구 테이블을 세면 파티션이 생길 때마다 고정 기준이 흔들린다 — 이 기준을 루트 README 고정 기준에 한 줄 덧붙이는 것은 리드 제안이다.
+- **세는 기준은 "업무 · 실험 스키마가 선언한 부모 테이블"이다.** 자식 파티션과 도구 테이블을 세면 파티션이 생길 때마다 고정 기준이 흔들린다 — 이 기준은 루트 README 고정 기준 PostgreSQL 테이블 행에 올라 있다.
 
 ## 시드
 
@@ -91,7 +92,7 @@ migrate 뒤 seed가 넣는 행이다. 기본 시드는 용량 티어 S(설비 5 
 |------|:------:|------|------|
 | site | 1 | timezone 'Asia/Seoul' | CHECK 고정([01_postgresql_schema.md](./01_postgresql_schema.md)) |
 | production_line | 1 | 설비 전부를 한 라인에 | S2 시드 최소분(REQ-MST-01) |
-| device | 5 | 설비 코드 연번 · is_active true | |
+| device | 5 | 설비 코드 연번 · is_active true | 해당 없음 |
 | modbus_config | 5 | **host 127.0.0.1(컨테이너 루프백)** · port 5020부터 설비당 1 · unit_id 1 | 루프백 host = 시뮬레이션 설비 → 정상 값에 SIMULATED(9)([../02_features/03_collector.md](../02_features/03_collector.md)) |
 | tag_master | 250 | function_code 3 · 연속 주소 · data_type 혼합(16 · 32비트) · 32비트는 word_order ABCD · scale 1 · offset_value 0 · deadband 0 · scan_rate_ms 1000 | 연속 주소는 블록 병합(원본 data_flow.md §3.1) · deadband 0은 SW-10 off 기준 |
 | user_account | 1 | 학습자 계정 · 비밀번호는 환경 변수에서 해시 | REQ-AUT-17 · 비밀 값은 시드 파일에 쓰지 않는다 |
@@ -100,7 +101,7 @@ migrate 뒤 seed가 넣는 행이다. 기본 시드는 용량 티어 S(설비 5 
 | alarm_rule · work_order · production_log · audit_log · tag_master_history · alarm_event | 0 | 표면(S4 · S7)이 만든다 | 시드는 사람이 쓰기 표면으로 만들 데이터를 흉내 내지 않는다 |
 
 - 검산: 시드 행이 있는 테이블 8(site · production_line · device · modbus_config · tag_master · user_account · role · user_role) + 0행 6 = **14** · 대조군은 적재가 채운다
-- **BOOL · FC01 · FC02 태그는 시드하지 않는다.** 레지스터 비트 BOOL과 FC01 · FC02 응답 영역이 미확인이라 결합 CHECK가 막아 두었다([02_postgresql_constraints.md](./02_postgresql_constraints.md)) — 해제 조건은 [../06_pipeline/02_collect.md](../06_pipeline/02_collect.md)(W4)다.
+- **BOOL · FC01 · FC02 태그는 시드하지 않는다.** 결합 CHECK가 막아 두었고([02_postgresql_constraints.md](./02_postgresql_constraints.md)) W4 판정도 **시드 금지 유지**다 — SIM이 비트 영역을 응답하지 않는다. 해제 조건 4개는 [../06_pipeline/02_collect.md](../06_pipeline/02_collect.md) §BOOL 판정이 갖는다.
 - **시드는 감사하지 않는다.** 감사 대상은 사람이 인증된 쓰기 표면으로 일으킨 변경이다(REQ-WRK-07). 시드 행에 감사 행을 만들면 "변경 이력 조회"에 존재하지 않은 변경이 나타난다.
 
 ## 시드의 결정성과 무인증 기간
@@ -152,7 +153,7 @@ migrate 뒤 seed가 넣는 행이다. 기본 시드는 용량 티어 S(설비 5 
 | M · M+ · L 티어의 시드 태그 구성 | 닫힘 — §티어 시드 구성(티어별 설비 · 태그/설비 · scan_rate_ms · 요청 산술) — [../06_pipeline/10_datagen_inject.md](../06_pipeline/10_datagen_inject.md) | [../06_pipeline/10_datagen_inject.md](../06_pipeline/10_datagen_inject.md)(W4) |
 | 알람 규칙 시연용 시드 여부(S7) | 닫힘 — 알람 규칙은 시드하지 않는다(현행 0행 유지) · S7 시연은 규칙 쓰기 표면으로 — [../06_pipeline/08_alarm.md](../06_pipeline/08_alarm.md) | [../06_pipeline/08_alarm.md](../06_pipeline/08_alarm.md)(W4) |
 | 학습자 계정 비밀번호 주입 방식 | **W7 닫힘** — seed가 SEED_USER_PASSWORD를 읽어 Argon2id로 해시해 넣는다 · 원문은 시드 파일 · 로그 · 감사에 남지 않는다 · 비었거나 자리표시면 seed 거부 | [../12_security/02_secrets_config.md](../12_security/02_secrets_config.md) |
-| 도구 관리 테이블을 고정 기준에서 빼는 문장 | 리드 제안 | [../README.md](../README.md)(리드) |
+| 도구 관리 테이블을 고정 기준에서 빼는 문장 | 닫힘 — 루트 README 고정 기준 PostgreSQL 테이블 행에 "세는 기준은 부모 테이블" 반영 | [../README.md](../README.md) |
 
 ## 관련 문서
 

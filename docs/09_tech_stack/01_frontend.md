@@ -2,6 +2,7 @@
 
 > **대상**: 웹(Next.js App Router · 호스트 프로세스)의 구성 선택 — BFF 역할과 경로 분담 · 차트(uPlot 주력 · ECharts 보조) · TanStack Query 설정값(staleTime · gcTime) · Zustand 실시간 스토어 · 네이티브 WebSocket 래퍼 · Tailwind CSS · shadcn/ui · 폼 · zod 공유 · **화면 조정값 현행값(링 버퍼 창 · 트렌드 창 · 콘솔 폴링 주기 · BFF revalidate)**
 > **작성일**: 2026-09-24
+> **개정일**: 2026-09-24 — 최종 정밀 검수 — 미확인 등재에 12_security/01이 넘긴 쿠키 이름 · 인증 경로 행 수용
 > **개정일**: 2026-09-24 — W7 검수 반영 — uPlot 번들 크기 **원본 예상치 약 45 KB** 추가(W7 이관 누락) · 미확인 표 웨이브 표지 (W7) 제거
 > **개정일**: 2026-09-24 — W6 실험 채번 반영 — EXP 번호 반영(정본 10_observability/01 · 06)
 > **원천**: 원본 tech_stack.md §2 · §4 · §4.1 · §4.2 · §4.3 · §10.1 · §10.4(커밋 ff66a37) · 원본 data_flow.md §7.2(커밋 ff66a37) · ADR-02 · ADR-07 · ADR-12 · 웨이브 인계 W6 10_observability/04 행(staleTime · gcTime · 링 버퍼 창 · 트렌드 창 · 콘솔 폴링 주기 현행값) · [../08_screen/01_standards.md](../08_screen/01_standards.md) §갱신 주기와 캐시 층 정렬(관계식) · [../08_screen/03_realtime_dashboard.md](../08_screen/03_realtime_dashboard.md) · [../08_screen/07_experiment_console.md](../08_screen/07_experiment_console.md) · [../06_pipeline/07_business_crud.md](../06_pipeline/07_business_crud.md)
@@ -137,6 +138,7 @@ ADR-02의 결정을 라이브러리 경계로 옮긴 표다. 경로별 전수의
 | 트렌드 창 · 링 버퍼 · 최대 태그 · 콘솔 폴링 현행값 | W6 초기값 — S2 합격 기록으로 고정 | 이 문서 · 계약은 08_screen/01 · 03 · 07 |
 | BFF의 Prometheus 텍스트 파서 선택 | 미설계 — 라이브러리 또는 직접 구현 | 코드 착수 시 · 이 문서와 [03_data_infra.md](./03_data_infra.md) §버전 고정표 |
 | TanStack Query 기본 재조회 트리거 · gcTime 기본값 | 공식 참조 재확인 대기 | [../03_requirements/16_official_references.md](../03_requirements/16_official_references.md) |
+| 리프레시 쿠키 이름 · BFF 인증 Route Handler 경로 | 미설계 — Path를 인증 경로로 좁힌다는 계약만 있다 | 코드 착수 시 · [../12_security/01_authn_authz.md](../12_security/01_authn_authz.md) |
 | 화면 반영 지연 · 신호 도달 지연 | 3계층 미확인 — 확정 전 임의 값 고정 금지 | EXP-29(AC-06) · [../10_observability/06_experiment_catalog.md](../10_observability/06_experiment_catalog.md) |
 
 ## 관련 문서

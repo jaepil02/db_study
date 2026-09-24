@@ -2,6 +2,7 @@
 
 > **대상**: 적재·분기(ING · NestJS ingest 모듈) 기능 목록 · 3계층 분기 실행 · 대조군 동시 적재 · 기능별 경계 · 실패 시 보이는 것 — 기능 ID ING-NN 채번 정본
 > **작성일**: 2026-09-24
+> **개정일**: 2026-09-24 — 최종 정밀 검수 — 생산 카운터 · 대조군 COPY 기전 미설계 → W4 판정(06_pipeline/04) 반영
 > **개정일**: 2026-09-24 — W7 검수 반영 — 장애 표 메트릭 stream_length → **redis_stream_length**(정본 10_observability/01) · 미확인 5행 닫힘(대조군 실패 의미론 · 대조군 멱등 · 생산 카운터 · alarm_eval 재시도 · DLQ 재처리) — 기능 수 불변
 > **개정일**: 2026-09-24 — W3 판정 반영 — 롤업 객체(tag_1m · tag_1h · tag_1d · MV 3) 도메인 귀속 잠정 ING → **ING 확정**(정본 05_data_stores/04 §도메인 귀속 판정)
 > **개정일**: 2026-09-24 — W3 판정 반영 — ING-13 컨슈머 증설의 효과 범위를 ADR-09(단일 flusher)에 맞춰 한정
@@ -45,7 +46,7 @@ ING는 **Stream에서 배치를 꺼내 저장소에 확정하고, 그 자리에�
 |------|------|------|------|------|
 | ① | 태그 원시값 | 배치를 tag_raw에 확정하고 롤업을 발동한다(ING-03 · 12) · 최신값 사본을 갱신한다(ING-08) | 원시값을 PostgreSQL에 싣지 않는다 — 대조군은 SW-09 on의 **실험 계측물**이지 분기 목적지가 아니다(ING-11) | ClickHouse 전용 · Redis는 휘발 사본 |
 | ② | 알람 판정 | 확정된 배치를 판정에 넘긴다(ING-09) | 세 저장소 쓰기를 직접 하지 않는다 — 핫 상태 · 판정 전수 · 확정 이벤트는 ALM이 쓴다 | Redis alarm:state · ClickHouse alarm_eval · PostgreSQL alarm_event |
-| ② | 생산 카운터 | **미설계** — 스트림 유래 카운터가 어느 판정으로 어디에 가는지 원본에 없다 | WRK의 production_log(업무 CRUD)를 대신 쓰지 않는다 | [../06_pipeline/04_routing.md](../06_pipeline/04_routing.md)(W4) |
+| ② | 생산 카운터 | **판정 완료(W4)** — 카운터 표본은 ① 경로 그대로 · 파생 사실 판정기는 목적지 테이블이 없어 두지 않는다 | WRK의 production_log(업무 CRUD)를 대신 쓰지 않는다 | [../06_pipeline/04_routing.md](../06_pipeline/04_routing.md) §생산 카운터 기전 판정 |
 | ③ | 회원 · 작업지시 · 감사 | 없음 — Stream에 들어오지 않는다 | 업무 쓰기를 소비하지 않는다. 받으면 read-your-writes와 트랜잭션 보장이 깨진다 | PostgreSQL 전용(API 직접) |
 
 - **"ING가 ③을 처리하지 않는 것"도 분기의 결과다.** 업무 CRUD 부하 중 stream:plc:raw 유입량이 CRUD와 무관하게 움직이는 것이 S7 합격 판정의 한 줄이다([../01_overview/05_priorities_roadmap.md](../01_overview/05_priorities_roadmap.md)).

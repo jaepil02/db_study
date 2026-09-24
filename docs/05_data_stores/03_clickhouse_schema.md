@@ -2,6 +2,7 @@
 
 > **대상**: ClickHouse 객체 9(테이블 5 · MV 3 · Dictionary 1)의 목록과 원시 · 판정 테이블 tag_raw · alarm_eval DDL · 코덱 · 파티션 · 정렬 키(ADR-15) · 중복 제거(ADR-14) · 시각 컬럼 시간대 표기 통일 · dict_tag DDL · 품질 코드 컬럼 판정 · 서버 설정 계약
 > **작성일**: 2026-09-24
+> **개정일**: 2026-09-24 — 최종 정밀 검수 — 빈 표 칸을 닫힌 어휘 해당 없음으로 채움(표 열 규약)
 > **개정일**: 2026-09-24 — W6 실험 채번 반영 — 실험 자리 W6 결과 반영(정본 10_observability/01 · 06)
 > **개정일**: 2026-09-24 — W6 판정 반영 — 서버 timezone 미확인 → **Asia/Seoul**(정본 09_tech_stack/03) · 스키마는 여전히 서버 설정에 기대지 않는다 — 설정 수 불변
 > **개정일**: 2026-09-24 — W4 판정 반영 — Dictionary 즉시 반영 단 번호 ③ → **④**(무효화 체인 6단 표기)
@@ -66,7 +67,7 @@ SETTINGS index_granularity = 8192,
 | PARTITION BY | toYYYYMMDD(ts) — **KST 날짜** | TTL이 파티션 단위로 떨어지고 보존 변경이 파티션 단위로 된다 | 월 — 파티션이 커져 TTL이 한 달 단위로만 떨어진다. 시간 — 파티션 수가 폭증해 삽입 블록이 여러 파티션에 걸친다 |
 | ORDER BY | (device_id, tag_id, ts) | 조회는 "특정 설비의 특정 태그를 시간 범위로"다. 카디널리티 낮은 컬럼을 앞에 두어 압축과 희소 인덱스 가지치기를 얻는다 | (ts, …) — 시간 범위 조회는 빨라 보이지만 단일 태그 조회가 모든 태그의 그래뉼을 읽는다 |
 | ORDER BY 변경 | **불가** — 새 테이블 생성 후 이관 | 계약 변경 규칙(원본 data_flow.md §14.2) | ALTER로 흉내 내면 정렬이 다른 파트가 섞여 인덱스가 무의미해진다 |
-| index_granularity | 8192(기본) | 원본 기본값 · 좁은 시간 범위 조회가 많으면 4096이 실험 대상 | |
+| index_granularity | 8192(기본) | 원본 기본값 · 좁은 시간 범위 조회가 많으면 4096이 실험 대상 | 해당 없음 |
 | 행 폭 | 7컬럼 · 문자열 없음 | tag_id(4바이트)만 저장하고 이름은 dictGet(ADR-16) | 태그명 컬럼 — 이름 변경이 과거 행 mutation이 된다 |
 | 파티션당 삽입 | 한 배치는 보통 1~2일 파티션에 걸친다 | 모드 D 백필은 여러 날짜를 한 INSERT에 싣는다 | 한 INSERT가 max_partitions_per_insert_block(서버 기본)을 넘으면 거절된다 — 백필 절차는 날짜 단위로 쪼갠다([04_clickhouse_rollup.md](./04_clickhouse_rollup.md)) |
 
@@ -82,8 +83,8 @@ SETTINGS index_granularity = 8192,
 | ts | Delta(8) + ZSTD(1) | 정렬 키 안에서 한 태그의 ts는 등간격이라 델타가 거의 상수가 된다 | DoubleDelta는 등간격 상수를 0으로 만든다 — 대안 코덱 실험 후보 |
 | device_id · tag_id | Delta(4) + ZSTD(1) | 정렬 키 앞자리라 긴 동일 값 구간이 이어진다 | 사실상 ZSTD만으로도 거의 0에 수렴 — 기여분 측정 대상 |
 | value | Gorilla + ZSTD(1) | 부동소수 시계열 전용 XOR 코덱 · 무손실 | RANDOM_WALK처럼 매 값의 가수가 흔들리면 XOR 이득이 작다 — 용량 산정의 최악 기준 |
-| quality | ZSTD(1) | 값 대부분이 같은 코드(생성 데이터는 9) | |
-| scan_seq | Delta(8) + ZSTD(1) | 태그 안에서 단조 증가 | |
+| quality | ZSTD(1) | 값 대부분이 같은 코드(생성 데이터는 9) | 해당 없음 |
+| scan_seq | Delta(8) + ZSTD(1) | 태그 안에서 단조 증가 | 해당 없음 |
 | ingested_at | Delta(8) + ZSTD(1) | 배치 안 행은 같은 값(now64 1회 평가) | **정렬 키 밖이라** 배치 경계마다 값이 뛴다 — ts보다 압축 기여가 작다 |
 
 - 검산: 코덱 행 = **6**(device_id · tag_id를 한 행으로 셈 · 컬럼 7)
@@ -101,7 +102,7 @@ ADR-14의 저장소 쪽 계약이다. 토큰 재료 · 백오프 합계의 기�
 | 단위 | 테이블마다 따로 기억한다 | 같은 배치 토큰을 tag_raw와 alarm_eval에 함께 써도 서로 간섭하지 않는다 |
 | 재시도 | 같은 토큰 · 백오프 합계가 윈도우 안 | 윈도우를 벗어난 재시도는 새 삽입으로 취급된다 |
 | 조회 비용 | 없음 — FINAL 불필요 | ReplacingMergeTree를 버린 이유(ADR-14): 머지 전까지 중복이 보여 모든 조회에 FINAL 비용이 붙는다 |
-| 검증 | tag_id + ts 중복 행 0(REQ-NFR-02) | |
+| 검증 | tag_id + ts 중복 행 0(REQ-NFR-02) | 해당 없음 |
 
 - 검산: 계약 항목 = **6**
 - **B형 — 중복 제거된 재시도도 성공 응답을 받는다.** 결론 — 삽입이 무시돼도 클라이언트는 정상 응답을 받고 XACK로 넘어간다. 반대 시나리오 — 무시를 오류로 올리면 재시도가 영원히 실패로 보여 DLQ가 정상 배치로 찬다. 파생 지침 — 중복 제거 발생은 응답 코드가 아니라 쓰인 행 수(written_rows 0)로 계측한다.
@@ -197,13 +198,13 @@ LIFETIME(MIN 300 MAX 600);
 | 설정 | 현행 참고 | 스키마 쪽 계약 | 어기면 |
 |------|------|------|------|
 | max_server_memory_usage_to_ram_ratio | 0.8 | 컨테이너 상한(프로파일별)의 비율 | 비율이 1에 가까우면 머지 · 집계가 컨테이너 OOM Killer에 먼저 걸린다 |
-| max_concurrent_queries | 32 | 대조 실험 쿼리 · 대시보드 동시 수 상한 | |
+| max_concurrent_queries | 32 | 대조 실험 쿼리 · 대시보드 동시 수 상한 | 해당 없음 |
 | background_pool_size | 8 | 머지 병렬도 — TTL 파트 삭제도 이 풀에서 돈다 | 작으면 파트 수가 줄지 않아 삽입 지연이 오른다 |
 | parts_to_delay_insert · parts_to_throw_insert | 150 · 300 | 파트 폭증을 조기에 드러낸다 | 기본값이면 too many parts가 늦게 보여 배치 정책 결함을 늦게 안다 |
 | async_insert | 0 | 적재는 단일 flusher 배치(ADR-09) · C안 비교 실험에서만 켠다 | 켜 둔 채 A안을 재면 서버 병합이 섞여 세 안 비교가 무효 |
-| max_insert_block_size | 1048576 | 대량 배치 삽입 | |
+| max_insert_block_size | 1048576 | 대량 배치 삽입 | 해당 없음 |
 | materialized_views_ignore_errors | 0(끔) | MV 실패를 삽입 오류로 드러낸다(REQ-ING-16) | 켜면 원시는 있고 롤업은 빈 구간이 오류 없이 남는다 |
-| 서버 timezone | **Asia/Seoul**(W6 판정) | **스키마는 의존하지 않는다** — 모든 시각 컬럼에 시간대 명시 | |
+| 서버 timezone | **Asia/Seoul**(W6 판정) | **스키마는 의존하지 않는다** — 모든 시각 컬럼에 시간대 명시 | 해당 없음 |
 
 - 검산: 설정 = 원본 6 + 신설 2(materialized_views_ignore_errors · 서버 timezone 의존 부정) = **8** · 원본 merge_tree.merge_max_block_size(8192 · 기본값)는 스키마 쪽 계약이 없어 뺐다
 - 접속 프로토콜 — api는 HTTP 8123만 쓰고 네이티브 9000은 CLI · 벤치마크 전용이다(원본 tech_stack.md §5.2). 삽입 형식은 JSONCompactEachRow + 요청 압축이다(REQ-ING-05).
