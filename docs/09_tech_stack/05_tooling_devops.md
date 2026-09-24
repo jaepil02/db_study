@@ -2,6 +2,7 @@
 
 > **대상**: 개발 도구 구성 — pnpm workspace · Biome · tsc strict · Vitest · Supertest · Testcontainers · 품질 게이트 · **마이그레이션 도구 판정** · Taskfile 작업 6(migrate · seed · snapshot · restore · bench · docs:lint) · 리포지터리의 도구 파일 자리 · **SIM 주입 계획 파일 형식(판정)** · 착수 체크리스트의 도구 항목
 > **작성일**: 2026-09-24
+> **개정일**: 2026-09-24 — S2 구현 반영 — Taskfile migrate · seed 구현(api 이미지 안 명령 · seed --tier · --slice) · 보조 작업 api-build · up · test-surface · Supertest 표면 계약 가동(Testcontainers 미사용)
 > **개정일**: 2026-09-24 — S1 실측 반영(EXP-21 기록 006 · 410a146 · EXP-39 기록 007~009 · 019e54d) — pnpm workspace 가동(apps/api · packages/shared · 잠금 파일 커밋) · 품질 게이트 ①~④ 전부 가동 · 빌드 스크립트 허용 목록 규칙 신설
 > **개정일**: 2026-09-24 — S0 구현 반영 — docs:lint 편입 완료(.omc/docs_lint.py → **scripts/docs_lint.py** · 품질 게이트 ④ 가동 — .githooks/pre-commit) · Taskfile S0분 3작업 구현(snapshot · restore · docs:lint) · 도구 파일 자리에 .nvmrc · .githooks · scripts 3행 추가
 > **개정일**: 2026-09-24 — 최종 정밀 검수 — 미확인 등재에 타 문서가 넘긴 3행 수용(구조화 로그 보관 · 시나리오 파일 형식 · 비밀번호 교체 작업화)
@@ -91,6 +92,7 @@
 
 - 검산: 작업 = 원본 5 + 코드 착수 1 = **6**
 - **S0 구현(2026-09-24) — snapshot · restore · docs:lint가 저장소 루트 Taskfile.yml에 있다.** migrate · seed(S3) · bench(S5)는 배정 단계에서 더한다. snapshot은 아직 없는 볼륨(api 이전의 spooldata)을 manifest에 absent로 적고 건너뛰며, restore는 아카이브에 있는 볼륨만 되돌린 뒤 저장소 3개 healthy까지 기다린다. 묶기와 풀기에 같은 태그 고정 이미지를 써서 볼륨 파일의 소유자 번호를 보존한다.
+- **S2 구현(2026-09-24) — migrate · seed가 Taskfile.yml에 있다.** 둘 다 api 이미지 안 명령이다(스키마 소유권 api — docker compose run --rm --no-deps api node dist/db/migrate.js · seed.js). migrate는 관리자 계정으로 001을 적용하고 역할 비밀번호를 .env 값으로 설정한 뒤 나머지 순번을 app_owner로 적용하며, ClickHouse 순번 파일을 매번 전부 멱등 적용한다 — Dictionary 재적재는 dict_tag가 생기는 S3부터다. seed는 --tier S · --slice s2 인자를 받고 계정 · 역할은 AUT 테이블이 생기는 단계(S7)에서 더한다. 보조 작업 셋 — api-build(작업 트리가 깨끗할 때만 커밋 해시를 빌드 인자로 · 아니면 null) · up(저장소 healthy → migrate → SEED가 있으면 seed → api healthy · 기동 순서 정본 [../04_architecture/03_execution_topology.md](../04_architecture/03_execution_topology.md)) · test-surface(기동한 api에 표면 계약 테스트) — 은 원본 6작업 밖의 편의 작업이라 위 검산에 넣지 않는다.
 - **seed가 채워진 볼륨을 거부하는 이유** — 시드 고정 생성기의 재현성은 빈 상태에서 출발할 때만 성립한다. 두 번 시드한 볼륨은 tag_id 공간이 달라 같은 시드의 두 실험이 다른 태그를 본다.
 - **bench의 CPU 집합 고정** — k6를 측정 대상과 겹치지 않는 집합에 둔다(배치 정본 [../04_architecture/03_execution_topology.md](../04_architecture/03_execution_topology.md) §cpuset 배치). 시나리오 정의의 정본은 [../10_observability/05_load_scenarios.md](../10_observability/05_load_scenarios.md), 기록 형식은 [../10_observability/04_experiment_protocol.md](../10_observability/04_experiment_protocol.md)다.
 - **snapshot · restore는 컨테이너를 정지한다.** 실행 중 볼륨을 묶으면 ClickHouse 파트 · PostgreSQL WAL이 중간 상태로 묶여 복원이 기동에 실패하거나 조용히 손상된다.

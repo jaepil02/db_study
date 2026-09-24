@@ -7,7 +7,8 @@
     "build": "next build",
     "start": "next start -H 127.0.0.1 -p 3001",
     "typecheck": "tsc --noEmit",
-    "test": "vitest run"
+    "test": "vitest run && pnpm run test:tz",
+    "test:tz": "TZ=Asia/Seoul vitest run test/time.test.ts && TZ=UTC vitest run test/time.test.ts && TZ=America/New_York vitest run test/time.test.ts"
   },
   "dependencies": {
     "@db-study/shared": "workspace:*",

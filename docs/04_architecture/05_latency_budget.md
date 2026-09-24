@@ -2,6 +2,7 @@
 
 > **대상**: 수집 → 조회 가능까지의 구간별 p95 예산 · 구간 경계(측정 시작 · 끝 시각) · 지배 구간과 플러시 주기 트레이드오프 · **ADR-09 반영 시 구간 변화** · 조회 경로 예산 · **알람 판정 구간 신설** · 측정 지점 · 로컬 해석 규칙
 > **작성일**: 2026-09-24
+> **개정일**: 2026-09-25 — S2 실측 반영(EXP-30 기록 011 폐기 · 012 · d32b09a) — 6a · 6b · 6c 미확인 행에 S2 기록 · 지배 구간 6c 실측 성립
 > **개정일**: 2026-09-24 — W6 실험 채번 반영 — 메트릭 이름 · EXP 번호 반영(정본 10_observability/01 · 06)
 > **개정일**: 2026-09-24 — W4 판정 반영 — Stream 대기 시작점 통일 기록(REQ-ING-18 · 11_glossary/05) · M+ 이상 행 트리거 지배 · 판정 인계 깊이 1 판정 반영(미설계 → **판정**)
 > **원천**: 원본 data_flow.md §4 · §4.1 · §4.2 · §8 · §9.1 · §15 · §16(커밋 ff66a37) · 원본 architecture.md §9.1 · §15 · §16(커밋 ff66a37) · 원본 implementation_plan.md §7.1 · §7.3(커밋 ff66a37) · 원본 tech_stack.md §10.6(커밋 ff66a37) · ADR-09 · ADR-11 · ADR-25 · [../03_requirements/13_nonfunctional.md](../03_requirements/13_nonfunctional.md) REQ-NFR-03 · 04 · 07 · 08 · 09 · 15 · [../11_glossary/05_units_and_time.md](../11_glossary/05_units_and_time.md)
@@ -160,7 +161,7 @@ WHERE ts > now() - INTERVAL 5 MINUTE
 |------|------|------|
 | 구간 #1~#9 · E2E · 조회 경로 5의 현행 목표 | 3계층 미확인 — 미확인 · 확정 전 임의 값 고정 금지 | EXP-30 · [../10_observability/06_experiment_catalog.md](../10_observability/06_experiment_catalog.md) · [../03_requirements/13_nonfunctional.md](../03_requirements/13_nonfunctional.md) |
 | 알람 판정 구간 · A1~A6 · 알람 통지 지연 | **신설 · 미확인** | 상동 |
-| 6a · 6b · 6c 분할 목표 | 신설 · 미확인 — 원본은 #6 하나로 셌다 | 상동 · S3 배치 세 안 비교 |
+| 6a · 6b · 6c 분할 목표 | 신설 · 목표 미확인 — **S2 기록(p50): 6a 0.55 · 6b 0.73 · 6c 575 ms(버킷 보간 — 평균 약 600 ms(설계값 600)) · #7 10.7 ms · E2E p50 608 · p95 1,011 ms**(기록 012 · d32b09a · 부하 실험 · S · 스위치 기본값) — "지배 구간은 6c로 옮겨 간다"가 실측으로 성립했다. 6c는 시간 트리거 W와 폴링 시작 위상이 정한다([../06_pipeline/02_collect.md](../06_pipeline/02_collect.md) §폴링과 레지스터 블록 병합 시작 위상 행) | 상동 · S3 배치 세 안 비교 |
 | 판정을 flusher와 같은 흐름에서 기다리는가 | **W4 판정** — 직렬 판정기 · 인계 깊이 1 | [../06_pipeline/08_alarm.md](../06_pipeline/08_alarm.md)(W4) |
 | 히스토그램 · 게이지 메트릭 이름 | **W6 판정** — col_modbus_rtt_seconds · ing_stream_residence_seconds · ing_decode_seconds · ing_fanin_wait_seconds · insert_duration · alm_eval_duration_seconds{phase} · e2e_latency | [../10_observability/01_metrics_catalog.md](../10_observability/01_metrics_catalog.md) |
 

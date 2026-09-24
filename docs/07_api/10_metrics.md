@@ -2,6 +2,7 @@
 
 > **대상**: OBS 도메인 표면 — GET /api/v1/health(저장소별 상태 · 스위치 11종의 실제 주입 구현 · 부분 실패 503) · GET /metrics(Prometheus 텍스트 · 스위치 상태 레이블) · 두 표면의 공개 판정 반영 · **health 본문 필드 이름 판정** · **저장소별 타임아웃 판정**
 > **작성일**: 2026-09-24
+> **개정일**: 2026-09-24 — S2 구현 반영 — switches.*.impl 문자열 → **문자열 또는 null**(도입 전 스위치) · obs_switch_info는 주입된 스위치만
 > **개정일**: 2026-09-24 — W6 실험 채번 반영 — 레이블 이름 · 설비 레이블 · EXP 반영(정본 10_observability/01 · 06)
 > **개정일**: 2026-09-24 — W6 판정 반영 — Compose api healthcheck timeout **3초**(저장소 타임아웃 1,000 ms의 3배 · 정본 09_tech_stack/03) · run 환경변수 이름 MEMORY_PROFILE · CAPACITY_TIER · COMMIT_HASH(정본 09_tech_stack/04) — 필드 수 불변
 > **개정일**: 2026-09-24 — W5 판정 반영 — health 본문에 측정 조건 **run**(commitHash · memoryProfile · memoryLimitMb · capacityTier) 신설 — 최상위 필드 4 → **5** · 필드 행 8 → **10** · #1 호출 화면에 EXP-COMPARE · EXP-COMPARE 비교 값은 표면 없음(BFF의 docs/measurements 읽기)
@@ -68,7 +69,7 @@ metrics 네임스페이스는 정의만 있고 코드가 0이다. health의 503�
 | stores.*.latencyMs | 정수 · null | 왕복 시간 — down이면 null |
 | stores.*.error | 문자열 · null | timeout · refused · error 중 하나 — up이면 null · 원문 오류 메시지를 싣지 않는다 |
 | switches | 객체 | 키 = 스위치 ID(SW-01 · …) · 값 = 아래 넷 |
-| switches.*.name · value · impl · warning | 문자열 · 문자열 또는 정수 · 문자열 · 문자열 또는 null | 환경변수 이름 · 실제 값 · 실제 주입된 구현 이름 · 경고 |
+| switches.*.name · value · impl · warning | 문자열 · 문자열 또는 정수 · 문자열 또는 null · 문자열 또는 null | 환경변수 이름 · 실제 값 · 실제 주입된 구현 이름(**포트가 아직 코드에 없는 도입 전 스위치는 null** — value는 기동 설정값) · 경고 |
 | **run** | 객체 | 측정 기록 4요소 중 스위치 밖 3요소 — 아래 넷 |
 | **run.commitHash · memoryProfile · memoryLimitMb · capacityTier** | 문자열 · 문자열 · 정수 · 문자열(S · M · M+ · L) — 각각 null 가능 | 빌드된 커밋 해시 · 메모리 프로파일 이름 · api 컨테이너의 실제 메모리 상한(cgroup에서 읽음) · 기동 시 주입된 용량 티어 |
 
@@ -76,6 +77,7 @@ metrics 네임스페이스는 정의만 있고 코드가 0이다. health의 503�
 - **run을 싣는 이유(W5 리드 판정)** — 측정 기록의 4요소(커밋 해시 · 메모리 프로파일 · 용량 티어 · 스위치 상태 — REQ-GLB-17)를 한 응답에서 읽게 한다. 실험 콘솔(EXP-CONSOLE)과 비교 화면(EXP-COMPARE)이 기록 조건을 손으로 옮겨 적지 않는다 — 옮겨 적다 틀리면 같은 조건이라 믿은 두 측정의 조건이 다르다. 셋 다 비밀이 아니다.
 - **값은 기동 시 주입값이며 모르면 null이다.** 커밋 해시는 이미지 빌드 인자, 메모리 프로파일 · 용량 티어는 기동 환경변수에서 읽는다(환경변수 MEMORY_PROFILE · CAPACITY_TIER · 빌드 인자 COMMIT_HASH — 이름 정본 [../09_tech_stack/04_local_environment.md](../09_tech_stack/04_local_environment.md)). 추정값으로 채우지 않는다 — null은 "그 측정 기록은 4요소가 빠져 인용할 수 없다"는 표지다. memoryLimitMb만은 프로파일 이름과 별도로 cgroup의 실제 상한을 읽는다 — 스위치와 같은 "실제 적용값" 원칙(REQ-OBS-11)이다.
 - **error에 원문 메시지를 싣지 않는 이유** — 드라이버 오류 문자열에는 접속 문자열 · 호스트 · 사용자 이름이 섞인다. 공개 표면의 응답에 비밀이 실리면 공개 판정이 무효다(REQ-OBS-10).
+- **도입 전 스위치의 impl은 null이다(S2 as-built).** 주입되지 않은 구현 이름을 적으면 "실제 주입 구현"이 거짓이 되고, 키를 빼면 측정 기록의 스위치 11키가 비어 4요소가 성립하지 않는다([../10_observability/04_experiment_protocol.md](../10_observability/04_experiment_protocol.md) BFF 판독 규칙 4) — 키는 싣고 impl만 비운다. obs_switch_info는 impl 레이블이 비지 않게 주입된 스위치만 낸다.
 - **switches의 키 집합은 정본의 스위치 전부다.** 개수를 이 문서가 세지 않는다 — 스위치가 늘면 키가 늘 뿐이고 응답 필드 추가 규칙(v1 유지)을 따른다. 정본 [../02_features/13_switch_matrix.md](../02_features/13_switch_matrix.md).
 
 ### 스위치 값 — 실제 주입 구현 기준

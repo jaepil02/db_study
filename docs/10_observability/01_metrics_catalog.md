@@ -2,6 +2,7 @@
 
 > **대상**: /metrics로 노출하는 메트릭 전수 — 이름 규약 · 닫힌 레이블 집합 · **스위치 상태 레이블 이름** · **컨슈머 랙 산출식 판정(가장 중요한 단일 지표)** · 계열별 전수(앱 기본 · HTTP·WS · 수집 · 적재 · 알람 · 실시간 · 조회 · 업무 · 인증 · Redis · PostgreSQL · ClickHouse · E2E · 관측 자체) · 파생 지표 식 · 선행 문서 인계 메트릭 대응 · 수집 주기 · E2E 창 · 메모리 표본 수 조회 계약 · Pub/Sub 출력 버퍼 관련 메트릭
 > **작성일**: 2026-09-24
+> **개정일**: 2026-09-25 — S2 판정 반영(EXP-29 기록 010) — col_modbus_rtt_seconds 타임아웃 관측값 20초(유한) · 버킷으로 읽기 · 무손실 차의 모드 A 분모 → **points_emitted**(Collector 발행 포인트 · Stream 디코딩 합 교차 확인)
 > **개정일**: 2026-09-24 — S1 구현 반영 — gen_worker_utilization 산출 방식 명시(작업 실행 시간 ÷ (경과 × 워커 수)) · gen_points_generated_total의 mode에 단독 실행 경로 standalone
 > **개정일**: 2026-09-24 — W7 보안 판정 반영 — aut_ratelimit_rejected_total class 값 **4 확정**(general · bulk_read · export · bulk_ingest) · 로그인 실패 계수는 신설하지 않고 http_requests_total로 대체 — 메트릭 수 불변(정본 12_security/03)
 > **원천**: 원본 architecture.md §14 · §16(커밋 ff66a37) · 원본 tech_stack.md §9(커밋 ff66a37) · 원본 data_flow.md §15 · §16(커밋 ff66a37) · 원본 implementation_plan.md §4.1 · §5 S2(커밋 ff66a37) · docs_plan.md 웨이브 인계 W6 10/01 행 · D-10 · ADR-20 · ADR-21 · ADR-22 · REQ-OBS-01~12 · [../02_features/11_metrics.md](../02_features/11_metrics.md) OBS-01~06 · [../04_architecture/06_backpressure_failure.md](../04_architecture/06_backpressure_failure.md) §판정량 · [../07_api/10_metrics.md](../07_api/10_metrics.md) #2
@@ -97,7 +98,7 @@
 | poll_duration | histogram | 초 | device | 폴링 한 사이클 소요 — scan_rate 초과가 병목 #1 | REQ-COL-15 |
 | col_polls_total · col_poll_timeouts_total | counter | 건 | device | 폴링 수 · 타임아웃 수 — 타임아웃율의 분모 · 분자 | REQ-COL-02 · 15 |
 | col_points_by_quality_total | counter | 포인트 | quality | 품질 코드별 판정 수 | REQ-COL-15 · AC-08 |
-| col_modbus_rtt_seconds | histogram | 초 | 없음 | Modbus 요청 직전 · 응답 직후 차(구간 #2) · 타임아웃은 +Inf 칸 | REQ-COL-15 · 지연 예산 #2 |
+| col_modbus_rtt_seconds | histogram | 초 | 없음 | Modbus 요청 직전 · 응답 직후 차(구간 #2) · 타임아웃은 +Inf 칸 — **최상위 버킷 초과 유한값(20초)으로 관측한다**(prom-client가 무한대 관측을 거부 · S2 구현) — _sum이 타임아웃마다 부풀어 평균이 아니라 버킷 분위수로 읽는다 | REQ-COL-15 · 지연 예산 #2 |
 | col_deadband_skipped_total | counter | 포인트 | device | 데드밴드 생략분 — 무손실 판정의 생성 측 차감 | ADR-24 · [../06_pipeline/02_collect.md](../06_pipeline/02_collect.md) |
 | deadband_boost_active | gauge | 0 · 1 | 없음 | 경고 단계 강화 적용 중 — SW-10 off면 0 고정 | REQ-COL-15 · ADR-24 |
 | spool_active · spool_bytes | gauge | 0 · 1 · 바이트 | 없음 | 스풀 전환 여부 · 스풀 파일 크기 | REQ-COL-15 |
@@ -272,6 +273,7 @@ PromQL 기록 규칙으로 계산하는 값이다. 관측 프로파일이 없을
 
 - 검산: 파생 지표 = **7**
 - 무손실 차의 tag_raw count는 메트릭이 아니라 SQL이다 — 적재를 멈추고 랙 0 뒤에 같은 구간으로 센다(AC-01).
+- **모드 A의 분모는 생성 카운트가 아니라 Collector 발행 포인트다(S2 판정).** 모드 A의 생성기는 레지스터를 갱신할 뿐 행을 만들지 않는다 — 행이 되는 것은 Collector가 폴링한 표본이라 gen_points_generated_total은 폴링 주기와 갱신 주기의 비만큼 행 수와 어긋난다. 모드 A 무손실 차 = points_emitted − tag_raw count이며, 수집 정지 뒤 Stream 엔트리 전부를 디코딩한 포인트 합으로 교차 확인한다(기록 010). 모드 B · C는 위 식 그대로다.
 
 ## 인계 메트릭 대응 검산
 

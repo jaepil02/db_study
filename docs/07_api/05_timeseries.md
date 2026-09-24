@@ -2,6 +2,7 @@
 
 > **대상**: TSQ 도메인 표면 — 시계열 조회(POST /api/v1/timeseries/query) 요청 스키마 · 해상도 규칙의 표면 모양 · meta · points 열 구성 · 다운샘플 모드 · 진행 구간 분할의 호출 모양 · 원시 내보내기 스트림 · **내보내기 스트림 중단 종료 표지 판정** · 태그 상한 · 최대 포인트 수(2계층 소유)
 > **작성일**: 2026-09-24
+> **개정일**: 2026-09-24 — S2 구현 반영 — §S2 단계 표면(as-built) 신설 — raw 고정 · 예상 포인트 초과 400(S4에서 상향으로) · tagName · unit null(S3 dict_tag) · 현재 버킷 TTL 구간 미도달
 > **개정일**: 2026-09-24 — W7 보안 판정 반영 — 내보내기 범위 상한 미정 → **현행 참고 1일**(2계층 · 초과 400 reason range) · 등급 class export — 표면 수 불변(정본 12_security/03)
 > **개정일**: 2026-09-24 — W6 실험 채번 반영 — 메트릭 이름 반영(정본 10_observability/01 · 06)
 > **원천**: 원본 architecture.md §11 · §11.1 · §18(커밋 ff66a37) · 원본 data_flow.md §6 · §6.1 · §6.2 · §6.3 · §14.1 5단계(커밋 ff66a37) · REQ-TSQ-01~17 · ADR-25 · [../02_features/07_timeseries.md](../02_features/07_timeseries.md) TSQ-01~09 · [../06_pipeline/06_timeseries_read.md](../06_pipeline/06_timeseries_read.md) · [../06_pipeline/12_data_contract.md](../06_pipeline/12_data_contract.md) 5단계 · docs_plan.md 웨이브 인계 W5 07_api 행(내보내기 스트림 중단 종료 표지)
@@ -64,6 +65,20 @@ TSQ 표면은 **요청한 것이 아니라 서버가 고른 것을 돌려주는 
 - 검산: 자리 = **4**
 - **A형 — "raw로 요청했는데 1m이 왔다"는 버그가 아니다.** 통념은 요청한 해상도가 그대로 온다는 것이다. 부정 — 서버는 범위와 maxPoints로 해상도를 강제한다. 진짜 축은 ClickHouse 보호다. 대체 경로 — 원시가 꼭 필요하면 #2 내보내기로 받는다.
 - **스냅한 범위가 곧 조회 범위다.** 응답의 meta.from · meta.to가 요청과 다를 수 있다 — 캐시 히트와 미스가 다른 범위의 결과를 내면 같은 화면이 새로고침마다 달라진다(기전 정본 인용).
+
+### S2 단계 표면(as-built)
+
+롤업 · Dictionary · 다운샘플이 없는 S2의 표면은 위 계약의 부분 집합이다. 바뀌는 자리는 셋이고, 각각 도입 단계에서 위 계약으로 돌아간다.
+
+| 자리 | S2 동작 | 위 계약으로 돌아가는 단계 | 이유 |
+|------|------|------|------|
+| interval | raw만 받는다 — 다른 값은 400 common.validation_failed(body.interval · enum) | S4(해상도 선택) | 롤업이 없어 1m · 1h · 1d를 낼 원천이 없다 |
+| 예상 포인트 > maxPoints | **거절한다** — 400 common.validation_failed(body.to · range) · 예상 포인트 = 범위 ÷ scan_rate_ms(시드 1,000 ms) | S4(상향 · LTTB) | 상향할 해상도도 축소 수단도 없다 — 조용히 자르면 부분 결과가 전체로 읽힌다 |
+| series[].tagName · unit | null | S3(dict_tag) | 메타를 붙이는 Dictionary가 S3에 생긴다 |
+
+- 검산: 자리 = **3**
+- **S2의 거절은 상향 계약의 임시 대체다.** 대시보드 채움(5분 × 1 Hz = 태그당 300포인트)은 걸리지 않는다. S4에서 거절 분기를 지우고 상향으로 바꾼다 — 그때 이 절을 지운다.
+- raw 버킷(1분)은 최근 창(5분) 안에 들어 TTL 구간 "현재 버킷 포함"이 S2에서 나오지 않는다([../06_pipeline/06_timeseries_read.md](../06_pipeline/06_timeseries_read.md) §TTL 구간 분류와 지터) — 캐시는 완전 과거 TTL만 쓴다.
 
 ### 응답
 

@@ -2,6 +2,7 @@
 
 > **대상**: db_study가 "동작한다" · "그 단계를 마쳤다" · "학습 목표를 산출했다"고 말할 수 있는 조건 — 흐름 검증 체크리스트 · 학습 단계 S0~S7 합격 판정 · 학습 목표 산출물(대조군 역전 지점 · 축출 연쇄 · 스위치 on/off 비교) · 롤업 부동소수 허용 오차 판정 · 캐시 정합성 판정 — **AC-NN 채번 정본**
 > **작성일**: 2026-09-24
+> **개정일**: 2026-09-25 — S2 판정 반영(EXP-29 기록 010) — AC-01 모드 A 생성 카운트 = **points_emitted**(Collector 발행 포인트)
 > **개정일**: 2026-09-24 — 최종 정밀 검수 — 축출 연쇄 미확인 행에 EXP-18 연결
 > **개정일**: 2026-09-24 — W7 검수 반영 — 미확인 1행 닫힘(시뮬레이터 주입 제어 수단) — AC 수 불변
 > **개정일**: 2026-09-24 — W6 실험 채번 반영 — AC-19 문구 보정(그룹 lag 0 · pending 유계 · 0 복귀) · p95 확정 실험 EXP-31 · 컨슈머 랙 정의 닫음(정본 10_observability/01 · 06)
@@ -37,7 +38,7 @@
 
 | AC ID | 검증 대상 | 방법 | 합격 기준 | 관련 흐름 | 관련 기능 ID | 근거 요구 | 학습 단계 |
 |------|------|------|------|------|------|------|------|
-| **AC-01** | 수집 무손실 | 정해진 포인트 수를 생성 → 적재 정지 · 랙 0 확인 → 생성 카운트와 같은 구간 tag_raw count() 대조 | **차 0**(완전 일치). DROPOUT이 생략한 행은 생성 카운트에 넣지 않는다 | F-01 · F-02 · F-09 | GEN-09 · COL-07 · ING-03 | [06_datagen.md](./06_datagen.md) · [07_ingest.md](./07_ingest.md) · [13_nonfunctional.md](./13_nonfunctional.md) | S2 |
+| **AC-01** | 수집 무손실 | 정해진 포인트 수를 생성 → 적재 정지 · 랙 0 확인 → 생성 카운트와 같은 구간 tag_raw count() 대조 | **차 0**(완전 일치). DROPOUT이 생략한 행은 생성 카운트에 넣지 않는다. 모드 A(S2)의 생성 카운트는 Collector 발행 포인트(points_emitted)다 — 레지스터 갱신은 행이 아니다([../10_observability/01_metrics_catalog.md](../10_observability/01_metrics_catalog.md) §파생 지표) | F-01 · F-02 · F-09 | GEN-09 · COL-07 · ING-03 | [06_datagen.md](./06_datagen.md) · [07_ingest.md](./07_ingest.md) · [13_nonfunctional.md](./13_nonfunctional.md) | S2 |
 | **AC-02** | 중복 없음 | tag_id + ts 조합별 행 수가 2 이상인 조합 조회 · 재시도를 유발한 구간 포함 | **0건** | F-02 | ING-04 · ING-05 | [07_ingest.md](./07_ingest.md) | S3 |
 | **AC-03** | E2E 지연 | 최근 창의 ingested_at − ts 분위수 SQL | p50 · p95 · p99가 4요소와 함께 **기록**된다. 목표 대비 판정(원본 목표 M 티어 p95 1.5초 이하 — 미확인)은 S5에서 [13_nonfunctional.md](./13_nonfunctional.md) 목표로 한다 | F-01 · F-02 | OBS-04 | [12_metrics.md](./12_metrics.md) · [13_nonfunctional.md](./13_nonfunctional.md) | S2 기록 · S5 판정 |
 | **AC-04** | 시간대 정확성 | 알려진 epoch ts의 행을 적재 → API 응답 시각 · 웹 표시 시각 대조 | API 응답은 저장 시각과 같은 순간을 가리키고, 웹 표시는 Asia/Seoul 변환을 **한 번만** 적용한 값이다 — 밀리초 단위 **오차 0** | F-04 · F-03 | TSQ-01 · RLT-01 | [01_global_rules.md](./01_global_rules.md) · [08_timeseries.md](./08_timeseries.md) | S2 |

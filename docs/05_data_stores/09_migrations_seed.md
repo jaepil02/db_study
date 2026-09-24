@@ -2,6 +2,7 @@
 
 > **대상**: 스키마 적용의 저장소 간 순서 · PostgreSQL 순번 마이그레이션 · ClickHouse DDL 순번 · 도구 관리 테이블 · 시드(사이트 · 라인 · 설비 · 접속 설정 · 태그 · 계정 · 역할) · 스키마 변경 절차 · 스냅샷과의 관계
 > **작성일**: 2026-09-24
+> **개정일**: 2026-09-24 — S2 구현 반영 — §S2 적용 범위(as-built) 신설(PostgreSQL 001 · 002 · ClickHouse 001 · 002 · 시드 --tier · --slice · changed_by 외래 키 003) · tag_master 시드 data_type 혼합(16 · 32비트) → **06_pipeline/10 §티어 시드 구성 인용(S = FLOAT32 · ABCD)** — 두 정본 불일치 해소
 > **개정일**: 2026-09-24 — 최종 정밀 검수 — 빈 표 칸을 닫힌 어휘 해당 없음으로 채움(표 열 규약) · BOOL · FC01 · FC02 시드 금지 근거를 W4 판정으로 갱신 · 도구 관리 테이블 제외 기준의 루트 README 반영 완료 표기
 > **개정일**: 2026-09-24 — W7 검수 반영 — 미확인 2행 닫힘(티어 시드 구성 · 알람 규칙 시드)
 > **개정일**: 2026-09-24 — W7 보안 판정 반영 — 학습자 계정 비밀번호 주입 방식 닫힘 — SEED_USER_PASSWORD · Argon2id 해시 · 원문 비저장(정본 12_security/02)
@@ -94,7 +95,7 @@ migrate 뒤 seed가 넣는 행이다. 기본 시드는 용량 티어 S(설비 5 
 | production_line | 1 | 설비 전부를 한 라인에 | S2 시드 최소분(REQ-MST-01) |
 | device | 5 | 설비 코드 연번 · is_active true | 해당 없음 |
 | modbus_config | 5 | **host 127.0.0.1(컨테이너 루프백)** · port 5020부터 설비당 1 · unit_id 1 | 루프백 host = 시뮬레이션 설비 → 정상 값에 SIMULATED(9)([../02_features/03_collector.md](../02_features/03_collector.md)) |
-| tag_master | 250 | function_code 3 · 연속 주소 · data_type 혼합(16 · 32비트) · 32비트는 word_order ABCD · scale 1 · offset_value 0 · deadband 0 · scan_rate_ms 1000 | 연속 주소는 블록 병합(원본 data_flow.md §3.1) · deadband 0은 SW-10 off 기준 |
+| tag_master | 250 | function_code 3 · 연속 주소 · data_type · 배치는 [../06_pipeline/10_datagen_inject.md](../06_pipeline/10_datagen_inject.md) §티어 시드 구성(S = FLOAT32 · word_order ABCD · 갭 0) · scale 1 · offset_value 0 · deadband 0 · scan_rate_ms 1000 | 연속 주소는 블록 병합(원본 data_flow.md §3.1) · deadband 0은 SW-10 off 기준 |
 | user_account | 1 | 학습자 계정 · 비밀번호는 환경 변수에서 해시 | REQ-AUT-17 · 비밀 값은 시드 파일에 쓰지 않는다 |
 | role | 3 | OPERATOR · ENGINEER · ADMIN | [../02_features/12_permission_matrix.md](../02_features/12_permission_matrix.md) |
 | user_role | 3 | 학습자 계정에 세 역할 전부 | REQ-AUT-17 |
@@ -102,6 +103,20 @@ migrate 뒤 seed가 넣는 행이다. 기본 시드는 용량 티어 S(설비 5 
 
 - 검산: 시드 행이 있는 테이블 8(site · production_line · device · modbus_config · tag_master · user_account · role · user_role) + 0행 6 = **14** · 대조군은 적재가 채운다
 - **BOOL · FC01 · FC02 태그는 시드하지 않는다.** 결합 CHECK가 막아 두었고([02_postgresql_constraints.md](./02_postgresql_constraints.md)) W4 판정도 **시드 금지 유지**다 — SIM이 비트 영역을 응답하지 않는다. 해제 조건 4개는 [../06_pipeline/02_collect.md](../06_pipeline/02_collect.md) §BOOL 판정이 갖는다.
+### S2 적용 범위(as-built)
+
+S2는 초기 대역의 앞 둘만 적용한다 — 뒤 순번은 그 테이블을 쓰는 단계에서 추가하며 재배치하지 않는다.
+
+| 대상 | S2 적용 | 뒤로 미룬 것 | 이유 |
+|------|------|------|------|
+| PostgreSQL 001 | pg_stat_statements · 역할 3(app_owner · app_rw · ch_reader — 비밀번호는 migrate가 환경변수에서 설정) · DB timezone | pg_partman(004 — 공식 이미지에 없다 · [../09_tech_stack/03_data_infra.md](../09_tech_stack/03_data_infra.md)) · auto_explain(확장이 아니라 적재 모듈 — 서버 설정이 싣는다) | 확장 생성은 첫 순번 원칙 유지 |
+| PostgreSQL 002 | MST 6 테이블 · 결합 CHECK | tag_master_history.changed_by → user_account 외래 키(003 — AUT 테이블과 같은 순번) | 참조 대상이 없는 외래 키는 만들 수 없다 |
+| ClickHouse | 001 DB · 002 tag_raw | 003~(alarm_eval · 롤업 · MV · dict_tag — S3) | 적재 경로가 tag_raw만 쓴다 |
+| 시드 | --tier S(설비 5 · 태그 250) · --slice s2(설비 1 · 태그 8 · 수직 슬라이스 — [../04_architecture/07_capacity_planning.md](../04_architecture/07_capacity_planning.md)) | user_account · role · user_role(003 이후 · S7) | 테이블이 없다 |
+
+- 검산: 대상 = **4**
+- **seed는 빈 볼륨 전용 · 한 트랜잭션이다.** 마스터에 행이 있으면 거부한다 — 두 번 시드한 볼륨은 tag_id 공간이 달라 같은 시드의 두 실험이 다른 태그를 본다. 빈 상태로 되돌리는 수단은 스냅샷 복원이다(s2-empty-slice · s2-empty-s).
+
 - **시드는 감사하지 않는다.** 감사 대상은 사람이 인증된 쓰기 표면으로 일으킨 변경이다(REQ-WRK-07). 시드 행에 감사 행을 만들면 "변경 이력 조회"에 존재하지 않은 변경이 나타난다.
 
 ## 시드의 결정성과 무인증 기간

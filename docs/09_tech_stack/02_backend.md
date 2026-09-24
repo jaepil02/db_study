@@ -2,6 +2,8 @@
 
 > **대상**: api 컨테이너의 런타임 구성 — NestJS + Fastify 어댑터 · 단일 런타임(ADR-01) · 모듈 11과 라이브러리 배정 · 데이터 평면 라이브러리(@clickhouse/client · ioredis · pg · modbus-serial · jsmodbus · msgpackr · piscina · prom-client)의 역할과 사용 제약 · piscina 워커 풀(ADR-25) · 스위치 11종의 환경변수와 DI 주입(ADR-08) · 스위치 밖 환경변수의 백엔드 쪽 읽기 규칙 · 요청 압축 · 보안 헤더
 > **작성일**: 2026-09-24
+> **개정일**: 2026-09-25 — S2 실측 반영(EXP-30 기록 012 · d32b09a) — msgpackr-extract S1 판정 끔 → **끔 유지(S2 재판정 → S5)**
+> **개정일**: 2026-09-24 — S2 착수 반영 — @clickhouse/client zstd 요청 압축 미확인 → **지원** 닫힘(버전은 03_data_infra 고정표)
 > **개정일**: 2026-09-24 — S1 실측 반영(EXP-21 기록 006 · 410a146 · EXP-39 기록 007~009 · 019e54d) — 미확인 "워커 수별 생성기 처리량" 미확인 → **워커 1 · 2 · 4 약 590만 · 1,031만 · 2,006만 pps(api 위치)** · 미확인 등재에 msgpackr-extract 끔 행 신설
 > **개정일**: 2026-09-24 — W7 보안 판정 반영 — 비밀 환경변수 이름 · 해시 알고리즘 · 레이트 리밋 등급 미설계 3항목 닫힘(정본 12_security/01 · 02 · 03)
 > **개정일**: 2026-09-24 — W6 실험 채번 반영 — 실험 자리 반영(정본 10_observability/01 · 06)
@@ -74,7 +76,7 @@
 
 | 경로 | 압축 | 조건 | 미지원 · 실패 시 |
 |------|------|------|------|
-| Ingest → ClickHouse 삽입 | zstd 요청 압축 · 대안 gzip | 런타임 부 버전 하한 · 클라이언트의 zstd 지원(미확인) | gzip — 둘 중 무엇을 썼는지 기록 조건 칸에 적는다 |
+| Ingest → ClickHouse 삽입 | zstd 요청 압축 · 대안 gzip | 런타임 부 버전 하한 · 클라이언트의 zstd 지원(**S2 확인 — 지원** · 버전은 [03_data_infra.md](./03_data_infra.md) 고정표) | gzip — 둘 중 무엇을 썼는지 기록 조건 칸에 적는다 |
 | 조회 캐시 값(cache:q) | gzip | 워커 풀에서 압축 · 해제(ADR-25) | 해당 없음 |
 
 - 검산: 경로 = **2**
@@ -149,10 +151,10 @@ ADR-25의 결정 아래 piscina 풀의 운용 규칙이다. **워커 수의 값�
 
 | 항목 | 상태 | 확정 자리 |
 |------|------|------|
-| @clickhouse/client의 zstd 요청 압축 지원 | 신규 미확인 — 원본은 "zstd 또는 gzip"(런타임 하한은 버전 고정표) | 착수 시 공식 참조 · [03_data_infra.md](./03_data_infra.md) |
+| @clickhouse/client의 zstd 요청 압축 지원 | **닫힘(S2 착수 확인 2026-09-24)** — 고정 버전(버전은 03_data_infra 고정표)이 지원 · 적재 경로 zstd | [03_data_infra.md](./03_data_infra.md) |
 | HTTP 처리량 비교(Fastify 대 대안) | 원본 예상치만 — 미확인 · 확정 전 임의 값 고정 금지 | [06_decisions_rationale.md](./06_decisions_rationale.md) · **W6 미채번** — 프레임워크 교체 비교는 실험 카탈로그 밖 · 이 스택의 HTTP 상한은 EXP-22 · EXP-37 |
 | 워커 수별 생성기 처리량 | **닫힘(S1 실측 · 기록 006 · 410a146 · 부하 실험 · M · 스위치 기본값)** — 워커 1 · 2 · 4 중앙값 api 위치(vCPU 5) 약 590만 · 1,031만 · 2,006만 pps · datagen 위치(vCPU 2) 약 609만 · 1,036만 · 1,045만 pps — 워커 수가 CPU 집합을 넘으면 처리량이 늘지 않고 사용률만 준다(0.72) | [../10_observability/06_experiment_catalog.md](../10_observability/06_experiment_catalog.md) EXP-21 |
-| msgpackr-extract(msgpackr 네이티브 해제 가속) | **S1 판정 — 끔** · 호스트와 컨테이너가 같은 순수 JS 경로 · 해제 성능이 측정 변수가 되는 S2(Ingest)에서 다시 판정 | S2 · [03_data_infra.md](./03_data_infra.md) |
+| msgpackr-extract(msgpackr 네이티브 해제 가속) | **S2 재판정 — 끔 유지** · 슬라이스 · 티어 S의 해제는 병목이 아니다(ing_decode_seconds p50 약 0.73 ms · 기록 012 · d32b09a · 부하 실험 · S · 스위치 기본값) · 해제가 병목 후보가 되는 S5 M 티어에서 다시 판정 | S5 · [03_data_infra.md](./03_data_infra.md) |
 | 비밀 환경변수 이름 · 비밀번호 해시 알고리즘 | **W7 닫힘** — 비밀 9 이름은 [04_local_environment.md](./04_local_environment.md) §환경변수 · 알고리즘 Argon2id(라이브러리 행은 [03_data_infra.md](./03_data_infra.md) 버전 고정표) | [../12_security/02_secrets_config.md](../12_security/02_secrets_config.md) · [../12_security/01_authn_authz.md](../12_security/01_authn_authz.md) |
 | 레이트 리밋 등급 이름 · 한도 | **W7 닫힘** — class general · bulk_read · export · bulk_ingest · 한도는 관계식 고정 · 값 2계층 미정 | [../12_security/03_api_surface_defense.md](../12_security/03_api_surface_defense.md) |
 

@@ -2,6 +2,7 @@
 
 > **대상**: 로컬 머신 1대의 요구사항 · 원본 실측 환경(WSL2 · 20스레드 · 가용 RAM) · WSL2 메모리 조정 · **컨테이너 메모리 상한(정본)** · 메모리 프로파일 2 + 조건부 중간 · 대조 실험 메모리 조건 · networkingMode=mirrored · **환경변수 목록(정본)** · 기동 · 정지 · 스냅샷 명령 · 아카이브 위치 · 착수 전 조정
 > **작성일**: 2026-09-24
+> **개정일**: 2026-09-24 — S2 구현 반영 — 기동 명령 ① compose up → **task up**(스키마 · 시드가 api 기동 앞 — 04_architecture/03 기동 순서 교정)
 > **개정일**: 2026-09-24 — Docker VM 메모리 상향 반영 — 약 7.75 → **15.6 GB**(사용자 상향) · 부하 실험 프로파일 사용 가능 · S0 회귀 부하 실험 프로파일 재확인(기록 003)
 > **개정일**: 2026-09-24 — 측정 머신 전환 · S0 구현 반영 — 현행 측정 머신(macOS · Docker Desktop VM vCPU 14) 절 신설 · 머신 요구사항 CPU · 플랫폼 행 갱신 · 접속 문자열 로컬 값 판정(PostgreSQL DB plc · 관리자 postgres · ClickHouse 계정 app)
 > **개정일**: 2026-09-24 — W7 검수 반영 — 원본 가정 칸 머신 RAM · 디스크 → **원본 요구 사양 32 GB · 200 GB**(금지어 명사형 제거 · 뜻 보존) · 미확인 표 웨이브 표지 (W7) 제거
@@ -179,9 +180,9 @@ swap=8GB
 작업 정의(Taskfile)의 정본은 [05_tooling_devops.md](./05_tooling_devops.md)이고, 기동 순서의 정본은 [../04_architecture/03_execution_topology.md](../04_architecture/03_execution_topology.md)다. 여기는 사람이 치는 명령의 순서다. 셸 명령은 plain으로 적는다.
 
 ```plain
-① 프로파일 기동     docker compose -f compose.yml -f compose.load.yml up -d      ← 개발은 compose.dev.yml · 중간은 compose.mid.yml
+① 전 구성 기동      task up PROFILE=load SEED="--slice s2"                      ← 저장소 → migrate → seed → api · 개발은 PROFILE=dev · 중간은 mid
 ② 상태 확인         docker compose ps                                              ← 4개 모두 healthy
-③ 스키마 · 시드     task migrate → task seed                                        ← 빈 볼륨일 때만
+③ 스키마 · 시드     ①이 api 앞에서 돈다 · 따로 칠 때 task migrate → task seed -- --tier S   ← 시드는 빈 볼륨일 때만
 ④ 웹               pnpm dev(웹 패키지 · 호스트 이름 127.0.0.1 · 3001)                 ← 호스트 이름 인자 필수
 ⑤ 확인             curl 127.0.0.1:3000/api/v1/health                               ← run 4필드 · switches 11 확인
 ⑥ 관측(선택)        docker compose --profile observability up -d

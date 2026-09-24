@@ -2,6 +2,7 @@
 
 > **대상**: F-01 수집 흐름의 기전 정본 — 기동 로드(PostgreSQL 태그 목록 선조회) · 스캔 그룹 폴링 · 레지스터 블록 병합 · 디코딩(FLOAT64 4워드 순서 · BOOL 판정) · 모드 A ts 채취 시점 · 품질 판정(SIMULATED · BAD_TIMEOUT 기록 자리 · UNCERTAIN 부여 주체) · 데드밴드(SW-10) · XADD와 그룹 적체 조회 · 스풀 진입 · 실행 중 마스터 변경 반영 · FC01 · FC02 해제 조건
 > **작성일**: 2026-09-24
+> **개정일**: 2026-09-25 — S2 구현 · 실측 반영 — 폴링 계약에 시작 위상 행 신설(벽시계 격자 + (i + 0.5) × 주기 ÷ N · 기록 011 폐기 · 012) · 시작 위상 미설계 두 행 등재(스캔 그룹 여럿 · 실행 중 설비 증감) — 계약 6 → **7** · S2 as-built 차이 등재(허용 갭 병합 · retry_count 미구현 — S3)
 > **개정일**: 2026-09-24 — W6 실험 채번 반영 — 메트릭 이름 · EXP 번호 반영(정본 10_observability/01 · 06)
 > **원천**: 원본 data_flow.md §3 · §3.1 · §3.2 · §3.3 · §14.1 · §15(커밋 ff66a37) · 원본 architecture.md §4 · §9 · §9.3 · §17(커밋 ff66a37) · 원본 tech_stack.md §6(커밋 ff66a37) · docs_plan.md 웨이브 인계 W4 06_pipeline/02 행 전부 · ADR-06 · ADR-10 · ADR-21 · ADR-22 · ADR-24 · ADR-25 · D-08 · REQ-COL-01~16 · REQ-SIM-04~07 · REQ-GLB-01 · 03 · 10 · 18 · [../02_features/03_collector.md](../02_features/03_collector.md) · [../11_glossary/03_enums_state_machines.md](../11_glossary/03_enums_state_machines.md) · [../05_data_stores/05_redis_keyspace.md](../05_data_stores/05_redis_keyspace.md)
 
@@ -78,8 +79,11 @@ F-01은 **값이 레지스터에서 Stream 엔트리가 되기까지**다. 모�
 | 블록 순서 | 한 사이클의 블록을 주소 오름차순으로 순차 요청 | 구조 | 병렬 요청은 연결 1개 위에서 순서만 섞인다 |
 | 타임아웃 | 설비별 timeout_ms 안에 응답이 없으면 그 스캔 그룹의 그 주기를 건너뛴다 | modbus_config.timeout_ms | 다음 주기를 기다리지 않고 재시도하면 폴링 주기가 밀린다 |
 | 재시도 | 같은 주기 안 재시도는 retry_count까지 · 남은 시간이 없으면 포기 | modbus_config.retry_count | 재시도가 주기를 넘기면 다음 사이클과 겹쳐 ts가 뒤섞인다 |
+| **시작 위상** | 설비 i(폴링하는 설비 N개 중)의 첫 요청을 벽시계 scan_rate_ms 격자 + (i + 0.5) × scan_rate_ms ÷ N에 맞추고 이후 고정 주기 | **S2 판정** · 구조 | 위상이 기동 순간의 우연이면 창 W(엔트리 ID 시각 정렬)와의 어긋남이 기동마다 달라 fan-in 대기 · E2E가 반복마다 다른 조건이 된다 — 기록 011 폐기(E2E 편차 기준 초과 — 기동마다 폴링 위상이 달라짐) |
 
-- 검산: 계약 = **6**
+- 검산: 계약 = **7**
+- **시작 위상을 고정하면 E2E 분포가 오프셋으로 설계된다(기록 012).** 설비별 E2E ≈ 창 끝 − 폴링 시각 + 유예 + 삽입이라 N = 5(티어 S)에서 오프셋 100 · 300 · 500 · 700 · 900 ms가 약 1,010 · 810 · 610 · 410 · 210 ms로 고르게 퍼지고, 세 반복의 p50이 608 · 609 · 608 ms로 같았다(d32b09a · 부하 실험 · S · 스위치 기본값). 0.5칸은 모드 A 생성기의 격자 갱신 순간(k = floor(now ÷ scan_rate_ms) — 계약 정본 [10_datagen_inject.md](./10_datagen_inject.md) §모드 A 레지스터 갱신)과 요청이 겹치지 않게 비킨다.
+- **S2 as-built 차이 둘** — 허용 갭 병합은 구현하지 않았다(연속 주소만 한 블록 · 갭이 있으면 가른다). retry_count 재시도도 없다(타임아웃이면 그 주기를 건너뛴다). 티어 시드가 갭 0 · retry_count 0이라 S2 측정에는 차이가 없고, 갭이 있는 시드 · 통신 장애 주입(SIM 계획)이 들어오는 S3에서 표대로 맞춘다.
 - **요청 수는 태그 수가 아니라 워드 수가 정한다.** FLOAT32는 2워드라 설비당 태그 200이면 400 레지스터 · 최소 4요청이다. 원본 산정 "설비 50 × 요청 블록 2"(원본 architecture.md §15)는 태그당 1워드일 때만 맞는다 — 티어 시드의 data_type 구성이 Modbus 요청 수를 정한다([10_datagen_inject.md](./10_datagen_inject.md) §티어 시드 구성).
 - 원본 표 "갭 허용 병합 — 설비당 약 5요청 · 50대 1초 주기 초당 250요청"(원본 data_flow.md §3.1)은 태그 500 · 1워드 기준 원본 예상치다. 실제 요청 수는 시드 구성에서 계산하고, 폴링 지연은 3계층 미확인이다.
 
@@ -216,6 +220,8 @@ FC01 · FC02 시드 금지의 **해제 조건**은 넷이며 같은 변경 단�
 | 데드밴드 강화 계수 | 2계층 · 원본 값 없음 | [../04_architecture/06_backpressure_failure.md](../04_architecture/06_backpressure_failure.md) S6 |
 | 32비트 반쪽 교환 word_order | 현 범위 밖 잔여 | [../11_glossary/03_enums_state_machines.md](../11_glossary/03_enums_state_machines.md) |
 | 비트 요청 상한(FC01 · FC02) | 원본 미기재 — 해제 조건 #3 | 상동 |
+| 시작 위상 — 설비에 scan_rate_ms가 둘 이상일 때 어느 주기로 위상을 잡는가 | 미설계 — **S2 구현은 가장 짧은 주기 그룹만 폴링하고 나머지 태그는 제외 · 경고한다**(apps/api/src/modules/collector/collect-definition.ts) — 위상도 그 주기 하나로 잡는다. 스캔 그룹 여럿의 루프별 위상은 설계 전 | S3 스캔 그룹 폴링 · 이 문서 |
+| 시작 위상 — 실행 중 설비 증감 시 재위상 | 미설계 — **S2는 기동 시 1회**(설비 수 N과 순번 i를 기동 로드에서 고정) · 설비 증감이 N을 바꿔도 다시 잡지 않는다. 마스터 변경 반영은 S4 | S4 · 이 문서 §실행 중 마스터 변경 반영 |
 | 타임아웃 · 생략분 · 기동 미준비 메트릭 이름 | **W6 판정** — col_poll_timeouts_total · col_deadband_skipped_total · col_ready | [../10_observability/01_metrics_catalog.md](../10_observability/01_metrics_catalog.md) |
 
 ## 관련 문서

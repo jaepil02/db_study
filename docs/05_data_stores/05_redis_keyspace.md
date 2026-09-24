@@ -2,6 +2,7 @@
 
 > **대상**: Redis 단일 인스턴스의 영역 접두 9 · 키 패턴 전수 · 값 모양 · TTL 조회 계약 · 네이밍 · 계열별 실패 전략 · Pub/Sub 채널 3 · **봉인 표** · 키 계열별 래퍼 강제(ADR-13) · 키 인계 판정 — Redis 키 패턴 채번 정본
 > **작성일**: 2026-09-24
+> **개정일**: 2026-09-24 — S2 구현 반영 — 미확인 등재에 래퍼 키 인자 모양의 S2 차이(런타임 접두 판정 · 용도별 메서드는 S3) 신설 · lock:rebuild:rt 만료 값 미정 → **5,000 ms**(S2 판정 · 복원 쿼리 타임아웃 2,000 ms 이상)
 > **개정일**: 2026-09-24 — 최종 정밀 검수 — 빈 표 칸을 닫힌 어휘 해당 없음으로 채움(표 열 규약)
 > **개정일**: 2026-09-24 — W7 보안 판정 반영 — rl class 후보 3 → **확정 4**(general · bulk_read · export · bulk_ingest) · auth:refresh 식별자 = **토큰의 암호학적 요약값**(원문 비저장) — 키 패턴 · 봉인 칸 수 불변(정본 12_security/01 · 03)
 > **개정일**: 2026-09-24 — W4 판정 반영 — rt:latest 조건부 쓰기(새 ts ≥ 저장 ts) · DurableKeyClient 조건부 쓰기 스크립트 노출 · ch:rt 발행자 ING → **SW-11 쓰기 주체** · DLQ 값에 원 배치 토큰 · 재처리 그룹 grp:dlq · alarm:state 쓰기 주체 판정기 단독 · 체인 번호 6단 표기 · 미확인 4행 W4 판정 — 키 패턴 · 봉인 칸 수 불변
@@ -96,7 +97,7 @@ TTL은 2계층 조정값이다. 본문에 값을 박지 않고 **키 모양 · �
 | cache:alarmevents | **첫 필드 채움 시 1회(EXPIRE NX)** | 없음 | 필드마다 만료 갱신 — 인기 조합이 영원히 안 낡는다 | 컴파일 실패 | 30초 · 이 문서 |
 | cache:workorders | 상동 | 없음 | 상동 | 컴파일 실패 | 60초 · 이 문서 |
 | lock:rebuild:q:{sha1} | 락 획득 시(PX) | 없음 | 만료 없는 락 · 소유자 검증 없는 DEL | 컴파일 실패 | 5000 ms · 대기 50 ms × 3회 · [../06_pipeline/06_timeseries_read.md](../06_pipeline/06_timeseries_read.md) |
-| lock:rebuild:rt:{device_id} | 락 획득 시(PX) | 없음 | 상동 | 컴파일 실패 | **복원 쿼리 타임아웃 이상** — 값 미정 · 이 문서(§미확인) |
+| lock:rebuild:rt:{device_id} | 락 획득 시(PX) | 없음 | 상동 | 컴파일 실패 | **복원 쿼리 타임아웃 이상** — 현행 참고 5,000 ms(S2 판정 · 복원 쿼리 타임아웃 2,000 ms는 ../06_pipeline/05) · 이 문서 |
 | rl:{class}:{user_id}:{unix_minute} | 창의 첫 INCR 시 | 없음 | TTL 없는 계수 · IP 기준 계수 | 컴파일 실패 | 90초(1분 창 + 여유) · 한도 [../12_security/03_api_surface_defense.md](../12_security/03_api_surface_defense.md) |
 | auth:refresh:{refresh_token_id} | 발급 시 | 없음 | TTL 없는 토큰 · rt: 접두 | 컴파일 실패 | 14일 · [../12_security/01_authn_authz.md](../12_security/01_authn_authz.md) |
 
@@ -229,7 +230,8 @@ ADR-13(보정 7.5)의 계약이다. 인터페이스 이름과 책임만 적는�
 
 | 항목 | 상태 | 확정 자리 |
 |------|------|------|
-| lock:rebuild:rt 만료 값 | 계약만 — 복원 쿼리 타임아웃 이상. 복원 쿼리 시간은 3계층 미확인 | S2 실측 뒤 이 문서 |
+| 래퍼 메서드가 용도 이름 · 식별자만 받는 모양 | **S2 as-built 차이** — S2 래퍼는 키 전체 문자열을 받고 접두 판정(봉인 접두 거부 · 캐시 접두만 TTL 지터)으로 계열 혼용을 **런타임에** 막는다. 타입 수준 강제(용도별 메서드)는 아니다 — 키 계열이 늘어나는 S3(dict · 멱등 토큰) 전에 용도별 메서드로 바꾼다 | S3 · 이 문서 §키 계열별 래퍼 강제 |
+| lock:rebuild:rt 만료 값 | **S2 판정 5,000 ms** — 복원 쿼리 타임아웃(2,000 ms · 소유 [../06_pipeline/05_realtime_read.md](../06_pipeline/05_realtime_read.md)) 이상 계약 성립. 복원 쿼리 시간 자체는 3계층 미확인 — 실측이 타임아웃에 근접하면 두 값을 함께 올린다 | 이 문서 |
 | rl class 값 집합 · 등급별 한도 | **W7 닫힘** — class 4 확정 · 한도는 관계식 고정 · 값 2계층 미정 | [../12_security/03_api_surface_defense.md](../12_security/03_api_surface_defense.md) |
 | DLQ 재처리 경로 · alarm_eval DLQ가 같은 stream:plc:dlq인지 | **W4 판정** — 원 토큰 직접 삽입 절차 · grp:dlq · alarm_eval은 DLQ에 격리하지 않는다 | [../06_pipeline/11_backpressure_failure.md](../06_pipeline/11_backpressure_failure.md) · [../06_pipeline/08_alarm.md](../06_pipeline/08_alarm.md)(W4) |
 | ACK가 alarm:state를 바꾸는 주체 | **W4 판정** — 판정기 단독 · 해소 첫 감지 때 acked_at 조회 | [../06_pipeline/08_alarm.md](../06_pipeline/08_alarm.md)(W4) |

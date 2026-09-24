@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # EXP-07(switch-sw02-latest-cache) 반복 1회의 팔 하나 — 복원 → ③ 기준선(api 없이 · 현행 참고 5분) → 기동 → 적재 누적 → k6 워밍업
-# → ⑤ 판정 창 → ⑥ 회복(k6 정지 뒤 consumer_lag 0 관측 · 30초 안에 안 오면 불성립). 한 번에 팔 하나(10분 안).
+# → ⑤ 판정 창 → ⑥ 회복(k6 정지 뒤 consumer_lag가 k6 전 수준 이하 — 수집은 계속 돌아 pending이 창 하나만큼 늘 있다 · 30초 안에 안 오면 불성립). 한 번에 팔 하나(10분 안).
 # k6: 컨테이너 grafana/k6(버전 고정) · cpuset 11-12 · compose 네트워크 안에서 http://api:3000(Host 대조 허용 이름).
 # 서버 p50 · p95 = http_request_duration_seconds 캡처 두 점의 차(버킷 보간) · k6 클라이언트 분위수 병기 · ClickHouse 점조회 수 = query_log.
 # 사용: scripts/lab/s2/exp07.sh <출력 JSON 줄 파일> <반복 번호> <팔 on|off> [도착률=100] [창 초=60] [워밍업 초=10] [누적 초=30] [기준선 초=300]
@@ -49,6 +49,12 @@ for arm in $ARMS; do
   wait_api
   curl -s http://127.0.0.1:3000/api/v1/health > "$TMP/health-$arm"
   sleep "$ACC"
+  LAG0=0
+  for _ in 1 2 3 4 5; do
+    l=$(curl -s http://127.0.0.1:3000/metrics | awk '$1=="consumer_lag" {print $2}')
+    if [ "${l:-0}" -gt "$LAG0" ]; then LAG0=$l; fi
+    sleep 1
+  done
   k6run "${WARM}s" "warm-$arm.json"
   curl -s http://127.0.0.1:3000/metrics > "$TMP/a-$arm"
   chq "SYSTEM FLUSH LOGS"
@@ -59,10 +65,10 @@ for arm in $ARMS; do
   RECOVER=-1
   for i in $(seq 1 30); do
     lag=$(curl -s http://127.0.0.1:3000/metrics | awk '$1=="consumer_lag" {print $2}')
-    if [ "${lag:-x}" = 0 ]; then RECOVER=$i; break; fi
+    if [ -n "$lag" ] && [ "$lag" -le "$LAG0" ]; then RECOVER=$i; break; fi
     sleep 1
   done
-  if [ "$RECOVER" -lt 0 ]; then echo "회복 불성립 — consumer_lag가 30초 안에 0이 되지 않았다" >&2; exit 1; fi
+  if [ "$RECOVER" -lt 0 ]; then echo "회복 불성립 — consumer_lag가 30초 안에 k6 전 수준($LAG0) 이하로 오지 않았다" >&2; exit 1; fi
   chq "SYSTEM FLUSH LOGS"
   PQ=$(chq "SELECT count() FROM system.query_log WHERE type = 'QueryFinish' AND event_time >= parseDateTimeBestEffort('$T0') AND event_time <= parseDateTimeBestEffort('$T1') AND query LIKE '%argMax(value, ts) AS last_value%' AND query NOT LIKE '%system.query_log%'")
   python3 scripts/lab/s2/hist-diff.py "$TMP/a-$arm" "$TMP/b-$arm" http_request_duration_seconds --label route="$ROUTE" code=200 > "$TMP/h-$arm"
@@ -76,9 +82,9 @@ def v(p):
 print(v(sys.argv[2]) - v(sys.argv[1]))
 PY
 )
-  python3 - "$TMP" "$arm" "$REP" "$RATE" "$WIN" "$WARM" "$ACC" "$T0" "$T1" "$PQ" "$EXH" "$BASE" "$RECOVER" >> "$OUT" <<'PY'
+  python3 - "$TMP" "$arm" "$REP" "$RATE" "$WIN" "$WARM" "$ACC" "$T0" "$T1" "$PQ" "$EXH" "$BASE" "$RECOVER" "$LAG0" >> "$OUT" <<'PY'
 import json, sys
-d, arm, rep, rate, win, warm, acc, t0, t1, pq, exh, base, rec = sys.argv[1:14]
+d, arm, rep, rate, win, warm, acc, t0, t1, pq, exh, base, rec, lag0 = sys.argv[1:15]
 k6 = json.load(open(f'{d}/k6-{arm}.json'))['metrics']
 dur = k6['http_req_duration']
 print(json.dumps({
@@ -90,7 +96,7 @@ print(json.dumps({
            'reqs': k6['http_reqs'].get('count'), 'failedRate': k6['http_req_failed'].get('value'),
            'dropped': k6.get('dropped_iterations', {}).get('count', 0)},
     'clickhousePointQueries': int(pq), 'lockWaitExhausted': float(exh),
-    'baselineS': int(base), 'baseline': open(f'{d}/baseline-{arm}').read().strip().splitlines(), 'recoverS': int(rec),
+    'baselineS': int(base), 'baseline': open(f'{d}/baseline-{arm}').read().strip().splitlines(), 'recoverS': int(rec), 'lagBeforeK6': int(lag0),
 }, ensure_ascii=False))
 PY
   tail -1 "$OUT" | python3 -c "

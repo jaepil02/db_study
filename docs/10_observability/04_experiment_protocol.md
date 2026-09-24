@@ -2,6 +2,8 @@
 
 > **대상**: ★ 실험 규칙 정본 — 실험 한 번의 절차 · 3회 중앙값과 편차 폐기 기준 · 구조 판정과 분포 판정 · 스냅샷과 복원 · 캐시 키 초기화 · 기준선 · 회복 관측 · 조건 칸(4요소 + 부가 조건) · 조건 분리 강제 · **측정 기록 템플릿(docs/measurements/NNN-{slug}.md)** · **기계 판독 블록 형식(EXP-COMPARE BFF가 읽는다)** · 기록 상태와 정정 · 결과를 정본 문서에 올리는 절차
 > **작성일**: 2026-09-24
+> **개정일**: 2026-09-25 — S2 판정 반영(기록 011 · 012 관측 뒤 정한 규칙(S2)) — §반복과 폐기에 버킷 보간 분위수 조항 신설 — 히스토그램 계열은 p50으로 판정 · p95 이상은 참고 · 정확 분위수가 있으면 그것이 절대값
+> **개정일**: 2026-09-25 — S2 판정 반영(기록 013) — 기계 판독 블록 switches: 스위치 비교 기록은 대상 스위치만 arm 순서 값 배열
 > **개정일**: 2026-09-24 — S0 반영 — 기록 상태에 구조 사실 판별 기록(api 부재 단계) 조항 신설 — run · switches null 허용 · 수치 인용 불가 · 정본에는 구조 사실만
 > **개정일**: 2026-09-24 — 최종 정밀 검수 — 조건 분리 규칙 7 → **8**(실시간 · STALE · E2E 실험은 현재 시각 생성만 — 03_requirements/06 · 02_features/05가 넘긴 판정 수용)
 > **원천**: 원본 implementation_plan.md §2.4 · §5 S5 · §8(커밋 ff66a37) · 원본 data_flow.md §11.3(커밋 ff66a37) · 원본 tech_stack.md §10.6 · §14(커밋 ff66a37) · 원본 architecture.md §14(커밋 ff66a37) · docs_plan.md 보정 #3 · 웨이브 인계 W6 10/04 행(기계 판독 블록) · D-10 · REQ-GLB-17 · 23 · REQ-TEC-08~13 · [../07_api/10_metrics.md](../07_api/10_metrics.md) health run · switches · [../08_screen/07_experiment_console.md](../08_screen/07_experiment_console.md) §대조군 역전 지점 · [../11_glossary/04_id_conventions.md](../11_glossary/04_id_conventions.md) §측정 기록 파일명
@@ -44,6 +46,7 @@
 | 판정 지표 | 실험마다 [06_experiment_catalog.md](./06_experiment_catalog.md) 판정 지표 열의 수치 전부 | 편차를 보고 싶은 지표만 골라 판정한다 |
 
 - 검산: 항목 = **6**
+- **히스토그램 계열의 판정 분위수는 p50이다 — p95 이상은 참고로 내린다. 정확 분위수(quantilesExact · k6)가 있으면 그것이 절대값이다(S2 판정 · 기록 011 · 012 관측 뒤).** 꼬리 분위수는 표본이 적은 넓은 칸(서브 ms 구간의 1~3 ms 칸은 폭이 값의 2배)에 떨어져 보간이 값을 만든다. 한 칸 안의 선형 보간은 칸 안 표본이 고르게 퍼졌다고 가정해 값을 만든다 — 그 값의 흔들림은 분포가 아니라 보간의 흔들림이라 편차 폐기를 거짓으로 걸거나(서브 ms 구간 p95가 1~3 ms 한 칸 안에서 기준을 넘음 · 기록 012) 반대로 세 값이 거의 같아 안정으로 오독된다(한 칸 안 보간이 같은 값을 냄 · 기록 013 on 팔 서버 p95). 참고로 내린 분위수는 기록에 남기되 편차 폐기와 정본 인용에 쓰지 않고, 어느 분위수를 판정에 쓰는지는 [06_experiment_catalog.md](./06_experiment_catalog.md) 판정 지표 열이 실험마다 적는다.
 - **B형 — 폐기 기록을 남기는 것은 실패의 전시가 아니다.** 결론 — 폐기 횟수 자체가 이 머신의 분산 크기를 알려 주는 자료다. 반대 시나리오 — 폐기를 버리면 기준 20%가 실제로는 몇 번 만에 통과되는지 모르므로 기준이 너무 느슨한지 판단할 근거가 없다. 파생 지침 — 폐기 기록도 기계 판독 블록을 갖고 status로 걸러진다.
 
 ## 구조 판정과 분포 판정
@@ -195,14 +198,15 @@ AC의 합격선은 두 종류다([../03_requirements/14_acceptance_criteria.md](
 | schema · record · exp · status · supersedes | 예 | measurement/v1 · 3자리 · EXP-NN 배열 · valid · discarded · superseded · 기록 번호 또는 null | BFF 필터 |
 | window | 예 | UTC ISO 시작 · 끝 | 사람 · 재현 |
 | run | 예 | health run 네 필드 그대로 | 4요소 툴팁 · 비교 성립 판정 |
-| switches | 예 | 스위치 11종 전부 · health switches.*.value 그대로 | 상동 |
+| switches | 예 | 스위치 11종 전부 · health switches.*.value 그대로 — **스위치 비교 기록(on/off 두 팔)은 대상 스위치만 results의 arm 순서대로 값 배열**(예: ["on", "off"]) · 나머지는 스칼라 | 상동 |
 | conditions | 예 | injectionMode · observability · cpuset · seed · generatorCpuMax · compression · swapUsed · wslNetworking · simFaultPlan(경로 · 해시 또는 null) 필수 · controlMemoryMb(대조 기록) · 나머지 실험별 | 조건 분리 판정 |
 | repeat | 예 | runs · deviation · threshold | 폐기 판정 |
 | results | 예(빈 배열 허용) | metric · arm · unit · values · median | 스위치 비교 기록 |
 | points | 대조 기록만 | query · rows · stage · store · index · cache · unit · values · median · resultMatch | 역전 지점 선 차트 |
 | axes | 대조 기록만 | axis(storage_bytes · compression_ratio · insert_rows_per_sec · write_amplification · index_bytes) · store · index · rows · value · unit | 비교 축 막대 |
 
-- 검산: 필드 행 = **9** · axes의 axis 값 **5** + 쿼리 시간(points) 1 = 비교 축 **6**([../05_data_stores/10_olap_vs_rdb_control.md](../05_data_stores/10_olap_vs_rdb_control.md) §비교 축 6)
+- 검산: 필드 행 = **9**
+- **비교 기록의 대상 스위치만 배열이다(S2 판정 · 기록 013).** 한 기록이 두 팔을 담으므로 대상 스위치의 값은 하나가 아니다 — 스칼라 하나를 적으면 다른 팔의 조건이 블록에서 사라지고, 두 기록으로 쪼개면 같은 복원 · 같은 반복 순서로 교대한 팔이 다른 기록이 되어 비교 성립 판정(나머지 10종 동일)을 블록 둘에 걸쳐 해야 한다. 판독기는 배열 값을 "이 스위치가 비교 대상"으로 읽고 BFF 규칙 4의 null 검사는 원소마다 한다. · axes의 axis 값 **5** + 쿼리 시간(points) 1 = 비교 축 **6**([../05_data_stores/10_olap_vs_rdb_control.md](../05_data_stores/10_olap_vs_rdb_control.md) §비교 축 6)
 
 ### BFF 판독 규칙
 

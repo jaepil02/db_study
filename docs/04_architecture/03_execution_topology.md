@@ -2,6 +2,7 @@
 
 > **대상**: 로컬 실행 구성 — Compose 서비스 4 · healthcheck · 기동 순서 · 네트워크 · 호스트 포트 · named volume 4 · 메모리 프로파일 2 + 조건부 중간 · CPU 가중 · **cpuset 배치(정본)** · 스냅샷과 복원 · 재빌드 · 재시작 영향 · 조정값 소유처
 > **작성일**: 2026-09-24
+> **개정일**: 2026-09-24 — S2 구현 반영 — 기동 순서 교정 — 스키마 · 시드 ⑥ → **③(api 기동 앞 · api 이미지 일회성 컨테이너)** · api 기동 ③ → ④ · 기동 복원 ④ → ⑤ · api healthy ⑤ → ⑥
 > **개정일**: 2026-09-24 — S1 실측 반영(EXP-21 기록 006 · 410a146) — piscina 워커 수 규칙 신설: 워커 수는 그 프로세스의 CPU 집합 크기를 넘기지 않는다(datagen 11-12 워커 4는 워커 2와 같은 처리량 · 사용률 0.72)
 > **개정일**: 2026-09-24 — ClickHouse 26.8 LTS 전환(사용자 결정 · 25.x 보안 지원 종료) — Compose 서비스 표 clickhouse 이미지 ClickHouse 25.8 → **26.8**
 > **개정일**: 2026-09-24 — 측정 머신 전환 · S0 구현 반영 — cpuset 배치를 현행 측정 머신(macOS Docker Desktop VM · vCPU 14)으로 재설계(사용자 결정) — api · redis 0-4 · clickhouse 5-8 · postgres 9-10 · 부하 도구 11-12(컨테이너 · cpuset) · 관측 13 · 대조 실험 배치 5-7 · 8-10 신설 · WSL2 20스레드 배치는 이전 배치로 보존 · 미확인 등재에 S0 postgres healthcheck 계정(migrate 전 관리자) 추가
@@ -33,16 +34,17 @@
 ```plain
 ① 저장소 3 기동          postgres · clickhouse · redis — 각자 healthcheck 반복
 ② 저장소 healthy 대기    Compose가 depends_on service_healthy 조건을 확인한다
-③ api 기동              APP_ROLE에 따라 모듈 초기화 · 스위치 포트 주입 · 부팅 경고(SW-01 off)
-④ Ingest 기동 복원       컨슈머 그룹 보장 · rt:latest를 ClickHouse argMax 1회로 재구성
-⑤ api healthy           /api/v1/health가 세 저장소 왕복을 통과
-⑥ 스키마 · 시드          migrate(순번 마이그레이션 + DDL 순번) → seed — 빈 볼륨일 때만
+③ 스키마 · 시드          api 이미지 일회성 컨테이너 — migrate(순번 마이그레이션 + DDL 순번) → seed(빈 볼륨일 때만)
+④ api 기동              APP_ROLE에 따라 모듈 초기화 · 스위치 포트 주입 · 부팅 경고(SW-01 off) · Collector 기동 로드
+⑤ Ingest 기동 복원       컨슈머 그룹 보장 · rt:latest를 ClickHouse argMax 1회로 재구성
+⑥ api healthy           /api/v1/health가 세 저장소 왕복을 통과
 ⑦ 웹 기동               호스트에서 Next.js 개발 서버(3001)
 ⑧ 관측(선택)             observability 프로파일 기동
 ```
 
 - **①② 없이 api가 먼저 뜨면 불필요한 스풀 파일이 생긴다.** 커넥션 오류로 재시작 루프를 도는 사이 Collector가 XADD 실패를 백프레셔로 읽고 스풀로 전환한다 — 기동 직후 spool_bytes 0이 이 순서의 검증 지표다(REQ-TEC-03).
 - **④의 복원은 키가 없을 때만 의미가 있다.** rt:latest는 TTL이 없어 Redis 재시작 뒤에도 AOF로 남는다. Redis까지 초기화된 경우에만 ClickHouse argMax가 재구성한다(원본 data_flow.md §12.4). 복원 주체는 보정 7.2 결정에 묶인다 — [06_backpressure_failure.md](./06_backpressure_failure.md) · ADR-10.
+- **스키마 · 시드는 api 기동 앞이다(S2 as-built · 순서 교정).** api 기동 로드(COL-01)와 기동 복원(⑤)이 tag_master · tag_raw를 읽는다 — 스키마보다 api가 먼저 뜨면 로드 재시도와 복원 실패로 기동해 첫 창의 결측이 기동 순서에서 생긴다. migrate · seed는 같은 api 이미지의 일회성 컨테이너가 돌아 스키마 소유권은 그대로 api다(task up — [../09_tech_stack/05_tooling_devops.md](../09_tech_stack/05_tooling_devops.md) §Taskfile 작업).
 - **S0 합격 판정이 ①②다.** 저장소 3개 healthy와 메모리 상한 적용 확인이 코드 없는 첫 단계의 판정이다([../01_overview/05_priorities_roadmap.md](../01_overview/05_priorities_roadmap.md)).
 
 ## 네트워크와 호스트 포트
