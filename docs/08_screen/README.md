@@ -4,7 +4,7 @@
 > **작성일**: 2026-09-23
 > **원천**: [../README.md](../README.md) · [../01_overview/03_personas_roles.md](../01_overview/03_personas_roles.md) · 원본 tech_stack.md §4 · 원본 data_flow.md §6.3 · §7.2 · §9.1 · 원본 implementation_plan.md §4 · §5 S2(커밋 ff66a37)
 
-"사람이 무엇을 보는가"에 답하는 폴더다. **화면 코드 {표면}-{의미}를 채번**하며 채번 자리는 이 README의 화면 인벤토리다(W5에서 신설). 화면은 데이터를 소유하지 않는다 — 모든 수치는 07_api 표면을 거쳐 오고, 화면 명세는 어느 표면을 어떤 빈도로 부르는지와 상태 4행(로딩 · 빈 값 · 오류 · 정상)을 고정한다.
+"사람이 무엇을 보는가"에 답하는 폴더다. **화면 코드 {표면}-{의미}를 채번**하며 채번 자리는 이 README의 화면 인벤토리다. 화면은 데이터를 소유하지 않는다 — 모든 수치는 07_api 표면을 거쳐 오고, 화면 명세는 어느 표면을 어떤 빈도로 부르는지와 상태 4행(로딩 · 빈 값 · 오류 · 정상)을 고정한다.
 
 **실험 콘솔은 스위치를 켜고 끄는 화면이 아니다.** 스위치는 환경변수 + DI 초기화 선택이라 전환에 재기동이 필요하다. [07_experiment_console.md](./07_experiment_console.md)는 현재 스위치 상태 표시 · 실험 실행 기록 · on/off 비교 대시보드를 담고, 전환은 재기동 절차로 안내한다.
 
@@ -21,6 +21,25 @@
 | [07_experiment_console.md](./07_experiment_console.md) | ★ 스위치 상태 표시 · 실험 실행 기록 · on/off 비교 대시보드 · 전환 절차 안내 | implementation_plan §4 · §8 | W5 |
 
 검산: 표준 · 추적성 2 + 화면 문서 5 + README 1 = **8**
+
+## 화면 인벤토리 선점
+
+W5 착수 전 리드가 화면 코드를 선점한다. 07_api를 쓰는 팀원이 표면 설명에 화면 코드를 동시에 인용하기 때문이다. **이 표가 화면 코드의 채번 자리**이며, 새 화면은 표 말미에 추가하고 코드를 재사용하지 않는다. 표면 접두는 6이다 — AUTH(인증) · DSH(실시간) · ANL(분석) · ALM(알람) · ADM(관리) · EXP(실험).
+
+| 화면 코드 | 화면 | 소속 파일 | 주 페르소나 | 주 도메인 |
+|-----------|------|----------|------------|----------|
+| AUTH-LOGIN | 로그인 | [06_master_admin.md](./06_master_admin.md) | 전원 | AUT |
+| DSH-REALTIME | 설비 실시간 대시보드(최신값 표 · 실시간 트렌드 · STALE · 연결 상태) | [03_realtime_dashboard.md](./03_realtime_dashboard.md) | 현장 운영자 | RLT · TSQ |
+| ANL-TREND | 트렌드 분석(범위 조회 · 해상도 · 다운샘플 표시 · 내보내기) | [04_trend_analysis.md](./04_trend_analysis.md) | 엔지니어 | TSQ |
+| ALM-CONSOLE | 알람 콘솔(활성 · 확인 · 이력) | [05_alarm_console.md](./05_alarm_console.md) | 현장 운영자 | ALM |
+| ALM-RULES | 알람 규칙 관리 · 판정 분석 | [05_alarm_console.md](./05_alarm_console.md) | 엔지니어 | ALM |
+| ADM-MASTER | 마스터 관리(사이트 · 라인 · 설비 · Modbus 설정 · 태그) | [06_master_admin.md](./06_master_admin.md) | 관리자 | MST |
+| ADM-WORKORDER | 작업지시 · 생산 실적 | [06_master_admin.md](./06_master_admin.md) | 관리자 | WRK |
+| ADM-AUDIT | 감사 로그 조회 | [06_master_admin.md](./06_master_admin.md) | 관리자 | WRK |
+| EXP-CONSOLE | 실험 콘솔(스위치 상태 표시 · 생성기 · 메트릭 요약 · 전환 절차 안내) | [07_experiment_console.md](./07_experiment_console.md) | 실험 수행자 | OBS · GEN |
+| EXP-COMPARE | 실험 비교(on/off · 구현값 비교 · 대조군 역전 지점) | [07_experiment_console.md](./07_experiment_console.md) | 실험 수행자 | OBS |
+
+검산: 선점 화면 **10** — AUTH 1 + DSH 1 + ANL 1 + ALM 2 + ADM 3 + EXP 2 = **10**
 
 ## 고정 기준 (축약)
 
