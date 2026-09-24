@@ -30,7 +30,7 @@ services:
     cpuset: "9-10"
 
   clickhouse:
-    image: clickhouse/clickhouse-server:25.8.33.6
+    image: clickhouse/clickhouse-server:26.8.10.6
     restart: unless-stopped
     environment:
       CLICKHOUSE_USER: app

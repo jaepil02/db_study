@@ -2,6 +2,7 @@
 
 > **대상**: docs/ 문서군을 작성·수정·검수하는 작업자(사람 · 리드 에이전트 · 팀원 에이전트)의 규약
 > **작성일**: 2026-09-23
+> **개정일**: 2026-09-24 — ClickHouse 26.8 LTS 전환(사용자 결정 · 25.x 보안 지원 종료) — 스택 표기 ClickHouse 25.8 → **26.8**
 > **개정일**: 2026-09-24 — S0 반영 — 기계 검사 명령 python3 .omc/docs_lint.py → **task docs:lint**(scripts/docs_lint.py · pre-commit 게이트가 커밋마다 같은 검사를 돈다) · 성격 문단에 S0 구성 반영
 > **원천**: [README.md](./README.md)의 고정 기준 · ID 규약 · 전역 불변식 · docs_ref/docs_ref/CLAUDE.md의 형식 규율 이식(열거의 정합 규칙 승계) · 저장소 루트 docs_plan.md의 형식 사양
 
@@ -61,7 +62,7 @@
 | 기호 | 라벨 구분 em dash( — ) · 전이·변화 → · 문장 안 대안 열거 ①②③④ · 뺄셈 − · 절 참조 §1.1("3절"이라고 쓰지 않는다) |
 | 강조 | 굵게는 ID · 수치 변화의 새 값 · 반직관적 사실 · 금지·경계 서술 · 신설 항목에만 쓴다 |
 | 빈 줄 | 헤딩·표·펜스·목록 앞뒤 각 1줄. 메타 블록 내부 0줄. 이중 빈 줄 금지 |
-| 스택 표기 | Next.js · NestJS · PostgreSQL 18 · ClickHouse 25.8 · Redis 8 · Docker Compose로 통일한다. 정확 버전(패치 · 라이브러리 메이저)은 09_tech_stack에만 적는다 |
+| 스택 표기 | Next.js · NestJS · PostgreSQL 18 · ClickHouse 26.8 · Redis 8 · Docker Compose로 통일한다. 정확 버전(패치 · 라이브러리 메이저)은 09_tech_stack에만 적는다 |
 
 ## 다이어그램 예산
 

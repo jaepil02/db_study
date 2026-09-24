@@ -2,6 +2,7 @@
 
 > **대상**: ClickHouse 객체 9(테이블 5 · MV 3 · Dictionary 1)의 목록과 원시 · 판정 테이블 tag_raw · alarm_eval DDL · 코덱 · 파티션 · 정렬 키(ADR-15) · 중복 제거(ADR-14) · 시각 컬럼 시간대 표기 통일 · dict_tag DDL · 품질 코드 컬럼 판정 · 서버 설정 계약
 > **작성일**: 2026-09-24
+> **개정일**: 2026-09-24 — ClickHouse 26.8 LTS 전환(사용자 결정 · 25.x 보안 지원 종료) — 서버 설정 계약에 input_format_read_datetime_number_as_raw_value 1 신설(설정 9 → **10** — 26.8은 정수 ts를 초로 읽어 9999-12-31로 포화 · 기록 004) · 종속 MV 판별 근거에 26.8 · async_insert 동시 사용은 25.8 거부 · 26.8 허용 · 병합 풀 파생 설정 26.8 재확인 · 토큰 없는 같은 내용의 중복 제거(26.8) 불릿 신설
 > **개정일**: 2026-09-24 — S0 실측 반영(EXP-32 · 기록 001) — 미확인 "MV 재실행" 닫힘(ⓑ — 종속 MV가 다시 돈다) · ADR-14 보강(사용자 결정) — 중복 제거 계약 항목 6 → **7**(종속 MV) · 서버 설정 계약 8 → **9**(deduplicate_blocks_in_dependent_materialized_views 1) · B형 계측 수단 written_rows → **DuplicatedInsertedBlocks**(재시도 응답의 written_rows는 0이 되지 않는다)
 > **개정일**: 2026-09-24 — 측정 머신 전환 · S0 구현 반영 — background_pool_size 8의 파생 병합 설정 3(10 · 12 · 4) 등재 — 없으면 25.8이 기동을 거부한다(S0 확인)
 > **개정일**: 2026-09-24 — 최종 정밀 검수 — 빈 표 칸을 닫힌 어휘 해당 없음으로 채움(표 열 규약)
@@ -102,12 +103,13 @@ ADR-14의 저장소 쪽 계약이다. 토큰 재료 · 백오프 합계의 기�
 | 토큰 | 배치 내용에 결정적 — 엔트리 ID 집합 + 행 수의 해시(REQ-ING-06) | 무작위 UUID면 재시작 후 같은 배치가 다른 토큰을 받아 중복 행이 생긴다 |
 | 윈도우 | non_replicated_deduplication_window — 최근 N개 삽입 블록의 토큰을 기억 | 0이면 비복제 MergeTree에서 토큰이 무시된다 — **설정 없이 토큰만 보내면 조용히 중복된다** |
 | 단위 | 테이블마다 따로 기억한다 | 같은 배치 토큰을 tag_raw와 alarm_eval에 함께 써도 서로 간섭하지 않는다 |
-| **종속 MV** | 롤업 3테이블도 윈도우를 갖고([04_clickhouse_rollup.md](./04_clickhouse_rollup.md) DDL) 삽입 설정 deduplicate_blocks_in_dependent_materialized_views 1로 MV가 쓰는 블록도 원 토큰에서 파생된 토큰으로 가른다 — 둘은 한 쌍이다(ADR-14 보강) | 25.8은 원시가 중복 제거돼도 종속 MV를 다시 돌린다 — 쌍 중 하나라도 없으면 응답 유실 뒤 같은 토큰 재시도가 세 롤업을 두 배로 센다(설정만 · 윈도우만 · 둘 다 없음 모두 3/3 — S0 실측 · 기록 001). 비운 롤업에 같은 내용을 다시 넣는 재계산은 윈도우에 걸려 버려지므로 insert_deduplicate 0으로 한다 |
+| **종속 MV** | 롤업 3테이블도 윈도우를 갖고([04_clickhouse_rollup.md](./04_clickhouse_rollup.md) DDL) 삽입 설정 deduplicate_blocks_in_dependent_materialized_views 1로 MV가 쓰는 블록도 원 토큰에서 파생된 토큰으로 가른다 — 둘은 한 쌍이다(ADR-14 보강) | 25.8 · 26.8 모두 원시가 중복 제거돼도 종속 MV를 다시 돌린다 — 쌍 중 하나라도 없으면 응답 유실 뒤 같은 토큰 재시도가 세 롤업을 두 배로 센다(설정만 · 윈도우만 · 둘 다 없음 모두 3/3 — S0 실측 · 기록 001 · 004). 비운 롤업에 같은 내용을 다시 넣는 재계산은 윈도우에 걸려 버려지므로 insert_deduplicate 0으로 한다 |
 | 재시도 | 같은 토큰 · 백오프 합계가 윈도우 안 | 윈도우를 벗어난 재시도는 새 삽입으로 취급된다 |
 | 조회 비용 | 없음 — FINAL 불필요 | ReplacingMergeTree를 버린 이유(ADR-14): 머지 전까지 중복이 보여 모든 조회에 FINAL 비용이 붙는다 |
 | 검증 | tag_id + ts 중복 행 0(REQ-NFR-02) | 해당 없음 |
 
 - 검산: 계약 항목 = **7**
+- **26.8은 토큰 없는 같은 내용도 중복 제거한다(기록 004).** 25.8은 ingested_at DEFAULT가 매번 달라 가르지 못했다(기록 001). 토큰은 계약대로 둔다 — 내용 해시 동작은 버전 종속이다. 파급은 SW-08 off 비교다 — 토큰만 빼면 26.8에서 재시도 중복이 재현되지 않는다([../06_pipeline/03_ingest_batch.md](../06_pipeline/03_ingest_batch.md) 미확인 등재).
 - **B형 — 중복 제거된 재시도도 성공 응답을 받는다.** 결론 — 삽입이 무시돼도 클라이언트는 정상 응답을 받고 XACK로 넘어간다. 반대 시나리오 — 무시를 오류로 올리면 재시도가 영원히 실패로 보여 DLQ가 정상 배치로 찬다. 파생 지침 — 중복 제거 발생은 응답 코드도 응답 요약의 written_rows도 아니라 쿼리 로그의 ProfileEvents DuplicatedInsertedBlocks로 계측한다 — **중복 제거된 재시도의 written_rows는 첫 시도와 같은 값이다**(S0 실측 · 기록 001).
 
 ## 시각 컬럼 시간대 표기
@@ -123,7 +125,7 @@ docs_plan 보정 #16의 W3 몫 "ingested_at · alarm_eval.ts 시간대 표기 �
 
 - 검산: 시각 컬럼 = ts · ingested_at · alarm_eval.ts · bucket 3 = **6** · 인자를 새로 단 컬럼 5
 - **시간대를 명시하면 서버 timezone 설정이 스키마에서 빠진다.** 인자 없는 컬럼의 달력 경계는 서버 설정을 따른다 — W6이 서버 timezone을 Asia/Seoul로 판정했지만([../09_tech_stack/03_data_infra.md](../09_tech_stack/03_data_infra.md)) 스키마는 그 값에 기대지 않는다. 서버가 UTC로 기동하면 alarm_eval 파티션이 KST 09:00에 갈리고 tag_1m 월 파티션이 KST 1일 09:00에 넘어간다 — 컬럼에 박으면 서버 설정과 무관해진다.
-- **적재는 시각을 epoch 정수로 보낸다.** 정수는 정밀도 3에 맞춘 epoch ms로 해석되어 파싱에 시간대가 개입하지 않는다. 문자열로 보내면 컬럼 시간대로 파싱되어 보내는 쪽 시간대와 어긋난다.
+- **적재는 시각을 epoch 정수로 보낸다.** 정수는 정밀도 3에 맞춘 epoch ms로 해석되어 파싱에 시간대가 개입하지 않는다 — **26.8은 사용자 프로파일 input_format_read_datetime_number_as_raw_value 1이 있어야 이 해석이 성립한다**(없으면 초로 읽어 9999-12-31로 포화 · §서버 설정 계약 · 기록 004). 문자열로 보내면 컬럼 시간대로 파싱되어 보내는 쪽 시간대와 어긋난다.
 - **달력 경계 시간대 Asia/Seoul은 시스템 단일 값이다.** PostgreSQL alarm_event 월 파티션 경계 · site.timezone CHECK · tag_1d 하루가 같은 값을 쓴다([02_postgresql_constraints.md](./02_postgresql_constraints.md) · [01_postgresql_schema.md](./01_postgresql_schema.md)).
 
 ## alarm_eval — 판정 전수 테이블
@@ -206,19 +208,20 @@ LIFETIME(MIN 300 MAX 600);
 | parts_to_delay_insert · parts_to_throw_insert | 150 · 300 | 파트 폭증을 조기에 드러낸다 | 기본값이면 too many parts가 늦게 보여 배치 정책 결함을 늦게 안다 |
 | async_insert | 0 | 적재는 단일 flusher 배치(ADR-09) · C안 비교 실험에서만 켠다 | 켜 둔 채 A안을 재면 서버 병합이 섞여 세 안 비교가 무효 |
 | max_insert_block_size | 1048576 | 대량 배치 삽입 | 해당 없음 |
+| **input_format_read_datetime_number_as_raw_value** | **1(켬)** — S0 실측 | 적재는 ts를 epoch ms 정수로 보낸다(§시각 컬럼 시간대 표기) — 1이면 따옴표 없는 정수를 열 정밀도의 틱(ms)으로 읽는다 | 26.8은 끄면 정수를 초로 읽어 **9999-12-31로 포화시키고 오류가 없다** — date_time_input_format 값과 무관(기록 004) |
 | materialized_views_ignore_errors | 0(끔) | MV 실패를 삽입 오류로 드러낸다(REQ-ING-16) | 켜면 원시는 있고 롤업은 빈 구간이 오류 없이 남는다 |
-| **deduplicate_blocks_in_dependent_materialized_views** | **1(켬)** — ADR-14 보강 · S0 실측 | 롤업 3테이블의 non_replicated_deduplication_window와 한 쌍 · async_insert 1과 함께 쓸 수 없다(서버가 삽입을 Code 344로 거부 — S0 실측) — C안 비교 실험은 async_insert 1 · 이 설정 0으로 함께 바꾼다 | 끄면 같은 토큰 재시도마다 종속 MV가 다시 돌아 롤업이 이중 계수된다 · 윈도우만 두어도 같다(EXP-32 · 기록 001) |
+| **deduplicate_blocks_in_dependent_materialized_views** | **1(켬)** — ADR-14 보강 · S0 실측 | 롤업 3테이블의 non_replicated_deduplication_window와 한 쌍 · async_insert 1과의 동시 사용은 25.8이 삽입을 Code 344로 거부했고 26.8은 허용한다(S0 실측 · 기록 001 · 004) | 끄면 같은 토큰 재시도마다 종속 MV가 다시 돌아 롤업이 이중 계수된다 · 윈도우만 두어도 같다(EXP-32 · 기록 001) |
 | 서버 timezone | **Asia/Seoul**(W6 판정) | **스키마는 의존하지 않는다** — 모든 시각 컬럼에 시간대 명시 | 해당 없음 |
 
-- **background_pool_size 8은 병합 풀 파생 설정 3을 함께 낮춰야 기동한다(2026-09-24 S0 확인).** 25.8은 슬롯(풀 × 동시성 비율 2 = 16)보다 큰 여유 슬롯 문턱을 설정 오류로 보고 기동을 거부한다(Code 36) — 기본값 20 · 25 · 8(뮤테이션 · 파티션 전체 최적화 · 병합 크기 하향 문턱)은 기본 풀 16(슬롯 32) 전제다. 기본값의 슬롯 대비 비율을 옮긴 10 · 12 · 4를 서버 설정 merge_tree 절에 둔다([../09_tech_stack/03_data_infra.md](../09_tech_stack/03_data_infra.md) §ClickHouse 설정 파일과 서버 timezone). 파생값이라 아래 설정 수에 세지 않는다.
-- 검산: 설정 = 원본 6 + 신설 3(materialized_views_ignore_errors · 서버 timezone 의존 부정 · 종속 MV 중복 제거) = **9** · 원본 merge_tree.merge_max_block_size(8192 · 기본값)는 스키마 쪽 계약이 없어 뺐다
+- **background_pool_size 8은 병합 풀 파생 설정 3을 함께 낮춰야 기동한다(2026-09-24 S0 확인).** 25.8 · 26.8 모두 슬롯(풀 × 동시성 비율 2 = 16)보다 큰 여유 슬롯 문턱을 설정 오류로 보고 기동을 거부한다(Code 36 · 26.8 재확인 — 기록 005) — 기본값 20 · 25 · 8(뮤테이션 · 파티션 전체 최적화 · 병합 크기 하향 문턱)은 기본 풀 16(슬롯 32) 전제다. 기본값의 슬롯 대비 비율을 옮긴 10 · 12 · 4를 서버 설정 merge_tree 절에 둔다([../09_tech_stack/03_data_infra.md](../09_tech_stack/03_data_infra.md) §ClickHouse 설정 파일과 서버 timezone). 파생값이라 아래 설정 수에 세지 않는다.
+- 검산: 설정 = 원본 6 + 신설 4(materialized_views_ignore_errors · 서버 timezone 의존 부정 · 종속 MV 중복 제거 · 정수 ts 틱 해석) = **10** · 원본 merge_tree.merge_max_block_size(8192 · 기본값)는 스키마 쪽 계약이 없어 뺐다
 - 접속 프로토콜 — api는 HTTP 8123만 쓰고 네이티브 9000은 CLI · 벤치마크 전용이다(원본 tech_stack.md §5.2). 삽입 형식은 JSONCompactEachRow + 요청 압축이다(REQ-ING-05).
 
 ## 미확인 · 미설계 등재
 
 | 항목 | 상태 | 확정 자리 |
 |------|------|------|
-| 원시 삽입 성공 · MV 실패 뒤 같은 토큰 재시도가 MV를 다시 실행하는가 | **닫힘(S0 실측 · EXP-32 · 기록 001)** — 다시 실행한다(ⓑ). 대가로 이미 성공한 MV도 다시 돌아 롤업이 이중 계수되므로 ADR-14를 보강했다(§중복 제거 종속 MV 행 · §서버 설정 계약) | [../06_pipeline/09_rollup.md](../06_pipeline/09_rollup.md) |
+| 원시 삽입 성공 · MV 실패 뒤 같은 토큰 재시도가 MV를 다시 실행하는가 | **닫힘(S0 실측 · EXP-32 · 기록 001 · 004 — 25.8 · 26.8 같음)** — 다시 실행한다(ⓑ). 대가로 이미 성공한 MV도 다시 돌아 롤업이 이중 계수되므로 ADR-14를 보강했다(§중복 제거 종속 MV 행 · §서버 설정 계약) | [../06_pipeline/09_rollup.md](../06_pipeline/09_rollup.md) |
 | 압축률(프로파일별) · 코덱 대안 효과 | 3계층 미확인 — 확정 전 임의 값 고정 금지. 원본 예상치 혼합 8~15배 · RANDOM_WALK 2~4배 | [../03_requirements/13_nonfunctional.md](../03_requirements/13_nonfunctional.md) REQ-NFR-14 |
 | 서버 timezone 설정 | **W6 판정 — Asia/Seoul** · 스키마는 의존하지 않는다 — 수동 쿼리 · 시스템 테이블 표시에만 영향 | [../09_tech_stack/03_data_infra.md](../09_tech_stack/03_data_infra.md) |
 | index_granularity 4096 실험 | 원본 실험 후보 — **W6 미채번**(카탈로그 39에 없다 · 필요해지면 EXP-40부터 말미 채번) | [../10_observability/06_experiment_catalog.md](../10_observability/06_experiment_catalog.md) |

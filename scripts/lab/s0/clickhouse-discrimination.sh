@@ -109,6 +109,7 @@ echo "RESULT rep=$REP async_insert dedup_mv1=$(echo "$RA" | cut -d' ' -f1) dedup
 
 step "부수 확인 — 정수 ts(epoch ms)가 그대로 해석됐는가 · 토큰 없는 같은 내용 재전송이 중복 제거되는가"
 c "SELECT min(ts) AS min_ts, toUnixTimestamp64Milli(min(ts)) = $(( NOWMS - 1800000 )) AS epoch_ms_ok FROM plc.tag_raw WHERE device_id = $(( 1000 + REP * 10 ))"
+echo "RESULT rep=$REP epoch_ms_ok=$(cq "SELECT toUnixTimestamp64Milli(min(ts)) = $(( NOWMS - 1800000 )) FROM plc.tag_raw WHERE device_id = $(( 1000 + REP * 10 ))") partitions=$(cq "SELECT groupUniqArray(partition) FROM system.parts WHERE database = 'plc' AND table = 'tag_raw' AND active")"
 DEV=$(( 1000 + REP * 10 + 9 )); gen_rows $DEV 8 60 $(( NOWMS - 1800000 )) > "$TMP/n.json"
 http_insert "$Q_INS" "$TMP/n.json" >/dev/null; http_insert "$Q_INS" "$TMP/n.json" >/dev/null
 echo "RESULT rep=$REP notoken_resend rows=480 raw=$(cnt_raw $DEV)"

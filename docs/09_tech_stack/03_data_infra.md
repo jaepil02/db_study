@@ -2,6 +2,7 @@
 
 > **대상**: 저장소 3종(PostgreSQL · ClickHouse · Redis)의 이미지 · 확장 · 설정 파일의 모양 · ClickHouse 서버 timezone 판정 · pg_partman 미리 만들기 · TTL 머지 주기 · Compose healthcheck와 health 타임아웃의 관계 · **observability 프로파일 구성원 판정(보정 #17)** · **버전 고정표(버전 문자열의 유일한 기재처)**
 > **작성일**: 2026-09-24
+> **개정일**: 2026-09-24 — ClickHouse 26.8 LTS 전환(사용자 결정 · 25.x 보안 지원 종료) — ClickHouse 태그 고정 25.8.33.6 → **26.8.10.6**(26.8 계열 최신 패치 · 레지스트리 대조) · 스택 표기 26.8 · 미확인 "LTS 트랙 보안 지원 종료" 닫힘 · 사용자 프로파일 트리에 input_format_read_datetime_number_as_raw_value · 설정 수준 확인 문장에 26.8 재확인
 > **개정일**: 2026-09-24 — 착수 체크리스트 7 · Python 반영 — 저장소 3행 릴리스 노트 · 레지스트리 대조 완료(18.6 · 8.10.2 계열 최신 · 25.8.33.6은 25.8 계열 최신이나 **25.x 보안 지원 종료**) · Python 행 신설(**버전 고정** 3.14 · 사용자 지정) — 행 36 → **37** · 도구 5 → **6** · 버전 고정 1 → **2** · 미확인 등재에 ClickHouse LTS 전환 신설
 > **개정일**: 2026-09-24 — S0 실측 반영 — 사용자 프로파일 설정 트리에 deduplicate_blocks_in_dependent_materialized_views 추가(ADR-14 보강 · 기록 001) · alpine 시간대 데이터 미확인 닫힘(PostgreSQL alpine · ClickHouse 모두 Asia/Seoul 해석) · Task 행 미고정 → **버전 고정** 3.53 — 상태 미고정 11 → **10** · 버전 고정 **1** 신설
 > **개정일**: 2026-09-24 — 측정 머신 전환 · S0 구현 반영 — 관측 스택 cpuset 18-19 → 13(현행 측정 머신 배치) · 저장소 이미지 3행 태그 고정(18.6-alpine · 25.8.33.6 · 8.10.2-alpine — 레지스트리 확인 · 릴리스 노트 대조 대기) · 상태 재확인 대기 24 → **21** · 태그 고정 **3** 신설 · ClickHouse 설정 트리를 실제 적용 수준으로 교정(max_concurrent_queries · background_pool_size 서버 · parts_to_* merge_tree) · pg_partman 공식 이미지 미포함 등재 · ClickHouse 설정 트리에 풀 파생 여유 슬롯 문턱 3 추가
@@ -10,7 +11,7 @@
 > **개정일**: 2026-09-24 — W6 실험 채번 반영 — EXP 번호 반영(정본 10_observability/01 · 06)
 > **원천**: 원본 tech_stack.md §2 · §5 · §9 · §10.1 · §10.4 · §12(커밋 ff66a37) · 원본 architecture.md §3 · §7.5 · §13 · §14(커밋 ff66a37) · 원본 implementation_plan.md §2.1 · §9(커밋 ff66a37) · ADR-03 · ADR-05 · ADR-18 · ADR-19 · ADR-20 · docs_plan 실행 계획 보정 #17 · 웨이브 인계 W6 09_tech_stack 행(ClickHouse 서버 timezone · pg_partman 미리 만들기 · TTL 머지 주기 · healthcheck timeout) · [../05_data_stores/01_postgresql_schema.md](../05_data_stores/01_postgresql_schema.md) · [../05_data_stores/03_clickhouse_schema.md](../05_data_stores/03_clickhouse_schema.md) · [../07_api/10_metrics.md](../07_api/10_metrics.md) §저장소 확인과 타임아웃 판정
 
-이 문서는 **정확 버전이 적히는 유일한 자리**다. 다른 문서는 스택을 Next.js · NestJS · PostgreSQL 18 · ClickHouse 25.8 · Redis 8 · Docker Compose로만 적고 이미지 태그 · 라이브러리 메이저는 §버전 고정표를 링크한다. 같은 폴더의 01 · 02 · 05도 버전을 적지 않는다 — 버전이 두 자리에 적히면 착수 시점 재확인이 한 자리만 고친다.
+이 문서는 **정확 버전이 적히는 유일한 자리**다. 다른 문서는 스택을 Next.js · NestJS · PostgreSQL 18 · ClickHouse 26.8 · Redis 8 · Docker Compose로만 적고 이미지 태그 · 라이브러리 메이저는 §버전 고정표를 링크한다. 같은 폴더의 01 · 02 · 05도 버전을 적지 않는다 — 버전이 두 자리에 적히면 착수 시점 재확인이 한 자리만 고친다.
 
 **저장소 내부 설정 값의 정본은 이 문서가 아니다.** PostgreSQL 튜닝 값은 [../05_data_stores/01_postgresql_schema.md](../05_data_stores/01_postgresql_schema.md) §튜닝 파라미터, ClickHouse 서버 설정은 [../05_data_stores/03_clickhouse_schema.md](../05_data_stores/03_clickhouse_schema.md) §서버 설정 계약, Redis maxmemory · MAXLEN은 [../05_data_stores/06_redis_memory.md](../05_data_stores/06_redis_memory.md)가 갖는다. 이 문서는 **설정 파일의 모양**과 인계로 넘어온 판정 넷(ClickHouse 서버 timezone · pg_partman 미리 만들기 · TTL 머지 주기 · healthcheck timeout)과 관측 프로파일 구성원 판정을 갖는다.
 
@@ -81,11 +82,11 @@ infra/clickhouse/
 │   ├── timezone.xml       서버 timezone = Asia/Seoul                      ← 이 문서 판정
 │   └── prometheus.xml     내장 메트릭 엔드포인트 9363
 ├── users.d/
-│   └── profiles.xml       async_insert · max_insert_block_size · materialized_views_ignore_errors · deduplicate_blocks_in_dependent_materialized_views   ← 05_data_stores/03 소유
+│   └── profiles.xml       async_insert · max_insert_block_size · materialized_views_ignore_errors · deduplicate_blocks_in_dependent_materialized_views · input_format_read_datetime_number_as_raw_value   ← 05_data_stores/03 소유
 └── ddl/                   순번 DDL 001~                                    ← 05_data_stores/09 소유
 ```
 
-- **서버 설정과 사용자 프로파일 설정을 가른다.** 메모리 비율 · 머지 풀 · 동시 쿼리 상한 · timezone은 서버 수준이고, 파트 수 문턱은 서버 설정의 merge_tree 절이며, 삽입 방식 · 블록 크기 · MV 오류 처리는 사용자 프로파일 수준이다 — 한 파일에 섞으면 적용 수준이 다른 설정이 조용히 무시된다. **수준은 25.8.33.6 이미지의 기본 설정 파일로 확인했다(2026-09-24)** — 초판 트리는 동시 쿼리 상한 · 파트 수 문턱을 사용자 프로파일에 두었다.
+- **서버 설정과 사용자 프로파일 설정을 가른다.** 메모리 비율 · 머지 풀 · 동시 쿼리 상한 · timezone은 서버 수준이고, 파트 수 문턱은 서버 설정의 merge_tree 절이며, 삽입 방식 · 블록 크기 · MV 오류 처리는 사용자 프로파일 수준이다 — 한 파일에 섞으면 적용 수준이 다른 설정이 조용히 무시된다. **수준은 25.8.33.6 이미지의 기본 설정 파일로 확인했고 26.8.10.6에서 같은 파일로 기동을 재확인했다(2026-09-24)** — 초판 트리는 동시 쿼리 상한 · 파트 수 문턱을 사용자 프로파일에 두었다.
 - 설정 조각의 이름은 설계 계약이며 파일 이름 형식은 구현이 정한다.
 
 ### 서버 timezone 판정
@@ -184,7 +185,7 @@ docs_plan 실행 계획 보정 #17을 닫는다. 원본 넷이 서로 다른 구
 | 런타임 | api 기반 이미지 | node 22 alpine | 태그 | api 멀티스테이지 빌드 | 재확인 대기 |
 | 런타임 | TypeScript | 원본 미기재 | 부 버전까지 | 전 패키지 | 미고정 |
 | 저장소 | PostgreSQL | 18 alpine | 부 버전 태그 | postgres 서비스 | **태그 고정** 18.6-alpine(18 계열 최신 — 릴리스 노트 · 레지스트리 대조 2026-09-24) |
-| 저장소 | ClickHouse | 25.8 LTS 이상 | LTS 패치 태그 | clickhouse 서비스 | **태그 고정** 25.8.33.6(25.8 계열 최신 패치 — 레지스트리 대조 2026-09-24 · **25.x 보안 지원 종료** — §미확인 · 미설계 등재) |
+| 저장소 | ClickHouse | 25.8 LTS 이상 | LTS 패치 태그 | clickhouse 서비스 | **태그 고정** 26.8.10.6(LTS 트랙 전환 — 사용자 결정 2026-09-24 · 25.x 보안 지원 종료 · 26.8 계열 최신 패치 — 레지스트리 대조) |
 | 저장소 | Redis | 8 alpine | 부 버전 태그 | redis 서비스 | **태그 고정** 8.10.2-alpine(8 계열 최신 — 릴리스 · 레지스트리 대조 2026-09-24) |
 | 저장소 확장 | pg_partman | 원본 미기재 | 부 버전까지 | alarm_event 월 파티션 | 미고정 |
 | 저장소 확장 | pg_stat_statements · auto_explain | PostgreSQL 동봉 | 엔진 버전을 따른다 | 쿼리 통계 · 계획 로깅 | 재확인 대기 |
@@ -245,7 +246,7 @@ docs_plan 실행 계획 보정 #17을 닫는다. 원본 넷이 서로 다른 구
 | 항목 | 상태 | 확정 자리 |
 |------|------|------|
 | 버전 고정표 전 행의 확정 태그 | 저장소 3행은 릴리스 노트 · 레지스트리 대조 뒤 고정(2026-09-24) · 나머지는 원본 기준 — 각 단계 착수 시 재확인 전까지 확정 아님 | 이 문서 §버전 고정표 · 착수 체크리스트 7번 |
-| **ClickHouse LTS 트랙의 보안 지원 종료** | **신규 — 사용자 결정 대기.** 25.8.33.6은 25.8 계열 최신 패치지만 공식 보안 정책상 25.x 전 계열이 지원 종료이고 지원 중인 LTS는 26.3 · 26.8이다(2026-09-24 확인). 로컬 전용(127.0.0.1 바인드)이라 노출 위험은 작다. 26.8 전환은 스택 표기 · 서버 설정(병합 풀 파생값) · EXP-32 판별(기록 001 — 종속 MV 중복 제거는 버전 종속)을 다시 도는 변경이다 | 착수 체크리스트 7 · 이 문서 · [../01_overview/05_priorities_roadmap.md](../01_overview/05_priorities_roadmap.md) |
+| ClickHouse LTS 트랙의 보안 지원 종료 | **닫힘(2026-09-24 사용자 결정)** — 25.8.33.6 → 26.8.10.6. 전환으로 드러난 동작 차이 넷(정수 ts 해석 · 적재 측 거절의 원시 커밋 · 토큰 없는 내용 중복 제거 · async_insert 동시 사용)은 기록 004가 적고, 정수 ts는 프로파일 설정으로 막았다 | [../05_data_stores/03_clickhouse_schema.md](../05_data_stores/03_clickhouse_schema.md) §서버 설정 계약 |
 | alpine 이미지의 시간대 데이터 포함 여부 | **닫힘(S0 확인 2026-09-24)** — PostgreSQL alpine · ClickHouse 이미지 모두 Asia/Seoul 해석 | 이 문서 |
 | @clickhouse/client의 zstd 요청 압축 지원 | 신규 미확인 — 원본은 "zstd(Node 22.15+) 또는 gzip" | 착수 시 공식 참조 · [02_backend.md](./02_backend.md) |
 | client-output-buffer-limit pubsub 값 | 값 미정 — 계약만(게이트웨이 소켓 한도보다 늦게) | S4 · 이 문서 · [../07_api/11_websocket.md](../07_api/11_websocket.md) 소켓 송신 대기량 한도와 같은 변경 단위 |

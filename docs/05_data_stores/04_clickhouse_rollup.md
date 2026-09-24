@@ -2,6 +2,7 @@
 
 > **대상**: 롤업 테이블 tag_1m · tag_1h · tag_1d와 MV 3(mv_tag_1m · mv_tag_1h · mv_tag_1d)의 DDL · -State/-Merge 조합자 · bad_cnt 조건식 · 일 경계 시간대 판정 · MV 제약 · 백필 절차 · 정합 검증 · 롤업 객체 도메인 귀속 판정
 > **작성일**: 2026-09-24
+> **개정일**: 2026-09-24 — ClickHouse 26.8 LTS 전환(사용자 결정 · 25.x 보안 지원 종료) — 롤업 윈도우 근거에 26.8(기록 004) · 백필 ④의 insert_deduplicate 0 근거를 버전 종속으로 교정(25.8 버림 · 26.8 버리지 않음)
 > **개정일**: 2026-09-24 — S0 실측 반영(EXP-32 · 기록 001) — ADR-14 보강(사용자 결정) — 롤업 3테이블 DDL에 non_replicated_deduplication_window 1000 신설 · MV 제약 #8 대응 미확인 → 한 쌍 설정 · 미확인 표 1행 닫힘 · 백필 ④에 insert_deduplicate 0(롤업 윈도우가 같은 내용 재삽입을 버림 — 실측)
 > **개정일**: 2026-09-24 — 최종 정밀 검수 — 빈 표 칸을 닫힌 어휘 해당 없음으로 채움(표 열 규약) · 롤업 귀속 README 반영 대기 표기 → 반영 완료
 > **개정일**: 2026-09-24 — W7 검수 반영 — 미확인 1행 닫힘(롤업 공백 재계산 절차)
@@ -93,7 +94,7 @@ GROUP BY bucket, device_id, tag_id;
 - **last_v 상태 타입에 ts와 같은 시간대를 적는다.** 상태 타입의 인자 타입은 원천 컬럼 타입과 시간대까지 같아야 MV 삽입이 타입 변환 없이 맞물린다 — 원본은 DateTime64(3)로 적어 원천 ts(Asia/Seoul)와 어긋났다.
 - **toStartOfMinute(ts)는 ts의 시간대를 물려받아 DateTime('Asia/Seoul')을 낸다.** 분 경계는 정수 시간 오프셋에서 시간대와 무관하지만, 이 bucket이 월 파티션 · 상위 롤업의 달력 함수 입력이 되므로 시간대가 필요하다.
 - **TTL 90일은 하한이다.** ttl_only_drop_parts = 1은 파트 전체가 만료돼야 지우므로 월 파티션의 마지막 날이 90일을 넘길 때 그 달 전체가 떨어진다 — 실제 보존은 최대 한 달 더 길다([08_retention_lifecycle.md](./08_retention_lifecycle.md)).
-- **롤업 3테이블에도 중복 제거 윈도우를 둔다(ADR-14 보강 · S0 실측).** 25.8은 원시가 토큰으로 중복 제거돼도 종속 MV를 다시 돌린다 — 롤업에 윈도우가 없으면 응답 유실 뒤 같은 토큰 재시도가 세 롤업의 count를 두 배로 만든다(EXP-32 · 기록 001). 윈도우는 삽입 설정 deduplicate_blocks_in_dependent_materialized_views 1과 한 쌍이며 설정의 정본은 [03_clickhouse_schema.md](./03_clickhouse_schema.md) §서버 설정 계약이다.
+- **롤업 3테이블에도 중복 제거 윈도우를 둔다(ADR-14 보강 · S0 실측).** 25.8 · 26.8 모두 원시가 토큰으로 중복 제거돼도 종속 MV를 다시 돌린다 — 롤업에 윈도우가 없으면 응답 유실 뒤 같은 토큰 재시도가 세 롤업의 count를 두 배로 만든다(EXP-32 · 기록 001 · 004). 윈도우는 삽입 설정 deduplicate_blocks_in_dependent_materialized_views 1과 한 쌍이며 설정의 정본은 [03_clickhouse_schema.md](./03_clickhouse_schema.md) §서버 설정 계약이다.
 
 ## tag_1h · tag_1d · 상위 MV
 
@@ -222,7 +223,7 @@ GROUP BY bucket, device_id, tag_id;
 ⑥ 정합 검증             count(tag_raw) = countMerge(tag_1m)   = countMerge(tag_1h) = countMerge(tag_1d)
 ```
 
-- **④는 insert_deduplicate 0으로 넣는다(S0 실측 · 기록 001).** 롤업 3테이블의 윈도우(ADR-14 보강)는 토큰 없는 삽입을 내용 해시로 가르는데 롤업에는 매번 다른 컬럼(원시의 ingested_at 같은)이 없다 — 같은 구간을 두 번 백필하거나 비운 뒤 다시 채우면 두 번째 삽입이 오류 없이 0행이 된다.
+- **④는 insert_deduplicate 0으로 넣는다(S0 실측 · 기록 001).** 롤업 3테이블의 윈도우(ADR-14 보강)는 토큰 없는 삽입을 내용 해시로 가르는데 롤업에는 매번 다른 컬럼(원시의 ingested_at 같은)이 없다 — 25.8에서는 같은 구간을 비운 뒤 다시 채우는 두 번째 삽입이 오류 없이 0행이 됐다(기록 001). 26.8은 버리지 않았지만(기록 004) 동작이 버전마다 달라 절차로 고정한다.
 
 - **분리하는 MV는 mv_tag_1m 하나다.** 원본 절차는 분리 대상을 mv_tag_1m으로만 적었고 이유는 적지 않았다 — ④가 tag_1m에 넣는 삽입이 상위 두 MV를 발동하므로 상위를 분리하면 상위 롤업을 따로 두 번 더 채워야 한다.
 - **③의 ts는 원시 보존 창 안이어야 한다(A형).** 통념은 "백필은 먼 과거를 채운다"이다. 그러나 tag_raw TTL은 ts 기준 7일이라 창 밖 ts의 파트는 다음 TTL 머지에서 통째로 떨어지고, 롤업만 남는다. 진짜 축은 ts 기준 보존이다. 대체 경로 — 용량 단계를 채우는 백필은 창 안에서 태그 · 설비 수로 행 수를 늘린다([10_olap_vs_rdb_control.md](./10_olap_vs_rdb_control.md) §역전 지점 탐색 설계).

@@ -2,6 +2,7 @@
 
 > **대상**: 설계 문서군이 인용하는 외부 공식 문서 · 릴리스 노트 · 표준의 URL 전수 — 런타임 · 저장소 · 저장소 확장 · 백엔드 라이브러리 · 프론트엔드 · 도구 · 부하 · 관측 · 실행 환경 · 프로토콜 표준 · 보안 참고 · 인용처 · 재확인 규칙
 > **작성일**: 2026-09-24
+> **개정일**: 2026-09-24 — ClickHouse 26.8 LTS 전환(사용자 결정 · 25.x 보안 지원 종료) — ClickHouse 변경 이력 행의 확인 대상 25.8 → **26.8** LTS 패치 태그
 > **개정일**: 2026-09-24 — 착수 체크리스트 7 반영 — 저장소 6행 확인일 채움(릴리스 · 레지스트리 대조) · ClickHouse 보안 정책 행 신설(25.x 지원 종료 확인) · Python 행 신설(버전 고정표 36 → **37**행 대응) — 등재 68 → **70** · 저장소 9 → **10** · 도구 · 부하 · 관측 13 → **14** · 미확인 68 → **63**
 > **개정일**: 2026-09-24 — W7 검수 반영 — 보안 참고 10 · Compose 변수 치환 1 추가 57 → **68** · 버전 고정표 35 → **36**행 대응 · 도입문의 역링크 서술을 인용처 열 기준으로
 > **원천**: [../09_tech_stack/03_data_infra.md](../09_tech_stack/03_data_infra.md) 버전 고정표 37행 · 각 문서의 "공식 참조로 재확인" 등재 행 · 원본 tech_stack.md §12 · 원본 implementation_plan.md §9 착수 체크리스트 7번(커밋 ff66a37) · 신설
@@ -39,7 +40,7 @@
 | PostgreSQL | 릴리스 노트 목록 | [https://www.postgresql.org/docs/release/](https://www.postgresql.org/docs/release/) | 18의 현행 부 버전 | [../09_tech_stack/03_data_infra.md](../09_tech_stack/03_data_infra.md) | 2026-09-24 |
 | PostgreSQL | 18 문서 | [https://www.postgresql.org/docs/18/](https://www.postgresql.org/docs/18/) | 선언적 파티션 · BRIN · COPY · 튜닝 파라미터 | [../05_data_stores/01_postgresql_schema.md](../05_data_stores/01_postgresql_schema.md) · [../05_data_stores/02_postgresql_constraints.md](../05_data_stores/02_postgresql_constraints.md) · [../05_data_stores/10_olap_vs_rdb_control.md](../05_data_stores/10_olap_vs_rdb_control.md) | 미확인 |
 | postgres 이미지 | 공식 이미지 | [https://hub.docker.com/_/postgres](https://hub.docker.com/_/postgres) | 18 alpine 태그 · 초기화 스크립트 규약 · 시간대 데이터 | [../09_tech_stack/03_data_infra.md](../09_tech_stack/03_data_infra.md) | 2026-09-24 |
-| ClickHouse | 변경 이력 | [https://clickhouse.com/docs/whats-new/changelog](https://clickhouse.com/docs/whats-new/changelog) | 25.8 LTS 패치 태그 | [../09_tech_stack/03_data_infra.md](../09_tech_stack/03_data_infra.md) | 2026-09-24 |
+| ClickHouse | 변경 이력 | [https://clickhouse.com/docs/whats-new/changelog](https://clickhouse.com/docs/whats-new/changelog) | 26.8 LTS 패치 태그 | [../09_tech_stack/03_data_infra.md](../09_tech_stack/03_data_infra.md) | 2026-09-24 |
 | ClickHouse | 문서 | [https://clickhouse.com/docs](https://clickhouse.com/docs) | MergeTree · AggregatingMergeTree · MV · Dictionary · 코덱 · TTL · insert_deduplication_token · async_insert · 서버 설정과 사용자 프로파일 설정의 수준 · merge_with_ttl_timeout 기본값 | [../05_data_stores/03_clickhouse_schema.md](../05_data_stores/03_clickhouse_schema.md) · [../05_data_stores/04_clickhouse_rollup.md](../05_data_stores/04_clickhouse_rollup.md) · [../09_tech_stack/03_data_infra.md](../09_tech_stack/03_data_infra.md) | 미확인 |
 | clickhouse-server 이미지 | 공식 이미지 | [https://hub.docker.com/r/clickhouse/clickhouse-server](https://hub.docker.com/r/clickhouse/clickhouse-server) | LTS 태그 · 설정 파일 마운트 경로 · 시간대 데이터 | [../09_tech_stack/03_data_infra.md](../09_tech_stack/03_data_infra.md) | 2026-09-24 |
 | ClickHouse | 보안 정책(지원 버전 표) | [https://github.com/ClickHouse/ClickHouse/blob/master/SECURITY.md](https://github.com/ClickHouse/ClickHouse/blob/master/SECURITY.md) | 고정한 LTS 계열의 보안 지원 여부 | [../09_tech_stack/03_data_infra.md](../09_tech_stack/03_data_infra.md) | 2026-09-24 |

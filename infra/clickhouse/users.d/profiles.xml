@@ -7,9 +7,12 @@
             <max_insert_block_size>1048576</max_insert_block_size>
             <!-- MV 실패를 삽입 오류로 드러낸다(REQ-ING-16) -->
             <materialized_views_ignore_errors>0</materialized_views_ignore_errors>
+            <!-- 적재는 ts를 epoch ms 정수로 보낸다(05_data_stores/03 §시각 컬럼 시간대 표기) — 26.8은 따옴표 없는 정수를
+                 DateTime64에서도 초로 읽어 9999-12-31로 포화시킨다(S0 실측 · 기록 004). 1이면 열 정밀도의 틱(ms)으로 읽는다 -->
+            <input_format_read_datetime_number_as_raw_value>1</input_format_read_datetime_number_as_raw_value>
             <!-- 같은 토큰 재시도가 롤업을 이중 계수하지 않게 종속 MV도 중복 제거한다(ADR-14 보강 · EXP-32 기록 001).
                  롤업 3테이블의 non_replicated_deduplication_window와 한 쌍이다 — 둘 중 하나만 있어도 재시도가 롤업을 두 배로 센다(실측).
-                 async_insert 1과 함께면 서버가 삽입을 Code 344로 거부한다(실측) — C안 비교 실험은 async_insert 1 · 이 값 0으로 함께 바꾼다 -->
+                 25.8은 async_insert 1과 함께면 삽입을 Code 344로 거부했고 26.8은 허용한다(실측 · 기록 001 · 004) -->
             <deduplicate_blocks_in_dependent_materialized_views>1</deduplicate_blocks_in_dependent_materialized_views>
         </default>
     </profiles>

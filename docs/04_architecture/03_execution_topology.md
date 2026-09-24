@@ -2,6 +2,7 @@
 
 > **대상**: 로컬 실행 구성 — Compose 서비스 4 · healthcheck · 기동 순서 · 네트워크 · 호스트 포트 · named volume 4 · 메모리 프로파일 2 + 조건부 중간 · CPU 가중 · **cpuset 배치(정본)** · 스냅샷과 복원 · 재빌드 · 재시작 영향 · 조정값 소유처
 > **작성일**: 2026-09-24
+> **개정일**: 2026-09-24 — ClickHouse 26.8 LTS 전환(사용자 결정 · 25.x 보안 지원 종료) — Compose 서비스 표 clickhouse 이미지 ClickHouse 25.8 → **26.8**
 > **개정일**: 2026-09-24 — 측정 머신 전환 · S0 구현 반영 — cpuset 배치를 현행 측정 머신(macOS Docker Desktop VM · vCPU 14)으로 재설계(사용자 결정) — api · redis 0-4 · clickhouse 5-8 · postgres 9-10 · 부하 도구 11-12(컨테이너 · cpuset) · 관측 13 · 대조 실험 배치 5-7 · 8-10 신설 · WSL2 20스레드 배치는 이전 배치로 보존 · 미확인 등재에 S0 postgres healthcheck 계정(migrate 전 관리자) 추가
 > **개정일**: 2026-09-24 — W6 실험 채번 반영 — cpuset 표에 APP_ROLE=datagen 행(잠정 16-17 공유) · EXP 번호(정본 10_observability/01 · 06)
 > **개정일**: 2026-09-24 — W6 판정 반영 — api 정확 버전 링크 02_backend → **03_data_infra 버전 고정표** · 미확인 2행(관측 구성원 · 중간 프로파일)을 닫는다
@@ -17,7 +18,7 @@
 |------|------|------|------|------|------|
 | api | 로컬 빌드(Node LTS 멀티스테이지 · 정확 버전 [../09_tech_stack/03_data_infra.md](../09_tech_stack/03_data_infra.md) §버전 고정표) | unless-stopped | /api/v1/health 왕복(무인증) | postgres · clickhouse · redis 전부 service_healthy | NestJS 단일 프로세스 — 모듈 11 · APP_ROLE 기본 all |
 | postgres | PostgreSQL 18 공식 alpine 이미지 | unless-stopped | pg_isready(애플리케이션 계정 · DB) | 없음 | OLTP — 업무 14 · 대조군 1 |
-| clickhouse | ClickHouse 25.8 공식 서버 이미지 | unless-stopped | HTTP ping(8123) | 없음 | OLAP — 원시 · 롤업 · 판정 전수 |
+| clickhouse | ClickHouse 26.8 공식 서버 이미지 | unless-stopped | HTTP ping(8123) | 없음 | OLAP — 원시 · 롤업 · 판정 전수 |
 | redis | Redis 8 공식 alpine 이미지 | unless-stopped | redis-cli ping | 없음 | Stream · 최신값 · 알람 상태 · 캐시 · 세션 · Pub/Sub |
 
 - 검산: 서비스 = **4** — healthcheck 4 · depends_on을 갖는 서비스 1(api)

@@ -2,6 +2,7 @@
 
 > **대상**: 전원 — db_study가 무엇을 만들고 무엇을 만들지 않는가, 그리고 만들지 않는 것이 측정에 남기는 한계
 > **작성일**: 2026-09-24
+> **개정일**: 2026-09-24 — ClickHouse 26.8 LTS 전환(사용자 결정 · 25.x 보안 지원 종료) — 저장소 행 스택 표기 ClickHouse 25.8 → **26.8**
 > **개정일**: 2026-09-24 — 최종 정밀 검수 — 생산 카운터 · 대조군 COPY 기전 미설계 → W4 판정(06_pipeline/04) 반영
 > **개정일**: 2026-09-24 — W7 검수 반영 — 확장 3단계 진입 조건의 상관 대상 스트림 길이 → **Stream 점유 메모리**(정본 04_architecture/08 · 10_observability/03)
 > **개정일**: 2026-09-24 — W6 판정 반영 — E2E 분산 추적 행의 상태를 관측 구성원 판정(tempo 현 범위 밖 · 조건부)으로 채운다
@@ -35,7 +36,7 @@ db_study의 범위는 **학습 목표 2축(D-01)을 측정으로 닫는 데 필�
 | 영역 | 포함하는 것 | 판정 근거 | 정본 |
 |------|------|------|------|
 | 도메인 기능 | 11도메인의 기능 전수 — NestJS 모듈과 1:1 | 수집 · 적재 · 조회 · 알람 · 업무 CRUD가 분기 3계층의 실제 원천이다 | [04_domain_map.md](./04_domain_map.md) · [../02_features/README.md](../02_features/README.md) |
-| 저장소 | PostgreSQL 18 · ClickHouse 25.8 · Redis 8(단일 인스턴스) + **PostgreSQL 대조군 테이블** | 목표 ①의 비교 상대와 목표 ②의 세 목적지 | [../05_data_stores/README.md](../05_data_stores/README.md) · D-05 |
+| 저장소 | PostgreSQL 18 · ClickHouse 26.8 · Redis 8(단일 인스턴스) + **PostgreSQL 대조군 테이블** | 목표 ①의 비교 상대와 목표 ②의 세 목적지 | [../05_data_stores/README.md](../05_data_stores/README.md) · D-05 |
 | 3계층 분기 | 원시값 · 알람과 실적 · 업무 CRUD의 목적지 판정과 기전 | 목표 ②의 대상 그 자체 | [../04_architecture/04_storage_split.md](../04_architecture/04_storage_split.md) · D-04 |
 | 데이터 흐름 | F-01~F-10(수집부터 백프레셔와 장애까지) | 분기가 일어나는 경로와 degrade 경로 | [../06_pipeline/01_flow_inventory.md](../06_pipeline/01_flow_inventory.md) |
 | 역할 스위치 | SW-01~SW-11과 그 계측 | 두 축의 공통 손잡이 | [../02_features/13_switch_matrix.md](../02_features/13_switch_matrix.md) · D-06 |

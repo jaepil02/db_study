@@ -2,6 +2,7 @@
 
 > **대상**: F-02 적재 흐름의 기전 정본 — 소비 루프 · 단일 flusher fan-in(ADR-09) · **배치 트리거 산술 보정** · 창 정렬 배치와 결정적 토큰(fan-in · SW-01 off 토큰 재료) · 배치 행 수 상한 · flusher 메모리 경계 · 중복 제거 윈도우 관계식 · 재시도 · DLQ(원 엔트리 단위) · XAUTOCLAIM 주기 회수 · 소진 모드 · SW-08 · 확인 뒤 후속 단계 순서 · 적재 행 조합 검증 · MV 재실행 판별(닫힘 — S0 실측)
 > **작성일**: 2026-09-24
+> **개정일**: 2026-09-24 — ClickHouse 26.8 LTS 전환(사용자 결정 · 25.x 보안 지원 종료) — 미확인 등재에 SW-08 off의 재시도 중복 재현 수단 신설(26.8은 토큰 없는 같은 내용도 중복 제거 · 기록 004)
 > **개정일**: 2026-09-24 — S0 실측 반영(EXP-32 · 기록 001) — 미확인 "MV 재실행" 닫힘 · 롤업 3테이블 윈도우 전진 속도 불릿 신설(ADR-14 보강)
 > **개정일**: 2026-09-24 — W6 실험 채번 반영 — 메트릭 이름 · EXP 번호 반영(정본 10_observability/01 · 06)
 > **원천**: 원본 data_flow.md §4 · §4.1 · §4.2 · §4.3 · §12.3 · §15(커밋 ff66a37) · 원본 architecture.md §7.5 · §9 · §9.1 · §9.2(커밋 ff66a37) · 원본 implementation_plan.md §7.1(커밋 ff66a37) · docs_plan.md 웨이브 인계 W4 06_pipeline/03 행 전부 · ADR-06 · ADR-09 · ADR-14 · ADR-21 · ADR-25 · REQ-GLB-05 · 06 · 07 · REQ-ING-01~13 · 17 · 18 · [../11_glossary/03_enums_state_machines.md](../11_glossary/03_enums_state_machines.md) 상태 머신 1 · [../04_architecture/07_capacity_planning.md](../04_architecture/07_capacity_planning.md) 파생 지표 · [../05_data_stores/03_clickhouse_schema.md](../05_data_stores/03_clickhouse_schema.md) 중복 제거
@@ -197,6 +198,7 @@ ClickHouse가 복구된 직후 적체를 빼는 동안의 배치 규칙이다(RE
 |------|------|------|
 | 원시 삽입 성공 · MV 실패 뒤 같은 토큰 재시도가 MV를 다시 실행하는가 | **닫힘(S0 실측 · EXP-32)** — 다시 실행한다 · 이중 계수는 롤업 윈도우와 종속 MV 중복 제거 설정 한 쌍으로 막는다(ADR-14 보강) | [09_rollup.md](./09_rollup.md) |
 | B · C안(컨슈머 1 + 배치 확대 · async_insert)과의 비교 | S3 실측 | AC-22 · ADR-09 |
+| **SW-08 off의 재시도 중복 재현 수단** | **신규(S0 실측 · 기록 004)** — ClickHouse 26.8은 토큰 없는 같은 내용 재전송도 중복 제거해, 토큰만 빼는 off(NoBatchToken)로는 EXP-13의 "off — 재시도 시 중복 행 발생"이 재현되지 않는다. off 구현이 insert_deduplicate 0을 함께 줄지 S3에서 판정한다 | S3 · EXP-13 · [../02_features/13_switch_matrix.md](../02_features/13_switch_matrix.md) |
 | M+ · L에서 R 값(시간 트리거 지배 여부) | 2계층 — 현행 50,000은 M+에서 행 트리거 지배 | S3 · S5 · 리드 제안 |
 | 창 닫힘 유예 · 행당 메모리 · flusher 메모리 상한 | 유예 2계층 미정 · 나머지 3계층 미확인 | S3 · S5 · EXP-34(유예) · EXP-26(flusher 메모리) |
 | 소진 모드 전환 중 크래시 재전달 중복 | 잔여 — 검출만 | [../05_data_stores/02_postgresql_constraints.md](../05_data_stores/02_postgresql_constraints.md) 한계 등재 #15(W4 반영) |

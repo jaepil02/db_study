@@ -10,7 +10,7 @@ Redis, PostgreSQL, ClickHouse를 활용하여 대용량 PLC 데이터와 업무 
 | 프론트엔드 | Next.js (App Router) + TypeScript | 호스트에서 `pnpm dev` → http://localhost:3001 |
 | 백엔드 | NestJS 단일 애플리케이션 (API + Collector·PlcSim·Ingest·Alarm·DataGen·Metrics 모듈) | Docker 컨테이너 `api` → 127.0.0.1:3000 |
 | OLTP | PostgreSQL 18 | Docker 컨테이너 `postgres` → 127.0.0.1:5432 |
-| OLAP | ClickHouse 25.8 | Docker 컨테이너 `clickhouse` → 127.0.0.1:8123 |
+| OLAP | ClickHouse 26.8 | Docker 컨테이너 `clickhouse` → 127.0.0.1:8123 |
 | 버퍼·캐시 | Redis 8 (Stream + 캐시 + Pub/Sub, 단일 인스턴스) | Docker 컨테이너 `redis` → 127.0.0.1:6379 |
 | 관측 (선택) | Prometheus + Grafana | `docker compose --profile observability up -d` |
 
