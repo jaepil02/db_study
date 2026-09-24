@@ -26,15 +26,19 @@ export class CollectorService implements OnApplicationBootstrap, OnModuleDestroy
   onApplicationBootstrap() {
     void this.definitions.whenLoaded().then((defs) => {
       if (this.stopped) return;
-      for (const def of defs) {
-        if (def.blocks.length === 0) {
-          this.log.warn(`설비 ${def.deviceId}(${def.deviceCode}) — 폴링할 태그 없음 · 루프를 띄우지 않는다`);
-          continue;
-        }
-        const p = new DevicePoller(def, this.buffer);
+      const polled = defs.filter((def) => {
+        if (def.blocks.length > 0) return true;
+        this.log.warn(`설비 ${def.deviceId}(${def.deviceCode}) — 폴링할 태그 없음 · 루프를 띄우지 않는다`);
+        return false;
+      });
+      polled.forEach((def, i) => {
+        // 시작 위상 = 벽시계 주기 격자 + 설비별 균등 오프셋((i + 0.5) × 주기 ÷ N) — 설비들의 발행이 창 안에 고르게 퍼지고
+        // 기동마다 같은 위상이 된다. 0.5칸은 모드 A 생성기의 격자(k = floor(now ÷ 주기)) 갱신 순간과 겹치지 않게 비킨다.
+        const offset = ((i + 0.5) * def.scanRateMs) / polled.length;
+        const p = new DevicePoller(def, this.buffer, undefined, offset);
         this.pollers.set(def.deviceId, p);
         p.start();
-      }
+      });
     });
   }
 

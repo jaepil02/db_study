@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { isAllowedHost, isAllowedOrigin } from '../src/common/http/surface-defense';
 import { parseLatestValue } from '../src/common/redis/durable-key-client';
 import type { DecodedEntry } from '../src/common/workers/tasks';
+import { phaseDelayMs } from '../src/modules/collector/device-poller';
 import {
   type BatchEntry,
   cmpId,
@@ -156,5 +157,14 @@ describe('최신값 필드 · 출처 방어', () => {
     expect(isAllowedOrigin('http://localhost:3001')).toBe(true);
     for (const o of [undefined, 'http://127.0.0.1:3001', 'https://localhost:3001', 'http://localhost:3000'])
       expect(isAllowedOrigin(o)).toBe(false);
+  });
+});
+
+describe('폴링 시작 위상', () => {
+  it('벽시계 격자 + 오프셋의 가장 가까운 미래까지 기다린다', () => {
+    expect(phaseDelayMs(500, 10_000, 1000)).toBe(500);
+    expect(phaseDelayMs(500, 10_600, 1000)).toBe(900);
+    expect(phaseDelayMs(500, 10_500, 1000)).toBe(0);
+    expect(phaseDelayMs(100, 1_790_000_000_950, 1000)).toBe(150);
   });
 });

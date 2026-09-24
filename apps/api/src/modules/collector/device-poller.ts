@@ -31,6 +31,11 @@ export const LOOP_RESTART_MS = 1000;
  */
 export const RTT_TIMEOUT_OBSERVATION_SECONDS = (LATENCY_BUCKETS_SECONDS.at(-1) ?? 10) * 2;
 
+/** 다음 격자 위상까지 기다릴 ms — 벽시계 wall에서 (k × period + offset) 중 가장 가까운 미래(같으면 0) */
+export function phaseDelayMs(offsetMs: number, wallMs: number, periodMs: number): number {
+  return (((offsetMs - wallMs) % periodMs) + periodMs) % periodMs;
+}
+
 export class DevicePoller {
   private readonly log: Logger;
   private readonly device: string;
@@ -50,6 +55,12 @@ export class DevicePoller {
     private readonly def: DeviceDef,
     private readonly buffer: PointBufferPort,
     private readonly clock: Clock = systemClock,
+    /**
+     * 폴링 시작 위상(벽시계 scan_rate_ms 격자 위의 오프셋 ms) — null이면 연결 즉시 시작.
+     * S2 판정: 위상을 기동마다 우연에 맡기면 창 W(엔트리 ID 시각 정렬)와의 어긋남이 기동마다 달라
+     * fan-in 대기(6c) · E2E가 반복마다 다른 조건이 된다(기록 011 폐기 사유). CollectorService가 설비별로 준다.
+     */
+    private readonly phaseOffsetMs: number | null = null,
   ) {
     this.log = new Logger(`Collector:${def.deviceCode}`);
     this.device = String(def.deviceId);
@@ -92,6 +103,11 @@ export class DevicePoller {
       `연결 — ${this.def.host}:${this.def.port} · 블록 ${this.def.blocks.length} · 주기 ${this.def.scanRateMs} ms`,
     );
     let next = this.clock.monoMs();
+    if (this.phaseOffsetMs !== null) {
+      const delay = phaseDelayMs(this.phaseOffsetMs, this.clock.wallMs(), this.def.scanRateMs);
+      next += delay;
+      await this.sleep(delay);
+    }
     while (this.running) {
       await this.cycle(client);
       // 주기 고정 — 사이클이 주기를 넘기면 밀린 틱을 몰아 돌지 않고 곧바로 다음 사이클로 간다
