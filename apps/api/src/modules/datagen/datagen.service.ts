@@ -1,6 +1,6 @@
 // 생성기 서비스 — 프로세스당 piscina 풀 하나(09_tech_stack/02 §워커 풀) · 창 분할 · 상태 이어받기 · 계측
 import { resolve } from 'node:path';
-import { CAPACITY_TIERS, type CapacityTier, SIGNAL_PROFILES } from '@db-study/shared';
+import { CAPACITY_TIERS, type CapacityTier, SIGNAL_PROFILES, type SignalProfile } from '@db-study/shared';
 import { Inject, Injectable, type OnModuleDestroy } from '@nestjs/common';
 import Piscina from 'piscina';
 import { Counter, Gauge, Registry } from 'prom-client';
@@ -57,9 +57,10 @@ export class DatagenService implements OnModuleDestroy {
     labelNames: ['mode'],
     registers: [this.registry],
   });
+  // 워커 스레드는 작업 사이에 쉬므로 이벤트 루프 사용률 = 작업 실행 시간 ÷ (경과 × 워커 수)로 잰다
   private readonly utilization = new Gauge({
     name: 'gen_worker_utilization',
-    help: '생성기 워커 스레드 사용률 — 생성기 CPU',
+    help: '생성기 워커 스레드 이벤트 루프 사용률 — 생성기 CPU',
     labelNames: ['mode'],
     registers: [this.registry],
   });
@@ -120,7 +121,8 @@ export class DatagenService implements OnModuleDestroy {
    */
   async runBench(o: BenchOptions): Promise<BenchResult> {
     const chunks = this.chunksFor(o.tier, o.mix, o.seed, o.chunks);
-    const mode = 'bench';
+    // 단독 실행 경로는 주입 모드(A~D)가 아니다 — mode 레이블 standalone
+    const mode = 'standalone';
     let measuring = false;
     let stop = false;
     const acc = { points: 0, dropped: 0, entries: 0, bytes: 0, busyMs: 0 };
@@ -135,7 +137,9 @@ export class DatagenService implements OnModuleDestroy {
           acc.entries += r.entries;
           acc.bytes += r.payload.byteLength;
           acc.busyMs += r.busyMs ?? 0;
-          this.generated.inc({ mode, profile: o.mix }, r.points);
+          r.pointsByProfile.forEach((n, code) => {
+            if (n > 0) this.generated.inc({ mode, profile: SIGNAL_PROFILES[code] as SignalProfile }, n);
+          });
           this.dropout.inc({ mode }, r.dropped);
         }
       }

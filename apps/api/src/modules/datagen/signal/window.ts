@@ -25,6 +25,8 @@ export interface WindowResult {
   points: number;
   dropped: number;
   state: Float64Array;
+  /** 프로파일 코드별 생성 포인트(행 생략 제외) — gen_points_generated_total{profile} */
+  pointsByProfile: Uint32Array;
   /** 워커가 이 창에 쓴 시간(ms) — 워커 안에서 채운다 */
   busyMs?: number;
 }
@@ -52,6 +54,7 @@ export function generateWindow(t: WindowTask): WindowResult {
   let points = 0;
   let dropped = 0;
   let e = 0;
+  const pointsByProfile = new Uint32Array(8);
   for (let s = 0; s < t.steps; s++) {
     const k = t.k0 + s;
     const ts = t.startMs + k * t.periodMs;
@@ -61,11 +64,13 @@ export function generateWindow(t: WindowTask): WindowResult {
       for (let j = 0; j < t.tagsPerDevice; j++) {
         const i = d * t.tagsPerDevice + j;
         const tagId = tagIdOf(dev, j, t.tagsPerDevice);
-        const v = valueAt(t.profiles[i] ?? 0, t.seed, tagId, k, state, i);
+        const code = t.profiles[i] ?? 0;
+        const v = valueAt(code, t.seed, tagId, k, state, i);
         if (Number.isNaN(v)) {
           dropped++;
           continue;
         }
+        pointsByProfile[code] = (pointsByProfile[code] ?? 0) + 1;
         tg[n] = tagId;
         va[n] = v;
         n++;
@@ -92,5 +97,5 @@ export function generateWindow(t: WindowTask): WindowResult {
     payload.set(c, at);
     at += c.length;
   }
-  return { payload, offsets, entries: e, points, dropped, state };
+  return { payload, offsets, entries: e, points, dropped, state, pointsByProfile };
 }

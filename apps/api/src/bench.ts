@@ -1,8 +1,8 @@
 // 생성기 모듈 단독 실행 경로(S1 · GEN-09 · EXP-21) — 수집 경로 없이 생성 + MessagePack 인코딩 처리량을 잰다.
-// 사용: APP_ROLE=datagen WORKER_POOL_SIZE=2 node dist/bench.js --tier M --mix mixed --seed 42 --warmup 5 --duration 30
+// 사용: APP_ROLE=datagen WORKER_POOL_SIZE=2 CAPACITY_TIER=M node dist/bench.js --mix mixed --seed 42 --warmup 5 --duration 30
+// 생성 티어는 CAPACITY_TIER(설정 로더)에서만 읽는다 — 기록의 run.capacityTier와 실제 생성 규모가 한 원천에서 나온다.
 // 출력은 JSON 한 줄 — run · switches는 설정 로더가 만든다(측정 기록 4요소 · 손으로 적지 않는다).
 import 'reflect-metadata';
-import { CAPACITY_TIER_NAMES, type CapacityTier } from '@db-study/shared';
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
 import { loadConfig, runInfo } from './config/app-config';
@@ -14,19 +14,31 @@ function arg(name: string, def: string): string {
   return i >= 0 ? (process.argv[i + 1] ?? def) : def;
 }
 
+/** 정수 인자 — 범위 밖 · 소수 · NaN이면 거부한다(기록한 값과 실제 값이 어긋나지 않게) */
+function intArg(name: string, def: string, min: number, max: number): number {
+  const v = Number(arg(name, def));
+  if (!Number.isInteger(v) || v < min || v > max)
+    throw new Error(`--${name} ${arg(name, def)} — ${min}~${max} 정수`);
+  return v;
+}
+
 async function main() {
   const cfg = loadConfig();
   if (cfg.appRole !== 'datagen') throw new Error('단독 실행 경로는 APP_ROLE=datagen으로만 돈다');
-  const tier = arg('tier', 'M') as CapacityTier;
-  if (!CAPACITY_TIER_NAMES.includes(tier)) throw new Error(`티어 ${tier} — S · M · M+ · L`);
+  const tier = cfg.capacityTier;
+  if (!tier) throw new Error('CAPACITY_TIER가 없다 — 생성 티어와 기록 4요소의 원천이다');
+  if (process.argv.includes('--tier') && arg('tier', '') !== tier) {
+    throw new Error(`--tier ${arg('tier', '')}가 CAPACITY_TIER ${tier}와 다르다`);
+  }
+  for (const w of cfg.switchWarnings) process.stderr.write(`경고: ${w}\n`);
   const opts = {
     tier,
     mix: parseMix(arg('mix', 'mixed')),
-    seed: Number(arg('seed', '42')),
-    warmupMs: Number(arg('warmup', '5')) * 1000,
-    durationMs: Number(arg('duration', '30')) * 1000,
-    stepsPerTask: Number(arg('steps', '10')),
-    chunks: Number(arg('chunks', '10')),
+    seed: intArg('seed', '42', 0, 4_294_967_295), // 난수는 32비트 시드를 쓴다
+    warmupMs: intArg('warmup', '5', 0, 3600) * 1000,
+    durationMs: intArg('duration', '30', 1, 3600) * 1000,
+    stepsPerTask: intArg('steps', '10', 1, 100_000),
+    chunks: intArg('chunks', '10', 1, 10_000),
   };
   const app = await NestFactory.createApplicationContext(AppModule.forConfig(cfg), {
     logger: ['error', 'warn'],

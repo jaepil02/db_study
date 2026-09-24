@@ -1,6 +1,7 @@
 // Stream 엔트리 MessagePack 코덱 — 정본 docs/06_pipeline/12_data_contract.md
 // 언어 중립이 계약이다: 배열은 표준 msgpack 배열(타입 배열 확장 · bin 금지), 레코드 확장 금지(map),
-// t0 · s는 정수 타입(uint64 계약)으로 싣는다 — 전환 조건 ①의 Python 생성기가 같은 Stream에 발행한다.
+// t0 · s는 정수 타입(uint64 계약 · 와이어는 msgpack int64 — 음이 아닌 값)으로 싣는다 — 전환 조건 ①의 Python 생성기가 같은 Stream에 발행한다.
+// va의 와이어 표현 — 정수로 떨어지는 값은 msgpack int, 나머지는 float64로 실린다. 소비자는 숫자를 Float64로 해석한다(06_pipeline/12 §와이어 표현).
 import { Packr } from 'msgpackr';
 import { STREAM_SCHEMA_VERSION, type StreamEntry } from './stream-entry';
 
@@ -38,7 +39,7 @@ export class UnknownSchemaVersionError extends Error {
   }
 }
 
-/** v로 해석을 고른다. 모르는 v는 추정하지 않고 오류로 돌려준다 */
+/** v로 해석을 고른다. 모르는 v는 추정하지 않고 오류로 돌려준다 — 모양 검증은 호출자가 스키마(발행자 · 소비자)로 한다 */
 export function decodeEntry(buf: Uint8Array): StreamEntry {
   const raw = packr.unpack(buf) as Record<string, unknown>;
   if (raw === null || typeof raw !== 'object' || !('v' in raw))

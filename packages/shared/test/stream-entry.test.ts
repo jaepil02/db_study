@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { entryTimestamps, StreamEntryV1 } from '../src/stream-entry';
+import { entryTimestamps, StreamEntryV1, StreamEntryV1Consumer } from '../src/stream-entry';
 
 const ok = {
   v: 1,
@@ -35,5 +35,16 @@ describe('Stream 엔트리 계약 v1', () => {
     ['음수 설비', { ...ok, d: -1 }],
   ])('%s → 거절', (_name, entry) => {
     expect(StreamEntryV1.safeParse(entry).success).toBe(false);
+  });
+});
+
+describe('소비자 스키마 — 음수 dt는 거절하지 않고 계수 대상으로 받는다', () => {
+  it('음수 dt · t0가 최솟값이 아닌 엔트리를 받는다', () => {
+    expect(StreamEntryV1Consumer.safeParse({ ...ok, dt: [0, -1, 3] }).success).toBe(true);
+    expect(StreamEntryV1Consumer.safeParse({ ...ok, dt: [1, 5, 10] }).success).toBe(true);
+  });
+  it('모양 위반은 막는다', () => {
+    expect(StreamEntryV1Consumer.safeParse({ ...ok, va: [1] }).success).toBe(false);
+    expect(StreamEntryV1Consumer.safeParse({ ...ok, q: [9, 3, 9] }).success).toBe(false);
   });
 });

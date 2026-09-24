@@ -6,7 +6,7 @@ import { generateWindow, type WindowResult, type WindowTask } from './signal/win
 class MovedResult {
   constructor(private readonly r: WindowResult) {}
   get [Piscina.transferableSymbol]() {
-    return [this.r.payload.buffer, this.r.offsets.buffer, this.r.state.buffer];
+    return [this.r.payload.buffer, this.r.offsets.buffer, this.r.state.buffer, this.r.pointsByProfile.buffer];
   }
   get [Piscina.valueSymbol]() {
     return this.r;

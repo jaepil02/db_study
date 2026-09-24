@@ -1,5 +1,7 @@
 // 환경변수 로더 — 이름 정본 docs/09_tech_stack/04_local_environment.md §환경변수 · 스위치 정본 docs/02_features/13_switch_matrix.md
-// 전부 기동 시 1회만 읽는다(D-06 · ADR-08). 허용값 밖이면 기동을 거부한다 — 조용히 기본값으로 돌면 기록 조건과 실제 실행이 어긋난다.
+// 전부 기동 시 1회만 읽는다(D-06 · ADR-08).
+// 허용값 밖이면 — APP_ROLE · 측정 조건 · 워커 수는 기동을 거부하고, 스위치는 기본 구현을 주입하고 경고한다.
+// 스위치의 실제 주입값은 runInfo · health가 보인다(09_tech_stack/04 §환경변수 역할 스위치 행 · 07_api/10 A형).
 // S1 범위: APP_ROLE · 스위치 11 · MEMORY_PROFILE · CAPACITY_TIER · COMMIT_HASH · WORKER_POOL_SIZE. 저장소 접속 · 비밀은 S2부터.
 import { readFileSync } from 'node:fs';
 import { CAPACITY_TIER_NAMES, type CapacityTier } from '@db-study/shared';
@@ -46,6 +48,8 @@ export interface AppConfig {
   commitHash: string | null;
   workerPoolSize: number;
   switches: SwitchValues;
+  /** 허용값 밖이라 기본 구현으로 대체한 스위치 — 기동 로그 경고로 낸다 */
+  switchWarnings: string[];
 }
 
 export class ConfigRejectedError extends Error {}
@@ -53,16 +57,19 @@ export class ConfigRejectedError extends Error {}
 export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
   const base = EnvSchema.safeParse(env);
   const switches: Record<string, unknown> = {};
-  const problems: string[] = base.success
-    ? []
-    : base.error.issues.map((i) => `${i.path.join('.')}: ${i.message}`);
+  const switchWarnings: string[] = [];
   for (const [id, [name, schema]] of Object.entries(SWITCH_ENV)) {
     const v = env[name] === '' ? undefined : env[name];
     const r = (schema as z.ZodTypeAny).safeParse(v);
-    if (r.success) switches[id] = r.data;
-    else problems.push(`${name}(${id}): ${r.error.issues[0]?.message ?? '허용값 밖'}`);
+    if (r.success) {
+      switches[id] = r.data;
+    } else {
+      switches[id] = (schema as z.ZodTypeAny).parse(undefined); // 기본 구현
+      switchWarnings.push(`${name}(${id})=${String(v)} 허용값 밖 — 기본값 ${String(switches[id])}으로 주입`);
+    }
   }
-  if (!base.success || problems.length > 0) {
+  if (!base.success) {
+    const problems = base.error.issues.map((i) => `${i.path.join('.')}: ${i.message}`);
     throw new ConfigRejectedError(`기동 거부 — 환경변수 허용값 밖: ${problems.join(' · ')}`);
   }
   return {
@@ -72,6 +79,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
     commitHash: base.data.COMMIT_HASH,
     workerPoolSize: base.data.WORKER_POOL_SIZE,
     switches: switches as SwitchValues,
+    switchWarnings,
   };
 }
 

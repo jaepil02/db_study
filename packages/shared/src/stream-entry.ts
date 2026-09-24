@@ -46,6 +46,38 @@ export const StreamEntryV1 = z
 
 export type StreamEntry = z.infer<typeof StreamEntryV1>;
 
+/**
+ * 소비자(Ingest)용 — 발행자 결함을 적재 유실로 바꾸지 않는다: 음수 dt · t0가 최솟값이 아닌 엔트리를
+ * 거절하지 않고 받아 계수한다(06_pipeline/12 §3단계 · ing_negative_dt_total). 모양(8필드 · 길이 · 타입)은 같이 막는다.
+ * 발행자(생성기 · Collector)는 StreamEntryV1로 검증한다.
+ */
+export const StreamEntryV1Consumer = z
+  .object({
+    v: z.literal(STREAM_SCHEMA_VERSION),
+    d: uint32,
+    s: uint64Safe,
+    t0: uint64Safe,
+    tg: z.array(uint32),
+    dt: z.array(
+      z
+        .number()
+        .int()
+        .min(-INT32_MAX - 1)
+        .max(INT32_MAX),
+    ),
+    va: z.array(z.number().refine(Number.isFinite)),
+    q: z.array(
+      z
+        .number()
+        .int()
+        .refine((c) => STREAM_QUALITY_CODES.includes(c)),
+    ),
+  })
+  .strict()
+  .refine((e) => e.dt.length === e.tg.length && e.va.length === e.tg.length && e.q.length === e.tg.length, {
+    message: 'tg · dt · va · q 길이가 같아야 한다',
+  });
+
 /** ts[i] = t0 + dt[i] */
 export function entryTimestamps(e: Pick<StreamEntry, 't0' | 'dt'>): number[] {
   return e.dt.map((d) => e.t0 + d);

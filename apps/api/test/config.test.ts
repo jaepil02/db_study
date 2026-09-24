@@ -50,14 +50,20 @@ describe('설정 로더 — 기동 시 1회 · 허용값 밖이면 기동 거부
 
   it.each([
     ['APP_ROLE 허용값 밖', { ...base, APP_ROLE: 'everything' }],
-    ['스위치 허용값 밖', { ...base, REDIS_LATEST_CACHE: 'yes' }],
-    ['WS_THROTTLE_MS 음수', { ...base, WS_THROTTLE_MS: '-1' }],
     ['WORKER_POOL_SIZE 없음', {}],
     ['WORKER_POOL_SIZE 0', { WORKER_POOL_SIZE: '0' }],
     ['티어 허용값 밖', { ...base, CAPACITY_TIER: 'XL' }],
     ['커밋 해시 모양 아님', { ...base, COMMIT_HASH: 'HEAD' }],
   ])('%s → 기동 거부', (_n, env) => {
     expect(() => loadConfig(env)).toThrow(ConfigRejectedError);
+  });
+
+  it('스위치 허용값 밖 → 기동은 하고 기본 구현 주입 · 경고 · runInfo가 실제 주입값을 보인다', () => {
+    const c = loadConfig({ ...base, REDIS_LATEST_CACHE: 'of', WS_THROTTLE_MS: '-1' });
+    expect(c.switches['SW-02']).toBe('on');
+    expect(c.switches['SW-07']).toBe(100);
+    expect(c.switchWarnings).toHaveLength(2);
+    expect(runInfo(c, null).switches['SW-02']).toBe('on');
   });
 
   it('memoryLimitMb는 cgroup에서 읽는다 — max면 null', () => {
