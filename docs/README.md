@@ -2,6 +2,7 @@
 
 > **대상**: db_study 설계 정본 — PLC 대용량 시계열과 업무 데이터를 Redis 중간 계층에서 갈라 ClickHouse와 PostgreSQL에 나눠 싣는 로컬 학습 시스템의 개요 · 기능 · 요구사항 · 아키텍처 · 저장소 · 파이프라인 · API · 화면 · 기술스택 · 관측 · 용어 · 보안
 > **작성일**: 2026-09-23
+> **개정일**: 2026-09-24 — Docker 메모리 상향 · 체크리스트 7 · Python 반영 — 파생 수치 행 버전 고정표 36 → **37**행 · 공식 참조 68 → **70**
 > **개정일**: 2026-09-24 — S0 완료 반영 — 성격 줄 · 현재 상태에 S0 불릿 신설(저장소 3 · Taskfile · 게이트 · 기록 001 · 002 · ADR-14 보강) · 기계 검사 경로 .omc/docs_lint.py → **scripts/docs_lint.py**
 > **개정일**: 2026-09-24 — 측정 머신 전환 · S0 구현 반영 — 호스트 포트 행에 현행 측정 머신의 redis 호스트 포트 6380 등재(충돌 시 호스트 쪽만 변경 규칙)
 > **개정일**: 2026-09-24 — 최종 정밀 검수 — 도메인 공백 행에 08_screen 주 화면 없음 4(COL · SIM · ING · GEN) 추가 · 현재 상태에 남은 미결의 세 부류 명시(문서 판정 대기 0)
@@ -89,7 +90,7 @@ db_study는 배포하지 않는 **로컬 전용 학습 시스템**이다. 목적
 | API 표면 | **43** — REST JSON 40 + 다운로드 스트림 1 + 메트릭 텍스트 1 + WebSocket 1. 문서별 03_auth 3 · 04_master 17 · 05_timeseries 2 · 06_realtime 2 · 07_alarms 6 · 08_work_orders 9 · 09_datagen 1 · 10_metrics 2 · 11_websocket 1. 검산: 3 + 17 + 2 + 2 + 6 + 9 + 1 + 2 + 1 = **43** · 원본 21 + 신설 22. 세는 기준은 도메인 문서의 표면 요약 표 행 수다(최대 번호가 아니다). 정본 [07_api/README.md](./07_api/README.md) |
 | 화면 | **10** — AUTH-LOGIN · DSH-REALTIME · ANL-TREND · ALM-CONSOLE · ALM-RULES · ADM-MASTER · ADM-WORKORDER · ADM-AUDIT · EXP-CONSOLE · EXP-COMPARE. 검산: AUTH 1 + DSH 1 + ANL 1 + ALM 2 + ADM 3 + EXP 2 = **10**. 정본 [08_screen/README.md](./08_screen/README.md) |
 | 실험 | **39** — EXP-01~39(결번 없음). 대조군 5(EXP-01~05) + 스위치 10 + 장애 재현 5 + 생성기 1 + 부하 시나리오 5 + 확장 진입 2 + 흐름·구조·기반 11. 검산: 5 + 10 + 5 + 1 + 5 + 2 + 11 = **39**. 신설은 EXP-40부터 말미 채번. 정본 [10_observability/06_experiment_catalog.md](./10_observability/06_experiment_catalog.md) |
-| 기술 · 관측 · 보안 파생 수치 | 메트릭 이름 **136**(정본 [10_observability/01_metrics_catalog.md](./10_observability/01_metrics_catalog.md)) · 알림 규칙 14 · 대시보드 6(정본 [10_observability/03_dashboards_alerts.md](./10_observability/03_dashboards_alerts.md)) · 환경변수 **34**(스위치 11 + 스위치 밖 23 · 정본 [09_tech_stack/04_local_environment.md](./09_tech_stack/04_local_environment.md)) · 버전 고정표 **36**행(정본 [09_tech_stack/03_data_infra.md](./09_tech_stack/03_data_infra.md)) · 공식 참조 **68**(정본 [03_requirements/16_official_references.md](./03_requirements/16_official_references.md)) · 위협 × 통제 **26** · 잔여 17(정본 [12_security/04_threat_model.md](./12_security/04_threat_model.md)) |
+| 기술 · 관측 · 보안 파생 수치 | 메트릭 이름 **136**(정본 [10_observability/01_metrics_catalog.md](./10_observability/01_metrics_catalog.md)) · 알림 규칙 14 · 대시보드 6(정본 [10_observability/03_dashboards_alerts.md](./10_observability/03_dashboards_alerts.md)) · 환경변수 **34**(스위치 11 + 스위치 밖 23 · 정본 [09_tech_stack/04_local_environment.md](./09_tech_stack/04_local_environment.md)) · 버전 고정표 **37**행(정본 [09_tech_stack/03_data_infra.md](./09_tech_stack/03_data_infra.md)) · 공식 참조 **70**(정본 [03_requirements/16_official_references.md](./03_requirements/16_official_references.md)) · 위협 × 통제 **26** · 잔여 17(정본 [12_security/04_threat_model.md](./12_security/04_threat_model.md)) |
 | 스택 표기 | **Next.js · NestJS · PostgreSQL 18 · ClickHouse 25.8 · Redis 8 · Docker Compose**로 통일한다. 정확 버전은 09_tech_stack에만 적는다 |
 | 단위와 시각 | ts = 측정 시각(모드 A는 Collector 폴링 시점 · 생성 모드는 생성기 시점) · ingested_at = 적재 시각 · 저장은 epoch 기준 · 표시 시점에만 Asia/Seoul로 변환 · 측정값 Float64. 정본 [11_glossary/05_units_and_time.md](./11_glossary/05_units_and_time.md) |
 

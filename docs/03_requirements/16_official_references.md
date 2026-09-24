@@ -2,8 +2,9 @@
 
 > **대상**: 설계 문서군이 인용하는 외부 공식 문서 · 릴리스 노트 · 표준의 URL 전수 — 런타임 · 저장소 · 저장소 확장 · 백엔드 라이브러리 · 프론트엔드 · 도구 · 부하 · 관측 · 실행 환경 · 프로토콜 표준 · 보안 참고 · 인용처 · 재확인 규칙
 > **작성일**: 2026-09-24
+> **개정일**: 2026-09-24 — 착수 체크리스트 7 반영 — 저장소 6행 확인일 채움(릴리스 · 레지스트리 대조) · ClickHouse 보안 정책 행 신설(25.x 지원 종료 확인) · Python 행 신설(버전 고정표 36 → **37**행 대응) — 등재 68 → **70** · 저장소 9 → **10** · 도구 · 부하 · 관측 13 → **14** · 미확인 68 → **63**
 > **개정일**: 2026-09-24 — W7 검수 반영 — 보안 참고 10 · Compose 변수 치환 1 추가 57 → **68** · 버전 고정표 35 → **36**행 대응 · 도입문의 역링크 서술을 인용처 열 기준으로
-> **원천**: [../09_tech_stack/03_data_infra.md](../09_tech_stack/03_data_infra.md) 버전 고정표 36행 · 각 문서의 "공식 참조로 재확인" 등재 행 · 원본 tech_stack.md §12 · 원본 implementation_plan.md §9 착수 체크리스트 7번(커밋 ff66a37) · 신설
+> **원천**: [../09_tech_stack/03_data_infra.md](../09_tech_stack/03_data_infra.md) 버전 고정표 37행 · 각 문서의 "공식 참조로 재확인" 등재 행 · 원본 tech_stack.md §12 · 원본 implementation_plan.md §9 착수 체크리스트 7번(커밋 ff66a37) · 신설
 
 이 문서는 **외부 URL의 유일한 등재처**다. 다른 문서는 URL을 쓰지 않고 무엇을 확인해야 하는지만 적으며, 그 사실이 어느 URL로 확인되는지는 이 문서의 인용처 열이 역으로 잇는다([../CLAUDE.md](../CLAUDE.md) 외부 URL 규칙). URL을 한 자리에 모으는 이유는 하나다 — 공식 문서의 주소는 버전마다 바뀌고, 여러 문서에 흩어진 URL은 한 번에 고칠 수 없어 낡은 주소가 조용히 남는다.
 
@@ -35,17 +36,18 @@
 
 | 대상 | 종류 | URL | 확인할 것 | 인용처 | 확인일 |
 |------|------|------|------|------|------|
-| PostgreSQL | 릴리스 노트 목록 | [https://www.postgresql.org/docs/release/](https://www.postgresql.org/docs/release/) | 18의 현행 부 버전 | [../09_tech_stack/03_data_infra.md](../09_tech_stack/03_data_infra.md) | 미확인 |
+| PostgreSQL | 릴리스 노트 목록 | [https://www.postgresql.org/docs/release/](https://www.postgresql.org/docs/release/) | 18의 현행 부 버전 | [../09_tech_stack/03_data_infra.md](../09_tech_stack/03_data_infra.md) | 2026-09-24 |
 | PostgreSQL | 18 문서 | [https://www.postgresql.org/docs/18/](https://www.postgresql.org/docs/18/) | 선언적 파티션 · BRIN · COPY · 튜닝 파라미터 | [../05_data_stores/01_postgresql_schema.md](../05_data_stores/01_postgresql_schema.md) · [../05_data_stores/02_postgresql_constraints.md](../05_data_stores/02_postgresql_constraints.md) · [../05_data_stores/10_olap_vs_rdb_control.md](../05_data_stores/10_olap_vs_rdb_control.md) | 미확인 |
-| postgres 이미지 | 공식 이미지 | [https://hub.docker.com/_/postgres](https://hub.docker.com/_/postgres) | 18 alpine 태그 · 초기화 스크립트 규약 · 시간대 데이터 | [../09_tech_stack/03_data_infra.md](../09_tech_stack/03_data_infra.md) | 미확인 |
-| ClickHouse | 변경 이력 | [https://clickhouse.com/docs/whats-new/changelog](https://clickhouse.com/docs/whats-new/changelog) | 25.8 LTS 패치 태그 | [../09_tech_stack/03_data_infra.md](../09_tech_stack/03_data_infra.md) | 미확인 |
+| postgres 이미지 | 공식 이미지 | [https://hub.docker.com/_/postgres](https://hub.docker.com/_/postgres) | 18 alpine 태그 · 초기화 스크립트 규약 · 시간대 데이터 | [../09_tech_stack/03_data_infra.md](../09_tech_stack/03_data_infra.md) | 2026-09-24 |
+| ClickHouse | 변경 이력 | [https://clickhouse.com/docs/whats-new/changelog](https://clickhouse.com/docs/whats-new/changelog) | 25.8 LTS 패치 태그 | [../09_tech_stack/03_data_infra.md](../09_tech_stack/03_data_infra.md) | 2026-09-24 |
 | ClickHouse | 문서 | [https://clickhouse.com/docs](https://clickhouse.com/docs) | MergeTree · AggregatingMergeTree · MV · Dictionary · 코덱 · TTL · insert_deduplication_token · async_insert · 서버 설정과 사용자 프로파일 설정의 수준 · merge_with_ttl_timeout 기본값 | [../05_data_stores/03_clickhouse_schema.md](../05_data_stores/03_clickhouse_schema.md) · [../05_data_stores/04_clickhouse_rollup.md](../05_data_stores/04_clickhouse_rollup.md) · [../09_tech_stack/03_data_infra.md](../09_tech_stack/03_data_infra.md) | 미확인 |
-| clickhouse-server 이미지 | 공식 이미지 | [https://hub.docker.com/r/clickhouse/clickhouse-server](https://hub.docker.com/r/clickhouse/clickhouse-server) | LTS 태그 · 설정 파일 마운트 경로 · 시간대 데이터 | [../09_tech_stack/03_data_infra.md](../09_tech_stack/03_data_infra.md) | 미확인 |
-| Redis | 릴리스 | [https://github.com/redis/redis/releases](https://github.com/redis/redis/releases) | 8의 현행 부 버전 | [../09_tech_stack/03_data_infra.md](../09_tech_stack/03_data_infra.md) | 미확인 |
+| clickhouse-server 이미지 | 공식 이미지 | [https://hub.docker.com/r/clickhouse/clickhouse-server](https://hub.docker.com/r/clickhouse/clickhouse-server) | LTS 태그 · 설정 파일 마운트 경로 · 시간대 데이터 | [../09_tech_stack/03_data_infra.md](../09_tech_stack/03_data_infra.md) | 2026-09-24 |
+| ClickHouse | 보안 정책(지원 버전 표) | [https://github.com/ClickHouse/ClickHouse/blob/master/SECURITY.md](https://github.com/ClickHouse/ClickHouse/blob/master/SECURITY.md) | 고정한 LTS 계열의 보안 지원 여부 | [../09_tech_stack/03_data_infra.md](../09_tech_stack/03_data_infra.md) | 2026-09-24 |
+| Redis | 릴리스 | [https://github.com/redis/redis/releases](https://github.com/redis/redis/releases) | 8의 현행 부 버전 | [../09_tech_stack/03_data_infra.md](../09_tech_stack/03_data_infra.md) | 2026-09-24 |
 | Redis | 문서 | [https://redis.io/docs/latest/](https://redis.io/docs/latest/) | Streams(컨슈머 그룹 · XPENDING · XAUTOCLAIM · XINFO GROUPS의 lag) · 축출 정책 volatile-lru · Pub/Sub · client-output-buffer-limit 기본값 · Lua 스크립트 | [../05_data_stores/05_redis_keyspace.md](../05_data_stores/05_redis_keyspace.md) · [../05_data_stores/06_redis_memory.md](../05_data_stores/06_redis_memory.md) · [../09_tech_stack/03_data_infra.md](../09_tech_stack/03_data_infra.md) · [../10_observability/01_metrics_catalog.md](../10_observability/01_metrics_catalog.md) | 미확인 |
-| redis 이미지 | 공식 이미지 | [https://hub.docker.com/_/redis](https://hub.docker.com/_/redis) | 8 alpine 태그 · 설정 파일 전달 방식 | [../09_tech_stack/03_data_infra.md](../09_tech_stack/03_data_infra.md) | 미확인 |
+| redis 이미지 | 공식 이미지 | [https://hub.docker.com/_/redis](https://hub.docker.com/_/redis) | 8 alpine 태그 · 설정 파일 전달 방식 | [../09_tech_stack/03_data_infra.md](../09_tech_stack/03_data_infra.md) | 2026-09-24 |
 
-- 검산: 저장소 = **9**
+- 검산: 저장소 = **10**
 
 ## 저장소 확장
 
@@ -106,13 +108,14 @@
 | node-pg-migrate | 공식 문서 | [https://salsita.github.io/node-pg-migrate/](https://salsita.github.io/node-pg-migrate/) | 부 버전 · 원시 SQL 마이그레이션 | [../09_tech_stack/05_tooling_devops.md](../09_tech_stack/05_tooling_devops.md) · [../05_data_stores/09_migrations_seed.md](../05_data_stores/09_migrations_seed.md) | 미확인 |
 | Prisma Migrate | 공식 문서 | [https://www.prisma.io/docs/orm/prisma-migrate](https://www.prisma.io/docs/orm/prisma-migrate) | 개발 명령의 드리프트 검사가 마이그레이션 이력 밖 파티션을 어떻게 다루는가 — 버린 대안의 실패 근거 | [../09_tech_stack/05_tooling_devops.md](../09_tech_stack/05_tooling_devops.md) · [../09_tech_stack/06_decisions_rationale.md](../09_tech_stack/06_decisions_rationale.md) | 미확인 |
 | Task | 공식 사이트 | [https://taskfile.dev/](https://taskfile.dev/) | 부 버전 · Taskfile 문법 | [../09_tech_stack/05_tooling_devops.md](../09_tech_stack/05_tooling_devops.md) | 미확인 |
+| Python | 릴리스 목록 | [https://www.python.org/downloads/](https://www.python.org/downloads/) | 3.14의 현행 부 버전 | [../09_tech_stack/03_data_infra.md](../09_tech_stack/03_data_infra.md) · [../09_tech_stack/05_tooling_devops.md](../09_tech_stack/05_tooling_devops.md) | 미확인 |
 | Docker Compose | 공식 문서 | [https://docs.docker.com/compose/](https://docs.docker.com/compose/) | v2 부 버전 · 리소스 제한(deploy.resources) · cpuset · healthcheck · profiles 문법 | [../04_architecture/03_execution_topology.md](../04_architecture/03_execution_topology.md) · [../09_tech_stack/04_local_environment.md](../09_tech_stack/04_local_environment.md) | 미확인 |
 | Docker Compose 변수 치환 | 공식 문서 | [https://docs.docker.com/compose/how-tos/environment-variables/variable-interpolation/](https://docs.docker.com/compose/how-tos/environment-variables/variable-interpolation/) | .env 값의 접속 문자열 치환 · 미설정 변수 처리 | [../09_tech_stack/04_local_environment.md](../09_tech_stack/04_local_environment.md) · [../12_security/02_secrets_config.md](../12_security/02_secrets_config.md) | 미확인 |
 | k6 | 공식 문서 | [https://grafana.com/docs/k6/latest/](https://grafana.com/docs/k6/latest/) | v1.x · 시나리오 실행기 · Prometheus 원격 쓰기 출력 | [../10_observability/05_load_scenarios.md](../10_observability/05_load_scenarios.md) | 미확인 |
 | Prometheus | 공식 문서 | [https://prometheus.io/docs/](https://prometheus.io/docs/) | 3.x · 규칙 파일 · 원격 쓰기 수신 기능 | [../09_tech_stack/03_data_infra.md](../09_tech_stack/03_data_infra.md) · [../10_observability/03_dashboards_alerts.md](../10_observability/03_dashboards_alerts.md) | 미확인 |
 | Grafana | 공식 문서 | [https://grafana.com/docs/grafana/latest/](https://grafana.com/docs/grafana/latest/) | 12.x · 대시보드 프로비저닝 형식 | [../09_tech_stack/03_data_infra.md](../09_tech_stack/03_data_infra.md) · [../10_observability/03_dashboards_alerts.md](../10_observability/03_dashboards_alerts.md) | 미확인 |
 
-- 검산: 도구 · 부하 · 관측 = **13**
+- 검산: 도구 · 부하 · 관측 = **14**
 
 ## 실행 환경
 
@@ -153,9 +156,9 @@
 
 ## 검산
 
-- 검산: 등재 = 런타임 4 + 저장소 9 + 저장소 확장 3 + 백엔드 라이브러리 13 + 프론트엔드 10 + 도구 · 부하 · 관측 13 + 실행 환경 2 + 프로토콜 표준 4 + 보안 참고 10 = **68**
-- **버전 고정표 36행이 모두 이 문서의 행 하나 이상에 닿는다**(Fastify 어댑터는 NestJS 문서 행 · 비밀번호 해시 라이브러리는 라이브러리 미선정이라 Argon2 RFC 9106 행 — 선정 시 그 공식 저장소 행을 더한다) — 고정표의 묶음 행(Zustand · React Hook Form · Tailwind CSS · Biome · Vitest · Supertest · Testcontainers)은 구성요소마다 한 행씩 나눠 등재했다. 해당 없음 행(shadcn/ui)도 복사 절차 확인을 위해 등재한다. pg_stat_statements · auto_explain은 엔진을 따르므로 버전이 아니라 적재 설정을 확인한다.
-- **등재했지만 확인하지 않았다** — 확인일 열 **68행 전부 미확인**. 확인은 착수 체크리스트 7번이 한다.
+- 검산: 등재 = 런타임 4 + 저장소 10 + 저장소 확장 3 + 백엔드 라이브러리 13 + 프론트엔드 10 + 도구 · 부하 · 관측 14 + 실행 환경 2 + 프로토콜 표준 4 + 보안 참고 10 = **70**
+- **버전 고정표 37행이 모두 이 문서의 행 하나 이상에 닿는다**(Fastify 어댑터는 NestJS 문서 행 · 비밀번호 해시 라이브러리는 라이브러리 미선정이라 Argon2 RFC 9106 행 — 선정 시 그 공식 저장소 행을 더한다) — 고정표의 묶음 행(Zustand · React Hook Form · Tailwind CSS · Biome · Vitest · Supertest · Testcontainers)은 구성요소마다 한 행씩 나눠 등재했다. 해당 없음 행(shadcn/ui)도 복사 절차 확인을 위해 등재한다. pg_stat_statements · auto_explain은 엔진을 따르므로 버전이 아니라 적재 설정을 확인한다.
+- **등재했지만 대부분 확인하지 않았다** — 확인일 열 확인 7(저장소 릴리스 · 이미지 · ClickHouse 보안 정책 — 착수 체크리스트 7번 · 2026-09-24) + 미확인 63 = **70**. 나머지 대조는 각 구성요소를 쓰는 단계의 착수 때 한다.
 
 ## 재확인 규칙
 
