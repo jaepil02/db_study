@@ -2,6 +2,7 @@
 
 > **대상**: PostgreSQL 업무 테이블 14의 컬럼 · 타입 · 컬럼 제약 · 도메인 소유 · tag_master_history 설계 · 저장 enum 값 집합 확정(condition_type · severity · work_order.status) · 인계 판정(site.timezone · 알람 담당자 · 무인증 기간 감사 행위자) · 튜닝 파라미터와 조정값 소유처 — 테이블명 · 컬럼명 채번 정본
 > **작성일**: 2026-09-24
+> **개정일**: 2026-09-24 — W7 검수 반영 — 미확인 1행 닫힘(실적 기록 상태 조건) — 테이블 수 불변
 > **개정일**: 2026-09-24 — W7 보안 판정 반영 — password_hash 알고리즘 미기재 → **Argon2id**(PHC 자기 기술 문자열 · 컬럼 형 불변)(정본 12_security/01)
 > **원천**: 원본 architecture.md §5 · §6 · §12 · §13 · §18(커밋 ff66a37) · 원본 tech_stack.md §5.1 · §10.2(커밋 ff66a37) · 원본 data_flow.md §7 · §8 · §8.2(커밋 ff66a37) · 원본 implementation_plan.md §2.3(커밋 ff66a37) · docs_plan.md 보정 #15 · 웨이브 인계 W3 05_data_stores/01 행 · ADR-16 · ADR-19 · D-04 · D-11 · [../README.md](../README.md) 고정 기준 PostgreSQL 테이블
 
@@ -248,7 +249,7 @@ REQ-WRK-04가 요구한 허용 전이 표다. 표 밖 전이는 work_orders.inva
 | condition_type · severity · work_order.status 값 | **이 문서가 확정** — 11_glossary/03 미설계 3행의 반영 제안 | [../11_glossary/03_enums_state_machines.md](../11_glossary/03_enums_state_machines.md)(리드 반영) |
 | RATE_OF_CHANGE의 첫 판정(직전 값 없음) · 직전 값의 BAD 행 처리 | **신규 미설계** — 판정 식의 경계 조건 | [../06_pipeline/08_alarm.md](../06_pipeline/08_alarm.md)(W4) |
 | 비활성 태그를 가리키는 alarm_rule | W2a 등재 미확인 — DB는 FK만 유지한다 | 상동 |
-| 생산 실적 기록 시점의 작업지시 상태 조건 | **신규 미설계** — PLANNED · 종결 지시에 실적을 적을 수 있는지 없다 | [../07_api/08_work_orders.md](../07_api/08_work_orders.md)(W5) |
+| 생산 실적 기록 시점의 작업지시 상태 조건 | 닫힘 — IN_PROGRESS인 지시에만 기록 · 밖이면 work_orders.production_log_not_allowed/409 — [../07_api/08_work_orders.md](../07_api/08_work_orders.md) | [../07_api/08_work_orders.md](../07_api/08_work_orders.md)(W5) |
 | password_hash 알고리즘 | **W7 닫힘** — Argon2id · 알고리즘 · 파라미터 · 솔트를 담은 자기 기술 문자열 하나(text 그대로) · 비용 파라미터 값은 2계층 미정 | [../12_security/01_authn_authz.md](../12_security/01_authn_authz.md) |
 | work_mem · maintenance_work_mem의 개발 · 중간 프로파일 값 | 원본 미기재 — 산정 규칙만 | 이 문서(S5 대조 실험 전 확정) |
 | 업무 CRUD p95 · 대조군 동거 시 간섭 크기 | 3계층 미확인 — 확정 전 임의 값 고정 금지 | [../03_requirements/13_nonfunctional.md](../03_requirements/13_nonfunctional.md) REQ-NFR-09 |

@@ -2,6 +2,7 @@
 
 > **대상**: 데이터 단계별 보존 기간 · 기준 시점 · 삭제 방식 · 삭제 단위 · 실제 삭제 시점 · 복구 가능성 · 파티션 단위 변경 원칙 · 보존 변경 절차 · 대조군 보존 정합 — **보존 조정값의 정본**
 > **작성일**: 2026-09-24
+> **개정일**: 2026-09-24 — W7 검수 반영 — 미확인 2행 닫힘(대조군 파티션 정리 · DLQ 재처리 전 보존)
 > **개정일**: 2026-09-24 — W6 판정 반영 — TTL 머지 주기(서버 기본값 유지 · 줄이지 않음) · alarm_event 아카이브 위치(snapshots/archive/alarm_event · 파티션당 덤프 1)를 닫는다 · 파티션 삭제 지연은 미확인 유지
 > **원천**: 원본 data_flow.md §10.1 · §13 · §17(커밋 ff66a37) · 원본 architecture.md §5 · §6 · §7.1 · §7.2 · §7.3 · §15 · §17 · §18(커밋 ff66a37) · 원본 tech_stack.md §10.3(커밋 ff66a37) · [../README.md](../README.md) 고정 기준 조정값(보존의 정본 지정) · ADR-15 · D-05 · D-10
 
@@ -144,10 +145,10 @@
 | 항목 | 상태 | 확정 자리 |
 |------|------|------|
 | TTL 머지 주기 · 파티션 삭제 지연 | **W6 판정** — 머지 주기는 서버 기본값 유지 · 줄이지 않는다 · 파티션 삭제 지연은 3계층 미확인 — 확정 전 임의 값 고정 금지 | [../09_tech_stack/03_data_infra.md](../09_tech_stack/03_data_infra.md) §TTL 머지 주기 |
-| 대조군 파티션 정리 작업의 주기 · 실행 주체 | 계약만(tag_raw와 같은 경계) | [10_olap_vs_rdb_control.md](./10_olap_vs_rdb_control.md) · [../06_pipeline/10_datagen_inject.md](../06_pipeline/10_datagen_inject.md)(W4) |
+| 대조군 파티션 정리 작업의 주기 · 실행 주체 | 닫힘 — GEN 실험 도구가 tag_raw에 실제로 남은 KST 일 파티션 목록 기준으로 DETACH · DROP · 대조 실험 착수 전과 SW-09 on 운전 중 매일 — [../06_pipeline/10_datagen_inject.md](../06_pipeline/10_datagen_inject.md) | [10_olap_vs_rdb_control.md](./10_olap_vs_rdb_control.md) · [../06_pipeline/10_datagen_inject.md](../06_pipeline/10_datagen_inject.md)(W4) |
 | 분리된 alarm_event 파티션의 아카이브 위치 · 형식 | **W6 판정** — snapshots/archive/alarm_event/ · 파티션 하나당 덤프 파일 하나 · 파일 이름 = 파티션 이름(월) · Git 제외 | [../09_tech_stack/04_local_environment.md](../09_tech_stack/04_local_environment.md) §스냅샷 · 아카이브 위치 |
 | 티어별 정상 상태 디스크 | 원본 예상치(S 약 1 GB · M 약 39 GB · M+ 약 259 GB) — 3계층 미확인 | [../04_architecture/07_capacity_planning.md](../04_architecture/07_capacity_planning.md) |
-| DLQ 재처리 전 보존 보장 | 트리밍 유실 — 한계 등재 #12 | [../06_pipeline/11_backpressure_failure.md](../06_pipeline/11_backpressure_failure.md)(W4) |
+| DLQ 재처리 전 보존 보장 | 닫힘 — 보장하지 않는다(한계 등재 #12 유지) · dlq_count와 DLQ 길이를 대조해 트리밍 전에 재처리하는 운영 절차 — [../06_pipeline/11_backpressure_failure.md](../06_pipeline/11_backpressure_failure.md) | [../06_pipeline/11_backpressure_failure.md](../06_pipeline/11_backpressure_failure.md)(W4) |
 
 ## 관련 문서
 

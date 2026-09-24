@@ -2,6 +2,7 @@
 
 > **대상**: 알람(ALM · NestJS alarms 모듈) 기능 목록 · 목적이 다른 세 쓰기 · 기능별 경계 · 의존 도메인 · 실패 시 보이는 것 — 기능 ID ALM-NN 채번 정본
 > **작성일**: 2026-09-24
+> **개정일**: 2026-09-24 — W7 검수 반영 — 미확인 1행 닫힘(규칙 · 판정 이력 표면) — 기능 수 불변
 > **개정일**: 2026-09-24 — W4 판정 반영 — ALM-05 alarm_eval 소진 시 DLQ 격리 → **격리 없음 · 분석 무효 구간 기록** · ALM-08 확인의 alarm:state 주체 판정 · 미확인 1행 판정 · 비활성 태그 열린 이벤트 닫는 수단 미확인 행 **신설** — 기능 수 불변
 > **개정일**: 2026-09-24 — W3 판정 반영 — condition_type · severity 미설계 → **확정**(4값 · 1~3) · 담당자 배정 → **컬럼 두지 않음**(정본 05_data_stores/01)
 > **개정일**: 2026-09-24 — W2 요구사항 판정 반영 — ACK 허용 조건(state ACTIVE · acked_at NULL) · alarms.ack_not_allowed/409 · 규칙 변경과 확인은 감사 대상(REQ-WRK-07)
@@ -100,7 +101,7 @@ ALM은 **분기 ②계층이 실제로 실행되는 자리**다. 한 스트림�
 | 확인이 alarm:state를 ACKED로 바꾸는 주체 | 확인은 API가 PostgreSQL에 쓴다 | **W4 판정** — 판정기 단독 쓰기 · 해소 첫 감지 때 acked_at 조회 | [../06_pipeline/08_alarm.md](../06_pipeline/08_alarm.md) |
 | 비활성 태그의 열린 이벤트를 닫는 수단 | 태그 비활성화 뒤 판정이 멈춰 열린 이벤트가 해소를 관측하지 못한다 | **미설계** — 시스템은 닫지 않는다(W4 판정 · 거짓 해제 방지) · 사람이 확인만 할 수 있다 | [../06_pipeline/08_alarm.md](../06_pipeline/08_alarm.md) §비활성 태그 규칙 · 기능 신설 여부는 리드 |
 | 담당자 배정 | "확인 · 해제 · 담당자 배정 등 상태 갱신이 필요"(원본 data_flow.md §8.2) | **W3 판정** — 담당자 컬럼을 두지 않는다. 배정 기능이 없고 갱신은 확인 · 해제 둘로 닫는다 | [../05_data_stores/01_postgresql_schema.md](../05_data_stores/01_postgresql_schema.md) |
-| 규칙 관리 · 판정 이력 분석 표면 | API 표에 알람은 이벤트 목록 · 확인 둘뿐이다 | **신규 — 표면 미설계** | [../07_api/07_alarms.md](../07_api/07_alarms.md)(W5) |
+| 규칙 관리 · 판정 이력 분석 표면 | API 표에 알람은 이벤트 목록 · 확인 둘뿐이다 | 닫힘 — 규칙 관리 · 판정 이력 표면 4 신설 — [../07_api/07_alarms.md](../07_api/07_alarms.md) | [../07_api/07_alarms.md](../07_api/07_alarms.md)(W5) |
 | 판정 구간 지연 예산 | 원본 지연 예산표에 알람 판정 구간이 없다(보정 7.3) | 미확인 — 확정 전 임의 값 고정 금지 | [../04_architecture/05_latency_budget.md](../04_architecture/05_latency_budget.md)(W3) |
 | 규칙 변경의 감사 기록 | 업무 데이터 변경은 감사 대상이다(원본 architecture.md §18) | **W2 판정 완료** — 규칙 변경 · 확인은 대상 · 판정 경로의 시스템 쓰기는 대상 아님 | [../03_requirements/10_alarms.md](../03_requirements/10_alarms.md) |
 

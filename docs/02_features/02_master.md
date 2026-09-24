@@ -2,6 +2,8 @@
 
 > **대상**: 마스터 데이터(MST · NestJS master 모듈) 기능 목록 · 기능별 경계 · 의존 도메인 · 실패 시 보이는 것 — 기능 ID MST-NN 채번 정본
 > **작성일**: 2026-09-24
+> **개정일**: 2026-09-24 — W7 검수 반영 — §무효화 체인 펜스 · 불릿 · 보정 표의 5단 번호 → **6단 번호**(① 커밋 · ⑤ ⑥ 보정 7.4 · 정본 06_pipeline/07) — 기능 수 불변
+> **개정일**: 2026-09-24 — W7 검수 반영 — 미확인 5행 닫힘(dict_tag 비활성 · 쓰기 표면 · 비활성 태그 규칙 · cache:tagmeta 모양 · site.timezone) — 기능 수 불변
 > **개정일**: 2026-09-24 — W4 판정 반영 — MST-03 modbus_config 변경의 ch:cacheinv 신호 · MST-08 체인 5단 표기 → **6단 번호**(① 커밋 · ⑤ ⑥ 보정 7.4) · 미확인 1행 W4 판정 — 기능 수 불변
 > **개정일**: 2026-09-24 — W2 요구사항 판정 반영 — 스케일 변경 PATCH(scale_change_forbidden/409) · 비활성 태그(코드 없음)의 채번 보류를 닫는다
 > **원천**: 원본 architecture.md §5 · §6 · §7.4 · §8.2 · §10.1 · §11 · §12(커밋 ff66a37) · 원본 data_flow.md §3 · §5 · §7 · §7.1 · §17(커밋 ff66a37) · 원본 implementation_plan.md §5 S2 · S4 · S7 · §7.4(커밋 ff66a37) · 저장소 루트 docs_plan.md 보정 #15 · D-04 · D-11 · [../01_overview/04_domain_map.md](../01_overview/04_domain_map.md)
@@ -35,18 +37,19 @@ MST는 **시스템 전체의 메타 원천**이다. 사이트 · 라인 · 설�
 MST-08의 순서다. 체인 확장의 기전 정본은 [../06_pipeline/07_business_crud.md](../06_pipeline/07_business_crud.md)다.
 
 ```plain
-BEGIN → UPDATE tag_master → INSERT audit_log(before · after) → COMMIT
-  → ① DEL cache:tagmeta · cache:devlist              (Redis 사본)
-    → ② PUBLISH ch:cacheinv                         (다른 api 인스턴스의 로컬 캐시)
-      → ③ SYSTEM RELOAD DICTIONARY plc.dict_tag      (ClickHouse dictGet)
-        → ④ BFF 서버 fetch 캐시 태그 무효화           (Next.js — 보정 7.4)
-          → ⑤ WebSocket 무효화 신호 → 브라우저 쿼리 캐시 (RLT-09 중계 — 보정 7.4)
+BEGIN → UPDATE tag_master → INSERT audit_log(before · after)
+  → ① COMMIT                                        (트랜잭션 확정)
+    → ② DEL cache:tagmeta · cache:devlist            (Redis 사본)
+      → ③ PUBLISH ch:cacheinv                       (다른 api 인스턴스의 로컬 캐시)
+        → ④ SYSTEM RELOAD DICTIONARY plc.dict_tag    (ClickHouse dictGet)
+          → ⑤ BFF 서버 fetch 캐시 태그 무효화         (Next.js — 보정 7.4)
+            → ⑥ WebSocket 무효화 신호 → 브라우저 쿼리 캐시 (RLT-09 중계 — 보정 7.4)
 ```
 
 - **커밋 전에 지우면 영구 오염이다.** 삭제와 커밋 사이에 다른 요청이 옛 값을 읽어 캐시를 다시 채우고, 그 뒤 커밋이 되면 캐시에는 TTL이 끝날 때까지 낡은 값이 남는다.
-- **③을 생략하면 LIFETIME만큼 옛 이름이 보인다.** 원본 기준 최대 10분이다(현행 LIFETIME 상한 참고).
-- **④ · ⑤가 없으면 "무효화 후 즉시 반영" 검증은 반드시 실패한다.** 원본 검증 체크리스트(원본 data_flow.md §17)가 합격 기준으로 적었지만 BFF 캐시와 브라우저 staleTime만큼 늦는다(원본 implementation_plan.md §7.4).
-- ②의 구독자는 현재 api 인스턴스 1개뿐이라 효과가 없다. 확장 로드맵 2단계에서 인스턴스가 늘 때 코드 변경 없이 동작하도록 경계를 미리 둔다.
+- **④를 생략하면 LIFETIME만큼 옛 이름이 보인다.** 원본 기준 최대 10분이다(현행 LIFETIME 상한 참고).
+- **⑤ · ⑥이 없으면 "무효화 후 즉시 반영" 검증은 반드시 실패한다.** 원본 검증 체크리스트(원본 data_flow.md §17)가 합격 기준으로 적었지만 BFF 캐시와 브라우저 staleTime만큼 늦는다(원본 implementation_plan.md §7.4).
+- ③의 구독자는 현재 api 인스턴스 1개뿐이라 효과가 없다. 확장 로드맵 2단계에서 인스턴스가 늘 때 코드 변경 없이 동작하도록 경계를 미리 둔다.
 
 ## 기능별 경계
 
@@ -94,7 +97,7 @@ BEGIN → UPDATE tag_master → INSERT audit_log(before · after) → COMMIT
 
 | 원본 항목 | 이 문서의 반영 | 정본 |
 |------|------|------|
-| 보정 7.4 무효화 체인에서 BFF와 브라우저가 빠짐 — 원본 implementation_plan.md §7.4 | MST-08에 ④ BFF 태그 무효화 · ⑤ 브라우저 쿼리 캐시 무효화를 더했다. ⑤의 중계는 RLT-09 | [../06_pipeline/07_business_crud.md](../06_pipeline/07_business_crud.md) · ADR [../04_architecture/09_decision_records.md](../04_architecture/09_decision_records.md) |
+| 보정 7.4 무효화 체인에서 BFF와 브라우저가 빠짐 — 원본 implementation_plan.md §7.4 | MST-08에 ⑤ BFF 태그 무효화 · ⑥ 브라우저 쿼리 캐시 무효화를 더했다. ⑥의 중계는 RLT-09 | [../06_pipeline/07_business_crud.md](../06_pipeline/07_business_crud.md) · ADR [../04_architecture/09_decision_records.md](../04_architecture/09_decision_records.md) |
 | 태그 변경 이력 테이블 부재 — docs_plan 보정 #15 | MST-06이 tag_master_history에 이력을 쓴다 | [../05_data_stores/01_postgresql_schema.md](../05_data_stores/01_postgresql_schema.md) |
 | 보정 7.5 TTL 강제 수단 | cache:tagmeta · cache:devlist 쓰기는 TTL 필수 래퍼로만 한다 | [../05_data_stores/05_redis_keyspace.md](../05_data_stores/05_redis_keyspace.md) |
 | 보정 7.1~7.3 | 해당 없음 | 해당 없음 |
@@ -103,12 +106,12 @@ BEGIN → UPDATE tag_master → INSERT audit_log(before · after) → COMMIT
 
 | 항목 | 원본에서 확인되는 것 | 상태 | 확정 자리 |
 |------|------|------|------|
-| 비활성 태그의 과거 행 태그명 | dict_tag 적재 쿼리가 WHERE is_active다(원본 architecture.md §7.4) · 태그는 논리 삭제한다(원본 architecture.md §12) | **불일치** — 비활성화 순간 그 태그의 과거 행에 dictGet이 이름을 붙이지 못한다. 논리 삭제가 지키려던 "과거 데이터의 해석"이 조회에서 빠진다 | [../05_data_stores/07_cross_store_consistency.md](../05_data_stores/07_cross_store_consistency.md)(W3) |
-| 라인 · 사이트 쓰기 · 접속 설정 쓰기 표면 | API 표에 sites(GET) · devices(GET) · tags(GET · POST · PATCH)만 있다(원본 architecture.md §11) | **표면 미설계** — S4 CRUD 범위와 어긋난다 | [../07_api/04_master.md](../07_api/04_master.md)(W5) |
+| 비활성 태그의 과거 행 태그명 | dict_tag 적재 쿼리가 WHERE is_active다(원본 architecture.md §7.4) · 태그는 논리 삭제한다(원본 architecture.md §12) | 닫힘 — dict_tag가 tag_master 전 행(비활성 포함)을 싣고 is_active를 속성으로 둔다 — [../05_data_stores/07_cross_store_consistency.md](../05_data_stores/07_cross_store_consistency.md) | [../05_data_stores/07_cross_store_consistency.md](../05_data_stores/07_cross_store_consistency.md)(W3) |
+| 라인 · 사이트 쓰기 · 접속 설정 쓰기 표면 | API 표에 sites(GET) · devices(GET) · tags(GET · POST · PATCH)만 있다(원본 architecture.md §11) | 닫힘 — 기능 근거로 표면 12 신설 — [../07_api/04_master.md](../07_api/04_master.md) | [../07_api/04_master.md](../07_api/04_master.md)(W5) |
 | 마스터 변경의 Collector 반영 | Collector는 기동 시 1회 로드한다(원본 data_flow.md §3) | **W4 판정** — ch:cacheinv 구독으로 해당 설비만 다음 사이클 경계 재로드 · Redis 재연결 시 전체 대조 | [../06_pipeline/02_collect.md](../06_pipeline/02_collect.md) |
-| 비활성 태그를 가리키는 알람 규칙 | alarm_rule.tag_id FK(원본 architecture.md §6) | 미확인 — 판정을 멈추는지 규칙을 남기는지 없음 | [../06_pipeline/08_alarm.md](../06_pipeline/08_alarm.md)(W4) |
-| cache:tagmeta 모양 | 단일 Hash(원본 data_flow.md §3 · §5) vs 태그별 키(원본 architecture.md §8.2) | W1 등재 불일치 | [../05_data_stores/05_redis_keyspace.md](../05_data_stores/05_redis_keyspace.md)(W3) |
-| site.timezone 용도 | 컬럼만 있다 | W1 등재 — 표시 시간대는 Asia/Seoul 고정 | [../05_data_stores/01_postgresql_schema.md](../05_data_stores/01_postgresql_schema.md)(W3) |
+| 비활성 태그를 가리키는 알람 규칙 | alarm_rule.tag_id FK(원본 architecture.md §6) | 닫힘 — §비활성 태그 규칙 판정 — [../06_pipeline/08_alarm.md](../06_pipeline/08_alarm.md) | [../06_pipeline/08_alarm.md](../06_pipeline/08_alarm.md)(W4) |
+| cache:tagmeta 모양 | 단일 Hash(원본 data_flow.md §3 · §5) vs 태그별 키(원본 architecture.md §8.2) | 닫힘 — 태그별 키 cache:tagmeta:{tag_id} — [../05_data_stores/05_redis_keyspace.md](../05_data_stores/05_redis_keyspace.md) | [../05_data_stores/05_redis_keyspace.md](../05_data_stores/05_redis_keyspace.md)(W3) |
+| site.timezone 용도 | 컬럼만 있다 | 닫힘 — site.timezone은 CHECK = 'Asia/Seoul'로 표시 · 달력 경계와 같은 값만 허용 — [../05_data_stores/01_postgresql_schema.md](../05_data_stores/01_postgresql_schema.md) | [../05_data_stores/01_postgresql_schema.md](../05_data_stores/01_postgresql_schema.md)(W3) |
 
 ## 관련 문서
 

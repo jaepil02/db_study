@@ -2,6 +2,7 @@
 
 > **대상**: db_study의 시각 의미론(ts · ingested_at) · 시각 인코딩 · 저장 시간대와 표시 시간대 · 버킷 경계 · 공학 단위 · 부동소수 비교 · 수치 단위 표기 — 시각 의미론 정본
 > **작성일**: 2026-09-24
+> **개정일**: 2026-09-24 — W7 검수 반영 — 레이트 리밋 키 rl:{user_id}:{unix_minute} → **rl:{class}:{user_id}:{unix_minute}**(정본 05_data_stores/05)
 > **개정일**: 2026-09-24 — W6 판정 반영 — ClickHouse 서버 timezone → **Asia/Seoul**(정본 09_tech_stack/03)
 > **개정일**: 2026-09-24 — W4 판정 반영 — Stream 대기 시작점 t0 → **엔트리 ID 시각** · t0 = 엔트리 ts 최솟값 · dt ≥ 0 판정 반영(06_pipeline/12)
 > **개정일**: 2026-09-24 — W3 판정 반영 — 시간대 표기 통일 경계 → **닫힘**(ClickHouse 전 시각 컬럼 Asia/Seoul 명시 · 정본 05_data_stores/03) · 버킷 · 파티션 경계 미확인 → **KST 확정**(tag_1d · tag_1m · tag_1h · alarm_eval · alarm_event) · site.timezone 미확인 → **CHECK Asia/Seoul 고정**(05_data_stores/01)
@@ -41,7 +42,7 @@
 | Collector 메모리 | ts | epoch ms 정수 | ms | 없음 |
 | Stream 엔트리 | t0 · dt[] | uint64 epoch ms + int32 오프셋 ms | ms | 없음 |
 | rt:latest:{device_id} 값 | "ts,value,quality"의 ts | epoch ms 10진 문자열 | ms | 없음 |
-| rl:{user_id}:{unix_minute} 키 | unix_minute | epoch 분 정수 | 분 | 없음 |
+| rl:{class}:{user_id}:{unix_minute} 키 | unix_minute | epoch 분 정수 | 분 | 없음 |
 | alarm:state:{rule_id} | first_breach_ts · first_clear_ts · last_ts | epoch ms 정수(W3 확정) | ms | 없음 |
 | ClickHouse tag_raw | ts · ingested_at | DateTime64(3) | ms | 문자열 변환 · 날짜 함수에만 |
 | ClickHouse tag_1m | bucket | DateTime | 초 | 상동 |

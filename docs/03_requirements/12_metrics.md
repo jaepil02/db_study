@@ -2,6 +2,7 @@
 
 > **대상**: 관측(OBS)의 동작 계약 — 단일 스크레이프 창구 · 도메인 계측의 등록 · 저장소 메트릭 주기 수집과 계열별 실패 격리 · 키 계열별 메모리 샘플링 · E2E 지연 게이지 · 헬스체크의 저장소별 확인 · **/api/v1/health 부분 실패 표현** · health · metrics 공개와 응답 내용 제한 · 스위치 상태 노출 — REQ-OBS-NN 채번 정본
 > **작성일**: 2026-09-24
+> **개정일**: 2026-09-24 — W7 검수 반영 — 미확인 2행 닫힘(health 필드 이름 · OBS APP_ROLE) — REQ 수 불변
 > **개정일**: 2026-09-24 — W6 실험 채번 반영 — REQ-OBS-06 닫힌 레이블에 설비 추가 · 레이블 이름 · 조정값 · EXP 반영(정본 10_observability/01 · 06)
 > **개정일**: 2026-09-24 — W6 판정 반영 — observability 프로파일 구성원 불일치를 닫는다(prometheus · grafana 2 — 정본 09_tech_stack/03)
 > **개정일**: 2026-09-24 — W5 판정 반영 — REQ-OBS-10 · 11 — health 본문에 측정 기록 4요소 중 스위치 밖 3요소(커밋 해시 · 메모리 프로파일 · 용량 티어) 노출 추가(EXP-CONSOLE · EXP-COMPARE가 읽는다) — REQ 수 불변
@@ -118,9 +119,9 @@ W1이 채번 보류로 넘긴 자리다. 판정은 **HTTP 상태로 가용 여�
 
 | 항목 | 원본에서 확인되는 것 | 상태 | 확정 자리 |
 |------|------|------|------|
-| health 본문 필드 이름 · 모양 | "각 저장소 헬스체크"(원본 architecture.md §11)뿐이다 | 미설계 — 이 문서는 필드 내용만 고정 | [../07_api/10_metrics.md](../07_api/10_metrics.md)(W5) |
+| health 본문 필드 이름 · 모양 | "각 저장소 헬스체크"(원본 architecture.md §11)뿐이다 | 닫힘 — §응답 — 본문 필드 이름 판정 · §부분 실패 판정 — [../07_api/10_metrics.md](../07_api/10_metrics.md) | [../07_api/10_metrics.md](../07_api/10_metrics.md)(W5) |
 | 스위치 상태 레이블 이름 · 메트릭 이름 규약 | 없다 | **W6 판정** — obs_switch_info(switch · env · value · impl) · 이름 규약 | [../10_observability/01_metrics_catalog.md](../10_observability/01_metrics_catalog.md) |
-| OBS의 APP_ROLE · 역할 분리 시 /metrics 집계 위치 | 원본 미지정 | 미확인(W1 등재) | [../04_architecture/02_module_boundaries.md](../04_architecture/02_module_boundaries.md)(W3) |
+| OBS의 APP_ROLE · 역할 분리 시 /metrics 집계 위치 | 원본 미지정 | 닫힘 — ADR-22(OBS는 전 역할 · 역할마다 자기 /metrics · 저장소 통계는 api 역할 한 곳) — [../04_architecture/02_module_boundaries.md](../04_architecture/02_module_boundaries.md) | [../04_architecture/02_module_boundaries.md](../04_architecture/02_module_boundaries.md)(W3) |
 | observability 프로파일 구성원 | prometheus · grafana · alertmanager · tempo 표기 불일치 | **W6 판정** — 구성원 prometheus · grafana 2 · alertmanager 채택하지 않음(수신처 없음 · D-02) · tempo 현 범위 밖 · 조건부 | [../09_tech_stack/03_data_infra.md](../09_tech_stack/03_data_infra.md) |
 | 관측 스택 on/off가 수치에 주는 영향 | "상대 비교용"(원본 architecture.md §14) | 미확인 — 확정 전 임의 값 고정 금지 | EXP-38 · [../10_observability/07_measurement_limits.md](../10_observability/07_measurement_limits.md) |
 | 수집 주기 · 게이지 창 · 샘플 수의 측정 부하 | 없다 | 미확인 — 확정 전 임의 값 고정 금지 | EXP-38 · [../10_observability/06_experiment_catalog.md](../10_observability/06_experiment_catalog.md) |

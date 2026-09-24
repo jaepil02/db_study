@@ -2,6 +2,7 @@
 
 > **대상**: 시계열 조회(TSQ)의 동작 계약 — 요청 검증 · 해상도 자동 선택과 보정 · 응답 형태 · 롤업 읽기 · 태그 메타 부착 · 캐시 키 정규화 · 캐시 적재와 degrade · 스탬피드 방지 · 진행 구간 분할 · 원시 내보내기 · ClickHouse 불가 시 응답 · 인가와 레이트 리밋 — REQ-TSQ-NN 채번 정본
 > **작성일**: 2026-09-24
+> **개정일**: 2026-09-24 — W7 검수 반영 — 키 표기 cache:q:{hash} · lock:rebuild:{hash} → **cache:q:{sha1} · lock:rebuild:q:{sha1}**(정본 05_data_stores/05) · 미확인 1행 닫힘(내보내기 끊김 표지) — REQ 수 불변
 > **개정일**: 2026-09-24 — W7 보안 판정 반영 — 내보내기 범위 상한 현행 참고 **1일** · class export 반영 — REQ 수 불변(정본 12_security/03)
 > **개정일**: 2026-09-24 — W6 실험 채번 반영 — 이벤트 루프 p95 메트릭 이름 통일(정본 10_observability/01 · 06)
 > **원천**: 원본 architecture.md §10 · §10.1 · §10.2 · §10.3 · §11 · §11.1 · §12 · §17 · §18(커밋 ff66a37) · 원본 data_flow.md §6 · §6.1 · §6.2 · §6.3 · §12.2 · §16(커밋 ff66a37) · 원본 implementation_plan.md §4.3 · §5 S4 · §7.5(커밋 ff66a37) · D-06 · D-10 · [../02_features/07_timeseries.md](../02_features/07_timeseries.md) TSQ-01~09 · [../02_features/13_switch_matrix.md](../02_features/13_switch_matrix.md) SW-03 · SW-04 · SW-05 · [../11_glossary/02_error_codes.md](../11_glossary/02_error_codes.md) · [../11_glossary/05_units_and_time.md](../11_glossary/05_units_and_time.md)
@@ -32,10 +33,10 @@
 
 | ID | 요구 | 근거 | 위반 시 실패 | 검증 방법 | 관련 기능 | 관련 흐름 | 관련 에러 코드 |
 |------|------|------|------|------|------|------|------|
-| **REQ-TSQ-09** | 캐시 키는 from · to를 선택된 해상도의 버킷 경계로 **epoch 연산으로** 내리고 태그 배열을 정렬하고 기본값 파라미터를 뺀 정규화 문자열의 SHA-1로 만들며 모양은 cache:q:{hash}다. 같은 버킷 안에서 초만 다른 두 요청은 같은 키를 낸다 | 원본 architecture.md §10.2 · TSQ-03 · [../11_glossary/05_units_and_time.md](../11_glossary/05_units_and_time.md) 캐시 키 시간 스냅 | 스냅이 없으면 매 요청이 다른 키가 되어 히트율이 0에 수렴한다 · 1d 스냅을 문자열 날짜로 하면 서버 시간대에 따라 같은 조회가 두 키로 갈린다 | 초 단위만 다른 두 요청 · 태그 순서만 다른 두 요청 → Redis MONITOR에서 같은 키 확인 | TSQ-03 | F-04 | 해당 없음 |
+| **REQ-TSQ-09** | 캐시 키는 from · to를 선택된 해상도의 버킷 경계로 **epoch 연산으로** 내리고 태그 배열을 정렬하고 기본값 파라미터를 뺀 정규화 문자열의 SHA-1로 만들며 모양은 cache:q:{sha1}다. 같은 버킷 안에서 초만 다른 두 요청은 같은 키를 낸다 | 원본 architecture.md §10.2 · TSQ-03 · [../11_glossary/05_units_and_time.md](../11_glossary/05_units_and_time.md) 캐시 키 시간 스냅 | 스냅이 없으면 매 요청이 다른 키가 되어 히트율이 0에 수렴한다 · 1d 스냅을 문자열 날짜로 하면 서버 시간대에 따라 같은 조회가 두 키로 갈린다 | 초 단위만 다른 두 요청 · 태그 순서만 다른 두 요청 → Redis MONITOR에서 같은 키 확인 | TSQ-03 | F-04 | 해당 없음 |
 | **REQ-TSQ-10** | 결과는 cache-aside로 gzip 압축해 두고 TTL은 구간 성격으로 가른다 — 완전 과거(to가 현재 버킷 시작보다 앞) 길게 · 현재 버킷 포함 짧게 · 최근 구간 캐시하지 않음. 모든 쓰기에 TTL과 지터가 붙고 **과거 구간을 명시적으로 무효화하지 않는다** | 원본 data_flow.md §6.2 · 원본 architecture.md §10.1 · 원본 implementation_plan.md §7.5 · TSQ-04 | TTL 없는 cache:q 키는 volatile-lru 축출 대상이 아니라 메모리 압박 때 봉인 계열(Stream)을 먼저 밀어내는 순서가 뒤집힌다 · 지터가 없으면 자동 새로고침 주기마다 동시 만료가 ClickHouse에 몰린다 | 세 구간 요청 각 1건 → TTL 명령으로 구간별 TTL 대조 · 최근 구간 요청 → 키 부재 · TTL 없는 cache:q 키 수 = 0 | TSQ-04 | F-04 | 해당 없음 |
 | **REQ-TSQ-11** | 캐시 계열 Redis 호출이 실패하거나 타임아웃이면 예외를 삼키고 ClickHouse로 직행해 200을 낸다. **캐시 실패를 에러 응답으로 올리지 않는다** | 원본 architecture.md §17 degrade 원칙 · 원본 data_flow.md §12.2 · TSQ-04 · [01_global_rules.md](./01_global_rules.md) 실패 전략 이원화 | 캐시 실패를 전파하면 Redis 3분 중단 실험에서 조회 표면 전체가 503이 되어 "캐시 계층 장애는 서비스 실패로 이어지지 않는다"는 원칙이 깨진다 | redis 컨테이너 정지 중 조회 → 200 · meta.cached 거짓 · API 지연 상승 기록 | TSQ-04 | F-04 · F-10 | 해당 없음 |
-| **REQ-TSQ-12** | 캐시 미스에서는 lock:rebuild:{hash}를 NX · 만료 시간과 함께 잡은 한 요청만 ClickHouse를 부르고, 나머지는 짧게 대기한 뒤 캐시를 다시 읽는다. 해제는 소유자 토큰 검증으로만 한다. 대기를 소진해도 요청자에게 실패를 노출하지 않고 원천을 직접 읽는다 | 원본 architecture.md §10.3 · TSQ-05 · [../11_glossary/02_error_codes.md](../11_glossary/02_error_codes.md) "에러 코드가 아닌 것" | 소유자 검증 없는 DEL은 자기 락이 만료된 뒤 남의 락을 지워 스탬피드가 다시 열린다 · 락이 없으면 동시 요청 수만큼 같은 집계가 ClickHouse에서 반복된다 | 캐시 비운 뒤 같은 요청 동시 N건 → ClickHouse 쿼리 로그의 동일 쿼리 실행 횟수 대조(SW-05 on/off) | TSQ-05 | F-04 | 해당 없음 |
+| **REQ-TSQ-12** | 캐시 미스에서는 lock:rebuild:q:{sha1}를 NX · 만료 시간과 함께 잡은 한 요청만 ClickHouse를 부르고, 나머지는 짧게 대기한 뒤 캐시를 다시 읽는다. 해제는 소유자 토큰 검증으로만 한다. 대기를 소진해도 요청자에게 실패를 노출하지 않고 원천을 직접 읽는다 | 원본 architecture.md §10.3 · TSQ-05 · [../11_glossary/02_error_codes.md](../11_glossary/02_error_codes.md) "에러 코드가 아닌 것" | 소유자 검증 없는 DEL은 자기 락이 만료된 뒤 남의 락을 지워 스탬피드가 다시 열린다 · 락이 없으면 동시 요청 수만큼 같은 집계가 ClickHouse에서 반복된다 | 캐시 비운 뒤 같은 요청 동시 N건 → ClickHouse 쿼리 로그의 동일 쿼리 실행 횟수 대조(SW-05 on/off) | TSQ-05 | F-04 | 해당 없음 |
 | **REQ-TSQ-13** | 끝이 현재인 조회는 확정된 과거 구간(버킷 경계까지 · 긴 TTL 캐시)과 진행 중 마지막 버킷(최신값 또는 짧은 TTL)으로 나눠 응답하고 합치는 것은 클라이언트다 | 원본 architecture.md §10.2 · TSQ-08 | 통째로 캐시하면 매번 미스이거나 오래된 값이 보인다 — 둘 중 어느 쪽이든 대시보드의 반복 조회가 캐시 이득을 잃는다 | "최근 N분" 요청 연속 2회 → 과거 구간 키 히트 · 마지막 버킷만 원천 조회 | TSQ-08 | F-04 · F-03 | 해당 없음 |
 | **REQ-TSQ-14** | SW-03 · SW-04 · SW-05는 포트 하나에 구현 둘을 두고 기동 시 환경변수로 고른다 — SW-03 off는 항상 미스 구현 · SW-04 off는 시각을 그대로 넣는 정규화 · SW-05 off는 락 없는 구현이다. **조회 경로 안에 스위치 분기를 두지 않는다** | 원본 implementation_plan.md §4.3 · D-06 · [../02_features/13_switch_matrix.md](../02_features/13_switch_matrix.md) | 경로 안 분기는 측정 대상 코드에 분기 비용을 섞고 스위치 조합마다 경로가 늘어 on/off 차이를 역할 하나로 설명할 수 없게 된다 | 각 스위치 off로 기동 → /api/v1/health 스위치 상태 대조 · off 구현 동작(항상 미스 · 키 파편화 · 동시 원천 호출) 관찰 | TSQ-03 · TSQ-04 · TSQ-05 | F-04 | 해당 없음 |
 
@@ -61,10 +62,10 @@
 |------|------|------|------|------|------|
 | 태그 배열 상한 | 조회 요청 검증 단계 | 요청 수신 시 | 초과분 절단 | 기동 거부 | 50 · [../07_api/05_timeseries.md](../07_api/05_timeseries.md) |
 | 최대 포인트 수 기본값 | 요청의 maxPoints 부재 시 | 해상도 선택 시 | 무제한 반환 | 기동 거부 | 2000 · 상동 |
-| TTL 구간 경계와 TTL | cache:q:{hash} 쓰기 | to와 **api 서버 시계의** 현재 버킷 시작 비교 | 구간 구분 없는 단일 TTL · TTL 없는 쓰기 | 기동 거부 | 과거 300초 · 현재 버킷 30초 · 최근 5분 미캐시 · [../06_pipeline/06_timeseries_read.md](../06_pipeline/06_timeseries_read.md) |
+| TTL 구간 경계와 TTL | cache:q:{sha1} 쓰기 | to와 **api 서버 시계의** 현재 버킷 시작 비교 | 구간 구분 없는 단일 TTL · TTL 없는 쓰기 | 기동 거부 | 과거 300초 · 현재 버킷 30초 · 최근 5분 미캐시 · [../06_pipeline/06_timeseries_read.md](../06_pipeline/06_timeseries_read.md) |
 | TTL 지터 | 캐시 계열 래퍼가 가산 | 쓰기 시 | 호출자별 지터 계산 | 래퍼 기본 동작 | ±20% · [../05_data_stores/05_redis_keyspace.md](../05_data_stores/05_redis_keyspace.md) |
 | 캐시 호출 타임아웃 | 캐시 계열 래퍼 | 호출마다 | 무기한 대기 · 예외 전파 | 래퍼 기본 동작 | 50 ms · 상동 |
-| 재구성 락 만료 · 대기 간격 · 재시도 횟수 | lock:rebuild:{hash} | 미스 시 | 만료 없는 락 · 무한 대기 | 기동 거부 | 5000 ms · 50 ms × 3회 · [../06_pipeline/06_timeseries_read.md](../06_pipeline/06_timeseries_read.md) |
+| 재구성 락 만료 · 대기 간격 · 재시도 횟수 | lock:rebuild:q:{sha1} | 미스 시 | 만료 없는 락 · 무한 대기 | 기동 거부 | 5000 ms · 50 ms × 3회 · [../06_pipeline/06_timeseries_read.md](../06_pipeline/06_timeseries_read.md) |
 | 내보내기 한도 · 범위 상한 | 레이트 리밋 키 rl:export:{user_id}:{unix_minute} · 범위는 요청 to − from | 분 창 · 요청 수신 시 | 조회 표면 한도 공유 · 범위를 잘라 내보내기 | 기동 거부 | 범위 1일 · 한도 미정(관계식 R1) · [../12_security/03_api_surface_defense.md](../12_security/03_api_surface_defense.md) |
 
 - 검산: 조정값 = 태그 상한 · 최대 포인트 · TTL 구간 · 지터 · 타임아웃 · 락 · 내보내기 = **7**
@@ -142,7 +143,7 @@ W1이 채번 보류로 넘긴 자리다(11_glossary/02 · 02_features/07). 캐�
 | 반복 조회 히트율 | 원본 목표 80% 이상 · SW-04 off 시 0% 수렴 | 미확인 — 확정 전 임의 값 고정 금지 | 상동 · [14_acceptance_criteria.md](./14_acceptance_criteria.md) |
 | 스탬피드 on/off 쿼리 횟수 | 원본 예상치 동시 100요청 시 100회 → 1회 | 미확인 — 확정 전 임의 값 고정 금지 | [../10_observability/06_experiment_catalog.md](../10_observability/06_experiment_catalog.md) |
 | ClickHouse 불가 에러 코드 | 이 문서가 503 · timeseries 네임스페이스로 판정 | **채번 완료** — timeseries.clickhouse_unavailable/503 | [../11_glossary/02_error_codes.md](../11_glossary/02_error_codes.md)(리드) |
-| 내보내기 스트리밍 도중 끊김의 표지 | 원본에 없다 | 미설계 | [../07_api/05_timeseries.md](../07_api/05_timeseries.md)(W5) |
+| 내보내기 스트리밍 도중 끊김의 표지 | 원본에 없다 | 닫힘 — 본문에 표지를 넣지 않는다 · 중단은 종결 청크 없는 비정상 종료 · 완결은 종결 청크 — [../07_api/05_timeseries.md](../07_api/05_timeseries.md) | [../07_api/05_timeseries.md](../07_api/05_timeseries.md)(W5) |
 | 스탬피드 대기 소진 후 원천 직접 조회 | 원본은 "최대 3회"까지만 적었다 — 이 문서가 "요청자는 실패를 보지 않는다"(11_glossary/02)의 귀결로 판정 | 판정 — 기전 확정 대기 | [../06_pipeline/06_timeseries_read.md](../06_pipeline/06_timeseries_read.md)(W4) |
 | p95 롤업 대조의 근사 허용 범위 | TDigest 근사 · 부동소수 허용 오차로 비교하지 않는다(W1) | 미확인 — 확정 수단은 [14_acceptance_criteria.md](./14_acceptance_criteria.md) | [14_acceptance_criteria.md](./14_acceptance_criteria.md) |
 

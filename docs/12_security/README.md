@@ -2,6 +2,7 @@
 
 > **대상**: db_study를 위협 관점에서 다시 읽는 리뷰 — 인증·인가 · 시크릿과 설정 · API 표면 방어 · 위협 모델 · 로컬 노출
 > **작성일**: 2026-09-23
+> **개정일**: 2026-09-24 — W7 보안 판정 반영 — 위협 × 통제 22 → **26**행 · 잔여 등재 15 → **17**(통제 없는 위협 5건 반영)
 > **개정일**: 2026-09-24 — W7 완성판 — 레이트 리밋 class 4 · 관계식 R1~R4 · 비밀 목록 9 · Argon2id · 위협 × 통제 22행 · 잔여 등재 15
 > **원천**: [../README.md](../README.md)(전역 불변식 — 로컬 전용) · 원본 architecture.md §2 · §11.2 · §18 · 원본 tech_stack.md §10.4 · 원본 implementation_plan.md §2.5(커밋 ff66a37)
 
@@ -35,7 +36,7 @@
 | 비밀 | 목록 **9** · 세 저장소 모두 비밀번호 필수 — 정본 [02_secrets_config.md](./02_secrets_config.md) |
 | 레이트 리밋 | class **4**(general · bulk_read · export · bulk_ingest) · 한도 값은 2계층 · 한도 사이 관계식 R1~R4는 1계층 — 정본 [03_api_surface_defense.md](./03_api_surface_defense.md) |
 | 내보내기 범위 상한 | 2계층(현행 참고 1일 · 상계 원시 보존) — 정본 [03_api_surface_defense.md](./03_api_surface_defense.md) |
-| 위협 모델 | 위협 × 통제 **22**행(닫힘 11 · 부분 11) · 잔여 등재 **15** — 정본 [04_threat_model.md](./04_threat_model.md) |
+| 위협 모델 | 위협 × 통제 **26**행(닫힘 14 · 부분 12 · 통제 없는 위협 0) · 잔여 등재 **17** — 정본 [04_threat_model.md](./04_threat_model.md) |
 
 ## 관련 문서
 

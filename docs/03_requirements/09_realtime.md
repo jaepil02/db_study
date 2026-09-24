@@ -2,6 +2,7 @@
 
 > **대상**: 실시간(RLT)의 동작 계약 — 최신값 읽기 · STALE 판정 · 메타 부착 · 빈 키 복원과 Redis 불가 503의 구분 · SW-02 읽기 포트 교체 · WebSocket 연결과 인증 · 스로틀 병합 · 연결 관리 · 재연결 동기화 · 알람 푸시 · 무효화 신호 중계 · ClickHouse 중단 중 최신값 정지의 표시 — REQ-RLT-NN 채번 정본
 > **작성일**: 2026-09-24
+> **개정일**: 2026-09-24 — W7 검수 반영 — 복원 락 키 lock:rebuild:{device 단위 식별자} → **lock:rebuild:rt:{device_id}** · 소유 05_data_stores/05(값은 미정 유지) · 미확인 4행 닫힘(구독 방식 · 신규 설비 응답 · tagmeta 미스 응답 · 락 키 분리) — REQ 수 불변
 > **개정일**: 2026-09-24 — W7 보안 판정 반영 — REQ-RLT-09의 Origin 실패 종료 적용 시점 S7 → **S2**(인증 실패는 S7) — REQ 수 불변(정본 12_security/03)
 > **개정일**: 2026-09-24 — W6 실험 채번 반영 — 이벤트 루프 p95 메트릭 이름 통일(정본 10_observability/01 · 06)
 > **개정일**: 2026-09-24 — W6 판정 반영 — Pub/Sub 출력 버퍼 한도의 값 소유 09_tech_stack/03 확정 · 계약(게이트웨이 소켓 한도보다 늦게 끊는다) · 값은 S4
@@ -65,7 +66,7 @@
 |------|------|------|------|------|------|
 | STALE 배수 | 응답 직전 판정 | api 서버 시계 | ingested_at 기준 판정 · 설비 단위 주기 | 기동 거부 | 3 · [../06_pipeline/05_realtime_read.md](../06_pipeline/05_realtime_read.md) |
 | 복원 창 | ClickHouse argMax 조건 | 복원 요청 시 | 창 없는 전 기간 argMax | 기동 거부 | 10분 · 상동 |
-| 복원 락 만료 | lock:rebuild:{device 단위 식별자} | 빈 키 감지 시 | 만료 없는 락 | 기동 거부 | 미정 · [../05_data_stores/05_redis_keyspace.md](../05_data_stores/05_redis_keyspace.md) |
+| 복원 락 만료 | lock:rebuild:rt:{device_id} | 빈 키 감지 시 | 만료 없는 락 | 기동 거부 | 복원 쿼리 타임아웃 이상 — 값 미정 · 소유 [../05_data_stores/05_redis_keyspace.md](../05_data_stores/05_redis_keyspace.md) |
 | 스로틀 창 | SW-07 환경변수 | 기동 시 | 런타임 토글 | 기본 on 값 | 100 ms · [../02_features/13_switch_matrix.md](../02_features/13_switch_matrix.md) |
 | ping 주기 · pong 미수신 허용 횟수 | 게이트웨이 | 연결마다 | 무기한 유지 | 기동 거부 | 30초 · 3회 · [../07_api/11_websocket.md](../07_api/11_websocket.md) |
 | 재연결 백오프 시작 · 상한 | 클라이언트 | 끊김 시 | 고정 간격 재시도 | 클라이언트 기본 | 1초 → 최대 30초 · 상동 |
@@ -133,11 +134,11 @@
 |------|------|------|------|
 | 최신값 조회 p95 · on/off 차이 | 원본 목표 10 ms 이하(4 vCPU 가정) · 원본 예상치 off 30~150 ms · on 0.3~1 ms | 미확인 — 확정 전 임의 값 고정 금지 | [13_nonfunctional.md](./13_nonfunctional.md) · [../10_observability/06_experiment_catalog.md](../10_observability/06_experiment_catalog.md) |
 | Pub/Sub → WebSocket 도달 지연 · 동시 연결 수 | 원본 목표 150 ms · 500 연결 이상 | 미확인 — 확정 전 임의 값 고정 금지 | 상동 |
-| 구독 방식 | 쿼리 파라미터(원본 architecture.md §11) 대 subscribe 메시지(원본 data_flow.md §9) | 신규 불일치(W2a 등재) | [../07_api/11_websocket.md](../07_api/11_websocket.md)(W5) |
-| 복원 창 안에 행이 없는 설비의 응답 | 원본에 없다 — 신규 설비의 첫 수집 전 | 미설계 | [../06_pipeline/05_realtime_read.md](../06_pipeline/05_realtime_read.md)(W4) |
-| cache:tagmeta 미스 + PostgreSQL 불가 시 최신값 응답 | 원본에 없다 — 값은 Redis에 있고 메타만 없는 상태 | 미설계 | 상동 |
+| 구독 방식 | 쿼리 파라미터(원본 architecture.md §11) 대 subscribe 메시지(원본 data_flow.md §9) | 닫힘 — subscribe 메시지로 고정 · 쿼리 파라미터 구독을 받지 않는다 — [../07_api/11_websocket.md](../07_api/11_websocket.md) | [../07_api/11_websocket.md](../07_api/11_websocket.md)(W5) |
+| 복원 창 안에 행이 없는 설비의 응답 | 원본에 없다 — 신규 설비의 첫 수집 전 | 닫힘 — 200 빈 목록 · 락 만료까지 재복원 금지 — [../06_pipeline/05_realtime_read.md](../06_pipeline/05_realtime_read.md) | [../06_pipeline/05_realtime_read.md](../06_pipeline/05_realtime_read.md)(W4) |
+| cache:tagmeta 미스 + PostgreSQL 불가 시 최신값 응답 | 원본에 없다 — 값은 Redis에 있고 메타만 없는 상태 | 닫힘 — 설비 전체는 200 — 값 · 품질은 내고 해당 태그의 이름 · 단위만 비움 · 단일 태그는 503 common.postgres_unavailable — [../06_pipeline/05_realtime_read.md](../06_pipeline/05_realtime_read.md) | 상동 |
 | 최신값 갱신 주체 | 현행 Ingest · 대안 Collector | S6 실측 결정 | [../04_architecture/09_decision_records.md](../04_architecture/09_decision_records.md)(W3) |
-| 조회 캐시 락과 복원 락의 키 모양 분리 | 둘 다 lock:rebuild 접두 | 미설계 | [../05_data_stores/05_redis_keyspace.md](../05_data_stores/05_redis_keyspace.md)(W3) |
+| 조회 캐시 락과 복원 락의 키 모양 분리 | 둘 다 lock:rebuild 접두 | 닫힘 — lock:rebuild:q:{sha1} · lock:rebuild:rt:{device_id} 두 하위 공간 — [../05_data_stores/05_redis_keyspace.md](../05_data_stores/05_redis_keyspace.md) | [../05_data_stores/05_redis_keyspace.md](../05_data_stores/05_redis_keyspace.md)(W3) |
 
 ## 관련 문서
 

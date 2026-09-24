@@ -2,6 +2,7 @@
 
 > **대상**: 시뮬레이션(SIM · NestJS plc-sim 모듈) 기능 목록 · 기능별 경계 · 의존 도메인 · 실패 시 보이는 것 — 기능 ID SIM-NN 채번 정본
 > **작성일**: 2026-09-24
+> **개정일**: 2026-09-24 — W7 검수 반영 — 미확인 3행 닫힘(주입 제어 수단 · FC01 · FC02 · SIM APP_ROLE) — 기능 수 불변
 > **원천**: 원본 tech_stack.md §3.3 · §3.4 · §6 · §7(커밋 ff66a37) · 원본 architecture.md §3 · §4 · §15 · §17(커밋 ff66a37) · 원본 data_flow.md §3 · §11 · §12.4 · §17(커밋 ff66a37) · 원본 implementation_plan.md §5 S2 · S3 · S6(커밋 ff66a37) · D-02 · [../01_overview/02_goals_scope.md](../01_overview/02_goals_scope.md) 제외가 만드는 한계
 
 SIM은 **실 PLC 대신 Modbus TCP 서버로 응답하는 도메인**이다. 설비 1대에 포트 1개를 열고, 레지스터 Buffer를 응답하며, 지연과 오류를 주입해 수집 경로의 실패를 재현한다(원본 tech_stack.md §6). 값을 만들지 않는다 — 값은 생성기(GEN 모드 A)가 레지스터에 넣는다.
@@ -83,9 +84,9 @@ SIM은 에러 코드를 내지 않는다. SIM의 실패는 Collector 쪽 품질 
 
 | 항목 | 원본에서 확인되는 것 | 상태 | 확정 자리 |
 |------|------|------|------|
-| 지연 · 오류 주입의 제어 수단 | "지연 · 오류 주입"이 책임으로 적혀 있다(원본 architecture.md §4) | **미설계** — 환경변수인지 실행 중 제어인지, 어느 설비 · 어느 레지스터에 거는지 없다 | [../06_pipeline/02_collect.md](../06_pipeline/02_collect.md)(W4) · 표면이 필요하면 [../07_api/09_datagen.md](../07_api/09_datagen.md)(W5) |
-| Coil · Discrete Input(FC01 · FC02) 응답 | 태그 마스터가 FC01 · FC02를 허용한다 · SIM 책임은 holding · input 레지스터뿐이다(원본 tech_stack.md §6) | **미확인** — BOOL 태그를 비트 영역으로 두면 SIM이 응답할 영역이 없다 | [../06_pipeline/02_collect.md](../06_pipeline/02_collect.md)(W4) |
-| SIM의 APP_ROLE | 원본이 배정하지 않았다 | W1 등재 · 이 문서가 제약(COL · GEN과 동거)을 더했다 | [../04_architecture/02_module_boundaries.md](../04_architecture/02_module_boundaries.md)(W3) |
+| 지연 · 오류 주입의 제어 수단 | "지연 · 오류 주입"이 책임으로 적혀 있다(원본 architecture.md §4) | 닫힘 — 기동 시 읽는 주입 계획 SIM_FAULT_PLAN · 실행 중 제어 표면 없음 — [../06_pipeline/10_datagen_inject.md](../06_pipeline/10_datagen_inject.md) | [../06_pipeline/02_collect.md](../06_pipeline/02_collect.md)(W4) · 표면이 필요하면 [../07_api/09_datagen.md](../07_api/09_datagen.md)(W5) |
+| Coil · Discrete Input(FC01 · FC02) 응답 | 태그 마스터가 FC01 · FC02를 허용한다 · SIM 책임은 holding · input 레지스터뿐이다(원본 tech_stack.md §6) | 닫힘 — FC01 · FC02 시드 금지 유지 · 해제 조건 4 — [../06_pipeline/02_collect.md](../06_pipeline/02_collect.md) | [../06_pipeline/02_collect.md](../06_pipeline/02_collect.md)(W4) |
+| SIM의 APP_ROLE | 원본이 배정하지 않았다 | 닫힘 — ADR-22(SIM · GEN 모드 A는 collector와 동거) — [../04_architecture/02_module_boundaries.md](../04_architecture/02_module_boundaries.md) | [../04_architecture/02_module_boundaries.md](../04_architecture/02_module_boundaries.md)(W3) |
 
 ## 관련 문서
 

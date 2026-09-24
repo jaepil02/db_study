@@ -2,6 +2,7 @@
 
 > **대상**: 기능 91 전수의 요구사항 · 흐름 · 화면 · API 문서 · 저장 객체 대응 · 요구사항 229의 역방향 검산 · 흐름 10 · 화면 10 · API 문서 9 · 저장 객체 24 · AC 45 축별 검산 · 미매핑 0 · 유령 0 · 재생성 규칙
 > **작성일**: 2026-09-24
+> **개정일**: 2026-09-24 — W7 검수 반영 — REQ-GLB-24 반영(요구사항 228 → **229** · 기능을 가리킴 223 → **224**) · API 열이 기능 표면의 API 문서 전부를 싣도록 재생성(RLT-07 → 11_websocket · 06_realtime)
 > **원천**: 기능 정본 [../02_features/README.md](../02_features/README.md) 도메인 파일 11본의 기능 표(흐름 · 표면 · 저장소 열) · 요구사항 정본 이 폴더 01~13의 요구사항 표(관련 기능 열) · 기능 → 화면 정본 [../08_screen/02_traceability.md](../08_screen/02_traceability.md) · AC 정본 [14_acceptance_criteria.md](./14_acceptance_criteria.md) · 저장 객체 정본 [../05_data_stores/01_postgresql_schema.md](../05_data_stores/01_postgresql_schema.md) · [../05_data_stores/03_clickhouse_schema.md](../05_data_stores/03_clickhouse_schema.md) · 원본 없음(신설)
 
 이 문서는 **추적성 3중 중 전역 매트릭스**다. 아무것도 채번하지 않고, 대응을 새로 정하지도 않는다 — 모든 칸은 정본 표의 열을 모아 뒤집은 것이다. 그래서 정본과 이 문서가 어긋나면 **정본이 맞고 이 문서가 낡은 것이다.** 정본의 대응 열을 고친 변경 단위에서 이 문서를 다시 만든다(§재생성 규칙).
@@ -173,7 +174,7 @@
 | RLT-04 | 빈 키 복원과 503 | GLB-09 · RLT-05 · RLT-06 | F-03 · F-10 | DSH-REALTIME | 06_realtime | ClickHouse tag_raw(읽기) · Redis rt:latest · lock:rebuild |
 | RLT-05 | WebSocket 구독 | NFR-12 · RLT-09 · RLT-10 · RLT-17 · RLT-18 | F-07 | DSH-REALTIME | 11_websocket | Redis ch:rt(구독) |
 | RLT-06 | 스로틀 병합 | NFR-12 · RLT-11 | F-07 | DSH-REALTIME | 11_websocket | 없음 — 메모리 |
-| RLT-07 | 연결 관리 · 재연결 동기화 | RLT-10 · RLT-12 · RLT-13 | F-07 · F-03 | DSH-REALTIME | 11_websocket | Redis ch:rt · rt:latest |
+| RLT-07 | 연결 관리 · 재연결 동기화 | RLT-10 · RLT-12 · RLT-13 | F-07 · F-03 | DSH-REALTIME | 11_websocket · 06_realtime | Redis ch:rt · rt:latest |
 | RLT-08 | 알람 푸시 | RLT-14 · RLT-17 | F-06 · F-07 | ALM-CONSOLE | 11_websocket | Redis ch:alarm(구독) |
 | RLT-09 | 무효화 신호 중계 | RLT-15 | F-05 | 공통 셸 | 11_websocket | Redis ch:cacheinv(구독) |
 

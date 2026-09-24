@@ -2,6 +2,7 @@
 
 > **대상**: AUT 도메인이 소유하는 REST 표면 — 로그인 · 토큰 갱신 · 로그아웃의 요청 · 응답 · 실패 · 경로 계약 · 계정 · 역할 관리 표면의 부재 판정
 > **작성일**: 2026-09-24
+> **개정일**: 2026-09-24 — W7 검수 반영 — 키 표기 auth:refresh:{id} → **auth:refresh:{refresh_token_id}**(정본 05_data_stores/05) — 표면 수 불변
 > **개정일**: 2026-09-24 — W7 보안 판정 반영 — BFF 인증 Route Handler **Origin 대조** 추가 · 미설계 3행(회전 · 로그인 시도 제한 · CORS 제외) 닫힘 — 표면 수 불변(정본 12_security/01 · 03)
 > **개정일**: 2026-09-24 — W6 실험 채번 반영 — 실험 자리 W6 결과 반영(정본 10_observability/01 · 06)
 > **원천**: 원본 architecture.md §11 · §11.2 · §18(커밋 ff66a37) · 원본 data_flow.md §7.2(커밋 ff66a37) · REQ-AUT-01~06 · 14 · 15 · 16 · 17 · D-07 · ADR-02 · [../02_features/01_auth.md](../02_features/01_auth.md) AUT-01~03 · [../02_features/12_permission_matrix.md](../02_features/12_permission_matrix.md) · [../06_pipeline/07_business_crud.md](../06_pipeline/07_business_crud.md) 인증 흐름 · [01_conventions.md](./01_conventions.md)
@@ -47,7 +48,7 @@ AUT는 **표면 셋만 소유하고 나머지 전 표면에 끼어드는 도메�
 |------|------|
 | 요청 | email(문자열 · 소문자 정규화 후 대조) · password(문자열) — 둘 다 필수 |
 | 응답 200 | accessToken · accessExpiresAt · refreshToken · refreshExpiresAt · user(userId · email · roles) |
-| 처리 | ① user_account 조회 ② password_hash 대조 — **계정이 없거나 비활성이어도 대조를 끝까지 수행** ③ JWT 발급 ④ auth:refresh:{id} 저장(TTL) ⑤ 응답. ④가 실패하면 ③의 토큰을 버리고 503 |
+| 처리 | ① user_account 조회 ② password_hash 대조 — **계정이 없거나 비활성이어도 대조를 끝까지 수행** ③ JWT 발급 ④ auth:refresh:{refresh_token_id} 저장(TTL) ⑤ 응답. ④가 실패하면 ③의 토큰을 버리고 503 |
 | 실패 | 자격 불일치 · 비활성 계정 · 없는 계정 → 모두 auth.invalid_credentials/401(같은 본문) · PostgreSQL 불가 → common.postgres_unavailable/503 · Redis 불가 → auth.token_store_unavailable/503 · 형식 위반 → common.validation_failed/400 |
 | BFF 동작 | refreshToken을 쿠키로 심고 **브라우저 응답 본문에서 refreshToken을 뺀다** · accessToken · user만 브라우저로 |
 | 관련 REQ | REQ-AUT-01 · 02 · 03 · 04 · 14 · 15 · 17 |
@@ -78,7 +79,7 @@ AUT는 **표면 셋만 소유하고 나머지 전 표면에 끼어드는 도메�
 |------|------|
 | 요청 | refreshToken(BFF가 쿠키에서 꺼내 본문으로) |
 | 응답 200 | accessToken · accessExpiresAt — 리프레시 토큰은 그대로(회전 없음) |
-| 처리 | auth:refresh:{id} 조회 → user_id 확인 → 새 JWT. 계정 비활성 · 역할 회수는 여기서 막지 않고 다음 요청의 Guard가 판정한다 |
+| 처리 | auth:refresh:{refresh_token_id} 조회 → user_id 확인 → 새 JWT. 계정 비활성 · 역할 회수는 여기서 막지 않고 다음 요청의 Guard가 판정한다 |
 | 실패 | 키 없음(로그아웃 폐기 · 수명 경과 · **메모리 압박 축출**) → auth.refresh_invalid/401 · Redis 불가 → auth.token_store_unavailable/503 |
 | BFF 동작 | 원요청의 auth.token_expired/401을 받았을 때만 부르고 **원요청을 1회만** 다시 보낸다 · refresh_invalid면 쿠키를 지우고 로그인 화면으로 |
 | 관련 REQ | REQ-AUT-04 · 05 · 14 |
@@ -93,7 +94,7 @@ AUT는 **표면 셋만 소유하고 나머지 전 표면에 끼어드는 도메�
 |------|------|
 | 요청 | refreshToken |
 | 응답 204 | 본문 없음 — 키가 이미 없어도 204(자연 멱등) |
-| 처리 | auth:refresh:{id} DEL. 발급된 액세스 토큰은 수명 만료까지 유효하다 — 폐기 목록을 두지 않는다 |
+| 처리 | auth:refresh:{refresh_token_id} DEL. 발급된 액세스 토큰은 수명 만료까지 유효하다 — 폐기 목록을 두지 않는다 |
 | 실패 | Redis 불가 → auth.token_store_unavailable/503 — **BFF는 이 경우에도 쿠키를 지운다** |
 | 관련 REQ | REQ-AUT-06 · 14 |
 | 흐름 | F-05 |

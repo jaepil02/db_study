@@ -2,6 +2,7 @@
 
 > **대상**: 관측(OBS · NestJS metrics 모듈) 기능 목록 · 기능별 경계 · 의존 도메인 · 실패 시 보이는 것 — 기능 ID OBS-NN 채번 정본
 > **작성일**: 2026-09-24
+> **개정일**: 2026-09-24 — W7 검수 반영 — 미확인 1행 닫힘(OBS APP_ROLE) — 기능 수 불변
 > **개정일**: 2026-09-24 — W6 실험 채번 반영 — 스위치 상태 레이블 이름 반영(정본 10_observability/01 · 06)
 > **개정일**: 2026-09-24 — W6 판정 반영 — observability 프로파일 구성원 prometheus · grafana 2(정본 09_tech_stack/03) — 기능 수 불변
 > **개정일**: 2026-09-24 — SW-11 LATEST_VALUE_WRITER 신설 반영(D-13 · 사용자 확정) — 스위치 10 → **11**
@@ -83,7 +84,7 @@ OBS에는 유효 에러 코드가 없다(metrics 네임스페이스는 정의만
 
 | 항목 | 상태 | 확정 자리 |
 |------|------|------|
-| OBS의 APP_ROLE | 원본 미지정(W1 등재) — 역할 분리 시 각 컨테이너가 자기 /metrics를 내는지 한 곳이 모으는지 없다 | [../04_architecture/02_module_boundaries.md](../04_architecture/02_module_boundaries.md)(W3) |
+| OBS의 APP_ROLE | 닫힘 — ADR-22(OBS는 전 역할 — 역할마다 자기 /metrics) — [../04_architecture/02_module_boundaries.md](../04_architecture/02_module_boundaries.md) | [../04_architecture/02_module_boundaries.md](../04_architecture/02_module_boundaries.md)(W3) |
 | 헬스 부분 실패 응답 | **W2 판정 완료** — 503 + 저장소별 상태 · 코드 없음 | [../03_requirements/12_metrics.md](../03_requirements/12_metrics.md) |
 | 스위치 상태 레이블 이름 · 메트릭 이름 규약 | **W6 판정** — obs_switch_info(switch · env · value · impl) · 이름 규약 | [../10_observability/01_metrics_catalog.md](../10_observability/01_metrics_catalog.md) |
 | 수집 주기 · E2E 게이지 창 | 2계층 조정값 — 현행 15초 · 5분(원본) | 상동 |

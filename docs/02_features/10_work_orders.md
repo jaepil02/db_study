@@ -2,6 +2,7 @@
 
 > **대상**: 업무 데이터(WRK · NestJS work-orders 모듈) 기능 목록 · 감사 로그의 소유와 쓰기 · 기능별 경계 · 의존 도메인 · 실패 시 보이는 것 — 기능 ID WRK-NN 채번 정본
 > **작성일**: 2026-09-24
+> **개정일**: 2026-09-24 — W7 검수 반영 — 미확인 2행 닫힘(실적 · 감사 조회 표면 · 생산 카운터 구분) — 기능 수 불변
 > **개정일**: 2026-09-24 — W5 판정 반영 — 미확인 표에 실적 정정 수단 · 실적 이중 제출 2행 등재 — **미설계 · 범위 밖**(W5 리드 판정) — 기능 수 불변
 > **개정일**: 2026-09-24 — W3 판정 반영 — work_order.status 미설계 → **4값 · 허용 전이 4쌍 확정** · 작업지시 캐시 키 → **cache:workorders · BFF no-store**(정본 05_data_stores/01 · 05)
 > **개정일**: 2026-09-24 — W2 요구사항 판정 반영 — 알람 규칙 변경 · 확인을 감사 대상으로 확정(REQ-WRK-07) · 상태 전이 위반 코드 invalid_status_transition/409
@@ -101,8 +102,8 @@ WRK는 **분기 ③계층 — 경로를 고르지 않는 분기 — 의 시연 �
 | 항목 | 상태 | 확정 자리 |
 |------|------|------|
 | work_order.status 값 · 전이 | **W3 확정** — 4값 · 4쌍 | [../05_data_stores/01_postgresql_schema.md](../05_data_stores/01_postgresql_schema.md) · 전이 위반 코드 [../11_glossary/02_error_codes.md](../11_glossary/02_error_codes.md) |
-| 생산 실적 · 감사 조회 표면 | 원본 API 표에 work-orders 하나뿐이다 | [../07_api/08_work_orders.md](../07_api/08_work_orders.md)(W5) |
-| 생산 카운터와 production_log의 구분 기전 | W1 인계 미설계 | [../06_pipeline/04_routing.md](../06_pipeline/04_routing.md)(W4) |
+| 생산 실적 · 감사 조회 표면 | 닫힘 — 실적 · 감사 조회 표면 신설(작업지시 상세 · 실적 목록 · 감사 목록 · 태그 재발급 계보) — [../07_api/08_work_orders.md](../07_api/08_work_orders.md) | [../07_api/08_work_orders.md](../07_api/08_work_orders.md)(W5) |
+| 생산 카운터와 production_log의 구분 기전 | 닫힘 — 카운터 표본은 ① 경로 · production_log는 사람의 실적 입력 전용(③ 경로 · 스트림 값으로 채우지 않는다) — [../06_pipeline/04_routing.md](../06_pipeline/04_routing.md) | [../06_pipeline/04_routing.md](../06_pipeline/04_routing.md)(W4) |
 | audit_log 소유와 다중 쓰기 | 한계 등재 대상 | [../05_data_stores/02_postgresql_constraints.md](../05_data_stores/02_postgresql_constraints.md)(W3) |
 | 작업지시 캐시 키 모양 | **W3 확정** — cache:workorders · BFF 서버 fetch 캐시 없음(no-store) | [../05_data_stores/05_redis_keyspace.md](../05_data_stores/05_redis_keyspace.md) |
 | 실적 오입력 정정 수단 | **미설계 — 범위 밖**(학습 목표 무관 · D-11은 존재만 요구 · W5 리드 판정) — 수정 · 삭제 표면이 없고 good_qty · defect_qty CHECK 0 이상이라 음수 보정 행도 쓸 수 없다 | [../05_data_stores/02_postgresql_constraints.md](../05_data_stores/02_postgresql_constraints.md) 한계 등재 · [../07_api/08_work_orders.md](../07_api/08_work_orders.md) |

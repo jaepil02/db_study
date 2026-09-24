@@ -1,10 +1,10 @@
 # docs/ 설계 문서군 구축 계획
 
-> **상태**: W7 진행 중(2026-09-24) — 12_security 5본 · 15 추적성 · 16 공식 참조(68행) 완료 · 다음은 w7-review 전수 검수
+> **상태**: **완료(2026-09-24)** — docs/ 122본 완성 · W7 전수 검수 통과(원 95건 해소 · 재검증 새 결함 6건 해소) · --final 린트 오류 0 · 원본 4본 삭제(원문은 커밋 ff66a37)
 > **완료된 것**: 실행 계획 확정(아래 "실행 계획 보정" 절) · docs/ 12폴더 재생성 · W0 14본(docs/README.md · docs/CLAUDE.md · 폴더 README 12본 골격판) · 린트 .omc/docs_lint.py 오류 0건 · W1 11본(11_glossary 5 · 01_overview 6) — 에러 코드 14 · D-01~D-12 · W2a 13본(02_features) — 기능 91 · SW 10 · 역할 3 · W2b 14본(03_requirements 01~14) — REQ 228 · AC 45 · 에러 코드 19 · W3 20본(04_architecture 9 · 05_data_stores 11) — ADR 25 · SW 11(D-13) · 키 패턴 18 · 봉인 26 · W4 12본(06_pipeline) — F-01~F-10 · 분기 기전 19행 · 한계 등재 17 · W5 18본(07_api 11 · 08_screen 7) — API 표면 43 · 화면 10 · 에러 22 · 린트 표 열 수 검사 추가 · W6 13본(09_tech_stack 6 · 10_observability 7) — 관측 구성원 2 · 환경변수 25 · 버전 고정표 35행 · EXP 39
-> **다음 작업**: W6 커밋 → W7 — w7-security(12_security 01~05) → 리드 03_requirements/15 · 16 → w7-review 전수 검수 → 결함 수정 · 이관 누락 대조 · --final 린트 · 루트 4본 삭제 · 루트 README 교체 · 최종 커밋
-> **팀원 누적**: 13 / 15 — w1-glossary · w1-overview · w2-features · w2-req-a · w2-req-b · w3-arch · w3-stores · w4-pipeline · w5-api · w5-screen(종료) · w6-stack · w6-obs(종료) · w7-security(종료) = 13. 남은 2 중 w7-review 1
-> **참고**: 기존 루트 4본(architecture.md · data_flow.md · tech_stack.md · implementation_plan.md)은 **W7까지 삭제하지 않는다** — 이관 누락을 검증할 원본이 필요하다
+> **다음 작업**: 없음(문서군 구축 종료). 남은 미결은 웨이브 인계 표와 각 문서의 미확인 · 미설계 등재 — 코드 착수 · EXP 실측으로 닫는다. 미결(확장 판정): ADR-09 배치 안 C가 적재 코드 경로를 바꾸면 스위치 신설 판정
+> **팀원 누적**: 15 / 15 — w1-glossary · w1-overview · w2-features · w2-req-a · w2-req-b · w3-arch · w3-stores · w4-pipeline · w5-api · w5-screen(종료) · w6-stack · w6-obs(종료) · w7-security(종료) · w7-review · w7-fix(종료) = 15. 전원 종료
+> **참고**: 기존 루트 4본(architecture.md · data_flow.md · tech_stack.md · implementation_plan.md)은 W7 마감 커밋에서 삭제했다 — 이관 누락 대조(원본 137절 전부 인용 확인)를 마친 뒤다. 원문은 커밋 ff66a37
 
 ## 실행 계획 보정 (2026-09-23 확정)
 
@@ -82,6 +82,8 @@ W1 w1-glossary 판정 · 미확인 — 행선지 웨이브가 확정한다.
 | W3 04_architecture/02 · 09 | SIM · OBS의 APP_ROLE 배정 · 보정 7.2 결정 시점(S3 전 잠정안 + 교체 가능한 포트 · S6 실측으로 최종) |
 | W3 05_data_stores | 롤업 테이블 · MV 도메인 귀속(잠정 ING) · audit_log 소유(WRK) vs MST 트랜잭션 쓰기 — 한계 등재(05/02) |
 | W4 06_pipeline/04 | ②계층 "생산 카운터"(스트림 유래)와 production_log(WRK CRUD)의 구분과 분기 기전 |
+
+W7 처리(검수): w7-review 95건(치명 3 · 중간 73 · 경미 19) → w7-fix B · C · E · F · G 90건 + 추가 6건 · 리드 H 5건 → 재검증 새 결함 6(N1 무효화 체인 6단 · N2 신규 설비 응답 · N3~N6 리드 파일 링크 · 개정일) 해소 → 통과. 원본 137절 전부 인용 확인 · 누락 2건(원본 예상치) 보충.
 
 W7 처리(12_security): 레이트 리밋 class 4(general · bulk_read · export · bulk_ingest) · 한도 관계식 R1~R4(1계층) · 로그인 시도 제한 없음(잔여) · 내보내기 범위 상한 현행 1일 · DATAGEN_BULK_ENABLED true 기동 경고 로그 · WS 종료 코드 8 유지 · sess 예약 유지(한계) · Argon2id · 리프레시 회전 없음 · 비밀 9 · 세 저장소 비밀번호 필수 · WS Origin S2부터 · Host 허용 목록 · 웹 3001 바인드는 기동 인자 · REQ-GLB-24 파라미터 바인딩 신설(REQ 228 → 229) · 환경변수 25 → 34 · 버전 고정표 35 → 36 · 위협 × 통제 26 · 잔여 17 — W7 12 행 닫혔다. w7-review 몫: 03_requirements/02 미설계 표 "WS 종료 코드 미정(W5)" 낡은 행.
 

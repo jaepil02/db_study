@@ -2,6 +2,7 @@
 
 > **대상**: 개발 도구 구성 — pnpm workspace · Biome · tsc strict · Vitest · Supertest · Testcontainers · 품질 게이트 · **마이그레이션 도구 판정** · Taskfile 작업 6(migrate · seed · snapshot · restore · bench · docs:lint) · 리포지터리의 도구 파일 자리 · **SIM 주입 계획 파일 형식(판정)** · 착수 체크리스트의 도구 항목
 > **작성일**: 2026-09-24
+> **개정일**: 2026-09-24 — W7 검수 반영 — 미확인 표 웨이브 표지 (W7) 제거
 > **개정일**: 2026-09-24 — W6 실험 채번 반영 — 메트릭 이름 반영(정본 10_observability/01 · 06)
 > **원천**: 원본 tech_stack.md §5.1 · §10.3 · §10.5 · §11(커밋 ff66a37) · 원본 implementation_plan.md §2.1 · §6 · §9(커밋 ff66a37) · 원본 architecture.md §3(커밋 ff66a37) · docs_plan 실행 계획 보정 #4 · #9 · 웨이브 인계 W6 행(주입 계획 파일 형식) · ADR-01 · ADR-08 · [../01_overview/05_priorities_roadmap.md](../01_overview/05_priorities_roadmap.md) 착수 체크리스트 · 코드 착수 항목 · [../05_data_stores/09_migrations_seed.md](../05_data_stores/09_migrations_seed.md) · [../06_pipeline/10_datagen_inject.md](../06_pipeline/10_datagen_inject.md) §SIM 주입 제어
 
@@ -187,7 +188,7 @@ db_study/
 | 항목 | 상태 | 확정 자리 |
 |------|------|------|
 | 도구 버전 전부 | 원본 미기재 — 착수 시 고정 | [03_data_infra.md](./03_data_infra.md) §버전 고정표 |
-| Prisma 드리프트 검사의 파티션 처리 | 버린 대안의 실패 근거 — 공식 참조로 재확인 | [../03_requirements/16_official_references.md](../03_requirements/16_official_references.md)(W7) |
+| Prisma 드리프트 검사의 파티션 처리 | 버린 대안의 실패 근거 — 공식 참조로 재확인 | [../03_requirements/16_official_references.md](../03_requirements/16_official_references.md) |
 | SIM 노출 필드 · 메트릭 이름 | 계획 파일 형식은 닫힘 · 노출 이름 **W6 판정** — sim_fault_injection_active{kind} | [../10_observability/01_metrics_catalog.md](../10_observability/01_metrics_catalog.md) |
 | CI 도입 | 선택 — 배포가 없다 | 도입 시 같은 게이트 명령 |
 

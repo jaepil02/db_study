@@ -2,6 +2,7 @@
 
 > **대상**: 적재·분기(ING · NestJS ingest 모듈)의 동작 계약 — Stream 소비 · 배치 플러시 · ClickHouse 삽입 · 멱등 · XACK · 재시도 · DLQ · PEL 회수 · 다중 컨슈머 · 최신값 · 알람 전달 · 3계층 분기 실행 · 대조군 동시 적재 · 롤업 발동 · 백프레셔 대응 · 관측 — REQ-ING-NN 채번 정본
 > **작성일**: 2026-09-24
+> **개정일**: 2026-09-24 — W7 검수 반영 — REQ-ING-17 에러 코드 칸 · 장애 표 메트릭 stream_length → **redis_stream_length**(정본 10_observability/01) · 미확인 6행 닫힘(대조군 멱등 · 생산 카운터 · alarm_eval 재시도 · DLQ 재처리 · 토큰 재료 · rt:latest 순서 역전) — REQ 수 불변
 > **개정일**: 2026-09-24 — W6 실험 채번 반영 — 메트릭 이름 반영 · 이벤트 루프 p95 메트릭 이름 통일(정본 10_observability/01 · 06)
 > **개정일**: 2026-09-24 — W4 판정 반영 — REQ-ING-18 Stream 대기 시작점 t0 → **엔트리 ID 시각**(04_architecture/05 판정과 통일) — REQ 수 불변
 > **개정일**: 2026-09-24 — W3 판정 반영 — 롤업 객체 귀속 잠정 ING → **ING 확정**
@@ -50,7 +51,7 @@
 
 | ID | 요구 | 근거 | 위반 시 구체적 실패 | 검증 방법 | 관련 기능 | 관련 흐름 | 관련 에러 코드 |
 |------|------|------|------|------|------|------|------|
-| **REQ-ING-17** | ClickHouse가 멈추면 XACK를 보류해 엔트리를 PEL에 둔다. 백프레셔 **주의** 단계에서 컨슈머 동시성을 늘리고, 복구 뒤에는 소진 모드로 배치를 키워(현행 참고 100,000행 · 소유 [../06_pipeline/03_ingest_batch.md](../06_pipeline/03_ingest_batch.md)) 적체를 빼낸다. 소진 시간(랙이 0으로 돌아오는 시간)을 계측한다. Redis 중단 중에는 XREADGROUP 실패로 대기한다 | 원본 architecture.md §9.3 · §17 · 원본 data_flow.md §12.2 · §12.3 | 소진 모드가 없으면 복구 후 평상 배치로 적체를 빼느라 소진 시간이 중단 시간보다 길어질 수 있다. 소진 시간을 재지 않으면 S6 판정(원본 목표 — 중단 시간의 30% 이내)을 할 수 없다 | ClickHouse 5분 중단 → 복구 후 무손실 · 무중복 · 소진 시간 기록 | ING-13 | F-10 | 해당 없음 — consumer_lag · stream_length |
+| **REQ-ING-17** | ClickHouse가 멈추면 XACK를 보류해 엔트리를 PEL에 둔다. 백프레셔 **주의** 단계에서 컨슈머 동시성을 늘리고, 복구 뒤에는 소진 모드로 배치를 키워(현행 참고 100,000행 · 소유 [../06_pipeline/03_ingest_batch.md](../06_pipeline/03_ingest_batch.md)) 적체를 빼낸다. 소진 시간(랙이 0으로 돌아오는 시간)을 계측한다. Redis 중단 중에는 XREADGROUP 실패로 대기한다 | 원본 architecture.md §9.3 · §17 · 원본 data_flow.md §12.2 · §12.3 | 소진 모드가 없으면 복구 후 평상 배치로 적체를 빼느라 소진 시간이 중단 시간보다 길어질 수 있다. 소진 시간을 재지 않으면 S6 판정(원본 목표 — 중단 시간의 30% 이내)을 할 수 없다 | ClickHouse 5분 중단 → 복구 후 무손실 · 무중복 · 소진 시간 기록 | ING-13 | F-10 | 해당 없음 — consumer_lag · redis_stream_length |
 | **REQ-ING-18** | ING는 consumer_lag · rows_inserted · insert_duration · batch_size · dlq_count · 계층별 쓰기 계수 · 대조군 실패 계수 · Stream 체류 지연(XREADGROUP 수신 시각 − 엔트리 ID 시각 — t0가 아니다 · [../04_architecture/05_latency_budget.md](../04_architecture/05_latency_budget.md) §구간 경계 판정) 히스토그램을 노출한다. 에러 네임스페이스를 두지 않는다 | 원본 architecture.md §14 · 원본 data_flow.md §15 · REQ-GLB-16 · [../11_glossary/02_error_codes.md](../11_glossary/02_error_codes.md) 에러 코드가 아닌 것 | 지표가 빠지면 그 실패는 응답 코드로도 드러나지 않아 관측 불가능하다 — consumer_lag가 없으면 격리 XACK 누락(REQ-ING-08)을 발견할 자리가 없다 | /metrics에서 지표 8종 존재 조회 · 이름 정본 [../10_observability/01_metrics_catalog.md](../10_observability/01_metrics_catalog.md) 대조 | ING-01~13 | F-02 · F-08 · F-10 | 해당 없음 |
 
 ## 관측 형태 요약
@@ -62,7 +63,7 @@ ING 요구가 깨질 때 무엇이 보이는지를 모은다. 에러 코드 표�
 | 삽입 실패 | 삽입시도 → 재시도대기 → 삽입시도(같은 토큰) | insert 실패 · 재시도 수 | REQ-ING-08 |
 | 재시도 소진 · 해독 불가 | → 격리(DLQ 복사 후 XACK) | dlq_count | REQ-ING-01 · 08 |
 | 컨슈머 예외 · 재기동 | → 회수(XAUTOCLAIM) → 누적 | consumer_lag 급증 후 회복 | REQ-ING-09 |
-| ClickHouse 중단 | XACK 보류 · 백프레셔 단계 상승 · 최신값 정지 | consumer_lag · stream_length · STALE 비율 | REQ-ING-12 · 17 |
+| ClickHouse 중단 | XACK 보류 · 백프레셔 단계 상승 · 최신값 정지 | consumer_lag · redis_stream_length · STALE 비율 | REQ-ING-12 · 17 |
 | 파트 폭증 | 없음 | 활성 파트 수 · 초당 삽입 횟수 | REQ-ING-04 |
 | MV 삽입 실패 | 원시 확정 · 롤업 공백 | 원시 · 롤업 count 차 | REQ-ING-16 |
 | 대조군 삽입 실패 | XACK 계속 · 구간 무효 표시 | 대조군 실패 계수 | REQ-ING-15 |
@@ -120,12 +121,12 @@ ING 요구가 깨질 때 무엇이 보이는지를 모은다. 에러 코드 표�
 
 | 항목 | 상태 | 확정 자리 |
 |------|------|------|
-| 대조군 멱등 수단 · 무효 구간 표시 형식 | REQ-ING-15가 요구한다 | [../06_pipeline/04_routing.md](../06_pipeline/04_routing.md)(W4) · [../05_data_stores/10_olap_vs_rdb_control.md](../05_data_stores/10_olap_vs_rdb_control.md)(W3) |
-| 생산 카운터의 분기 기전 | W1 등재 미설계 | [../06_pipeline/04_routing.md](../06_pipeline/04_routing.md)(W4) |
-| alarm_eval 삽입의 재시도 · DLQ | "Ingest 배치와 동일한 정책"뿐 — 같은 DLQ인지 없다 | [../06_pipeline/08_alarm.md](../06_pipeline/08_alarm.md)(W4) |
-| DLQ 재처리 경로 | DLQ 이동 · 알림까지만 | [../06_pipeline/11_backpressure_failure.md](../06_pipeline/11_backpressure_failure.md)(W4) |
-| fan-in 배치의 토큰 재료 · SW-01 off 토큰 재료 | **신규 미확인** — REQ-ING-06이 결정성만 요구한다 | [../06_pipeline/03_ingest_batch.md](../06_pipeline/03_ingest_batch.md)(W4) |
-| 최신값 덮어쓰기의 순서 역전 | **신규 미확인** — 원본은 "항상 덮어쓰기"(원본 architecture.md §10.1)이고 컨슈머 간 순서는 보장하지 않는다(REQ-GLB-07). 두 컨슈머가 같은 설비의 배치를 역순으로 확인하면 더 오래된 값이 rt:latest에 남을 수 있다 — ts 비교 덮어쓰기 여부가 없다 | [../06_pipeline/05_realtime_read.md](../06_pipeline/05_realtime_read.md)(W4) |
+| 대조군 멱등 수단 · 무효 구간 표시 형식 | 닫힘 — 대조군 중복은 막지 않고 구간 count로 검출 · 무효 구간은 표가 아니라 실패 계수 · 측정 기록으로 남긴다 — [../06_pipeline/04_routing.md](../06_pipeline/04_routing.md) | [../06_pipeline/04_routing.md](../06_pipeline/04_routing.md)(W4) · [../05_data_stores/10_olap_vs_rdb_control.md](../05_data_stores/10_olap_vs_rdb_control.md)(W3) |
+| 생산 카운터의 분기 기전 | 닫힘 — 카운터 표본은 ① 경로 그대로 · 파생 판정기는 목적지 없이 두지 않는다 — [../06_pipeline/04_routing.md](../06_pipeline/04_routing.md) | [../06_pipeline/04_routing.md](../06_pipeline/04_routing.md)(W4) |
+| alarm_eval 삽입의 재시도 · DLQ | 닫힘 — 재시도는 원시 배치와 같은 정책 · 소진 시 DLQ로 격리하지 않고 무효 구간 기록 — [../06_pipeline/08_alarm.md](../06_pipeline/08_alarm.md) | [../06_pipeline/08_alarm.md](../06_pipeline/08_alarm.md)(W4) |
+| DLQ 재처리 경로 | 닫힘 — 사람이 거는 운영 절차 · 원 토큰으로 tag_raw에 직접 삽입 — [../06_pipeline/11_backpressure_failure.md](../06_pipeline/11_backpressure_failure.md) | [../06_pipeline/11_backpressure_failure.md](../06_pipeline/11_backpressure_failure.md)(W4) |
+| fan-in 배치의 토큰 재료 · SW-01 off 토큰 재료 | 닫힘 — fan-in 조각은 첫 · 끝 엔트리 ID + 행 수 · SW-01 off는 (설비 · 시퀀스) 쌍 정렬 목록 + 행 수의 sha1 — [../06_pipeline/03_ingest_batch.md](../06_pipeline/03_ingest_batch.md) | [../06_pipeline/03_ingest_batch.md](../06_pipeline/03_ingest_batch.md)(W4) |
+| 최신값 덮어쓰기의 순서 역전 | 닫힘 — rt:latest의 모든 쓰기는 필드 단위 조건부 쓰기(새 ts ≥ 저장 ts일 때만) — [../06_pipeline/05_realtime_read.md](../06_pipeline/05_realtime_read.md) | [../06_pipeline/05_realtime_read.md](../06_pipeline/05_realtime_read.md)(W4) |
 | 롤업 객체의 도메인 귀속 | **W3 확정 — ING** | [../05_data_stores/04_clickhouse_rollup.md](../05_data_stores/04_clickhouse_rollup.md) |
 | 계층별 쓰기 계수 · 대조군 실패 계수의 메트릭 이름 | **W6 판정** — ing_routed_rows_total · ing_control_copy_failures_total | [../10_observability/01_metrics_catalog.md](../10_observability/01_metrics_catalog.md) |
 | Stream 대기 · 삽입 · MV 지연 · 소진 시간 | 3계층 미확인 — 미확인 · 확정 전 임의 값 고정 금지 | [13_nonfunctional.md](./13_nonfunctional.md) REQ-NFR-04 · 16 |

@@ -2,6 +2,7 @@
 
 > **대상**: db_study 문서군과 구현이 쓰는 모든 식별자의 형식 · 채번 규칙 · 결번 · 예약 대역 · 원본 흐름 표기 대응 — ID 규약 정본
 > **작성일**: 2026-09-24
+> **개정일**: 2026-09-24 — W7 검수 반영 — 식별자 자리 예시 rl:{user_id}:{unix_minute} → **rl:{class}:{user_id}:{unix_minute}**(정본 05_data_stores/05)
 > **개정일**: 2026-09-24 — 루트 README ID 규약 표의 API 표면 형식을 {문서} #N으로 맞춘 것을 반영 — 불일치 서술을 정합 서술로 바꾼다
 > **원천**: [../README.md](../README.md) ID·표기 규약 표 상세화 · 원본 data_flow.md §1(커밋 ff66a37) 흐름 목록 · 원본 architecture.md §6 · §7 · §8.3(커밋 ff66a37) 테이블 · 키 네이밍 · docs_plan.md 실행 계획 보정 #6 · #22
 
@@ -125,7 +126,7 @@
 | 키 | 영역:용도:식별자 — 콜론 계층, 앞이 넓은 범주 | rt:latest:12 · cache:q:{sha1} | 원본 architecture.md §8.3 |
 | 영역 접두 | stream · rt · alarm · cache · lock · rl · sess · auth · ch 중 하나 | | **접두 하나가 곧 TTL 정책의 경계다.** 봉인 계열 · 캐시 계열 · 채널 구분과 검산의 정본은 [../05_data_stores/05_redis_keyspace.md](../05_data_stores/05_redis_keyspace.md) |
 | 접두 충돌 금지 | 새 용도가 기존 접두의 TTL 정책과 다르면 기존 접두를 빌리지 않는다 | 리프레시 토큰은 rt:가 아니라 auth:refresh: | 원본에서 실제로 rt:{refresh_token_id}가 최신값 계열 rt:와 겹쳐 개명됐다. 빌려 쓰면 TTL 금지 접두 아래에 TTL 키가 생겨 린트 · 래퍼가 어느 쪽 규칙도 적용하지 못한다 |
-| 식별자 자리 | 숫자 ID는 그대로 · 해시는 소문자 16진 · 시각은 epoch 정수 | rl:{user_id}:{unix_minute} | 시각을 문자열 날짜로 넣으면 시간대에 따라 같은 분이 다른 키가 된다 |
+| 식별자 자리 | 숫자 ID는 그대로 · 해시는 소문자 16진 · 시각은 epoch 정수 | rl:{class}:{user_id}:{unix_minute} | 시각을 문자열 날짜로 넣으면 시간대에 따라 같은 분이 다른 키가 된다 |
 | Pub/Sub 채널 | ch: 접두 | ch:rt:{device_id} · ch:alarm · ch:cacheinv | 키가 아니므로 TTL 대상이 아니다 |
 | 컨슈머 그룹 | grp:{소비 모듈} | grp:ingest | **키가 아니라 Stream 안의 이름이다** — 영역 접두 집계에 들지 않는다 |
 | 컨슈머 | {모듈}-{pid}-{n} | ingest-{pid}-1 | pid가 바뀌면 이전 이름의 PEL이 남는다. XAUTOCLAIM 회수가 이 이름 규칙을 전제한다 |

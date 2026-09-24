@@ -2,6 +2,7 @@
 
 > **대상**: 데이터 생성(GEN · NestJS datagen 모듈)의 동작 계약 — 신호 프로파일 · SIMULATED 표지와 결측 · 시드 재현성 · 부하 티어 · 주입 모드 A~D · 부하 주입 표면 · 백필 절차 · 생성기 여유 · 대조군 동일 행 — REQ-GEN-NN 채번 정본
 > **작성일**: 2026-09-24
+> **개정일**: 2026-09-24 — W7 검수 반영 — 미확인 2행 닫힘(모드 D 대조군 절차 · 부하 주입 표면 게이트 · 본문) — REQ 수 불변
 > **개정일**: 2026-09-24 — W6 실험 채번 반영 — EXP 번호 · 메트릭 이름 반영 · 이벤트 루프 p95 메트릭 이름 통일(정본 10_observability/01 · 06)
 > **개정일**: 2026-09-24 — W4 판정 반영 — REQ-GEN-07 · 09 스트림 길이 검사 → **미확인 적체 검사**(ADR-21) · 모드 B 검사 기전 W4 판정 반영 — REQ 수 불변
 > **개정일**: 2026-09-24 — W3 판정 반영 — 모드 B 검사의 판정량을 그룹 적체로 교정(ADR-21)
@@ -109,9 +110,9 @@ GEN-07 표면만 코드를 낸다. 인용 코드는 [../11_glossary/02_error_cod
 | 항목 | 상태 | 확정 자리 |
 |------|------|------|
 | 모드 B 적체 검사의 기전 · 발행 중단 계수 메트릭 이름 | 기전 **W4 판정**(XADD + XINFO GROUPS 파이프라인 · 위험이면 중단 · 주의 임계 미만 재개) · 메트릭 이름 **W6 판정** — gen_publish_halted_entries_total · gen_publish_halted_points_total · backpressure_stage{publisher} | [../06_pipeline/10_datagen_inject.md](../06_pipeline/10_datagen_inject.md)(W4) · [../10_observability/01_metrics_catalog.md](../10_observability/01_metrics_catalog.md) |
-| 모드 D 대조군 동일 행 절차 | 절차 미설계 | [../06_pipeline/10_datagen_inject.md](../06_pipeline/10_datagen_inject.md)(W4) |
+| 모드 D 대조군 동일 행 절차 | 닫힘 — §모드 D 백필과 대조군 동일 행 — [../06_pipeline/10_datagen_inject.md](../06_pipeline/10_datagen_inject.md) | [../06_pipeline/10_datagen_inject.md](../06_pipeline/10_datagen_inject.md)(W4) |
 | 생성기 실행 제어 표면 | 원본 API 표에 없다 — 이 문서는 표면을 요구하지 않는다 | [../07_api/09_datagen.md](../07_api/09_datagen.md)(W5) · 리드 판정 |
-| 부하 주입 표면 게이트 환경변수 이름 · 요청 본문 | 표면 명세 | [../07_api/09_datagen.md](../07_api/09_datagen.md)(W5) |
+| 부하 주입 표면 게이트 환경변수 이름 · 요청 본문 | 닫힘 — 게이트 DATAGEN_BULK_ENABLED(기본 false) · §요청 본문 — [../07_api/09_datagen.md](../07_api/09_datagen.md) | [../07_api/09_datagen.md](../07_api/09_datagen.md)(W5) |
 | 생성 모드의 과거 ts와 STALE | 실시간 화면 실험은 현재 시각으로 생성한다 | [../10_observability/04_experiment_protocol.md](../10_observability/04_experiment_protocol.md) |
 | 생성기 단독 처리량 · 프로파일별 압축률 | 3계층 미확인 — 미확인 · 확정 전 임의 값 고정 금지 | [13_nonfunctional.md](./13_nonfunctional.md) REQ-NFR-14 · 17 · EXP-35 · EXP-21 |
 

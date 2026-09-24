@@ -2,6 +2,7 @@
 
 > **대상**: PostgreSQL · ClickHouse · Redis 사이의 정합 원칙 — 두 DB를 트랜잭션으로 묶지 않는 원칙(ADR-16) · 교차 저장소 참조 전수 · Dictionary · tag_id 불변과 태그 생애 · 논리 삭제 · 스케일 변경 · 즉시 반영 · 비활성 태그 이름 판정 · 불일치 시 진실
 > **작성일**: 2026-09-24
+> **개정일**: 2026-09-24 — W7 검수 반영 — 미확인 2행 닫힘(비활성 태그 규칙 · 적재 행 조합 검증)
 > **개정일**: 2026-09-24 — W6 실험 채번 반영 — EXP 번호 반영(정본 10_observability/01 · 06)
 > **원천**: 원본 architecture.md §5 · §7.4 · §12 · §17(커밋 ff66a37) · 원본 data_flow.md §5 · §7 · §7.1 · §8.2 · §12.2(커밋 ff66a37) · 원본 implementation_plan.md §7.2 · §7.4(커밋 ff66a37) · 웨이브 인계 W3 05_data_stores/07 · 01 행(dict_tag WHERE is_active) · ADR-10 · ADR-12 · ADR-16 · [../README.md](../README.md) 전역 불변식 불변 사실 기록 · 저장소 책임 단일화
 
@@ -137,8 +138,8 @@ tag_id 하나가 겪는 사건과 각 저장소에서 일어나는 일이다. ta
 |------|------|------|
 | dict_tag 레이아웃 전환 기준 | 비활성 포함 적재로 행 수 단조 증가 — 전환 시점 미확인 | [03_clickhouse_schema.md](./03_clickhouse_schema.md) · 태그 규모 실측 |
 | 스케일 변경 전후 구간의 추이 표시 | 저장은 계보 행으로 닫힘 · 표시는 미설계 | [../08_screen/04_trend_analysis.md](../08_screen/04_trend_analysis.md)(W5) |
-| 비활성 태그를 가리키는 알람 규칙 | W2a 등재 미확인 | [../06_pipeline/08_alarm.md](../06_pipeline/08_alarm.md)(W4) |
-| 적재 행의 (device_id, tag_id) 조합 검증 | 교차 참조 #2 — 적재 쪽 강제 없음 | [../06_pipeline/03_ingest_batch.md](../06_pipeline/03_ingest_batch.md)(W4) |
+| 비활성 태그를 가리키는 알람 규칙 | 닫힘 — 활성 규칙 = enabled ∧ 태그 is_active · 규칙 행 · 열린 이벤트 · alarm:state는 남긴다 — [../06_pipeline/08_alarm.md](../06_pipeline/08_alarm.md) | [../06_pipeline/08_alarm.md](../06_pipeline/08_alarm.md)(W4) |
+| 적재 행의 (device_id, tag_id) 조합 검증 | 닫힘 — 발행자 책임 + 사후 대조 쿼리 · 적재 경로는 행마다 검증하지 않는다 — [../06_pipeline/03_ingest_batch.md](../06_pipeline/03_ingest_batch.md) | [../06_pipeline/03_ingest_batch.md](../06_pipeline/03_ingest_batch.md)(W4) |
 | 층별 반영 시간 | 3계층 미확인 — 원본 예상치 Dictionary 최대 10분(RELOAD 생략 시) · BFF 최대 30초 | [../06_pipeline/07_business_crud.md](../06_pipeline/07_business_crud.md) · EXP-29(AC-06 기록) |
 
 ## 관련 문서

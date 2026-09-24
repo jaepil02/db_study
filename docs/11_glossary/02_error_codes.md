@@ -2,6 +2,7 @@
 
 > **대상**: db_study api 컨테이너의 REST 표면이 반환하는 에러 코드 전수 — 채번 정본
 > **작성일**: 2026-09-24
+> **개정일**: 2026-09-24 — W7 검수 반영 — README ID 규약 예시와의 충돌 서술 → **W1에 고쳤다**로 갱신 — 코드 수 불변
 > **개정일**: 2026-09-24 — W5 표면 판정 반영 — 에러 코드 19 → **22종**(master.reissue_source_inactive/409 · alarms.eval_store_unavailable/503 · work_orders.production_log_not_allowed/409 신설) · common.duplicate_key 대상 · common.postgres_unavailable 인가 단계 표면 · invalid_status_transition fromStatus 경합 조건 보강
 > **개정일**: 2026-09-24 — W4 판정 반영 — datagen.stream_full 조건 스트림 길이 → **미확인 적체**(ADR-21) · common.postgres_unavailable 표면에 최신값 단일 태그 추가 · common.rate_limited 키 표기 rl:{class}:{user_id}:{unix_minute} — 코드 수 불변
 > **개정일**: 2026-09-24 — W2 요구사항 판정으로 채번 보류 8건을 닫는다 — 에러 코드 14 → **19종**(auth.token_store_unavailable/503 · master.scale_change_forbidden/409 · timeseries.clickhouse_unavailable/503 · alarms.ack_not_allowed/409 · work_orders.invalid_status_transition/409 신설) · 코드 보유 네임스페이스 5 → **8** · 재사용 1 · 코드 없음 2
@@ -54,7 +55,7 @@
 | metrics | OBS | [../07_api/10_metrics.md](../07_api/10_metrics.md) | 현재 채번 없음 |
 
 - **COL · SIM · ING은 네임스페이스를 두지 않는다.** 세 도메인은 외부 표면이 없는 내부 모듈이라 HTTP 응답을 만드는 자리가 없다. 내부 모듈의 실패는 에러 코드가 아니라 **메트릭과 상태 전이**로 드러난다 — ING의 삽입 실패는 재시도대기 → 격리(DLQ) 전이와 dlq_count로, COL의 XADD 실패는 스풀 전환과 spool_active로 계측한다. 코드를 주면 응답으로 나갈 곳이 없는 코드가 생겨 미러와 추적성 표에 유령 행이 된다.
-- **/api/v1/ingest/bulk의 에러는 datagen 네임스페이스다.** URL 경로에 ingest가 들어 있지만 이 표면은 부하 주입 표면이라 GEN이 소유한다(docs_plan.md 실행 계획 보정 #11). 거절을 판정하는 것도 ING 소비 루프가 아니라 표면이 XADD 전에 하는 미확인 적체 검사(그룹 lag + pending — XLEN이 아니다 · ADR-21)다. [../README.md](../README.md) ID 규약 표의 예시 ingest.stream_full/503은 **이 배정과 충돌하므로 datagen.stream_full/503으로 채번한다** — ingest를 네임스페이스로 쓰면 "ING은 표면 없음"과 "ING 네임스페이스 코드가 응답으로 나간다"가 동시에 참이 되어 도메인 공백 진술이 깨진다.
+- **/api/v1/ingest/bulk의 에러는 datagen 네임스페이스다.** URL 경로에 ingest가 들어 있지만 이 표면은 부하 주입 표면이라 GEN이 소유한다(docs_plan.md 실행 계획 보정 #11). 거절을 판정하는 것도 ING 소비 루프가 아니라 표면이 XADD 전에 하는 미확인 적체 검사(그룹 lag + pending — XLEN이 아니다 · ADR-21)다. [../README.md](../README.md) ID 규약 표의 예시도 datagen.stream_full/503이다(W0 골격판의 ingest.stream_full/503을 W1에 고쳤다) — ingest를 네임스페이스로 쓰면 "ING은 표면 없음"과 "ING 네임스페이스 코드가 응답으로 나간다"가 동시에 참이 되어 도메인 공백 진술이 깨진다.
 - **네임스페이스 정의와 코드 보유를 가른다.** 표면 있는 도메인 8은 코드가 0이어도 네임스페이스를 가진다 — 첫 코드를 채번할 때 이름을 새로 정하지 않도록 자리를 먼저 고정한다.
 
 ## 에러 코드 전수

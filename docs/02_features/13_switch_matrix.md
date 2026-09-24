@@ -2,6 +2,7 @@
 
 > **대상**: 역할 스위치 11종의 채번 · 환경변수 · 기본값 · off · on 동작 · 측정 대상 · 교체되는 포트 · 관련 기능 · 흐름 · 원본 예상치 · 실험 자리 · 조합 제약 — SW-NN 채번 정본
 > **작성일**: 2026-09-24
+> **개정일**: 2026-09-24 — W7 검수 반영 — SW-09 분류 서술 Redis 역할 9 → **10**(같은 문서 §검산) · 미확인 2행 닫힘(SW-09 실패 의미론 · SW-01 off 토큰 재료) — 스위치 수 불변
 > **개정일**: 2026-09-24 — W6 실험 채번 반영 — 스위치 상태 레이블 obs_switch_info · 스위치별 EXP 번호 채번 · 조합 제약 #8 · #9 신설(7 → 9)(정본 10_observability/01 · 06)
 > **개정일**: 2026-09-24 — W4 판정 반영 — SW-11 관련 흐름에 F-01 추가(collector 구현이 발행 파이프라인에서 실행) · 흐름 참여 합 17 → **18** · 세는 기준 명시 — 스위치 수 불변
 > **개정일**: 2026-09-24 — **SW-11 LATEST_VALUE_WRITER 신설**(사용자 결정 D-13) · 스위치 10 → **11** · SW-02 포트 LatestValuePort → **LatestValueReadPort** 개명(W3 04/02 확정) · 포트 이름 잠정 · SW-10 off 경고 강화 미확인 행을 닫는다(ADR-24 — 무동작)
@@ -32,7 +33,7 @@ SW-01~SW-10의 순서는 [README.md](./README.md) 고정 기준의 목록 순서
 | **SW-11** | LATEST_VALUE_WRITER | Redis 역할 — 최신값 결합 | **ingest** | ingest — Ingest가 ClickHouse 삽입 성공 · XACK 뒤에 rt:latest를 덮어쓴다(ING-08) | collector — Collector가 XADD와 같은 파이프라인으로 rt:latest를 덮어쓴다 | S3(ingest 잠정) · S6(비교) |
 
 - 도입 단계의 정본은 [../01_overview/05_priorities_roadmap.md](../01_overview/05_priorities_roadmap.md) §스위치 도입 시점이다 — 이 열은 인용이며 이 문서는 단계를 다시 세지 않는다.
-- **SW-09가 "Redis 역할"로 분류되는 것은 docs_plan 스위치 표의 분류를 승계한 것이다.** 대조군 동시 적재는 Redis 기능이 아니지만 Stream 뒤 적재 경로의 한 갈래로 Redis 역할 9에 센다. 분류 축을 바꾸면 루트 README 고정 기준의 검산식이 함께 바뀐다.
+- **SW-09가 "Redis 역할"로 분류되는 것은 docs_plan 스위치 표의 분류를 승계한 것이다.** 대조군 동시 적재는 Redis 기능이 아니지만 Stream 뒤 적재 경로의 한 갈래로 Redis 역할 10에 센다. 분류 축을 바꾸면 루트 README 고정 기준의 검산식이 함께 바뀐다.
 - SW-10 기본값의 원본 표기는 "0"이다(원본 implementation_plan.md §4.1) — 데드밴드 0 = 비활성 = off와 같다.
 - **SW-11은 켜고 끄는 스위치가 아니라 구현 선택 스위치다.** off · on 열에 두 값(ingest · collector)을 적는다. 원본 보정 7.2가 "S6 실측으로 결정"한 최신값 갱신 주체를 스위치로 노출해, ClickHouse 중단 중 대시보드가 살아 있는지의 비교가 스위치 상태로 기록되게 한다(ADR-10 · D-13). S6 결정 뒤에도 스위치는 남긴다 — 결합도 비교가 학습 목표 ②의 실험이기 때문이다.
 
@@ -127,8 +128,8 @@ SW-01~SW-10의 순서는 [README.md](./README.md) 고정 기준의 목록 순서
 |------|------|------|
 | 스위치 상태 레이블 이름 | **W6 판정** — 정보 메트릭 obs_switch_info(레이블 switch · env · value · impl) + obs_switch_warning | [../10_observability/01_metrics_catalog.md](../10_observability/01_metrics_catalog.md) |
 | 스위치별 실험 EXP 번호(SW-09 제외) | **채번 완료(W6)** — SW-01~08 · 10 · 11 = EXP-06~15 · 스위치당 1 | [../10_observability/06_experiment_catalog.md](../10_observability/06_experiment_catalog.md) |
-| SW-09 on에서 대조군 삽입 실패의 의미론 · 대조군 멱등 수단 | **신규 미확인** — [06_ingest.md](./06_ingest.md) §미확인 · 미설계 등재 | [../06_pipeline/04_routing.md](../06_pipeline/04_routing.md)(W4) · [../05_data_stores/10_olap_vs_rdb_control.md](../05_data_stores/10_olap_vs_rdb_control.md)(W3) |
-| SW-01 off에서의 배치 토큰 재료 | **신규 미확인** — 조합 제약 #3 | [../06_pipeline/03_ingest_batch.md](../06_pipeline/03_ingest_batch.md)(W4) |
+| SW-09 on에서 대조군 삽입 실패의 의미론 · 대조군 멱등 수단 | 닫힘 — COPY는 ClickHouse 성공 뒤 1회 · 재시도 없음 · XACK 비차단 · 중복은 구간 count로 검출 — [../06_pipeline/04_routing.md](../06_pipeline/04_routing.md) | [../06_pipeline/04_routing.md](../06_pipeline/04_routing.md)(W4) · [../05_data_stores/10_olap_vs_rdb_control.md](../05_data_stores/10_olap_vs_rdb_control.md)(W3) |
+| SW-01 off에서의 배치 토큰 재료 | 닫힘 — (설비 · 시퀀스) 쌍 정렬 목록 + 행 수의 sha1 · 재전달 멱등은 성립 대상이 없다(조합 제약 #3) — [../06_pipeline/03_ingest_batch.md](../06_pipeline/03_ingest_batch.md) | [../06_pipeline/03_ingest_batch.md](../06_pipeline/03_ingest_batch.md)(W4) |
 | 예상 차이 전 행 | 미확인 — 확정 전 임의 값 고정 금지 | 각 실험의 실측 결과 |
 
 ## 관련 문서

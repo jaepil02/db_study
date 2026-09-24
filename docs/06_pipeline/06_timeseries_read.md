@@ -2,6 +2,7 @@
 
 > **대상**: F-04 조회 흐름의 기전 정본 — 조회 판정 트리 · 해상도 자동 선택과 상향 · 캐시 키 정규화(SW-04) · 캐시 TTL 구간 분류와 지터 · 진행 구간 분할 · 스탬피드 방지(SW-05)와 **대기 소진 후 원천 직접 조회 판정** · 캐시 호출 타임아웃 · 다운샘플 · 메타 부착 · ClickHouse 불가 503 · 늦게 도착한 데이터와 과거 캐시 · 원시 내보내기
 > **작성일**: 2026-09-24
+> **개정일**: 2026-09-24 — W7 검수 반영 — 닫힌 행의 웨이브 표지 (W5) 제거
 > **개정일**: 2026-09-24 — W6 실험 채번 반영 — 메트릭 이름 · EXP 번호 반영(정본 10_observability/01 · 06)
 > **원천**: 원본 data_flow.md §6 · §6.1 · §6.2 · §6.3 · §15 · §16(커밋 ff66a37) · 원본 architecture.md §10 · §10.1 · §10.2 · §10.3 · §11.1(커밋 ff66a37) · docs_plan.md 웨이브 인계 W4 06_pipeline/06 행 · ADR-05 · ADR-13 · ADR-16 · ADR-25 · REQ-TSQ-01~17 · REQ-GLB-09 · [../05_data_stores/05_redis_keyspace.md](../05_data_stores/05_redis_keyspace.md) TTL 조회 계약 · [../11_glossary/05_units_and_time.md](../11_glossary/05_units_and_time.md) 캐시 키 시간 스냅 · [../11_glossary/02_error_codes.md](../11_glossary/02_error_codes.md)
 
@@ -188,7 +189,7 @@ POST 시계열 조회(브라우저 → api 직결)
 | 캐시 히트 · 미스 응답 p95 · 히트율 | 3계층 미확인 — 원본 목표 20 ms · 300 ms · 80% | [../03_requirements/13_nonfunctional.md](../03_requirements/13_nonfunctional.md) REQ-NFR-08 · 10 |
 | 스탬피드 대기 총량 대 재구성 시간 관계 | **현행 참고 값에서 관계 미충족 가능** — S4 실측 뒤 대기 값 조정 · 재구성 시간은 tsq_rebuild_duration_seconds | AC-25 · 이 문서 · EXP-10 절차 ①② |
 | TTL · 최근 창 · 타임아웃의 적정성 | 2계층 현행 참고 | S4 · 이 문서 |
-| 최대 포인트 · 태그 상한 값 | 2계층 — 소유 07_api | [../07_api/05_timeseries.md](../07_api/05_timeseries.md)(W5) |
+| 최대 포인트 · 태그 상한 값 | 2계층 — 소유 07_api | [../07_api/05_timeseries.md](../07_api/05_timeseries.md) |
 | 응답 시각 형식 · 내보내기 종료 표지 | 미정 | 상동 |
 | 소진 · 캐시 실패 메트릭 이름 | **W6 판정** — tsq_rebuild_lock_wait_exhausted_total · cache_wrapper_failures_total{prefix · op} | [../10_observability/01_metrics_catalog.md](../10_observability/01_metrics_catalog.md) |
 

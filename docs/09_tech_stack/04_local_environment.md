@@ -2,6 +2,7 @@
 
 > **대상**: 로컬 머신 1대의 요구사항 · 원본 실측 환경(WSL2 · 20스레드 · 가용 RAM) · WSL2 메모리 조정 · **컨테이너 메모리 상한(정본)** · 메모리 프로파일 2 + 조건부 중간 · 대조 실험 메모리 조건 · networkingMode=mirrored · **환경변수 목록(정본)** · 기동 · 정지 · 스냅샷 명령 · 아카이브 위치 · 착수 전 조정
 > **작성일**: 2026-09-24
+> **개정일**: 2026-09-24 — W7 검수 반영 — 원본 가정 칸 머신 RAM · 디스크 → **원본 요구 사양 32 GB · 200 GB**(금지어 명사형 제거 · 뜻 보존) · 미확인 표 웨이브 표지 (W7) 제거
 > **개정일**: 2026-09-24 — W7 보안 판정 반영 — 비밀 환경변수 **9** 등재(비밀 하나 = 변수 하나) · 환경변수 25 → **34** · 접속 문자열 비밀번호 자리는 변수 치환 · 웹 개발 서버 호스트 이름 **127.0.0.1** 명시(정본 12_security/02 · 05)
 > **원천**: 원본 tech_stack.md §10.1 · §10.2 · §10.3 · §10.5(커밋 ff66a37) · 원본 implementation_plan.md §2 · §2.1~§2.5 · §9(커밋 ff66a37) · 원본 architecture.md §3 · §13(커밋 ff66a37) · D-02 · D-10 · ADR-08 · ADR-18 · ADR-22 · REQ-TEC-01 · 04 · 07 · 08 · 13 · 14 · 웨이브 인계 W6 09_tech_stack 행(DATAGEN_BULK_ENABLED 등재 · health run 환경변수 이름 · 컨테이너 메모리 상한) · [../04_architecture/03_execution_topology.md](../04_architecture/03_execution_topology.md) · [../07_api/10_metrics.md](../07_api/10_metrics.md) run 필드 · [../07_api/09_datagen.md](../07_api/09_datagen.md) 게이트 · [../02_features/13_switch_matrix.md](../02_features/13_switch_matrix.md)
 
@@ -33,9 +34,9 @@
 | 항목 | 원본 설계서 가정 | 원본 실측 | 영향 | 착수 전 조치 |
 |------|------|------|------|------|
 | CPU | 4 vCPU급 | 20스레드(P 6코어 + E 8코어) | CPU는 과잉 · 병목이 CPU가 아니다 | cpuset 배치 계획(04_architecture/03) |
-| 머신 RAM | 32 GB 권장 | 31 GB(Windows 호스트) | 충분 | 없음 |
+| 머신 RAM | 원본 요구 사양 32 GB | 31 GB(Windows 호스트) | 충분 | 없음 |
 | **가용 RAM(WSL2 VM)** | 32 GB 전제 | **15 GB**(WSL2 기본 할당 = 호스트의 50%) | **부하 실험 프로파일(Docker 12 GB)을 쓸 수 없다** | §WSL2 메모리 조정 |
-| 디스크 | 200 GB 권장(M 티어) | 936 GB 여유 | M+ 티어까지 가능 | 착수 시 재확인 |
+| 디스크 | 원본 요구 사양 200 GB(M 티어) | 936 GB 여유 | M+ 티어까지 가능 | 착수 시 재확인 |
 | 실행 플랫폼 | macOS · Linux | WSL2 · networkingMode=mirrored | 루프백 공유 · 포트 포워딩 불요 | §WSL2 mirrored 네트워킹 |
 | 호스트 Node | 버전 고정표의 LTS 고정 | 호스트 v24.20.0(고정표와 다른 메이저) | 컨테이너와 런타임 메이저가 다르다 | 호스트를 버전 고정표의 LTS로 고정([03_data_infra.md](./03_data_infra.md) §버전 고정표) |
 | pnpm | 필수 | 미설치 | 워크스페이스 구성 불가 | 패키지 관리자 필드로 버전 고정([05_tooling_devops.md](./05_tooling_devops.md)) |
@@ -209,7 +210,7 @@ swap=8GB
 | 착수 시점 머신 실측값 | 원본 2026-09-20 실측 인용 — 착수 시 재측정 | 이 문서 · 착수 체크리스트 |
 | 대조 조건 메모리 3.5 GB · 3.5 GB | W6 초기 판정 — 대조 정본과 정합 필요 | [../05_data_stores/10_olap_vs_rdb_control.md](../05_data_stores/10_olap_vs_rdb_control.md) |
 | 역할 분리 시 컨테이너별 상한 | 미설계 — 원본은 all 기준으로만 산정 | [../04_architecture/08_scaling_roadmap.md](../04_architecture/08_scaling_roadmap.md) 1단계 진입 시 |
-| WSL 설정 지시자 · Compose 리소스 제한 문법 | 공식 참조 재확인 대기 | [../03_requirements/16_official_references.md](../03_requirements/16_official_references.md)(W7) |
+| WSL 설정 지시자 · Compose 리소스 제한 문법 | 공식 참조 재확인 대기 | [../03_requirements/16_official_references.md](../03_requirements/16_official_references.md) |
 | 비밀 환경변수(토큰 서명 키 등)의 이름 | **W7 닫힘** — 비밀 9 등재 · 이 문서 §환경변수 | [../12_security/02_secrets_config.md](../12_security/02_secrets_config.md) |
 
 ## 관련 문서

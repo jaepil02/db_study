@@ -2,6 +2,7 @@
 
 > **대상**: 인증·인가(AUT · NestJS auth 모듈) 기능 목록 · 기능별 경계 · 의존 도메인 · 실패 시 보이는 것 — 기능 ID AUT-NN 채번 정본
 > **작성일**: 2026-09-24
+> **개정일**: 2026-09-24 — W7 검수 반영 — 미확인 1행 닫힘(계정 · 역할 부여 경로 — 시드 전용) — 기능 수 불변
 > **개정일**: 2026-09-24 — W7 보안 판정 반영 — AUT-07 Origin 검증 S7 → **S2** · Host 헤더 허용 목록 추가 · 레이트 리밋 class 값 집합 · 토큰 수명 소유 닫힘 — 기능 수 불변(정본 12_security/01 · 03)
 > **개정일**: 2026-09-24 — W3 판정 반영 — 권한 캐시 키 미정 → **cache:perm:{user_id}** · sess:{session_id} → **패턴 폐지 · sess 접두 예약** · 레이트 리밋 키 → **rl:{class}:{user_id}:{unix_minute}**(정본 05_data_stores/05)
 > **개정일**: 2026-09-24 — W2 요구사항 판정 반영 — Redis 불가 시 거동 · 비활성 계정 로그인의 채번 보류를 판정 결과(token_store_unavailable/503 · invalid_credentials 재사용)로 닫는다
@@ -99,7 +100,7 @@ AUT는 **신원을 확인하고 표면마다 역할을 대조하는 도메인**�
 
 | 항목 | 원본에서 확인되는 것 | 상태 | 확정 자리 |
 |------|------|------|------|
-| 계정 · 역할 부여 경로 | user_account · role · user_role 테이블(원본 architecture.md §6) | **미설계 — 표면 없음.** 시드로만 만든다고 잠정한다 | [../05_data_stores/09_migrations_seed.md](../05_data_stores/09_migrations_seed.md)(W3) · 표면 신설 여부 [../07_api/03_auth.md](../07_api/03_auth.md)(W5) |
+| 계정 · 역할 부여 경로 | user_account · role · user_role 테이블(원본 architecture.md §6) | 닫힘 — 시드로만 만든다 · 계정 생성 · 역할 부여 표면은 두지 않는다(07_api/03 §원본에 없는 표면) · 비밀번호는 SEED_USER_PASSWORD 주입 — [../05_data_stores/09_migrations_seed.md](../05_data_stores/09_migrations_seed.md) | [../05_data_stores/09_migrations_seed.md](../05_data_stores/09_migrations_seed.md)(W3) · 표면 신설 여부 [../07_api/03_auth.md](../07_api/03_auth.md)(W5) |
 | sess:{session_id} 키의 소비 기능 | 키 계열 표에 세션 JSON · TTL 1800초가 있다(원본 architecture.md §8.2) | **W3 판정 — 키 패턴 폐지 · sess 접두 예약.** 인증은 JWT + 리프레시 키로 닫혀 세션 키를 읽는 기능이 없다. 접두는 캐시 계열 정책으로 남겨 세션 키가 다시 생길 때 정책이 이미 정해져 있게 한다 | [../05_data_stores/05_redis_keyspace.md](../05_data_stores/05_redis_keyspace.md) |
 | 레이트 리밋의 엔드포인트 차원 | "사용자별 + 엔드포인트별"(원본 architecture.md §18) · 키는 rl:{user_id}:{unix_minute}(원본 architecture.md §8.2) | **W3 판정** — 키를 rl:{class}:{user_id}:{unix_minute}로 바꿔 한도 등급 자리를 둔다. **W7 닫힘** — class 값 general · bulk_read · export · bulk_ingest · 한도는 관계식 고정 · 값 2계층 미정 | 상동 · [../12_security/03_api_surface_defense.md](../12_security/03_api_surface_defense.md) |
 | 권한 캐시 키 모양 | cache-aside 300초 · 변경 시 즉시 DEL(원본 architecture.md §10.1) | **W3 확정** — cache:perm:{user_id} | [../05_data_stores/05_redis_keyspace.md](../05_data_stores/05_redis_keyspace.md) |

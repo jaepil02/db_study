@@ -2,6 +2,7 @@
 
 > **대상**: 수집(COL · NestJS collector 모듈)의 동작 계약 — 정의 로드 · 폴링 · 블록 병합 · 디코딩 · 품질 판정 · SIMULATED 표지 · 데드밴드 · Stream 발행 · 발행량 감축 · 스풀 전환과 재발행 · 관측 — REQ-COL-NN 채번 정본
 > **작성일**: 2026-09-24
+> **개정일**: 2026-09-24 — W7 검수 반영 — REQ-COL-10 에러 코드 칸 메트릭 stream_length → **redis_stream_length**(정본 10_observability/01) · 미확인 1행 닫힘(SW-10 off와 경고 단계 강화) — REQ 수 불변
 > **개정일**: 2026-09-24 — W6 실험 채번 반영 — 메트릭 이름 반영(정본 10_observability/01 · 06)
 > **개정일**: 2026-09-24 — W4 판정 반영 — REQ-COL-01 기동 로드 원천 → **PostgreSQL** · 실행 중 마스터 변경 재기동 전 미반영 → **ch:cacheinv 반영** · 미확인 4행 W4 판정 반영 — REQ 수 불변
 > **개정일**: 2026-09-24 — W3 판정 반영 — REQ-COL-10 판정량을 XLEN에서 그룹 적체(lag + pending)로 교정(ADR-21)
@@ -34,7 +35,7 @@
 | ID | 요구 | 근거 | 위반 시 구체적 실패 | 검증 방법 | 관련 기능 | 관련 흐름 | 관련 에러 코드 |
 |------|------|------|------|------|------|------|------|
 | **REQ-COL-09** | 스캔 사이클 하나를 Stream 엔트리 하나로 만든다 — MessagePack 컬럼 배열(스키마 버전 v · 설비 d · 시퀀스 s · 기준 시각 t0 · 태그 tg · 오프셋 dt · 값 va · 품질 q). 계약의 정본은 [../06_pipeline/12_data_contract.md](../06_pipeline/12_data_contract.md) | 원본 architecture.md §8.4 · 원본 data_flow.md §14.1 · REQ-GLB-21 | 포인트 단위 엔트리는 필드 이름을 반복 저장해 메모리가 약 9배로 늘고 고부하에서 Redis 메모리가 수 분 만에 고갈된다 | XLEN 증가량 = 스캔 사이클 수 대조 · 샘플 엔트리의 필드 집합 · v 조회 | COL-07 | F-01 · F-02 | 해당 없음 — Redis 메모리 |
-| **REQ-COL-10** | 매 사이클 XADD와 컨슈머 그룹 적체(lag + pending) 조회를 한 파이프라인으로 보내 적체를 확인한다 — 이것이 백프레셔 1차 신호의 원천이다. **XLEN으로 판정하지 않는다** — 확인된 엔트리가 MAXLEN까지 남아 정상 운전에서도 위험 단계로 오판한다(ADR-21). stream:plc:raw 쓰기는 봉인 계열 래퍼로만 하며 래퍼는 실패를 삼키지 않고 던진다. Collector는 ClickHouse에 쓰지 않고 Ingest를 부르지 않는다 — 예외는 SW-01 off(실험 전용 · 기동 경고)뿐이며 이때 스풀 경로는 없다 | 원본 architecture.md §9 · §9.3 · 원본 implementation_plan.md §7.5 · REQ-GLB-03 · 04 · 08 | 적체 확인을 생략하면 Collector가 곧 "검사를 우회한 발행자"가 되어 MAXLEN이 미소비 엔트리를 **조용히 자른다.** 래퍼가 실패를 삼키면 XADD 실패가 스풀 전환 없이 유실이 된다 | 백프레셔 재현 중 stream_trimmed_unacked 0 · Redis 중단 주입 → spool_active 켜짐 · SW-01 off 기동 로그 경고 | COL-07 | F-01 · F-02 · F-10 | 해당 없음 — stream_length · stream_trimmed_unacked |
+| **REQ-COL-10** | 매 사이클 XADD와 컨슈머 그룹 적체(lag + pending) 조회를 한 파이프라인으로 보내 적체를 확인한다 — 이것이 백프레셔 1차 신호의 원천이다. **XLEN으로 판정하지 않는다** — 확인된 엔트리가 MAXLEN까지 남아 정상 운전에서도 위험 단계로 오판한다(ADR-21). stream:plc:raw 쓰기는 봉인 계열 래퍼로만 하며 래퍼는 실패를 삼키지 않고 던진다. Collector는 ClickHouse에 쓰지 않고 Ingest를 부르지 않는다 — 예외는 SW-01 off(실험 전용 · 기동 경고)뿐이며 이때 스풀 경로는 없다 | 원본 architecture.md §9 · §9.3 · 원본 implementation_plan.md §7.5 · REQ-GLB-03 · 04 · 08 | 적체 확인을 생략하면 Collector가 곧 "검사를 우회한 발행자"가 되어 MAXLEN이 미소비 엔트리를 **조용히 자른다.** 래퍼가 실패를 삼키면 XADD 실패가 스풀 전환 없이 유실이 된다 | 백프레셔 재현 중 stream_trimmed_unacked 0 · Redis 중단 주입 → spool_active 켜짐 · SW-01 off 기동 로그 경고 | COL-07 | F-01 · F-02 · F-10 | 해당 없음 — redis_stream_length · stream_trimmed_unacked |
 | **REQ-COL-11** | 백프레셔 **경고** 단계에서 데드밴드를 임시 강화해 발행량을 줄이고 deadband_boost_active를 켠다. 하강 시 해제한다. 단계 임계는 2계층 조정값(정본 [../04_architecture/06_backpressure_failure.md](../04_architecture/06_backpressure_failure.md)). SW-10 off일 때의 강화 의미는 미확인이다 | 원본 architecture.md §9.3 · 원본 data_flow.md §12.1 | 경고 단계에 반응이 없으면 정상 → 위험으로 곧장 넘어가 스풀 전환이 늦는다. 강화 상태를 계측하지 않으면 경고 구간의 행 수 감소가 유실로 오독된다 | 경고 단계 도달 시 deadband_boost_active 1 · points_emitted 감소 · 단계 하강 후 0 복귀 | COL-08 | F-10 | 해당 없음 — deadband_boost_active |
 | **REQ-COL-12** | 백프레셔 **위험** 단계이거나 XADD가 실패하면(OOM · 연결 끊김) spooldata 볼륨의 /app/spool에 길이 접두 + MessagePack 프레임을 순서대로 쌓고 spool_active · spool_bytes를 올린다. 버리지 않는다 — 발행을 스풀로 돌릴 뿐 폴링은 계속한다 | 원본 architecture.md §9.3 스풀 파일 포맷 · §17 Redis 중단 · 원본 data_flow.md §12.1 · REQ-GLB-10 | 위험 단계에서 발행을 계속하면 MAXLEN 트리밍이 미소비 엔트리를 자른다. 스풀 없이 폴링을 멈추면 Redis 중단 3분이 그대로 수집 결측이 된다 | docker stop redis 3분 → spool_active 1 · spool_bytes 증가 · 복구 후 생성 카운트 = tag_raw count | COL-09 | F-10 | 해당 없음 — spool_active · spool_bytes |
 | **REQ-COL-13** | 복구 단계에서 스풀 프레임을 앞에서부터 순차 재발행하고 다 비우면 스풀을 끝낸다. 프레임은 Stream 엔트리와 같은 포맷이라 디코딩 없이 XADD 페이로드로 넘긴다. 재발행 속도를 spool_drain_rate로 계측한다 | 원본 architecture.md §9.3 · 원본 data_flow.md §12.2 | 재발행에 변환 코드가 끼면 인코더가 둘이 되어 스풀 경유 행과 직행 행의 값이 갈릴 수 있다. 순서를 섞으면 같은 설비의 scan_seq가 역전돼 재발행 누락을 가려낼 수 없다 | 스풀 재발행 전후 scan_seq 연속성 조회 · spool_drain_rate 존재 · 재발행 뒤 스풀 파일 0 | COL-09 | F-10 | 해당 없음 — spool_drain_rate |
@@ -94,7 +95,7 @@ COL의 요구가 깨질 때 무엇이 보이는지를 한 표로 모은다. 에�
 |------|------|------|
 | 모드 A ts 채취 시점(요청 직전 · 응답 직후) | **W4 판정** — 요청 블록 송신 직전(응답 직후 시각은 왕복 히스토그램에만) | [../06_pipeline/02_collect.md](../06_pipeline/02_collect.md) |
 | 실행 중 마스터 변경의 반영 | **W4 판정** — ch:cacheinv 구독 · REQ-COL-01 반영 | 상동 |
-| SW-10 off와 경고 단계 데드밴드 강화 | 데드밴드가 꺼진 상태에서 "강화"가 태그별 설정값 적용인지 무동작인지 없다 | [../04_architecture/06_backpressure_failure.md](../04_architecture/06_backpressure_failure.md)(W3) |
+| SW-10 off와 경고 단계 데드밴드 강화 | 닫힘 — ADR-24(SW-10 off면 경고 단계 데드밴드 강화는 무동작 — 스위치가 백프레셔 반응보다 우선) — [../04_architecture/06_backpressure_failure.md](../04_architecture/06_backpressure_failure.md) | [../04_architecture/06_backpressure_failure.md](../04_architecture/06_backpressure_failure.md)(W3) |
 | 백프레셔 하강 히스테리시스 | 경고 해제 · 스풀 종료 조건의 떨림 방지 없음 | 상동 |
 | BAD_TIMEOUT "기록"의 자리 | **W4 판정** — 메트릭만 · 행 · 최신값 갱신 없음 | [../06_pipeline/02_collect.md](../06_pipeline/02_collect.md) |
 | FLOAT64 4워드 순서 · 레지스터 비트 BOOL | **W4 판정** — 두 축 조합 · 레지스터 비트 BOOL 미지원 | 상동 |

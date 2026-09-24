@@ -2,6 +2,7 @@
 
 > **대상**: 측정값 하나가 계층을 지나며 바뀌는 모양의 정본 — 단계별 스키마(와이어 → 디코딩 → Stream 엔트리 → ClickHouse 행 → API 응답) · 스키마 버전 필드 v · t0 · dt 규칙 · 최신값 Hash 값 · Pub/Sub 페이로드 · 스풀 프레임 · DLQ 엔트리 · 계약 변경 규칙 · 발행자 공통 계약
 > **작성일**: 2026-09-24
+> **개정일**: 2026-09-24 — W7 검수 반영 — 미확인 2행 닫힘(모드 C 본문 · 응답 시각 형식과 WebSocket 프레임)
 > **개정일**: 2026-09-24 — W6 실험 채번 반영 — 메트릭 이름 반영(정본 10_observability/01 · 06)
 > **원천**: 원본 data_flow.md §14 · §14.1 · §14.2 · §15(커밋 ff66a37) · 원본 architecture.md §9.3(커밋 ff66a37) · docs_plan.md 파일 목차(06_pipeline/12) · ADR-01 · ADR-04 · ADR-14 · ADR-15 · REQ-GLB-01 · 02 · 21 · REQ-COL-09 · REQ-GEN-07 · REQ-ING-01 · 05 · REQ-TSQ-05 · [../11_glossary/05_units_and_time.md](../11_glossary/05_units_and_time.md) 기준값 + 오프셋 인코딩 · [../05_data_stores/03_clickhouse_schema.md](../05_data_stores/03_clickhouse_schema.md) tag_raw · [../05_data_stores/05_redis_keyspace.md](../05_data_stores/05_redis_keyspace.md) 봉인 계열 값 모양
 
@@ -192,8 +193,8 @@ stream:plc:dlq 엔트리 하나 = **실패한 원 엔트리 하나**다(W3 판�
 | 항목 | 상태 | 확정 자리 |
 |------|------|------|
 | 실제 엔트리 크기 · 컬럼 배열 대 객체 배열 크기 비 | 3계층 미확인 — 원본 예상치 약 7 KB(태그 500) · 약 1/9 | [../05_data_stores/06_redis_memory.md](../05_data_stores/06_redis_memory.md) · 실측 |
-| 모드 C 요청 본문 모양 | 미정 — 이 계약으로 변환된다 | [../07_api/09_datagen.md](../07_api/09_datagen.md)(W5) |
-| 응답 시각 형식 · WebSocket 프레임 · 채널 필드 이름 | 미정 | [../07_api/01_conventions.md](../07_api/01_conventions.md) · [../07_api/11_websocket.md](../07_api/11_websocket.md)(W5) |
+| 모드 C 요청 본문 모양 | 닫힘 — §요청 본문(이 계약으로 변환) — [../07_api/09_datagen.md](../07_api/09_datagen.md) | [../07_api/09_datagen.md](../07_api/09_datagen.md)(W5) |
+| 응답 시각 형식 · WebSocket 프레임 · 채널 필드 이름 | 닫힘 — 측정 시각은 epoch ms 정수 · 업무 시각은 UTC ISO 8601 · WebSocket 프레임 · 채널 필드는 07_api/11 — [../07_api/01_conventions.md](../07_api/01_conventions.md) | [../07_api/01_conventions.md](../07_api/01_conventions.md) · [../07_api/11_websocket.md](../07_api/11_websocket.md)(W5) |
 | DLQ 엔트리 원 배치 토큰 필드 | 판정 — 키 공간 값 모양 갱신 필요 | [../05_data_stores/05_redis_keyspace.md](../05_data_stores/05_redis_keyspace.md)(W4 반영) |
 | 음수 dt · 잘린 스풀 프레임 계수 이름 | **W6 판정** — ing_negative_dt_total · col_spool_truncated_frames_total | [../10_observability/01_metrics_catalog.md](../10_observability/01_metrics_catalog.md) |
 

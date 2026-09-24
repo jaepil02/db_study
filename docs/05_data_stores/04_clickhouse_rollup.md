@@ -2,6 +2,7 @@
 
 > **대상**: 롤업 테이블 tag_1m · tag_1h · tag_1d와 MV 3(mv_tag_1m · mv_tag_1h · mv_tag_1d)의 DDL · -State/-Merge 조합자 · bad_cnt 조건식 · 일 경계 시간대 판정 · MV 제약 · 백필 절차 · 정합 검증 · 롤업 객체 도메인 귀속 판정
 > **작성일**: 2026-09-24
+> **개정일**: 2026-09-24 — W7 검수 반영 — 미확인 1행 닫힘(롤업 공백 재계산 절차)
 > **원천**: 원본 architecture.md §7.2 · §11.1 · §15(커밋 ff66a37) · 원본 data_flow.md §6.1 · §10 · §10.1 · §10.2 · §10.3 · §13 · §17(커밋 ff66a37) · docs_plan.md 웨이브 인계 W3 05_data_stores/04 행 · W3 05_data_stores 행(롤업 · MV 도메인 귀속) · ADR-15 · [../11_glossary/03_enums_state_machines.md](../11_glossary/03_enums_state_machines.md) 품질 코드 · [../11_glossary/05_units_and_time.md](../11_glossary/05_units_and_time.md) 버킷 경계
 
 롤업은 **원시 스캔을 피하려고 삽입 시점에 미리 접어 두는 집계**다. tag_raw 삽입이 MV를 발동하고, MV의 타깃 테이블 삽입이 다음 MV를 발동하는 연쇄로 분 → 시간 → 일 롤업이 별도 배치 잡 없이 완성된다(원본 architecture.md §7.2). 원시를 7일만 보관하고도 장기 추이를 볼 수 있는 이유가 이 계층이다.
@@ -254,7 +255,7 @@ GROUP BY bucket, device_id, tag_id;
 | MV 캐스케이드 지연 · MV가 삽입 처리량에 더하는 비용 | 3계층 미확인 — 원본 예상치 MV 캐스케이드 100 ms | [../03_requirements/13_nonfunctional.md](../03_requirements/13_nonfunctional.md) REQ-NFR-04 |
 | 중복 제거된 재시도와 종속 MV | MV 제약 #8 · [03_clickhouse_schema.md](./03_clickhouse_schema.md) 미확인 | S0 실측 · [../06_pipeline/09_rollup.md](../06_pipeline/09_rollup.md)(W4) |
 | UNCERTAIN(1) 부여 주체 · 가중치 | 판정 — 가중치 미구현 · 주체 생기면 재판정 | [../06_pipeline/02_collect.md](../06_pipeline/02_collect.md)(W4) |
-| 롤업 공백 구간 재계산 명령 | 절차 모양만 있다 — 재계산 범위 산정 · 기존 부분 상태와의 중복 처리 | [../06_pipeline/09_rollup.md](../06_pipeline/09_rollup.md)(W4) |
+| 롤업 공백 구간 재계산 명령 | 닫힘 — 빠진 기여분만 넣기 · 버킷 비우고 다시 만들기 두 절차(부분 상태 버킷 이중 계수 방지) — [../06_pipeline/09_rollup.md](../06_pipeline/09_rollup.md) | [../06_pipeline/09_rollup.md](../06_pipeline/09_rollup.md)(W4) |
 
 ## 관련 문서
 

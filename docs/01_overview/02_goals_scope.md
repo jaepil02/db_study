@@ -2,6 +2,7 @@
 
 > **대상**: 전원 — db_study가 무엇을 만들고 무엇을 만들지 않는가, 그리고 만들지 않는 것이 측정에 남기는 한계
 > **작성일**: 2026-09-24
+> **개정일**: 2026-09-24 — W7 검수 반영 — 확장 3단계 진입 조건의 상관 대상 스트림 길이 → **Stream 점유 메모리**(정본 04_architecture/08 · 10_observability/03)
 > **개정일**: 2026-09-24 — W6 판정 반영 — E2E 분산 추적 행의 상태를 관측 구성원 판정(tempo 현 범위 밖 · 조건부)으로 채운다
 > **개정일**: 2026-09-24 — SW-11 LATEST_VALUE_WRITER 신설 반영(D-13 · 사용자 확정) — 스위치 10 → **11**
 > **원천**: 원본 tech_stack.md §1 · §3.4 · §10.6 · §13(커밋 ff66a37) · 원본 architecture.md §2 · §17 · §18 · §19(커밋 ff66a37) · 원본 implementation_plan.md §2(커밋 ff66a37) · [06_design_decisions.md](./06_design_decisions.md) D-01 · D-02 · D-11 · [../README.md](../README.md) 고정 기준 · 전역 불변식
@@ -52,7 +53,7 @@ db_study의 범위는 **학습 목표 2축(D-01)을 측정으로 닫는 데 필�
 |------|------|------|------|
 | 확장 1단계 — APP_ROLE 역할 분리 | api 이벤트 루프 지연이 임계를 넘거나 수집량 상승에 비례해 조회 p95가 악화됨 | 코드는 분리 가능하게 쓰되(Stream 경계) 기동은 all | [../04_architecture/08_scaling_roadmap.md](../04_architecture/08_scaling_roadmap.md) |
 | 확장 2단계 — api 다중 인스턴스 · PgBouncer | api 역할 컨테이너 CPU 사용률이 임계에서 지속 | ch:cacheinv 채널만 존재 · 구독자 1 | 상동 |
-| 확장 3단계 — Redis 인스턴스 분리 | 캐시 히트율이 스트림 길이와 역상관을 보이며 임계 아래로 내려감 | 키 접두로 생존 정책을 가르는 단일 인스턴스 | 상동 · [../05_data_stores/06_redis_memory.md](../05_data_stores/06_redis_memory.md) |
+| 확장 3단계 — Redis 인스턴스 분리 | 캐시 히트율이 Stream 점유 메모리와 역상관을 보이며 임계 아래로 내려감 | 키 접두로 생존 정책을 가르는 단일 인스턴스 | 상동 · [../05_data_stores/06_redis_memory.md](../05_data_stores/06_redis_memory.md) |
 | 확장 4단계 — Kafka 전환 | Redis 메모리로 보존 기간을 감당할 수 없거나 재처리 요구 발생 | Ingest 소스 인터페이스만 추상화 | 상동 |
 | Python 데이터 평면 분리 | 생성기 처리량 미달 · 시뮬레이터 기능 부족 · Arrow 직삽입 필요 중 하나가 실측됨(원본 tech_stack.md §3.4) | 데이터 계약을 Stream 페이로드 하나로 고정 | [../09_tech_stack/06_decisions_rationale.md](../09_tech_stack/06_decisions_rationale.md) |
 | 중간 메모리 프로파일 | WSL2 메모리 상향이 불가능할 때(원본 implementation_plan.md §2.3) | 부하 실험 프로파일을 쓴다 | [../09_tech_stack/04_local_environment.md](../09_tech_stack/04_local_environment.md) |

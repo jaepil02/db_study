@@ -2,6 +2,7 @@
 
 > **대상**: 데이터 생성(GEN · NestJS datagen 모듈) 기능 목록 · 주입 모드 4종 · 부하 주입 표면 · SIMULATED 표기 · 기능별 경계 · 실패 시 보이는 것 — 기능 ID GEN-NN 채번 정본
 > **작성일**: 2026-09-24
+> **개정일**: 2026-09-24 — W7 검수 반영 — GEN-07 · 판정 주체 서술의 스트림 길이 검사 → **미확인 적체 검사**(ADR-21) · 미확인 2행 닫힘(모드 B 검사 · 모드 D 대조군 절차) — 기능 수 불변
 > **개정일**: 2026-09-24 — W6 실험 채번 반영 — EXP 번호 반영(정본 10_observability/01 · 06)
 > **개정일**: 2026-09-24 — W3 판정 반영 — 길이 검사의 판정량을 그룹 적체로 교정(ADR-21)
 > **원천**: 원본 tech_stack.md §3.3 · §3.4 · §7 · §8(커밋 ff66a37) · 원본 data_flow.md §10.3 · §11 · §11.1 · §11.2 · §11.3 · §12.1(커밋 ff66a37) · 원본 architecture.md §4 · §9.3 · §11 · §15 · §18(커밋 ff66a37) · 원본 implementation_plan.md §5 S1 · S2 · S5(커밋 ff66a37) · 저장소 루트 docs_plan.md 보정 #11 · D-05 · D-12 · [../11_glossary/03_enums_state_machines.md](../11_glossary/03_enums_state_machines.md) 신호 프로파일 · 주입 모드
@@ -24,7 +25,7 @@ GEN은 **실장비가 없는 이 시스템에서 실험의 품질을 결정하�
 | **GEN-04** | 부하 티어 설정 | 용량 티어 S · M · M+ · L(설비 수 · 설비당 태그 · 주기)을 생성 규모로 받는다. 초당 포인트는 티어가 정하고 생성기는 그 값을 만들어 낸다 — 티어 값의 정본은 [../04_architecture/07_capacity_planning.md](../04_architecture/07_capacity_planning.md) | S1 · S5 | F-09 | 해당 없음 | 표면 없음 — 실행 인자 | 없음 |
 | **GEN-05** | 모드 A 레지스터 갱신 | PlcSim 레지스터 Buffer를 주기적으로 갱신한다. Collector 폴링을 거치므로 **진짜 E2E 지연과 Modbus 병목**을 잰다. DB 상한은 잴 수 없다 — Modbus가 먼저 막힌다 | S2 | F-01 · F-09 | 해당 없음 | 표면 없음 — 실행 인자 | 없음(SIM Buffer) |
 | **GEN-06** | 모드 B Stream 직결 | stream:plc:raw에 직접 XADD한다. Modbus와 Collector를 우회해 **Redis · Ingest · ClickHouse 상한**을 잰다. 엔트리는 Collector와 같은 페이로드 계약(스키마 버전 v 포함)을 따른다. api 컨테이너 안 또는 같은 머신의 APP_ROLE=datagen 컨테이너에서 돈다 | S5 | F-02 · F-09 | 해당 없음 | 표면 없음 — 실행 인자 | Redis stream:plc:raw |
-| **GEN-07** | 모드 C 부하 주입 표면 | **POST /api/v1/ingest/bulk**로 받아 Stream에 넣는다. HTTP 계층 · 인증 · 직렬화 비용을 포함한 수집 상한을 잰다. **기본 비활성이며 환경변수로만 켠다.** 켜진 상태에서도 XADD 전에 스트림 길이를 검사해 백프레셔 **위험** 단계면 거절한다 — Collector가 스풀로 가는 것과 같은 임계다 | S5 | F-09 · F-10 | 해당 없음 | 07_api/09_datagen | Redis stream:plc:raw |
+| **GEN-07** | 모드 C 부하 주입 표면 | **POST /api/v1/ingest/bulk**로 받아 Stream에 넣는다. HTTP 계층 · 인증 · 직렬화 비용을 포함한 수집 상한을 잰다. **기본 비활성이며 환경변수로만 켠다.** 켜진 상태에서도 XADD 전에 미확인 적체(그룹 lag + pending — XLEN이 아니다 · ADR-21)를 검사해 백프레셔 **위험** 단계면 거절한다 — Collector가 스풀로 가는 것과 같은 임계다 | S5 | F-09 · F-10 | 해당 없음 | 07_api/09_datagen | Redis stream:plc:raw |
 | **GEN-08** | 모드 D 백필 | ClickHouse에 직접 삽입해 과거 구간을 채운다(시간 압축). 절차는 MV 분리 → 원시 대량 삽입 → 롤업 직접 채우기(INSERT SELECT) → MV 재연결 → 원시 count 대 롤업 countMerge 대조 순이다. MV를 붙인 채 백필하면 삽입이 느려지고 중간 실패 시 롤업이 부분만 채워져 정합 판단이 불가능하다(원본 data_flow.md §10.3). **ING를 우회하므로 멱등 토큰 · 대조군 동시 적재를 타지 않는다** | S5 | F-08 · F-09 | 해당 없음 | 표면 없음 — 실행 인자 | ClickHouse tag_raw · tag_1m · tag_1h · tag_1d(쓰기 · 소유 아님) |
 | **GEN-09** | 생성기 단독 처리량 실측 | 수집 경로 없이 생성 + MessagePack 인코딩 처리량을 워커 수별로 잰다. 합격은 **M 티어 초당 포인트의 3배**(원본 목표 30,000 pps)이며 목적은 판정보다 **기준선 확보**다. 미달이면 APP_ROLE=datagen 별도 컨테이너 또는 Python 생성기로 간다(원본 tech_stack.md §3.4) | S1 | F-09 | 해당 없음 | 표면 없음 — 실행 인자 | 없음 |
 | **GEN-10** | 대조군 동일 행 백필 | 모드 D로 채운 구간은 SW-09 동시 적재가 적용되지 않으므로, 같은 시드 · 같은 구간 · 같은 태그 집합으로 PostgreSQL 대조군 plc_tag_raw_control에도 **같은 행 집합**을 채운다. 행 집합이 다르면 두 저장소의 쿼리 결과 자체를 대조할 수 없다(D-05). S5의 용량 단계별 대조 쿼리가 이 기능 위에서 돈다(D-12). 절차의 정본은 [../06_pipeline/10_datagen_inject.md](../06_pipeline/10_datagen_inject.md) | S5 | F-09 | SW-09 | 표면 없음 — 실행 인자 | PostgreSQL plc_tag_raw_control(쓰기 · 소유 아님) |
@@ -49,7 +50,7 @@ GEN은 **실장비가 없는 이 시스템에서 실험의 품질을 결정하�
 
 ## 부하 주입 표면이 GEN 소유인 이유
 
-**통념**: 경로가 /api/v1/ingest/bulk이니 ING(적재) 표면이다. **부정**: ING는 외부 표면이 없는 내부 모듈이며 Stream 뒤에서만 데이터를 받는다. 이 표면을 부르는 주체는 부하 주입(모드 C)이고 거절을 판정하는 것도 ING 소비 루프가 아니라 표면이 XADD 전에 하는 길이 검사다. **진짜 축**: 표면 소유는 URL이 아니라 **호출 주체와 판정 주체**를 따른다(docs_plan 보정 #11). **대체 경로**: 에러 네임스페이스도 datagen이다 — datagen.stream_full/503 · datagen.bulk_disabled/404([../11_glossary/02_error_codes.md](../11_glossary/02_error_codes.md)).
+**통념**: 경로가 /api/v1/ingest/bulk이니 ING(적재) 표면이다. **부정**: ING는 외부 표면이 없는 내부 모듈이며 Stream 뒤에서만 데이터를 받는다. 이 표면을 부르는 주체는 부하 주입(모드 C)이고 거절을 판정하는 것도 ING 소비 루프가 아니라 표면이 XADD 전에 하는 적체 검사다. **진짜 축**: 표면 소유는 URL이 아니라 **호출 주체와 판정 주체**를 따른다(docs_plan 보정 #11). **대체 경로**: 에러 네임스페이스도 datagen이다 — datagen.stream_full/503 · datagen.bulk_disabled/404([../11_glossary/02_error_codes.md](../11_glossary/02_error_codes.md)).
 
 - ING 네임스페이스로 코드를 내면 "ING는 표면이 없다"와 "ING 코드가 응답으로 나간다"가 동시에 참이 되어 도메인 공백 진술이 깨진다.
 - 표면 명세(요청 본문 · 게이트 환경변수 이름)는 [../07_api/09_datagen.md](../07_api/09_datagen.md)(W5)가 정한다.
@@ -106,9 +107,9 @@ GEN은 **실장비가 없는 이 시스템에서 실험의 품질을 결정하�
 
 | 항목 | 원본에서 확인되는 것 | 상태 | 확정 자리 |
 |------|------|------|------|
-| 모드 B의 스트림 길이 검사 | Collector는 그룹 적체(lag + pending)를 파이프라인으로 확인하고(ADR-21 — XLEN이 아니다) bulk 표면도 같은 임계에서 거절한다(원본 architecture.md §9.3) · MAXLEN은 "검사를 우회한 발행자"를 막는 최후 안전장치다 | **신규 미확인** — 모드 B가 검사를 하는지 없다. 하지 않으면 모드 B가 바로 그 "우회한 발행자"이고 위험 단계에서 미소비 엔트리가 조용히 잘린다 | [../06_pipeline/10_datagen_inject.md](../06_pipeline/10_datagen_inject.md)(W4) |
+| 모드 B의 스트림 길이 검사 | Collector는 그룹 적체(lag + pending)를 파이프라인으로 확인하고(ADR-21 — XLEN이 아니다) bulk 표면도 같은 임계에서 거절한다(원본 architecture.md §9.3) · MAXLEN은 "검사를 우회한 발행자"를 막는 최후 안전장치다 | 닫힘 — 모드 B도 XADD 전에 적체 검사 · 위험 단계면 발행 중단 · 주의 임계에서 재개(REQ-GEN-07) — [../06_pipeline/10_datagen_inject.md](../06_pipeline/10_datagen_inject.md) | [../06_pipeline/10_datagen_inject.md](../06_pipeline/10_datagen_inject.md)(W4) |
 | 생성기 실행 제어 표면 | 원본 API 표(원본 architecture.md §11)에 생성기 실행 · 정지 표면이 없다 | **근거 없음** — 07_api 목차가 "생성기 실행 제어"를 적었으나 원본에 없다. 이 문서는 표면을 만들지 않았다 | [../07_api/09_datagen.md](../07_api/09_datagen.md)(W5) · 리드 판정 |
-| 모드 D와 대조군의 동일 행 절차 | 대조군 쪽도 같은 행 집합이어야 한다(W1 [../01_overview/01_purpose_learning_goals.md](../01_overview/01_purpose_learning_goals.md)) | 절차 미설계 | [../06_pipeline/10_datagen_inject.md](../06_pipeline/10_datagen_inject.md)(W4) |
+| 모드 D와 대조군의 동일 행 절차 | 대조군 쪽도 같은 행 집합이어야 한다(W1 [../01_overview/01_purpose_learning_goals.md](../01_overview/01_purpose_learning_goals.md)) | 닫힘 — §모드 D 백필과 대조군 동일 행(같은 행 벡터를 날짜 단위로 두 저장소에 차례로 쓰고 일마다 count 대조) — [../06_pipeline/10_datagen_inject.md](../06_pipeline/10_datagen_inject.md) | [../06_pipeline/10_datagen_inject.md](../06_pipeline/10_datagen_inject.md)(W4) |
 | 생성 모드의 과거 ts와 STALE | 시간 압축으로 과거 시각을 찍으면 최신값 화면이 전부 STALE이다(W1 [../11_glossary/05_units_and_time.md](../11_glossary/05_units_and_time.md)) | 판정식의 결과 — 실시간 화면 실험은 현재 시각으로 생성한다 | [../10_observability/04_experiment_protocol.md](../10_observability/04_experiment_protocol.md) |
 | 압축률 · 생성 처리량 | 원본 예상치(프로파일별 압축률 · 20 스레드 머신 미달 가능성 낮음) | 미확인 — 확정 전 임의 값 고정 금지 | EXP-35 · EXP-21 · [../10_observability/06_experiment_catalog.md](../10_observability/06_experiment_catalog.md) |
 

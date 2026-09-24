@@ -2,6 +2,7 @@
 
 > **대상**: 적재·분기(ING · NestJS ingest 모듈) 기능 목록 · 3계층 분기 실행 · 대조군 동시 적재 · 기능별 경계 · 실패 시 보이는 것 — 기능 ID ING-NN 채번 정본
 > **작성일**: 2026-09-24
+> **개정일**: 2026-09-24 — W7 검수 반영 — 장애 표 메트릭 stream_length → **redis_stream_length**(정본 10_observability/01) · 미확인 5행 닫힘(대조군 실패 의미론 · 대조군 멱등 · 생산 카운터 · alarm_eval 재시도 · DLQ 재처리) — 기능 수 불변
 > **개정일**: 2026-09-24 — W3 판정 반영 — 롤업 객체(tag_1m · tag_1h · tag_1d · MV 3) 도메인 귀속 잠정 ING → **ING 확정**(정본 05_data_stores/04 §도메인 귀속 판정)
 > **개정일**: 2026-09-24 — W3 판정 반영 — ING-13 컨슈머 증설의 효과 범위를 ADR-09(단일 flusher)에 맞춰 한정
 > **원천**: 원본 architecture.md §5 · §7.1 · §7.2 · §9 · §9.1 · §9.2 · §9.3 · §17(커밋 ff66a37) · 원본 data_flow.md §4 · §4.1 · §4.2 · §4.3 · §8 · §8.2 · §10 · §12.3 · §12.4 · §14.1(커밋 ff66a37) · 원본 tech_stack.md §5.3(커밋 ff66a37) · 원본 implementation_plan.md §4.1 · §5 S2 · S3 · S6 · §7.1 · §7.2 · §7.3(커밋 ff66a37) · 저장소 루트 docs_plan.md(학습 목표 1 · 2) · D-04 · D-05 · D-12 · [13_switch_matrix.md](./13_switch_matrix.md)
@@ -93,7 +94,7 @@ ING는 에러 코드를 내지 않는다([../11_glossary/02_error_codes.md](../1
 |------|------|------|------|
 | ClickHouse 삽입 실패 | 재시도대기 → 삽입시도(같은 토큰) | insert 실패 수 · 재시도 수 | ING-05 |
 | 재시도 소진 | 격리 — DLQ 복사 후 XACK · 알림 | dlq_count | ING-05 |
-| ClickHouse 중단 | XACK 보류 → 스트림 적체 → 백프레셔 단계 상승 · **최신값도 함께 정지** | consumer_lag · stream_length | ING-08 · 13 |
+| ClickHouse 중단 | XACK 보류 → 스트림 적체 → 백프레셔 단계 상승 · **최신값도 함께 정지** | consumer_lag · redis_stream_length | ING-08 · 13 |
 | 컨슈머 하나의 예외 | 모듈 재시도 루프 재기동 · 다른 컨슈머가 PEL 회수 | consumer_lag 급증 후 회복 | ING-06 |
 | api 재기동 | 미소비 엔트리와 PEL은 AOF로 보존 · 재기동 후 회수 | consumer_lag | ING-06 |
 | MV 삽입 실패 | 원시는 확정 · 롤업만 빈다 — 해당 구간 재계산 | 원시 count 대 롤업 countMerge | ING-12 |
@@ -115,11 +116,11 @@ ING는 에러 코드를 내지 않는다([../11_glossary/02_error_codes.md](../1
 
 | 항목 | 상태 | 확정 자리 |
 |------|------|------|
-| 대조군 삽입 실패의 의미론 | **신규 미확인** — 대조군 실패가 XACK를 막으면 PostgreSQL 지연이 수집 경로의 백프레셔가 되어 목표 ②의 수치가 오염되고, 막지 않으면 두 저장소 행 수가 어긋나 S3 합격 판정(행 수 일치)이 깨진다 | [../06_pipeline/04_routing.md](../06_pipeline/04_routing.md)(W4) · [../05_data_stores/10_olap_vs_rdb_control.md](../05_data_stores/10_olap_vs_rdb_control.md)(W3) |
-| 대조군 쪽 멱등 수단 | **신규 미확인** — 재시도가 같은 배치를 다시 넣을 때 ClickHouse는 토큰이 막지만 PostgreSQL에는 대응 수단이 원본에 없다. 없으면 재시도마다 대조군에만 중복 행이 쌓인다 | 상동 |
-| 생산 카운터의 분기 기전 | W1 등재 미설계 | [../06_pipeline/04_routing.md](../06_pipeline/04_routing.md)(W4) |
-| alarm_eval 삽입의 재시도 · DLQ | "Ingest 배치와 동일한 정책"(원본 data_flow.md §8.2) — 같은 DLQ Stream을 쓰는지 없다 | [../06_pipeline/08_alarm.md](../06_pipeline/08_alarm.md)(W4) |
-| DLQ 재처리 경로 | DLQ 이동과 알림까지만 있다 | [../06_pipeline/11_backpressure_failure.md](../06_pipeline/11_backpressure_failure.md)(W4) |
+| 대조군 삽입 실패의 의미론 | 닫힘 — 대조군 COPY는 ClickHouse 삽입 성공 뒤 1회 · XACK는 대조군 성패와 무관 · 실패 배치는 대조군 0행 + 실패 기록으로 무효 구간 표시 — [../06_pipeline/04_routing.md](../06_pipeline/04_routing.md) | [../06_pipeline/04_routing.md](../06_pipeline/04_routing.md)(W4) · [../05_data_stores/10_olap_vs_rdb_control.md](../05_data_stores/10_olap_vs_rdb_control.md)(W3) |
+| 대조군 쪽 멱등 수단 | 닫힘 — 재시도 루프 밖 1회라 재시도 중복은 없고 크래시 재전달 중복은 막지 않고 구간 count로 검출(한계 등재 #5) — [../06_pipeline/04_routing.md](../06_pipeline/04_routing.md) | 상동 |
+| 생산 카운터의 분기 기전 | 닫힘 — 카운터 표본은 ① 경로 그대로 · 파생 판정기는 목적지 없이 두지 않는다(도입 조건 4) — [../06_pipeline/04_routing.md](../06_pipeline/04_routing.md) | [../06_pipeline/04_routing.md](../06_pipeline/04_routing.md)(W4) |
+| alarm_eval 삽입의 재시도 · DLQ | 닫힘 — 재시도는 원시 배치와 같은 정책 · 소진 시 DLQ로 격리하지 않고 무효 구간 기록 — [../06_pipeline/08_alarm.md](../06_pipeline/08_alarm.md) | [../06_pipeline/08_alarm.md](../06_pipeline/08_alarm.md)(W4) |
+| DLQ 재처리 경로 | 닫힘 — 사람이 거는 운영 절차 · 원 토큰으로 tag_raw에 직접 삽입 · stream:plc:raw 재발행 없음 — [../06_pipeline/11_backpressure_failure.md](../06_pipeline/11_backpressure_failure.md) | [../06_pipeline/11_backpressure_failure.md](../06_pipeline/11_backpressure_failure.md)(W4) |
 | 롤업 객체의 도메인 귀속 | **W3 확정 — ING** | [../05_data_stores/04_clickhouse_rollup.md](../05_data_stores/04_clickhouse_rollup.md) §도메인 귀속 판정 |
 
 ## 관련 문서

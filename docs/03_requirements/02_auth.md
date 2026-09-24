@@ -2,6 +2,7 @@
 
 > **대상**: 인증·인가(AUT · NestJS auth 모듈)의 동작 계약 — 로그인 · 토큰 수명과 보관 · 갱신 · 폐기 · 신원 확인 · 역할 인가 · 레이트 리밋 · 요청 출처 방어 · 저장소 장애 시 거동 — REQ-AUT-NN 채번 정본
 > **작성일**: 2026-09-24
+> **개정일**: 2026-09-24 — W7 검수 반영 — 미확인 1행 닫힘(WebSocket 인증 실패 · Origin 종료 코드) — REQ 수 불변
 > **개정일**: 2026-09-24 — W7 보안 판정 반영 — REQ-AUT-13에 WebSocket Origin 검증 S7 → **S2** · **BFF 인증 경로 Origin 대조** · **Host 헤더 허용 목록** 추가 · 레이트 리밋 class 값 집합 · 토큰 수명 미정 행 닫힘 — REQ 수 불변(정본 12_security/01 · 03)
 > **개정일**: 2026-09-24 — W6 실험 채번 반영 — 메트릭 이름 반영(정본 10_observability/01 · 06)
 > **개정일**: 2026-09-24 — W3 판정 반영 — 레이트 리밋 키 rl:{user_id}:{unix_minute} → **rl:{class}:{user_id}:{unix_minute}**(엔드포인트 차원 = 한도 등급) · 권한 캐시 키 미정 → **cache:perm:{user_id}** · sess:{session_id} → **패턴 폐지 · sess 접두 예약**(정본 05_data_stores/05)
@@ -116,7 +117,7 @@ Redis 접속 불가
 | 레이트 리밋의 엔드포인트 차원 | **닫힘(W7)** — 키 rl:{class}:{user_id}:{unix_minute} · class 값 general · bulk_read · export · bulk_ingest · 한도는 관계식 R1~R4 고정 · 값 2계층 미정 | [../12_security/03_api_surface_defense.md](../12_security/03_api_surface_defense.md) |
 | 권한 캐시 키 모양 | **W3 확정** — cache:perm:{user_id} | [../05_data_stores/05_redis_keyspace.md](../05_data_stores/05_redis_keyspace.md) |
 | sess:{session_id} 소비 기능 | **W3 판정** — 키 패턴 폐지 · sess 접두는 캐시 계열 예약으로 유지(세션 키가 다시 생길 때 정책이 이미 정해져 있게) | [../05_data_stores/05_redis_keyspace.md](../05_data_stores/05_redis_keyspace.md) |
-| WebSocket 인증 실패 · Origin 불일치 종료 코드 | 미정 | [../07_api/11_websocket.md](../07_api/11_websocket.md)(W5) |
+| WebSocket 인증 실패 · Origin 불일치 종료 코드 | 닫힘 — Origin 불일치 · 역할 0 사용자 4403 · 인증 실패 4401(종료 코드 8종) — [../07_api/11_websocket.md](../07_api/11_websocket.md) | [../07_api/11_websocket.md](../07_api/11_websocket.md)(W5) |
 | Redis 불가 중 레이트 리밋 통과 계수의 메트릭 이름 | **W6 판정** — aut_ratelimit_bypassed_total | [../10_observability/01_metrics_catalog.md](../10_observability/01_metrics_catalog.md) |
 | 토큰 수명 · 한도 값 | **닫힘(W7)** — 수명 정본 12_security/01(현행 참고 액세스 15분 · 리프레시 14일 · 리프레시는 발급 시점 기준 · 슬라이딩 금지) · 한도 정본 12_security/03 | [../12_security/01_authn_authz.md](../12_security/01_authn_authz.md) · [../12_security/03_api_surface_defense.md](../12_security/03_api_surface_defense.md) |
 

@@ -2,6 +2,7 @@
 
 > **대상**: db_study의 동작 계약 — 전역 규칙 · 도메인별 요구사항 · 비기능 · 인수 기준 · 추적성 · 공식 참조
 > **작성일**: 2026-09-23
+> **개정일**: 2026-09-24 — W7 검수 반영 — 14 설명에 학습 목표 산출물 추가 · REQ 228 → **229** · 공식 참조 57 → **68**
 > **개정일**: 2026-09-24 — W7 완성판 — 15 추적성(7축 · 미매핑 0 · 유령 0) · 16 공식 참조(등재 68 · 전부 미확인)
 > **원천**: [../README.md](../README.md)(전역 불변식) · [../02_features](../02_features/README.md)(기능 ID) · 원본 architecture.md §1 · §15 · §16 · 원본 data_flow.md §15 · §17 · 원본 implementation_plan.md §5 합격 판정(커밋 ff66a37)
 
@@ -26,7 +27,7 @@
 | [11_work_orders.md](./11_work_orders.md) | REQ-WRK | architecture §6 | W2 |
 | [12_metrics.md](./12_metrics.md) | REQ-OBS | architecture §14 · tech_stack §9 | W2 |
 | [13_nonfunctional.md](./13_nonfunctional.md) | REQ-NFR(지연 예산 · 처리량 · 무손실) + REQ-TEC(로컬 실행 · 마이그레이션 · 버전 고정). 성능 목표치는 3계층 미확인으로 등재 | architecture §15 · §16 · data_flow §15 | W2 |
-| [14_acceptance_criteria.md](./14_acceptance_criteria.md) | **AC-NN 채번 정본** — 흐름 검증 체크리스트 · 단계별 합격 판정 | data_flow §17 · implementation_plan §5 | W2 |
+| [14_acceptance_criteria.md](./14_acceptance_criteria.md) | **AC-NN 채번 정본** — 흐름 검증 체크리스트 · 단계별 합격 판정 · 학습 목표 산출물 | data_flow §17 · implementation_plan §5 | W2 |
 | [15_traceability.md](./15_traceability.md) | 기능 ↔ REQ ↔ 흐름 ↔ 화면 ↔ API ↔ 테이블 전수 매핑 · 미매핑 0 · 유령 0 | 신설 | W7(리드) |
 | [16_official_references.md](./16_official_references.md) | 외부 URL 유일 등재처 — 공식 문서 · 릴리스 노트 | 신설 | W7(리드) |
 

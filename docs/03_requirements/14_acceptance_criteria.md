@@ -2,6 +2,7 @@
 
 > **대상**: db_study가 "동작한다" · "그 단계를 마쳤다" · "학습 목표를 산출했다"고 말할 수 있는 조건 — 흐름 검증 체크리스트 · 학습 단계 S0~S7 합격 판정 · 학습 목표 산출물(대조군 역전 지점 · 축출 연쇄 · 스위치 on/off 비교) · 롤업 부동소수 허용 오차 판정 · 캐시 정합성 판정 — **AC-NN 채번 정본**
 > **작성일**: 2026-09-24
+> **개정일**: 2026-09-24 — W7 검수 반영 — 미확인 1행 닫힘(시뮬레이터 주입 제어 수단) — AC 수 불변
 > **개정일**: 2026-09-24 — W6 실험 채번 반영 — AC-19 문구 보정(그룹 lag 0 · pending 유계 · 0 복귀) · p95 확정 실험 EXP-31 · 컨슈머 랙 정의 닫음(정본 10_observability/01 · 06)
 > **개정일**: 2026-09-24 — W5 판정 반영 — §캐시 정합성 판정의 체인 단 번호를 5단 표기 → **6단 정본**(② ③ ④ · ⑤ · ⑥)으로 · API 직결 층의 "Dictionary 재적재가 응답 전에 끝난다" → **④는 응답 뒤 — 재적재 완료가 사건**(06_pipeline/07) — 판정 층 수 불변
 > **개정일**: 2026-09-24 — SW-11 LATEST_VALUE_WRITER 신설 반영(D-13 · 사용자 확정) — 스위치 10 → **11**
@@ -206,7 +207,7 @@ W1이 이 문서로 넘긴 값이다(11_glossary/05 · 웨이브 인계 W2 행).
 | 성능 목표 전부(E2E p95 · 조회 p95 · 히트율 · 소진 시간 · 처리량) | 원본 목표(4 vCPU 가정) | 미확인 — 확정 전 임의 값 고정 금지 | [13_nonfunctional.md](./13_nonfunctional.md) · EXP-NN |
 | 쿼리별 역전 지점 · 시스템 변곡점 | 없다 — 산출물이다 | 미확인 — 확정 전 임의 값 고정 금지 | AC-27 · AC-29 실측 |
 | 축출 연쇄가 관찰되는 메모리 조건 | 원본 실험 조건 maxmemory 하향 | 2계층 조정값 · 관찰 결과는 미확인 | [../05_data_stores/06_redis_memory.md](../05_data_stores/06_redis_memory.md) |
-| 시뮬레이터 지연 · 오류 주입 제어 수단 | 주입 기능은 있고 제어 표면은 없다 | 미설계(W2a 등재) | [../06_pipeline/02_collect.md](../06_pipeline/02_collect.md)(W4) · [../07_api](../07_api/README.md)(W5) |
+| 시뮬레이터 지연 · 오류 주입 제어 수단 | 주입 기능은 있고 제어 표면은 없다 | 닫힘 — 기동 시 읽는 주입 계획 SIM_FAULT_PLAN · 실행 중 제어 표면 없음 — [../06_pipeline/10_datagen_inject.md](../06_pipeline/10_datagen_inject.md) | [../06_pipeline/02_collect.md](../06_pipeline/02_collect.md)(W4) · [../07_api](../07_api/README.md)(W5) |
 | 컨슈머 랙 지표 정의 | "Stream 길이 − 처리 완료 오프셋"(원본 tech_stack.md §9) · "XLEN − PEL 처리량"(원본 architecture.md §16) | **W6 판정** — 두 원본 식을 버리고 consumer_lag = 그룹 lag + pending(ADR-21 판정량과 같다) | [../10_observability/01_metrics_catalog.md](../10_observability/01_metrics_catalog.md) §컨슈머 랙 판정 |
 | 보존 적용 시점 | TTL DELETE(파티션 DROP) | 2계층 | [../05_data_stores/08_retention_lifecycle.md](../05_data_stores/08_retention_lifecycle.md)(W3) |
 

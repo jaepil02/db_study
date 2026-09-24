@@ -2,6 +2,7 @@
 
 > **대상**: db_study 문서군이 쓰는 산업 프로토콜 · 수집 · 시계열 저장 · Redis 스트림 · 조회 캐시 · 흐름 제어 · 실행 환경 · 실험 용어 — 용어 정의 정본
 > **작성일**: 2026-09-24
+> **개정일**: 2026-09-24 — W7 검수 반영 — MAXLEN 트리밍 · 백프레셔 행의 길이 기준 → **적체 기준**(ADR-21) · 캐시 스탬피드 락 키 lock:rebuild:{key} → **lock:rebuild:q:{sha1}**(정본 05_data_stores/05) — 용어 수 불변
 > **개정일**: 2026-09-24 — W6 실험 채번 반영 — 컨슈머 랙 정의를 lag + pending으로(정본 10_observability/01 · 06)
 > **원천**: 원본 tech_stack.md §5.3 · §6 · §7 · §10.1 · §10.3(커밋 ff66a37) · 원본 data_flow.md §3 · §3.1 · §3.3 · §4 · §4.2 · §4.3 · §6 · §7.2 · §9 · §10 · §12(커밋 ff66a37) · 원본 architecture.md §7 · §8 · §9 · §10 · §12(커밋 ff66a37)
 
@@ -73,7 +74,7 @@
 | XAUTOCLAIM | 일정 시간 idle인 PEL 엔트리를 다른 컨슈머로 넘기는 명령 | 주기 타이머로 돌려 죽은 컨슈머 이름에 남은 PEL을 회수한다. idle 기준은 2계층 | XCLAIM — 엔트리를 하나씩 지정 | [03_enums_state_machines.md](./03_enums_state_machines.md) |
 | 컨슈머 랙 | 그룹이 아직 처리하지 못한 양 = 그룹 lag(미배달) + pending(미확인) — XLEN이 아니다 | consumer_lag. 백프레셔 판정량(ADR-21)과 같은 양이며 정상 단계의 계측 지표이고, XACK 누락이 있으면 영원히 0이 되지 않는다 | 스트림 길이 — 트리밍 전 전체 엔트리 수 · 랙은 미처리분 | [../10_observability/01_metrics_catalog.md](../10_observability/01_metrics_catalog.md) |
 | DLQ | Dead Letter Queue — 재시도를 소진한 배치의 격리처 | stream:plc:dlq에 배치와 오류 사유를 넣는다. dlq_count가 늘면 알린다 | 스풀 — 발행 실패의 임시 버퍼 | [../06_pipeline/03_ingest_batch.md](../06_pipeline/03_ingest_batch.md) |
-| MAXLEN 트리밍 | XADD 때 길이 상한을 넘는 오래된 엔트리를 잘라내는 것 | **최후 안전장치**다. 오류 없이 조용히 버리므로 미소비 엔트리가 잘리면 stream_trimmed_unacked로 결함 계측한다. 1차 백프레셔 신호는 길이 검사가 만든다 | 축출 — 메모리 정책이 키를 지우는 것 | [../04_architecture/06_backpressure_failure.md](../04_architecture/06_backpressure_failure.md) |
+| MAXLEN 트리밍 | XADD 때 길이 상한을 넘는 오래된 엔트리를 잘라내는 것 | **최후 안전장치**다. 오류 없이 조용히 버리므로 미소비 엔트리가 잘리면 stream_trimmed_unacked로 결함 계측한다. 1차 백프레셔 신호는 적체 검사가 만든다 | 축출 — 메모리 정책이 키를 지우는 것 | [../04_architecture/06_backpressure_failure.md](../04_architecture/06_backpressure_failure.md) |
 | 봉인 계열 · 캐시 계열 | TTL 금지 키 접두(stream · rt · alarm)와 TTL 필수 키 접두(cache · lock · rl · sess · auth) | 단일 인스턴스에서 **접두 하나가 생존 정책의 경계**다. 실패 전략도 정반대 — 봉인은 명시적 실패, 캐시는 조용한 degrade | 영속 · 휘발 — 봉인은 "축출되지 않는다"이지 "영속"이 아니다. rt:latest는 봉인 계열이면서 ClickHouse에서 재구성하는 휘발 사본이다 | [../05_data_stores/05_redis_keyspace.md](../05_data_stores/05_redis_keyspace.md) |
 | volatile-lru | TTL 있는 키만 LRU로 축출하는 메모리 정책 | TTL 없는 봉인 계열은 축출 후보가 아니다. TTL 키가 다 밀린 뒤에는 쓰기가 OOM으로 실패한다 | allkeys-lru — Stream까지 조용히 지운다 · 쓰지 않는다 | [../05_data_stores/06_redis_memory.md](../05_data_stores/06_redis_memory.md) |
 | AOF | Append Only File — 쓰기 명령 로그 영속화 | 재기동 시 미소비 Stream 엔트리와 PEL을 보존하는 목적이다 | 스냅샷(task snapshot) — 실험 롤백용 볼륨 묶음 | [../04_architecture/03_execution_topology.md](../04_architecture/03_execution_topology.md) |
@@ -88,7 +89,7 @@
 | 캐시 무효화 | 원천 변경 후 캐시를 지우는 것 | **커밋 후 DEL**이 규칙이다. 커밋 전에 지우면 사이에 옛 값이 다시 채워져 영구히 남는다. 갱신이 아니라 삭제한다 | TTL 만료 — 시간이 지우는 것 | [../06_pipeline/07_business_crud.md](../06_pipeline/07_business_crud.md) |
 | 해상도 자동 선택 | 조회 범위 길이로 원시 · 1m · 1h · 1d 테이블을 서버가 고르는 것 | 편의가 아니라 **보호 장치**다. 없으면 긴 범위의 원시 조회가 ClickHouse를 메모리 한계로 죽인다 | 다운샘플링 — 선택 뒤 남은 포인트를 줄이는 것 | [../06_pipeline/06_timeseries_read.md](../06_pipeline/06_timeseries_read.md) |
 | 시간 스냅 | 캐시 키의 from · to를 버킷 경계로 내림하는 정규화 | 없으면 초 단위 now()로 매 요청이 다른 키가 된다. SW-04가 켜고 끈다 | 버킷 — 롤업 집계 단위 | [05_units_and_time.md](./05_units_and_time.md) |
-| 캐시 스탬피드 | 같은 키가 동시에 미스 나 원천에 같은 무거운 쿼리가 몰리는 현상 | lock:rebuild:{key} SET NX로 한 요청만 원천을 읽고 나머지는 대기 후 재조회한다. SW-05가 켜고 끈다 | 썬더링 허드 — 같은 현상의 다른 이름 | [../06_pipeline/06_timeseries_read.md](../06_pipeline/06_timeseries_read.md) |
+| 캐시 스탬피드 | 같은 키가 동시에 미스 나 원천에 같은 무거운 쿼리가 몰리는 현상 | lock:rebuild:q:{sha1} SET NX로 한 요청만 원천을 읽고 나머지는 대기 후 재조회한다. SW-05가 켜고 끈다 | 썬더링 허드 — 같은 현상의 다른 이름 | [../06_pipeline/06_timeseries_read.md](../06_pipeline/06_timeseries_read.md) |
 | single-flight | 같은 작업을 동시에 하나만 실행하게 하는 락 사용법 | 캐시 재구성 · 최신값 복원 · 롤업 잡에 쓴다. 해제는 **소유자 검증 Lua**로 한다 — 단순 DEL은 만료 후 남의 락을 지운다 | 분산 트랜잭션 — 쓰지 않는다 | [../05_data_stores/05_redis_keyspace.md](../05_data_stores/05_redis_keyspace.md) |
 | 지터 | TTL 등 시간값에 더하는 무작위 가산 | 동시 만료를 흩어 스탬피드를 막는다(2계층) | 백오프 — 재시도 간격 증가 | [../06_pipeline/06_timeseries_read.md](../06_pipeline/06_timeseries_read.md) |
 | 다운샘플링 · LTTB | 응답 포인트를 화면 폭에 맞게 줄이는 것 · 형태와 스파이크를 보존하는 삼각형 면적 기반 방법 | 롤업이 1차, API의 LTTB가 2차로 줄인다. 단순 n번째 추출은 스파이크를 잃어 쓰지 않는다 | 롤업 — 저장 단계의 축소 | [../06_pipeline/06_timeseries_read.md](../06_pipeline/06_timeseries_read.md) |
@@ -98,7 +99,7 @@
 
 | 용어 | 정의 | 이 시스템에서의 쓰임 | 혼동하기 쉬운 인접 용어 | 정본 |
 |------|------|------------------|-------------------|------|
-| 백프레셔 | 하류가 느릴 때 상류에 감속 · 거절 신호를 거꾸로 보내는 것 | Stream 길이로 5단계를 가른다. **버퍼가 차면 조용히 버리지 않고 실패시키고 계측한다** | 스로틀링 — 표시 빈도 조절 | [03_enums_state_machines.md](./03_enums_state_machines.md) |
+| 백프레셔 | 하류가 느릴 때 상류에 감속 · 거절 신호를 거꾸로 보내는 것 | 미확인 적체(그룹 lag + pending — XLEN이 아니다 · ADR-21)로 5단계를 가른다. **버퍼가 차면 조용히 버리지 않고 실패시키고 계측한다** | 스로틀링 — 표시 빈도 조절 | [03_enums_state_machines.md](./03_enums_state_machines.md) |
 | degrade | 의존 요소 실패 시 기능을 낮춰 계속 서비스하는 것 | 캐시 계열 Redis 실패는 짧은 타임아웃 뒤 DB로 우회한다 | 명시적 실패 — 봉인 계열은 반대로 실패시킨다 | [../04_architecture/06_backpressure_failure.md](../04_architecture/06_backpressure_failure.md) |
 | 명시적 실패 | 오류를 숨기지 않고 호출자에게 돌려 상위 대응을 발동하는 것 | 봉인 계열 쓰기 실패 → 스풀 전환 · Redis 접속 불가 시 최신값 503 | 조용한 유실 — MAXLEN 트리밍 · allkeys 축출 | [02_error_codes.md](./02_error_codes.md) |
 | at-least-once | 최소 한 번 전달 — 중복은 허용하고 유실은 막는 보장 | XACK를 삽입 성공 뒤로 미뤄 얻는다. 중복은 중복 제거 토큰이 막아 exactly-once에 준하는 효과가 난다 | exactly-once — 전송 계층이 보장하지 않는다 | [../06_pipeline/03_ingest_batch.md](../06_pipeline/03_ingest_batch.md) |

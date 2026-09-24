@@ -2,6 +2,7 @@
 
 > **대상**: 마스터 데이터(MST · NestJS master 모듈)의 동작 계약 — 사이트 · 라인 · 설비 · Modbus 접속 설정 · 태그 마스터 쓰기 · 논리 삭제 · 스케일 변경 · 캐시 무효화 체인 · Dictionary 원천 — REQ-MST-NN 채번 정본
 > **작성일**: 2026-09-24
+> **개정일**: 2026-09-24 — W7 검수 반영 — REQ-MST-09 실패 칸 보정 7.4 단 번호 ④ · ⑤ → **⑤ · ⑥**(6단 번호) · 미확인 3행 닫힘(dict_tag 비활성 · 쓰기 표면 · tag_master_history 컬럼) — REQ 수 불변
 > **개정일**: 2026-09-24 — W6 실험 채번 반영 — EXP 번호 · 메트릭 이름 반영(정본 10_observability/01 · 06)
 > **개정일**: 2026-09-24 — W5 판정 반영 — Modbus 매핑 변경 판정 — **PATCH 허용 + 감사 기록**(해석 교정 · 새 태그 발급 대상 아님) — REQ 수 불변
 > **개정일**: 2026-09-24 — W4 판정 반영 — REQ-MST-03 · 08 실행 중 마스터 변경 재기동 전 미반영 → **ch:cacheinv로 Collector 반영**(modbus_config도 신호) · REQ-MST-09 체인 5단 표기 → **6단 번호**(① 커밋) — REQ 수 불변
@@ -36,7 +37,7 @@
 
 | ID | 요구 | 근거 | 위반 시 구체적 실패 | 검증 방법 | 관련 기능 | 관련 흐름 | 관련 에러 코드 |
 |------|------|------|------|------|------|------|------|
-| **REQ-MST-09** | 마스터 쓰기는 무효화 체인 6단을 건다 — ① 트랜잭션 커밋 ② Redis 캐시 삭제 ③ ch:cacheinv 발행 ④ SYSTEM RELOAD DICTIONARY plc.dict_tag(tag_master 쓰기만 · 응답 뒤) ⑤ BFF 서버 fetch 캐시 태그 무효화 ⑥ WebSocket 무효화 신호(RLT-09 중계). ②~⑥은 **커밋된 뒤에만** 건다. 단 번호의 정본은 [../06_pipeline/07_business_crud.md](../06_pipeline/07_business_crud.md)다(ADR-12). 캐시는 갱신하지 않고 **삭제**한다 | 원본 data_flow.md §7.1 · 원본 implementation_plan.md §7.4 · 기전 정본 [../06_pipeline/07_business_crud.md](../06_pipeline/07_business_crud.md) | 커밋 전에 지우면 그 사이 다른 요청이 옛 값을 다시 채워 **TTL이 끝날 때까지 영구 오염**이다. 갱신하면 동시 쓰기의 순서 역전으로 낡은 값이 최종값으로 남는다. ④ · ⑤가 없으면 "무효화 후 즉시 반영" 검증(원본 data_flow.md §17)이 반드시 실패한다 | 태그명 수정 직후 API · BFF · 브라우저 세 층에서 새 이름이 보이기까지의 시간을 층별로 측정 · 무효화 호출이 커밋 로그 뒤에 찍히는지 대조 | MST-08 | F-05 · F-07 | 해당 없음 |
+| **REQ-MST-09** | 마스터 쓰기는 무효화 체인 6단을 건다 — ① 트랜잭션 커밋 ② Redis 캐시 삭제 ③ ch:cacheinv 발행 ④ SYSTEM RELOAD DICTIONARY plc.dict_tag(tag_master 쓰기만 · 응답 뒤) ⑤ BFF 서버 fetch 캐시 태그 무효화 ⑥ WebSocket 무효화 신호(RLT-09 중계). ②~⑥은 **커밋된 뒤에만** 건다. 단 번호의 정본은 [../06_pipeline/07_business_crud.md](../06_pipeline/07_business_crud.md)다(ADR-12). 캐시는 갱신하지 않고 **삭제**한다 | 원본 data_flow.md §7.1 · 원본 implementation_plan.md §7.4 · 기전 정본 [../06_pipeline/07_business_crud.md](../06_pipeline/07_business_crud.md) | 커밋 전에 지우면 그 사이 다른 요청이 옛 값을 다시 채워 **TTL이 끝날 때까지 영구 오염**이다. 갱신하면 동시 쓰기의 순서 역전으로 낡은 값이 최종값으로 남는다. ⑤ · ⑥이 없으면 "무효화 후 즉시 반영" 검증(원본 data_flow.md §17)이 반드시 실패한다 | 태그명 수정 직후 API · BFF · 브라우저 세 층에서 새 이름이 보이기까지의 시간을 층별로 측정 · 무효화 호출이 커밋 로그 뒤에 찍히는지 대조 | MST-08 | F-05 · F-07 | 해당 없음 |
 | **REQ-MST-10** | 무효화 체인의 Redis 삭제 실패는 요청을 실패시키지 않는다(캐시 계열 degrade — REQ-GLB-09). 실패는 캐시 삭제 실패 계수로 계측하고, 옛 사본은 TTL 만료까지 남는다. Dictionary 재적재 실패도 요청을 실패시키지 않으며 LIFETIME 자동 재적재로 수렴한다 | 원본 architecture.md §7.4 · §17 degrade 원칙 | 삭제 실패로 요청을 실패시키면 이미 커밋된 쓰기가 실패 응답을 받아 클라이언트가 **같은 쓰기를 재시도**하고 tag_code 중복 409를 맞는다 | Redis 중단 중 태그 쓰기 → 성공 응답 · 삭제 실패 계수 증가 · 복구 후 TTL 경과 시 새 값 확인 | MST-08 · MST-09 | F-05 · F-10 | 해당 없음 |
 | **REQ-MST-11** | ClickHouse dict_tag는 PostgreSQL tag_master의 활성 행을 전용 읽기 계정으로 주기 적재한다. 적재 주기는 2계층 조정값(현행 참고 LIFETIME MIN 300 MAX 600 · 소유 [../05_data_stores/03_clickhouse_schema.md](../05_data_stores/03_clickhouse_schema.md)). **PostgreSQL이 멈춰도 Dictionary는 마지막 적재 값을 유지**해 시계열 조회가 계속된다 | 원본 architecture.md §7.4 · §17 PostgreSQL 중단 | 앱 계정으로 적재하면 Dictionary 소스가 쓰기 권한을 가진다. Dictionary가 PostgreSQL 장애에 함께 비면 업무 DB 하나의 장애가 시계열 조회 전체를 멈춘다 | docker stop postgres 중 dictGet 태그명 부착 조회 성공 · Dictionary 소스 계정의 권한 조회(SELECT만) | MST-09 | F-04 · F-08 | 해당 없음 |
 | **REQ-MST-12** | ClickHouse 시계열 행에는 tag_id(4바이트)만 저장하고 태그명 · 단위 문자열을 싣지 않는다. 메타는 조회 시점에 dictGet으로 붙인다 — 두 DB를 트랜잭션으로 묶지 않는 원칙의 실행 자리다 | 원본 architecture.md §7.4 · §12 · REQ-GLB-14 | 태그명을 행에 복사하면 이름 변경이 **과거 행 수정**(ClickHouse mutation)이 되고, 두 DB 쓰기를 묶을 방법이 없어 한쪽만 바뀐 창이 생긴다 | tag_raw 컬럼 목록에 문자열 메타 컬럼 부재 조회 · 태그명 변경 후 과거 구간 조회 결과에 새 이름이 붙는지 확인 | MST-09 | F-04 | 해당 없음 |
@@ -101,11 +102,11 @@
 
 | 항목 | 상태 | 확정 자리 |
 |------|------|------|
-| 비활성 태그 과거 행의 태그명 | **불일치** — dict_tag가 WHERE is_active로 적재해 비활성화 순간 과거 행에 dictGet이 이름을 붙이지 못한다. REQ-MST-08 · 12가 함께 요구하는 "과거 해석 보존"과 충돌한다 | [../05_data_stores/07_cross_store_consistency.md](../05_data_stores/07_cross_store_consistency.md)(W3) |
-| 새 태그 발급 표면 · 라인 · 사이트 · 접속 설정 쓰기 표면 | 원본 API 표에 tags(GET · POST · PATCH) · sites · devices(GET)만 있다 | [../07_api/04_master.md](../07_api/04_master.md)(W5) |
+| 비활성 태그 과거 행의 태그명 | 닫힘 — dict_tag가 tag_master 전 행(비활성 포함)을 싣고 is_active를 속성으로 둔다 — [../05_data_stores/07_cross_store_consistency.md](../05_data_stores/07_cross_store_consistency.md) | [../05_data_stores/07_cross_store_consistency.md](../05_data_stores/07_cross_store_consistency.md)(W3) |
+| 새 태그 발급 표면 · 라인 · 사이트 · 접속 설정 쓰기 표면 | 닫힘 — 기능 근거로 표면 12 신설 — [../07_api/04_master.md](../07_api/04_master.md) | [../07_api/04_master.md](../07_api/04_master.md)(W5) |
 | 실행 중 마스터 변경의 Collector 반영 | **W4 판정** — ch:cacheinv 구독 · REQ-MST-03 · 08 반영 | [../06_pipeline/02_collect.md](../06_pipeline/02_collect.md) |
 | 비활성 태그를 가리키는 알람 규칙 | 판정을 멈추는지 규칙을 남기는지 없다 | [../06_pipeline/08_alarm.md](../06_pipeline/08_alarm.md)(W4) |
-| tag_master_history 컬럼 | REQ-MST-07이 기록 내용(이전 · 새 tag_id · 변경 전후 값)만 요구한다 | [../05_data_stores/01_postgresql_schema.md](../05_data_stores/01_postgresql_schema.md)(W3) |
+| tag_master_history 컬럼 | 닫힘 — 컬럼 10(history_id · 이전 · 새 tag_id · 변경 전후 스케일 · 오프셋 · 변경 시각 · 행위자 · 사유) — [../05_data_stores/01_postgresql_schema.md](../05_data_stores/01_postgresql_schema.md) | [../05_data_stores/01_postgresql_schema.md](../05_data_stores/01_postgresql_schema.md)(W3) |
 | 캐시 삭제 실패 계수의 메트릭 이름 | **W6 판정** — mst_cache_delete_failures_total · mst_dict_reloads_total | [../10_observability/01_metrics_catalog.md](../10_observability/01_metrics_catalog.md) |
 | 무효화 층별 반영 시간 | 3계층 미확인 — 미확인 · 확정 전 임의 값 고정 금지. 원본 예상치: Dictionary 최대 10분(③ 생략 시) · BFF 최대 30초 | [../06_pipeline/07_business_crud.md](../06_pipeline/07_business_crud.md)(W4) · EXP-29(AC-06 기록) |
 

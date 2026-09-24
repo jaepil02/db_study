@@ -2,6 +2,7 @@
 
 > **대상**: 웹(Next.js App Router · 호스트 프로세스)의 구성 선택 — BFF 역할과 경로 분담 · 차트(uPlot 주력 · ECharts 보조) · TanStack Query 설정값(staleTime · gcTime) · Zustand 실시간 스토어 · 네이티브 WebSocket 래퍼 · Tailwind CSS · shadcn/ui · 폼 · zod 공유 · **화면 조정값 현행값(링 버퍼 창 · 트렌드 창 · 콘솔 폴링 주기 · BFF revalidate)**
 > **작성일**: 2026-09-24
+> **개정일**: 2026-09-24 — W7 검수 반영 — uPlot 번들 크기 **원본 예상치 약 45 KB** 추가(W7 이관 누락) · 미확인 표 웨이브 표지 (W7) 제거
 > **개정일**: 2026-09-24 — W6 실험 채번 반영 — EXP 번호 반영(정본 10_observability/01 · 06)
 > **원천**: 원본 tech_stack.md §2 · §4 · §4.1 · §4.2 · §4.3 · §10.1 · §10.4(커밋 ff66a37) · 원본 data_flow.md §7.2(커밋 ff66a37) · ADR-02 · ADR-07 · ADR-12 · 웨이브 인계 W6 10_observability/04 행(staleTime · gcTime · 링 버퍼 창 · 트렌드 창 · 콘솔 폴링 주기 현행값) · [../08_screen/01_standards.md](../08_screen/01_standards.md) §갱신 주기와 캐시 층 정렬(관계식) · [../08_screen/03_realtime_dashboard.md](../08_screen/03_realtime_dashboard.md) · [../08_screen/07_experiment_console.md](../08_screen/07_experiment_console.md) · [../06_pipeline/07_business_crud.md](../06_pipeline/07_business_crud.md)
 
@@ -16,7 +17,7 @@
 | 영역 | 선택 | 선택 근거 | 버린 것 — 실패 | 근거 상세 |
 |------|------|------|------|------|
 | 프레임워크 | Next.js App Router | Route Handler가 BFF — 리프레시 토큰을 서버에서만 다룬다 | React + Vite SPA — 서버 측 코드가 없어 httpOnly 쿠키의 리프레시를 브라우저 JS가 다루게 된다 | [06_decisions_rationale.md](./06_decisions_rationale.md) §프론트엔드 |
-| 차트 주력 | uPlot | 초경량 Canvas · 시계열 특화 · 10만 점을 부드럽게 | Recharts — SVG DOM 노드가 1만 점부터 폭증 | 상동 |
+| 차트 주력 | uPlot | 초경량 Canvas(번들 크기 원본 예상치 약 45 KB · 원본 tech_stack.md §4.2) · 시계열 특화 · 10만 점을 부드럽게 | Recharts — SVG DOM 노드가 1만 점부터 폭증 | 상동 |
 | 차트 보조 | Apache ECharts | dataZoom · 브러시 · 분포 차트(비교 화면) | Chart.js — 10만 점에서 버벅임 · 범용 차트 둘을 두면 렌더러가 셋 | 상동 |
 | 서버 상태 | TanStack Query | staleTime · gcTime으로 브라우저 층을 Redis TTL과 정렬해 2단 캐시 실험을 한다 | 직접 fetch + 상태 — 브라우저 층의 수명이 코드마다 달라 층별 기여를 가를 수 없다 | 상동 |
 | 클라이언트 상태 | Zustand | 실시간 태그 값 스토어 · 링 버퍼를 구독자 밖에서 갱신 | Redux — 초당 10프레임마다 액션 · 리듀서를 거쳐 보일러플레이트와 복사가 는다 | 상동 |
@@ -135,7 +136,7 @@ ADR-02의 결정을 라이브러리 경계로 옮긴 표다. 경로별 전수의
 |------|------|------|
 | 트렌드 창 · 링 버퍼 · 최대 태그 · 콘솔 폴링 현행값 | W6 초기값 — S2 합격 기록으로 고정 | 이 문서 · 계약은 08_screen/01 · 03 · 07 |
 | BFF의 Prometheus 텍스트 파서 선택 | 미설계 — 라이브러리 또는 직접 구현 | 코드 착수 시 · 이 문서와 [03_data_infra.md](./03_data_infra.md) §버전 고정표 |
-| TanStack Query 기본 재조회 트리거 · gcTime 기본값 | 공식 참조 재확인 대기 | [../03_requirements/16_official_references.md](../03_requirements/16_official_references.md)(W7) |
+| TanStack Query 기본 재조회 트리거 · gcTime 기본값 | 공식 참조 재확인 대기 | [../03_requirements/16_official_references.md](../03_requirements/16_official_references.md) |
 | 화면 반영 지연 · 신호 도달 지연 | 3계층 미확인 — 확정 전 임의 값 고정 금지 | EXP-29(AC-06) · [../10_observability/06_experiment_catalog.md](../10_observability/06_experiment_catalog.md) |
 
 ## 관련 문서

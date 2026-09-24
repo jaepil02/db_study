@@ -2,6 +2,7 @@
 
 > **대상**: 기능 91 → 화면 매핑 전수 · 화면 없는 기능의 닫힌 어휘(내부 모듈 · 표면 없음 · 화면 없음(API 전용)) · 주 화면별 파생 집계 · 권한 매트릭스와의 교차 검산 · 화면 → 표면 인용 목록 · 누락 0 · 유령 0 검산
 > **작성일**: 2026-09-24
+> **개정일**: 2026-09-24 — W7 검수 반영 — 미확인 1행 닫힘(전 축 정합 — 15_traceability 완성) — 매핑 수 불변
 > **원천**: [../02_features/12_permission_matrix.md](../02_features/12_permission_matrix.md) 역할 × 기능 매트릭스 · §검산 · 도메인 파일 11본 [../02_features/01_auth.md](../02_features/01_auth.md) ~ [../02_features/11_metrics.md](../02_features/11_metrics.md) 기능 목록 · [README.md](./README.md) 화면 인벤토리 · 화면 문서 5본의 요소 표 · [01_standards.md](./01_standards.md) 공통 셸 요소 표 · 07_api 도메인 문서의 표면 요약 · 원본 architecture.md §11(커밋 ff66a37)
 
 이 문서는 **기능 → 화면 매핑과 파생 집계의 정본**이다. 기능 ID와 기능명의 정본은 02_features 도메인 파일 11본이고, 화면 코드의 정본은 [README.md](./README.md) 화면 인벤토리다. 이 문서는 둘을 잇기만 하며 기능도 화면도 새로 만들지 않는다.
@@ -173,7 +174,7 @@
 | 항목 | 상태 | 확정 자리 |
 |------|------|------|
 | README 도메인 공백 행의 GEN · OBS 잠정 귀속 | **제안** — GEN 화면 없음(산출은 EXP-CONSOLE 메트릭) · OBS는 EXP-CONSOLE · EXP-COMPARE로 확정 | [README.md](./README.md)(리드) |
-| 기능 ↔ REQ ↔ 흐름 ↔ 화면 ↔ API ↔ 테이블 전 축 정합 | W7 | [../03_requirements/15_traceability.md](../03_requirements/15_traceability.md) |
+| 기능 ↔ REQ ↔ 흐름 ↔ 화면 ↔ API ↔ 테이블 전 축 정합 | 닫힘 — 전 축 매핑 완성(미매핑 0 · 유령 0) — [../03_requirements/15_traceability.md](../03_requirements/15_traceability.md) | [../03_requirements/15_traceability.md](../03_requirements/15_traceability.md) |
 
 ## 관련 문서
 

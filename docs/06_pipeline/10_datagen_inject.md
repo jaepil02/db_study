@@ -2,6 +2,7 @@
 
 > **대상**: F-09 주입 흐름의 기전 정본 — 생성 엔진 → 모드 A~D · 한 번에 한 계층 원칙 · 모드 A 레지스터 갱신 · **모드 B 적체 검사 기전(판정량은 그룹 적체)** · 모드 C 표면 · 모드 D 백필 실행 · **모드 D 대조군 동일 행 절차** · 대조군 파티션 정리 · **SIM 지연 · 오류 주입 제어 수단** · 티어 시드 구성 · 생성기 포화 · 부하 실행 절차
 > **작성일**: 2026-09-24
+> **개정일**: 2026-09-24 — W7 검수 반영 — 부하 절차 5단계 판정량의 산출식 "W6 확정 대상" → **닫힘**(consumer_lag = 그룹 lag + pending · 정본 10_observability/01)
 > **개정일**: 2026-09-24 — W6 실험 채번 반영 — 메트릭 이름 · EXP 번호 · 디스크 예산 반영(정본 10_observability/01 · 06)
 > **개정일**: 2026-09-24 — W6 판정 반영 — 주입 계획 파일 형식 → JSON + zod 검증 · infra/sim-plans · SIM_FAULT_PLAN(정본 09_tech_stack/05 · 04) · 노출 필드 이름만 미정
 > **원천**: 원본 data_flow.md §11 · §11.1 · §11.2 · §11.3 · §10.3 · §12.1(커밋 ff66a37) · 원본 architecture.md §4 · §9.3 · §11 · §17(커밋 ff66a37) · 원본 tech_stack.md §3.4(커밋 ff66a37) · docs_plan.md 웨이브 인계 W4 06_pipeline/10 행 전부 · SIM 지연 · 오류 주입 제어 수단 · D-05 · D-12 · ADR-17 · ADR-19 · ADR-21 · ADR-22 · ADR-23 · REQ-GEN-01~15 · REQ-SIM-08~11 · REQ-GLB-10 · 18 · 23 · REQ-TEC-08~13 · [../05_data_stores/10_olap_vs_rdb_control.md](../05_data_stores/10_olap_vs_rdb_control.md) · [../05_data_stores/08_retention_lifecycle.md](../05_data_stores/08_retention_lifecycle.md) §대조군 보존 정합 · [../04_architecture/07_capacity_planning.md](../04_architecture/07_capacity_planning.md) 티어
@@ -195,7 +196,7 @@ F-09는 **생성기가 만든 값이 네 계층 중 하나에 들어가기까지
 | 8 | 4요소와 함께 기록 → task restore | 다음 실험의 조건을 같게 | REQ-GLB-17 · REQ-TEC-10 |
 
 - 검산: 단계 = **8**
-- **5단계의 판정량도 XLEN이 아니다.** 원본은 "컨슈머 랙"으로 적었고 그 산출식이 원본마다 다르다 — 백프레셔와 같은 그룹 적체로 보고 산출식 확정은 W6이다.
+- **5단계의 판정량도 XLEN이 아니다.** 원본은 "컨슈머 랙"으로 적었고 그 산출식이 원본마다 다르다 — 백프레셔와 같은 그룹 적체로 본다 — 산출식은 consumer_lag = 그룹 lag + pending으로 닫혔다([../10_observability/01_metrics_catalog.md](../10_observability/01_metrics_catalog.md) §컨슈머 랙 판정).
 - **7단계의 차감 셋이 빠지면 거짓 유실이 난다.** 모드 B 발행 중단 · SW-10 on의 데드밴드 생략 · DROPOUT 행 생략은 생성했지만 적재되지 않는 것이 설계된 동작이다.
 
 ## 미확인 · 미설계 등재

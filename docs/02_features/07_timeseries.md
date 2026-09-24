@@ -2,6 +2,7 @@
 
 > **대상**: 시계열 조회(TSQ · NestJS timeseries 모듈) 기능 목록 · 기능별 경계 · 스위치 교체 · 의존 도메인 · 실패 시 보이는 것 — 기능 ID TSQ-NN 채번 정본
 > **작성일**: 2026-09-24
+> **개정일**: 2026-09-24 — W7 검수 반영 — TSQ-03 · TSQ-05 키 표기 cache:q:{hash} · lock:rebuild:{hash} → **cache:q:{sha1} · lock:rebuild:q:{sha1}**(정본 05_data_stores/05) — 기능 수 불변
 > **개정일**: 2026-09-24 — W7 보안 판정 반영 — 내보내기 범위 상한 · 등급 닫힘(정본 12_security/03)
 > **개정일**: 2026-09-24 — W2 요구사항 판정 반영 — ClickHouse 불가 시 조회 응답(clickhouse_unavailable/503)의 채번 보류를 닫는다
 > **원천**: 원본 architecture.md §7.2 · §7.4 · §8.2 · §10 · §10.1 · §10.2 · §10.3 · §11 · §11.1 · §17 · §18(커밋 ff66a37) · 원본 data_flow.md §6 · §6.1 · §6.2 · §6.3 · §14.1 · §16(커밋 ff66a37) · 원본 implementation_plan.md §4.1 · §4.3 · §5 S2 · S4(커밋 ff66a37) · [13_switch_matrix.md](./13_switch_matrix.md) SW-03 · SW-04 · SW-05 · [../11_glossary/03_enums_state_machines.md](../11_glossary/03_enums_state_machines.md) 조회 해상도 · 집계 함수
@@ -18,9 +19,9 @@ TSQ는 **ClickHouse에 쌓인 시계열을 화면 폭에 맞게 줄여 돌려주
 |------|------|------|------|------|------|------|------|
 | **TSQ-01** | 시계열 조회 | 태그 배열(현행 상한 50) · 시간 범위(ISO 8601) · 해상도(raw · 1m · 1h · 1d — 미지정 시 서버 선택) · 집계 함수(avg · min · max · last · p95 복수) · 최대 포인트 수(현행 2000)를 받아 응답한다. 응답은 meta(interval · pointCount · downsampled · cached)와 태그별 points(**배열의 배열**)다 — 객체 배열보다 JSON이 약 1/3로 줄고 차트의 열 지향 형식으로 바꾸기 쉽다. 브라우저 직결이다. S2는 raw 고정이다 | S2 · S4 | F-04 | 해당 없음 | 07_api/05_timeseries | ClickHouse tag_raw · tag_1m · tag_1h · tag_1d(읽기) |
 | **TSQ-02** | 해상도 자동 선택 | 범위 길이로 테이블을 고른다 — 1시간 이하 raw · 7일까지 1m · 90일까지 1h · 그 초과 1d(경계는 1계층 구조값). 결과 포인트가 최대치를 넘으면 한 단계 올린다 — **거절이 아니라 보정**이며 meta.interval에 드러난다 | S4 | F-04 | 해당 없음 — 보호 장치 | 07_api/05_timeseries | 상동 |
-| **TSQ-03** | 캐시 키 정규화 | 시간 범위를 버킷 경계로 스냅하고 태그 배열을 정렬하고 기본값 파라미터를 뺀 정규화 문자열을 SHA-1로 해싱해 cache:q:{hash}를 만든다. **스냅이 핵심이다** — 초 단위 now()를 그대로 쓰면 매 요청이 다른 키가 되어 히트율이 0에 수렴한다 | S4 | F-04 | SW-04 | 표면 없음 — TSQ-04의 내부 단계 | Redis cache:q |
+| **TSQ-03** | 캐시 키 정규화 | 시간 범위를 버킷 경계로 스냅하고 태그 배열을 정렬하고 기본값 파라미터를 뺀 정규화 문자열을 SHA-1로 해싱해 cache:q:{sha1}를 만든다. **스냅이 핵심이다** — 초 단위 now()를 그대로 쓰면 매 요청이 다른 키가 되어 히트율이 0에 수렴한다 | S4 | F-04 | SW-04 | 표면 없음 — TSQ-04의 내부 단계 | Redis cache:q |
 | **TSQ-04** | 조회 결과 캐시 | cache-aside로 gzip 압축 결과를 둔다. TTL은 구간 성격으로 가른다 — 완전 과거 구간(길게) · 현재 버킷 포함(짧게) · 최근 수 분(캐시하지 않고 최신값 API · WebSocket으로 유도). TTL에 무작위 지터를 더해 동시 만료를 흩는다. TTL · 지터 값은 2계층 조정값이며 정본은 [../05_data_stores/05_redis_keyspace.md](../05_data_stores/05_redis_keyspace.md). **Redis 실패 시 짧은 타임아웃 뒤 ClickHouse로 우회한다**(degrade) | S2 · S4 | F-04 | SW-03 | 표면 없음 — TSQ-01의 내부 단계 | Redis cache:q |
-| **TSQ-05** | 스탬피드 방지 | 캐시 미스에서 lock:rebuild:{hash}를 SET NX PX로 잡은 한 요청만 ClickHouse를 부르고, 나머지는 짧게 대기한 뒤 캐시를 다시 읽는다(현행 참고 — 50 ms × 최대 3회). 해제는 **소유자 검증 Lua**로 한다 — 단순 DEL은 자기 락이 만료된 뒤 남의 락을 지운다 | S4 | F-04 | SW-05 | 표면 없음 — TSQ-01의 내부 단계 | Redis lock:rebuild |
+| **TSQ-05** | 스탬피드 방지 | 캐시 미스에서 lock:rebuild:q:{sha1}를 SET NX PX로 잡은 한 요청만 ClickHouse를 부르고, 나머지는 짧게 대기한 뒤 캐시를 다시 읽는다(현행 참고 — 50 ms × 최대 3회). 해제는 **소유자 검증 Lua**로 한다 — 단순 DEL은 자기 락이 만료된 뒤 남의 락을 지운다 | S4 | F-04 | SW-05 | 표면 없음 — TSQ-01의 내부 단계 | Redis lock:rebuild |
 | **TSQ-06** | 다운샘플 | 1차는 롤업 테이블이 이미 줄이고, 여전히 많으면 API가 LTTB로 2차 축소한다(piscina 워커 — 이벤트 루프 격리). 알람 분석 화면에는 극값을 보존하는 min · max 쌍을 쓴다. 단순 n번째 추출은 스파이크를 잃어 쓰지 않는다 | S4 | F-04 | 해당 없음 | 07_api/05_timeseries | 없음 — 계산 |
 | **TSQ-07** | 태그 메타 부착 | 결과에 dictGet(plc.dict_tag)으로 태그명 · 단위를 붙인다. ClickHouse에는 tag_id만 있고 메타는 조회 시점에 붙인다 — 태그명이 바뀌어도 과거 데이터를 고치지 않는다 | S3 · S4 | F-04 | 해당 없음 | 07_api/05_timeseries | ClickHouse dict_tag(읽기) |
 | **TSQ-08** | 진행 구간 분할 | "최근 N분"처럼 끝이 현재인 조회를 **확정된 과거 구간(긴 TTL 캐시)과 진행 중 마지막 버킷(최신값 또는 짧은 TTL)**으로 쪼개고 클라이언트가 합친다. 끝이 현재인 조회를 통째로 캐시하면 매번 미스가 나거나 오래된 값이 보인다(원본 architecture.md §10.2) | S4 | F-04 · F-03 | 해당 없음 | 07_api/05_timeseries | Redis cache:q · rt:latest(읽기) |
