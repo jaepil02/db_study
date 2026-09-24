@@ -1,0 +1,10 @@
+**/node_modules
+**/dist
+**/dist-check
+.git
+.omc
+snapshots
+docs
+docs_ref
+docs_plan.md
+.env

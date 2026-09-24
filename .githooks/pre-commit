@@ -1,8 +1,16 @@
 #!/usr/bin/env bash
 # 품질 게이트 — 정본 docs/09_tech_stack/05_tooling_devops.md §품질 게이트
-# 싼 것부터: ① Biome ② tsc strict ③ Vitest ④ docs:lint. ①~③은 코드가 생기는 S1에서 붙는다.
+# 싼 것부터: ① Biome ② tsc strict ③ Vitest ④ docs:lint — 앞에서 실패하면 뒤는 돌지 않는다
 set -euo pipefail
 cd "$(git rev-parse --show-toplevel)"
+# 호스트 Node를 저장소 고정 메이저(.nvmrc)로 맞춘다 — 전역 기본이 다른 메이저여도 게이트는 같은 런타임에서 돈다
+if [ -s "$HOME/.nvm/nvm.sh" ]; then
+  # shellcheck disable=SC1091
+  . "$HOME/.nvm/nvm.sh" >/dev/null && nvm use >/dev/null
+fi
+pnpm exec biome check .
+pnpm -r --silent typecheck
+pnpm -r --silent test
 if command -v task >/dev/null 2>&1; then
   task docs:lint
 else

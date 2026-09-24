@@ -1,0 +1,9 @@
+packages:
+  - apps/*
+  - packages/*
+
+# 의존성 빌드 스크립트 허용 목록 — 결정하지 않은 항목이 있으면 pnpm이 설치를 거부한다.
+# msgpackr-extract(msgpackr의 선택적 네이티브 해제 가속기)는 끈다 — 호스트와 컨테이너가 같은 순수 JS 경로로 돈다.
+# 해제 성능이 측정 변수가 되는 S2(Ingest)에서 다시 판정한다.
+allowBuilds:
+  msgpackr-extract: false
