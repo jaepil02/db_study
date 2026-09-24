@@ -2,6 +2,7 @@
 
 > **대상**: ★ 실험 규칙 정본 — 실험 한 번의 절차 · 3회 중앙값과 편차 폐기 기준 · 구조 판정과 분포 판정 · 스냅샷과 복원 · 캐시 키 초기화 · 기준선 · 회복 관측 · 조건 칸(4요소 + 부가 조건) · 조건 분리 강제 · **측정 기록 템플릿(docs/measurements/NNN-{slug}.md)** · **기계 판독 블록 형식(EXP-COMPARE BFF가 읽는다)** · 기록 상태와 정정 · 결과를 정본 문서에 올리는 절차
 > **작성일**: 2026-09-24
+> **개정일**: 2026-09-24 — S0 반영 — 기록 상태에 구조 사실 판별 기록(api 부재 단계) 조항 신설 — run · switches null 허용 · 수치 인용 불가 · 정본에는 구조 사실만
 > **개정일**: 2026-09-24 — 최종 정밀 검수 — 조건 분리 규칙 7 → **8**(실시간 · STALE · E2E 실험은 현재 시각 생성만 — 03_requirements/06 · 02_features/05가 넘긴 판정 수용)
 > **원천**: 원본 implementation_plan.md §2.4 · §5 S5 · §8(커밋 ff66a37) · 원본 data_flow.md §11.3(커밋 ff66a37) · 원본 tech_stack.md §10.6 · §14(커밋 ff66a37) · 원본 architecture.md §14(커밋 ff66a37) · docs_plan.md 보정 #3 · 웨이브 인계 W6 10/04 행(기계 판독 블록) · D-10 · REQ-GLB-17 · 23 · REQ-TEC-08~13 · [../07_api/10_metrics.md](../07_api/10_metrics.md) health run · switches · [../08_screen/07_experiment_console.md](../08_screen/07_experiment_console.md) §대조군 역전 지점 · [../11_glossary/04_id_conventions.md](../11_glossary/04_id_conventions.md) §측정 기록 파일명
 
@@ -228,6 +229,7 @@ AC의 합격선은 두 종류다([../03_requirements/14_acceptance_criteria.md](
 | superseded | 뒤 기록이 supersedes로 가리킨 기록 | **고치지 않는다** — 뒤 기록이 정정한다 | 불가 · 뒤 기록을 인용 |
 
 - 검산: 상태 = **3**
+- **구조 사실 판별 기록(api 부재 단계)** — health가 없는 단계(S0)의 판별 · 회귀 기록은 run의 티어 · switches를 null로 두고 status valid로 쓴다. 4요소가 비었으므로 수치는 인용하지 않고, 정본에는 구조 사실(동작 여부 · 1계층 개수 · 설정 채택 근거)만 올린다. BFF 규칙 4는 그대로 적용해 "4요소 누락"으로 센다. 기계 판독 블록 conditions에 recordKind structural-discrimination을 적는다.
 - **기록은 사후에 고치지 않는다**(REQ-TEC-11). 잘못 적은 기록은 새 번호의 정정 기록을 쓰고 supersedes로 옛 번호를 가리킨다 — 옛 파일의 status를 바꾸지 않아도 BFF 규칙 3이 옛 기록을 뺀다.
 
 ## 결과를 정본 문서에 올리는 절차

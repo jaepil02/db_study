@@ -2,6 +2,7 @@
 
 > **대상**: 롤업 테이블 tag_1m · tag_1h · tag_1d와 MV 3(mv_tag_1m · mv_tag_1h · mv_tag_1d)의 DDL · -State/-Merge 조합자 · bad_cnt 조건식 · 일 경계 시간대 판정 · MV 제약 · 백필 절차 · 정합 검증 · 롤업 객체 도메인 귀속 판정
 > **작성일**: 2026-09-24
+> **개정일**: 2026-09-24 — S0 실측 반영(EXP-32 · 기록 001) — ADR-14 보강(사용자 결정) — 롤업 3테이블 DDL에 non_replicated_deduplication_window 1000 신설 · MV 제약 #8 대응 미확인 → 한 쌍 설정 · 미확인 표 1행 닫힘 · 백필 ④에 insert_deduplicate 0(롤업 윈도우가 같은 내용 재삽입을 버림 — 실측)
 > **개정일**: 2026-09-24 — 최종 정밀 검수 — 빈 표 칸을 닫힌 어휘 해당 없음으로 채움(표 열 규약) · 롤업 귀속 README 반영 대기 표기 → 반영 완료
 > **개정일**: 2026-09-24 — W7 검수 반영 — 미확인 1행 닫힘(롤업 공백 재계산 절차)
 > **원천**: 원본 architecture.md §7.2 · §11.1 · §15(커밋 ff66a37) · 원본 data_flow.md §6.1 · §10 · §10.1 · §10.2 · §10.3 · §13 · §17(커밋 ff66a37) · docs_plan.md 웨이브 인계 W3 05_data_stores/04 행 · W3 05_data_stores 행(롤업 · MV 도메인 귀속) · ADR-15 · [../11_glossary/03_enums_state_machines.md](../11_glossary/03_enums_state_machines.md) 품질 코드 · [../11_glossary/05_units_and_time.md](../11_glossary/05_units_and_time.md) 버킷 경계
@@ -70,7 +71,8 @@ ENGINE = AggregatingMergeTree
 PARTITION BY toYYYYMM(bucket)
 ORDER BY (device_id, tag_id, bucket)
 TTL bucket + INTERVAL 90 DAY DELETE
-SETTINGS ttl_only_drop_parts = 1;
+SETTINGS ttl_only_drop_parts = 1,
+         non_replicated_deduplication_window = 1000;
 
 CREATE MATERIALIZED VIEW IF NOT EXISTS plc.mv_tag_1m TO plc.tag_1m AS
 SELECT
@@ -91,6 +93,7 @@ GROUP BY bucket, device_id, tag_id;
 - **last_v 상태 타입에 ts와 같은 시간대를 적는다.** 상태 타입의 인자 타입은 원천 컬럼 타입과 시간대까지 같아야 MV 삽입이 타입 변환 없이 맞물린다 — 원본은 DateTime64(3)로 적어 원천 ts(Asia/Seoul)와 어긋났다.
 - **toStartOfMinute(ts)는 ts의 시간대를 물려받아 DateTime('Asia/Seoul')을 낸다.** 분 경계는 정수 시간 오프셋에서 시간대와 무관하지만, 이 bucket이 월 파티션 · 상위 롤업의 달력 함수 입력이 되므로 시간대가 필요하다.
 - **TTL 90일은 하한이다.** ttl_only_drop_parts = 1은 파트 전체가 만료돼야 지우므로 월 파티션의 마지막 날이 90일을 넘길 때 그 달 전체가 떨어진다 — 실제 보존은 최대 한 달 더 길다([08_retention_lifecycle.md](./08_retention_lifecycle.md)).
+- **롤업 3테이블에도 중복 제거 윈도우를 둔다(ADR-14 보강 · S0 실측).** 25.8은 원시가 토큰으로 중복 제거돼도 종속 MV를 다시 돌린다 — 롤업에 윈도우가 없으면 응답 유실 뒤 같은 토큰 재시도가 세 롤업의 count를 두 배로 만든다(EXP-32 · 기록 001). 윈도우는 삽입 설정 deduplicate_blocks_in_dependent_materialized_views 1과 한 쌍이며 설정의 정본은 [03_clickhouse_schema.md](./03_clickhouse_schema.md) §서버 설정 계약이다.
 
 ## tag_1h · tag_1d · 상위 MV
 
@@ -102,12 +105,14 @@ ENGINE = AggregatingMergeTree
 PARTITION BY toYYYYMM(bucket)
 ORDER BY (device_id, tag_id, bucket)
 TTL bucket + INTERVAL 730 DAY DELETE
-SETTINGS ttl_only_drop_parts = 1;
+SETTINGS ttl_only_drop_parts = 1,
+         non_replicated_deduplication_window = 1000;
 
 CREATE TABLE IF NOT EXISTS plc.tag_1d AS plc.tag_1m
 ENGINE = AggregatingMergeTree
 PARTITION BY toYear(bucket)
-ORDER BY (device_id, tag_id, bucket);
+ORDER BY (device_id, tag_id, bucket)
+SETTINGS non_replicated_deduplication_window = 1000;
 
 CREATE MATERIALIZED VIEW IF NOT EXISTS plc.mv_tag_1h TO plc.tag_1h AS
 SELECT toStartOfHour(bucket) AS bucket, device_id, tag_id,
@@ -199,7 +204,7 @@ GROUP BY bucket, device_id, tag_id;
 | 5 | 체이닝 깊이 | MV의 MV의 MV는 디버깅이 어렵다 | 3단계까지 · 넘으면 배치 잡 |
 | 6 | **상태 타입 일치** | 상태 인자 타입(시간대 포함)이 원천과 다르면 MV 생성 · 삽입이 실패한다 | 세 롤업을 AS plc.tag_1m 한 구조로 · ts 시간대를 상태 타입에 명시 |
 | 7 | **보존은 테이블별 독립** | 원시 TTL이 롤업을 지우지 않고 롤업 TTL이 원시를 지우지 않는다 | 의도된 성질 — 원시를 버려도 장기 분석이 남는다. 역으로 원시가 남은 구간의 롤업 재계산은 원시 보존 기간 안에서만 된다 |
-| 8 | **중복 제거와 종속 MV** | 원시 성공 · MV 실패 뒤 같은 토큰 재시도가 MV를 다시 돌리는지 미확인 | 미확인 등재 — 재시도로 메워진다고 가정하지 않고 #2의 대조 · 재계산을 쓴다 |
+| 8 | **중복 제거와 종속 MV** | 원시가 중복 제거돼도 같은 토큰 재시도가 종속 MV를 다시 돌린다(S0 실측) — 빠진 롤업은 메워지지만 이미 쓰인 롤업은 두 배가 된다 | 롤업 3테이블 윈도우 + 종속 MV 중복 제거 설정 한 쌍(ADR-14 보강) — #2의 대조 · 재계산은 DLQ · 설정을 내린 실험의 안전망으로 남는다 |
 
 - 검산: 원본 5(#1~#5) + 신설 3(#6~#8) = **8**
 - **#3은 버그가 아니다(B형).** 결론 — 버킷 하나에 여러 부분 상태 행이 있는 것이 정상이다. 반대 시나리오 — 조회가 -Merge 없이 컬럼을 그대로 읽으면 같은 분이 여러 행으로 보여 "중복"으로 신고된다. 파생 지침 — 롤업 조회는 언제나 GROUP BY 버킷 · -Merge다.
@@ -212,10 +217,12 @@ GROUP BY bucket, device_id, tag_id;
 ① 주입 정지 확인        다른 주입 모드 · 수집이 멈췄는가     분리 중 들어온 행은 롤업되지 않는다
 ② DETACH mv_tag_1m      mv_tag_1h · mv_tag_1d는 붙여 둔다     상위 연쇄는 ④가 발동한다
 ③ 원시 대량 삽입        날짜 단위 INSERT · ts는 보존 창 안     보존 창 밖 ts는 TTL 머지에서 곧 사라진다
-④ tag_1m 직접 채우기    INSERT SELECT -State FROM tag_raw     백필 구간만 · tag_1h · tag_1d가 연쇄로 채워진다
+④ tag_1m 직접 채우기    INSERT SELECT -State FROM tag_raw     백필 구간만 · tag_1h · tag_1d가 연쇄로 채워진다 · insert_deduplicate 0
 ⑤ ATTACH mv_tag_1m      정상 연쇄 복귀
 ⑥ 정합 검증             count(tag_raw) = countMerge(tag_1m)   = countMerge(tag_1h) = countMerge(tag_1d)
 ```
+
+- **④는 insert_deduplicate 0으로 넣는다(S0 실측 · 기록 001).** 롤업 3테이블의 윈도우(ADR-14 보강)는 토큰 없는 삽입을 내용 해시로 가르는데 롤업에는 매번 다른 컬럼(원시의 ingested_at 같은)이 없다 — 같은 구간을 두 번 백필하거나 비운 뒤 다시 채우면 두 번째 삽입이 오류 없이 0행이 된다.
 
 - **분리하는 MV는 mv_tag_1m 하나다.** 원본 절차는 분리 대상을 mv_tag_1m으로만 적었고 이유는 적지 않았다 — ④가 tag_1m에 넣는 삽입이 상위 두 MV를 발동하므로 상위를 분리하면 상위 롤업을 따로 두 번 더 채워야 한다.
 - **③의 ts는 원시 보존 창 안이어야 한다(A형).** 통념은 "백필은 먼 과거를 채운다"이다. 그러나 tag_raw TTL은 ts 기준 7일이라 창 밖 ts의 파트는 다음 TTL 머지에서 통째로 떨어지고, 롤업만 남는다. 진짜 축은 ts 기준 보존이다. 대체 경로 — 용량 단계를 채우는 백필은 창 안에서 태그 · 설비 수로 행 수를 늘린다([10_olap_vs_rdb_control.md](./10_olap_vs_rdb_control.md) §역전 지점 탐색 설계).
@@ -254,7 +261,7 @@ GROUP BY bucket, device_id, tag_id;
 |------|------|------|
 | p95 원시 대 롤업 허용 범위 | 3계층 미확인 — 확정 수단은 원시 안 순위 오차 3회 측정(W2 판정) | [../03_requirements/14_acceptance_criteria.md](../03_requirements/14_acceptance_criteria.md) |
 | MV 캐스케이드 지연 · MV가 삽입 처리량에 더하는 비용 | 3계층 미확인 — 원본 예상치 MV 캐스케이드 100 ms | [../03_requirements/13_nonfunctional.md](../03_requirements/13_nonfunctional.md) REQ-NFR-04 |
-| 중복 제거된 재시도와 종속 MV | MV 제약 #8 · [03_clickhouse_schema.md](./03_clickhouse_schema.md) 미확인 | S0 실측 · [../06_pipeline/09_rollup.md](../06_pipeline/09_rollup.md)(W4) |
+| 중복 제거된 재시도와 종속 MV | **닫힘(S0 실측 · EXP-32 · 기록 001)** — 다시 돈다 · MV 제약 #8 대응으로 막는다 | [../06_pipeline/09_rollup.md](../06_pipeline/09_rollup.md) |
 | UNCERTAIN(1) 부여 주체 · 가중치 | 판정 — 가중치 미구현 · 주체 생기면 재판정 | [../06_pipeline/02_collect.md](../06_pipeline/02_collect.md)(W4) |
 | 롤업 공백 구간 재계산 명령 | 닫힘 — 빠진 기여분만 넣기 · 버킷 비우고 다시 만들기 두 절차(부분 상태 버킷 이중 계수 방지) — [../06_pipeline/09_rollup.md](../06_pipeline/09_rollup.md) | [../06_pipeline/09_rollup.md](../06_pipeline/09_rollup.md)(W4) |
 

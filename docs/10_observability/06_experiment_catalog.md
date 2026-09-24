@@ -2,13 +2,14 @@
 
 > **대상**: ★★ 실험 전수 — **EXP-NN 채번 정본** · 대조군 실험 EXP-01~05 · 스위치 실험(11종 전부) · 장애 재현 · 생성기 처리량 · 부하 시나리오 · 확장 진입 판정 · 흐름 · 구조 · 기반 실험 · 각 실험의 가설 · 조건 · 절차 · 판정 지표 · 확정되는 미확인 · 관련 AC · 학습 단계 · 결과 자리 · 대조 실험 조정값(Q5 문턱 · 디스크 예산 · 적재 시간 예산) · 스위치 → EXP · AC → EXP · REQ-NFR → EXP 대응 검산
 > **작성일**: 2026-09-24
+> **개정일**: 2026-09-24 — S0 반영 — 도입 단락의 "실행 전 기록은 0건" 문장을 기록 수를 세지 않는 형태로 교정(첫 기록 001 · 002 생성)
 > **원천**: 원본 implementation_plan.md §4.1 · §4.2 · §5 · §8(커밋 ff66a37) · 원본 tech_stack.md §8 · §14(커밋 ff66a37) · 원본 architecture.md §16 · §17(커밋 ff66a37) · 원본 data_flow.md §11.3 · §15 · §17(커밋 ff66a37) · docs_plan.md 학습 목표 1 · 웨이브 인계 W6 행 · D-05 · D-06 · D-10 · D-12 · ADR-09 · ADR-10 · ADR-17 · ADR-21 · ADR-23 · ADR-24 · [../02_features/13_switch_matrix.md](../02_features/13_switch_matrix.md) · [../03_requirements/14_acceptance_criteria.md](../03_requirements/14_acceptance_criteria.md) · [../03_requirements/13_nonfunctional.md](../03_requirements/13_nonfunctional.md) · [../05_data_stores/10_olap_vs_rdb_control.md](../05_data_stores/10_olap_vs_rdb_control.md)
 
 이 문서는 **EXP-NN의 유일한 채번 자리**다. 다른 폴더의 "미확인 — 확정 전 임의 값 고정 금지"는 전부 여기의 실험 하나로 확정되며, 확정되는 미확인 열이 그 대응을 적는다. 실험이 없는 미확인은 영영 미확인으로 남고, 미확인이 없는 실험은 기록할 이유가 없다 — 두 방향을 §대응 검산 세 표가 닫는다.
 
 **실험의 단위는 질문 하나다.** 한 실험은 한 손잡이(스위치 · 부하 · 장애 · 격자 단계)를 움직이고 나머지를 고정한다. 실행 규칙(3회 중앙값 · 편차 폐기 · 스냅샷 · 캐시 초기화 · 기준선 · 4요소 · 기록 형식)의 정본은 [04_experiment_protocol.md](./04_experiment_protocol.md)이고, 이 문서는 무엇을 · 어떤 조건에서 · 무엇으로 판정하는지만 고정한다. 부하의 모양은 [05_load_scenarios.md](./05_load_scenarios.md), 지표 이름은 [01_metrics_catalog.md](./01_metrics_catalog.md)가 정본이다.
 
-**가설은 수치가 아니라 방향과 구조로 쓴다.** 원본 예상치는 "원본 예상치"로만 곁에 두고 3계층 미확인이다. 판정 지표는 전부 4요소(커밋 해시 · 메모리 프로파일 · 용량 티어 · 스위치 상태)가 붙은 3회 중앙값으로만 기록에 오른다. 실행 전 기록은 0건이다 — 결과 자리 열은 기록 파일의 slug이며 파일은 실행할 때 docs/measurements/NNN-{slug}.md로 생긴다.
+**가설은 수치가 아니라 방향과 구조로 쓴다.** 원본 예상치는 "원본 예상치"로만 곁에 두고 3계층 미확인이다. 판정 지표는 전부 4요소(커밋 해시 · 메모리 프로파일 · 용량 티어 · 스위치 상태)가 붙은 3회 중앙값으로만 기록에 오른다. 결과 자리 열은 기록 파일의 slug이며 기록은 실행할 때 docs/measurements/NNN-{slug}.md로 생긴다 — 어느 실험에 기록이 있는지는 그 폴더가 말하고 이 문서는 기록 수를 세지 않는다.
 
 ## 채번 규칙
 

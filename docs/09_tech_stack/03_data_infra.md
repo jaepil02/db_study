@@ -2,6 +2,7 @@
 
 > **대상**: 저장소 3종(PostgreSQL · ClickHouse · Redis)의 이미지 · 확장 · 설정 파일의 모양 · ClickHouse 서버 timezone 판정 · pg_partman 미리 만들기 · TTL 머지 주기 · Compose healthcheck와 health 타임아웃의 관계 · **observability 프로파일 구성원 판정(보정 #17)** · **버전 고정표(버전 문자열의 유일한 기재처)**
 > **작성일**: 2026-09-24
+> **개정일**: 2026-09-24 — S0 실측 반영 — 사용자 프로파일 설정 트리에 deduplicate_blocks_in_dependent_materialized_views 추가(ADR-14 보강 · 기록 001) · alpine 시간대 데이터 미확인 닫힘(PostgreSQL alpine · ClickHouse 모두 Asia/Seoul 해석) · Task 행 미고정 → **버전 고정** 3.53 — 상태 미고정 11 → **10** · 버전 고정 **1** 신설
 > **개정일**: 2026-09-24 — 측정 머신 전환 · S0 구현 반영 — 관측 스택 cpuset 18-19 → 13(현행 측정 머신 배치) · 저장소 이미지 3행 태그 고정(18.6-alpine · 25.8.33.6 · 8.10.2-alpine — 레지스트리 확인 · 릴리스 노트 대조 대기) · 상태 재확인 대기 24 → **21** · 태그 고정 **3** 신설 · ClickHouse 설정 트리를 실제 적용 수준으로 교정(max_concurrent_queries · background_pool_size 서버 · parts_to_* merge_tree) · pg_partman 공식 이미지 미포함 등재 · ClickHouse 설정 트리에 풀 파생 여유 슬롯 문턱 3 추가
 > **개정일**: 2026-09-24 — 최종 정밀 검수 — §조정값 현행값 → §화면 조정값 현행값(절 이름 교정)
 > **개정일**: 2026-09-24 — W7 보안 판정 반영 — Redis 설정 바인드 · 보호 모드 행에 **requirepass 필수** 명시 · 버전 고정표에 Argon2id 해시 라이브러리 행 추가 35 → **36**(백엔드 12 → **13** · 미고정 10 → **11**)(정본 12_security/01 · 02)
@@ -25,7 +26,7 @@
 
 - 검산: 이미지 = **4** — 저장소 3 + 로컬 빌드 1(api)
 - **모든 태그를 명시하고 latest를 쓰지 않는다.** 태그 값은 §버전 고정표 한 자리에만 적는다.
-- **공식 이미지의 alpine 변형은 로케일 · 시간대 데이터가 최소 구성이다.** 서버 timezone을 이름으로 줄 때 시간대 데이터베이스가 이미지에 들어 있는지 착수 시 확인한다(공식 참조 — 03_requirements/16 W7 등재). 없으면 기동은 되지만 시간대 이름이 해석되지 않아 기동 로그에 오류가 남는다.
+- **공식 이미지의 alpine 변형은 로케일 · 시간대 데이터가 최소 구성이다.** 서버 timezone을 이름으로 줄 때 시간대 데이터베이스가 이미지에 들어 있는지 착수 시 확인한다(공식 참조 — 03_requirements/16 W7 등재). 없으면 기동은 되지만 시간대 이름이 해석되지 않아 기동 로그에 오류가 남는다. **S0 확인(2026-09-24) — PostgreSQL alpine 이미지(TimeZone)와 ClickHouse 이미지(timezone()) 모두 Asia/Seoul을 해석한다.**
 
 ## PostgreSQL 확장과 설정 파일
 
@@ -79,7 +80,7 @@ infra/clickhouse/
 │   ├── timezone.xml       서버 timezone = Asia/Seoul                      ← 이 문서 판정
 │   └── prometheus.xml     내장 메트릭 엔드포인트 9363
 ├── users.d/
-│   └── profiles.xml       async_insert · max_insert_block_size · materialized_views_ignore_errors   ← 05_data_stores/03 소유
+│   └── profiles.xml       async_insert · max_insert_block_size · materialized_views_ignore_errors · deduplicate_blocks_in_dependent_materialized_views   ← 05_data_stores/03 소유
 └── ddl/                   순번 DDL 001~                                    ← 05_data_stores/09 소유
 ```
 
@@ -174,7 +175,7 @@ docs_plan 실행 계획 보정 #17을 닫는다. 원본 넷이 서로 다른 구
 
 ## 버전 고정표
 
-**이 표가 버전 문자열의 유일한 기재처다.** 버전 열은 전부 **원본 기준**이며 착수 시점 공식 릴리스 노트 재확인 전까지 확정 태그가 아니다. "원본 미기재"는 원본이 버전을 적지 않은 항목이며 착수 시 같은 절차로 고정한다. 상태 열의 **재확인 대기**는 원본 기준만 있는 행, **미고정**은 원본 기준도 없는 행이다.
+**이 표가 버전 문자열의 유일한 기재처다.** 버전 열은 전부 **원본 기준**이며 착수 시점 공식 릴리스 노트 재확인 전까지 확정 태그가 아니다. "원본 미기재"는 원본이 버전을 적지 않은 항목이며 착수 시 같은 절차로 고정한다. 상태 열의 **재확인 대기**는 원본 기준만 있는 행, **미고정**은 원본 기준도 없는 행, **태그 고정** · **버전 고정**은 착수 뒤 실제 태그 · 설치 버전을 박은 행이다.
 
 | 구분 | 구성요소 | 원본 기준 | 고정 단위 | 쓰는 자리 | 상태 |
 |------|------|------|------|------|------|
@@ -209,13 +210,13 @@ docs_plan 실행 계획 보정 #17을 닫는다. 원본 넷이 서로 다른 구
 | 도구 | pnpm | 원본 미기재(원본 체크리스트는 latest 활성화 — 금지) | 패키지 관리자 필드 | 워크스페이스 | 미고정 |
 | 도구 | Biome · Vitest · Supertest · Testcontainers | 원본 미기재 | 부 버전까지 | 품질 게이트 · 통합 테스트 | 미고정 |
 | 도구 | node-pg-migrate | 원본 미기재(원본 후보) | 부 버전까지 | PostgreSQL 마이그레이션 | 미고정 |
-| 도구 | Task(Taskfile 실행기) | 원본 미기재 | 부 버전까지 | migrate · seed · snapshot · restore · bench · docs:lint | 미고정 |
+| 도구 | Task(Taskfile 실행기) | 원본 미기재 | 부 버전까지 | migrate · seed · snapshot · restore · bench · docs:lint | **버전 고정** 3.53(호스트 설치 3.53.1 · 2026-09-24) |
 | 도구 | Docker Compose | v2 | 부 버전까지 | 실행 구성 | 재확인 대기 |
 | 부하 | k6 | v1.x | 부 버전까지 | 부하 시나리오 | 재확인 대기 |
 | 관측 | Prometheus | 3.x | 부 버전 태그 | observability 프로파일 | 재확인 대기 |
 | 관측 | Grafana | 12.x | 부 버전 태그 | observability 프로파일 | 재확인 대기 |
 
-- 검산: 행 = 런타임 3 + 저장소 3 + 저장소 확장 2 + 백엔드 13 + 프론트엔드 6 + 공유 1 + 도구 5 + 부하 1 + 관측 2 = **36** · 상태 태그 고정 3 + 재확인 대기 21 + 미고정 11 + 해당 없음 1 = **36**
+- 검산: 행 = 런타임 3 + 저장소 3 + 저장소 확장 2 + 백엔드 13 + 프론트엔드 6 + 공유 1 + 도구 5 + 부하 1 + 관측 2 = **36** · 상태 태그 고정 3 + 버전 고정 1 + 재확인 대기 21 + 미고정 10 + 해당 없음 1 = **36**
 - **원본 고정표에서 뺀 행 1** — Prisma(원본 "pg + Prisma")는 마이그레이션 도구 판정에서 채택하지 않았다([05_tooling_devops.md](./05_tooling_devops.md) §마이그레이션 도구 판정 · [06_decisions_rationale.md](./06_decisions_rationale.md)). 원본의 pg 행은 남았다.
 - **원본에 없던 행 2** — pg-copy-streams(대조군 COPY가 스트림 복사를 요구) · 보안 헤더 플러그인(원본 tech_stack.md §10.4가 이름만 적음). 둘 다 미고정이다.
 - **고정 단위가 "부 버전까지"인 이유** — 메이저만 고정하면 부 버전 갱신이 설치 시점마다 달라 같은 커밋의 두 설치가 다른 코드를 받는다. 잠금 파일이 패치까지 고정하고, 이 표는 잠금 파일을 갱신할 때 넘지 않을 경계를 준다.
@@ -242,7 +243,7 @@ docs_plan 실행 계획 보정 #17을 닫는다. 원본 넷이 서로 다른 구
 | 항목 | 상태 | 확정 자리 |
 |------|------|------|
 | 버전 고정표 전 행의 확정 태그 | 저장소 3행은 레지스트리 태그 확인 뒤 고정 · 릴리스 노트 대조 대기 · 나머지는 원본 기준 — 착수 시 재확인 전까지 확정 아님 | 이 문서 §버전 고정표 · 착수 체크리스트 7번 |
-| alpine 이미지의 시간대 데이터 포함 여부 | 신규 미확인 — Asia/Seoul 이름 해석 가능 여부 | 착수 시 이미지 확인 · 이 문서 |
+| alpine 이미지의 시간대 데이터 포함 여부 | **닫힘(S0 확인 2026-09-24)** — PostgreSQL alpine · ClickHouse 이미지 모두 Asia/Seoul 해석 | 이 문서 |
 | @clickhouse/client의 zstd 요청 압축 지원 | 신규 미확인 — 원본은 "zstd(Node 22.15+) 또는 gzip" | 착수 시 공식 참조 · [02_backend.md](./02_backend.md) |
 | client-output-buffer-limit pubsub 값 | 값 미정 — 계약만(게이트웨이 소켓 한도보다 늦게) | S4 · 이 문서 · [../07_api/11_websocket.md](../07_api/11_websocket.md) 소켓 송신 대기량 한도와 같은 변경 단위 |
 | TTL 파티션 삭제 지연 | 3계층 미확인 — 확정 전 임의 값 고정 금지 | EXP-29 · [../10_observability/06_experiment_catalog.md](../10_observability/06_experiment_catalog.md) |

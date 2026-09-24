@@ -2,6 +2,7 @@
 
 > **대상**: db_study의 기술 결정 — ADR-01~25 · 결정 색인 · 분류 검산 · 상태 · 원본 보정 5건 대응 · D-NN과의 경계 — ADR-NN 채번 정본
 > **작성일**: 2026-09-24
+> **개정일**: 2026-09-24 — S0 실측 반영(EXP-32 · 기록 001 · 사용자 결정) — ADR-14에 상태 항목 신설(보강 — 롤업 3테이블 윈도우 + 종속 MV 중복 제거 설정 한 쌍) — 결정 원문 보존 · ADR 수 · 상태 분류 불변
 > **개정일**: 2026-09-24 — 최종 정밀 검수 — ADR 파급 줄의 후속 판정 대상 표기 3곳을 판정 결과로 갱신(ADR-16 · 20 · 23 — 결정 본문 불변)
 > **개정일**: 2026-09-24 — W7 보안 판정 반영 — ADR-18 버린 대안 ② 문구 정정 — "인증 없는 DB 포트" → **비밀번호 한 겹만 남은 DB 포트**(세 저장소 모두 비밀번호 필수) — ADR 수 · 상태 불변(정본 12_security/02 · 05)
 > **개정일**: 2026-09-24 — W6 실험 채번 반영 — 후속 판정 등재 W6 결과 반영(정본 10_observability/01 · 06)
@@ -35,7 +36,7 @@
 | **ADR-11** | 알람 판정은 배치 단위 상태 조회 · Ingest 직접 호출은 유일한 경계 예외(보정 7.3) | 모듈 경계 · 구조 | 현행 | 선점 | [02_module_boundaries.md](./02_module_boundaries.md) · 06_pipeline/08 |
 | **ADR-12** | 캐시 무효화 체인 6단 — BFF · 브라우저 포함(보정 7.4) | 정합성 강제 | 현행 | 선점 | 06_pipeline/07 |
 | **ADR-13** | TTL 강제는 린트가 아니라 키 계열별 래퍼(보정 7.5) | 정합성 강제 | 현행 | 선점 | 05_data_stores/05 |
-| **ADR-14** | 적재 멱등은 insert_deduplication_token — ReplacingMergeTree 미채택 | 적재 · 백프레셔 | 현행 | 선점 | 05_data_stores/03 · 06_pipeline/03 |
+| **ADR-14** | 적재 멱등은 insert_deduplication_token — ReplacingMergeTree 미채택 | 적재 · 백프레셔 | 현행 | 선점 | 05_data_stores/03 · 05_data_stores/04 · 06_pipeline/03 |
 | **ADR-15** | tag_raw 롱 포맷 · 일자 파티션 · 정렬 키(device_id · tag_id · ts) | 저장소 | 현행 | 선점 | 05_data_stores/03 |
 | **ADR-16** | 마스터 연동은 ClickHouse Dictionary(PostgreSQL 소스) — 두 DB를 트랜잭션으로 묶지 않는다 | 저장소 | 현행 | 선점 | 05_data_stores/07 |
 | **ADR-17** | PostgreSQL 대조군 동형 테이블 · SW-09 동시 적재 | 저장소 | 현행 | 선점 | 05_data_stores/10 · 06_pipeline/04 |
@@ -175,6 +176,7 @@
 
 ## ADR-14 — 적재 멱등은 insert_deduplication_token
 
+- **상태**: 현행 — **S0 실측으로 보강(2026-09-24 · EXP-32 · 기록 001 · 사용자 결정).** 결정 원문(결정적 토큰 + tag_raw 윈도우)은 그대로 산다. ClickHouse 25.8은 원시가 토큰으로 중복 제거돼도 종속 MV를 다시 돌려, 원문만으로는 응답이 유실된 성공 배치의 재시도가 롤업 3테이블을 두 배로 센다(3회 모두). 그래서 **롤업 3테이블에도 같은 윈도우를 두고 삽입 설정 deduplicate_blocks_in_dependent_materialized_views를 켜는 한 쌍**을 결정에 더한다 — 둘 중 하나만 둔 두 조건(설정만 · 윈도우만)도 이중 계수가 3회 모두 남았다(실측). **잔여** — 재계산 · 백필처럼 비운 롤업에 같은 내용을 다시 넣는 삽입은 윈도우에 걸려 오류 없이 버려지므로 insert_deduplicate 0으로 한다(실측) · MV 실행 순서가 뒤바뀐 부분 실패는 보강 아래에서 미측정이다. 정본 [../05_data_stores/03_clickhouse_schema.md](../05_data_stores/03_clickhouse_schema.md) §서버 설정 계약 · [../05_data_stores/04_clickhouse_rollup.md](../05_data_stores/04_clickhouse_rollup.md).
 - **맥락**: at-least-once라 컨슈머가 삽입 직후 · XACK 직전에 죽으면 같은 배치를 다시 읽는다(원본 architecture.md §7.1 · 원본 data_flow.md §4.3).
 - **결정**: 배치마다 **내용에 결정적인 토큰**(첫 엔트리 ID + 끝 엔트리 ID + 행 수의 해시)을 insert_deduplication_token으로 싣고, tag_raw에 비복제 중복 제거 윈도우를 둔다. 재시도는 첫 시도와 같은 토큰을 쓰고 백오프 합계는 윈도우 안에 머문다. SW-08 off가 토큰을 빼는 실험 경로다.
 - **버린 대안**: ① **ReplacingMergeTree** — 중복이 머지 시점에야 사라져 머지 전 조회가 중복을 보고, 정확한 결과에 FINAL을 붙이면 조회마다 비용이 붙는다 — 롤업 MV는 삽입 블록을 보므로 중복이 롤업에 그대로 들어간다. ② **무작위 UUID 토큰** — 재시작 뒤 같은 배치가 다른 토큰을 받아 중복 행이 생긴다. ③ **토큰 없음** — 재시도 중복이 avg · count 롤업을 조용히 부풀려 역전 지점과 압축률 측정까지 오염된다.

@@ -2,6 +2,7 @@
 
 > **대상**: db_study의 시스템 구조 — 조감도 · 모듈 경계 · 실행 토폴로지 · 저장소 분리 정책 · 지연 예산 · 백프레셔와 장애 · 용량 · 확장 로드맵 · 기술 결정
 > **작성일**: 2026-09-23
+> **개정일**: 2026-09-24 — S0 실측 반영 — ADR-14 색인 행 근거 문서에 05/04(롤업 DDL 윈도우 · ADR-14 보강) 추가
 > **원천**: [../README.md](../README.md)(전역 불변식 · 분기 3계층) · 원본 architecture.md §1~§5 · §9 · §13 · §15 · §17 · §19 · 원본 tech_stack.md §3 · §5.3 · §13 · 원본 data_flow.md §8.2 · §15 · 원본 implementation_plan.md §2 · §4.3 · §6 · §7(커밋 ff66a37)
 
 "어떤 구조로 계약을 강제하는가"에 답하는 폴더다. **기술 결정 ADR-NN을 채번**한다. 요구사항이 "무엇이 참이어야 하는가"라면 아키텍처는 "무엇이 그것을 참으로 만드는가"다.
@@ -43,7 +44,7 @@ W3 착수 전 리드가 번호를 선점한다. 05_data_stores를 쓰는 팀원�
 | ADR-11 | 알람 판정은 배치 단위 상태 조회 · Ingest 직접 호출은 경계 예외 — 보정 7.3 | implementation_plan §7.3 | 04/02 · 06/08 |
 | ADR-12 | 캐시 무효화 체인 6단(BFF · 브라우저 포함) — 보정 7.4 | implementation_plan §7.4 | 06/07 |
 | ADR-13 | TTL 강제는 린트가 아니라 키 계열별 래퍼 — 보정 7.5 | implementation_plan §7.5 | 05/05 |
-| ADR-14 | 적재 멱등은 insert_deduplication_token(ReplacingMergeTree 미채택) | architecture §7.1 | 05/03 · 06/03 |
+| ADR-14 | 적재 멱등은 insert_deduplication_token(ReplacingMergeTree 미채택) | architecture §7.1 | 05/03 · 05/04 · 06/03 |
 | ADR-15 | tag_raw 롱 포맷 · 일자 파티션 · 정렬 키(device_id · tag_id · ts) | architecture §7.1 | 05/03 |
 | ADR-16 | 마스터 연동은 ClickHouse Dictionary(PostgreSQL 소스) · 두 DB를 트랜잭션으로 묶지 않는다 | architecture §7.4 · §12 | 05/07 |
 | ADR-17 | PostgreSQL 대조군 동형 테이블 · SW-09 동시 적재 | docs_plan 학습 목표 1 · D-05 | 05/10 · 06/04 |

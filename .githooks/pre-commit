@@ -1,0 +1,10 @@
+#!/usr/bin/env bash
+# 품질 게이트 — 정본 docs/09_tech_stack/05_tooling_devops.md §품질 게이트
+# 싼 것부터: ① Biome ② tsc strict ③ Vitest ④ docs:lint. ①~③은 코드가 생기는 S1에서 붙는다.
+set -euo pipefail
+cd "$(git rev-parse --show-toplevel)"
+if command -v task >/dev/null 2>&1; then
+  task docs:lint
+else
+  python3 scripts/docs_lint.py
+fi

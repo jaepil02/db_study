@@ -2,6 +2,7 @@
 
 > **대상**: api 프로세스 안 모듈 사이의 경계 — Stream 경계 원칙과 근거 4 · 경계 예외(알람 직접 호출)의 근거 · APP_ROLE 5값과 모듈 배정 · worker_threads 격리 대상 · **스위치 = DI 포트 확정 표(포트 · 구현 이름 정본)** · 리포지터리 구조
 > **작성일**: 2026-09-24
+> **개정일**: 2026-09-24 — S0 반영 — 리포지터리 구조에 scripts/ · .githooks/ 자리 추가 · Taskfile 행에 docs:lint
 > **개정일**: 2026-09-24 — W6 실험 채번 반영 — 스위치 상태 레이블 · 이벤트 루프 메트릭 이름(정본 10_observability/01 · 06)
 > **원천**: 원본 architecture.md §1 · §4 · §8.2 · §9(커밋 ff66a37) · 원본 tech_stack.md §1 · §3.1 · §3.3 · §3.4 · §5.3 · §11(커밋 ff66a37) · 원본 data_flow.md §4.2 · §8 · §9 · §15(커밋 ff66a37) · 원본 implementation_plan.md §4.3 · §6 · §7.2 · §7.3 · §7.5(커밋 ff66a37) · D-06 · ADR-06 · ADR-07 · ADR-08 · ADR-10 · ADR-11 · ADR-22 · ADR-25 · [../01_overview/04_domain_map.md](../01_overview/04_domain_map.md) · [../02_features/13_switch_matrix.md](../02_features/13_switch_matrix.md)
 
@@ -166,7 +167,9 @@ db_study/
 ├── snapshots/                  ← 볼륨 아카이브 · 덤프(Git 제외)
 ├── docs/                       ← 설계 정본 12폴더(docs/README.md 문서 지도)
 │   └── measurements/           ← 실측 기록 — 번호 없는 예외 폴더(D-09)
-└── Taskfile                    ← migrate · seed · snapshot · restore · bench
+├── scripts/                    ← 문서군 린트 · 단계 실습 스크립트(도구 파일 자리 정본 09_tech_stack/05)
+├── .githooks/                  ← pre-commit 품질 게이트
+└── Taskfile                    ← migrate · seed · snapshot · restore · bench · docs:lint
 ```
 
 - **원본 레이아웃의 docs 행이 바뀌었다.** 원본은 docs/ 아래(또는 루트)에 설계서 4본을 두었다. 현행은 docs/ 12폴더가 설계 정본이고 루트 4본은 W7에서 삭제된다(D-03) · docs/measurements는 설계 정본이 아니다(D-09).

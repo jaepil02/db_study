@@ -2,6 +2,7 @@
 
 > **대상**: 개발 도구 구성 — pnpm workspace · Biome · tsc strict · Vitest · Supertest · Testcontainers · 품질 게이트 · **마이그레이션 도구 판정** · Taskfile 작업 6(migrate · seed · snapshot · restore · bench · docs:lint) · 리포지터리의 도구 파일 자리 · **SIM 주입 계획 파일 형식(판정)** · 착수 체크리스트의 도구 항목
 > **작성일**: 2026-09-24
+> **개정일**: 2026-09-24 — S0 구현 반영 — docs:lint 편입 완료(.omc/docs_lint.py → **scripts/docs_lint.py** · 품질 게이트 ④ 가동 — .githooks/pre-commit) · Taskfile S0분 3작업 구현(snapshot · restore · docs:lint) · 도구 파일 자리에 .nvmrc · .githooks · scripts 3행 추가
 > **개정일**: 2026-09-24 — 최종 정밀 검수 — 미확인 등재에 타 문서가 넘긴 3행 수용(구조화 로그 보관 · 시나리오 파일 형식 · 비밀번호 교체 작업화)
 > **개정일**: 2026-09-24 — W7 검수 반영 — 미확인 표 웨이브 표지 (W7) 제거
 > **개정일**: 2026-09-24 — W6 실험 채번 반영 — 메트릭 이름 반영(정본 10_observability/01 · 06)
@@ -9,7 +10,7 @@
 
 도구의 목표는 하나다 — **같은 커밋이면 누가 언제 돌려도 같은 코드 · 같은 스키마 · 같은 엔진 버전에서 측정이 돈다.** 도구 선택마다 "이 도구가 빠지면 두 측정의 조건이 어디서 갈라지는가"로 근거를 닫는다. 도구의 버전은 적지 않는다 — 정본은 [03_data_infra.md](./03_data_infra.md) §버전 고정표다.
 
-**도구 · 작업은 아직 코드가 아니다.** 이 문서는 코드 착수 때 만들어질 작업의 계약이다. 문서군 린트는 지금 리드가 로컬 스크립트로 돌리고, Taskfile 편입은 코드 착수 항목이다(docs_plan 보정 #9 · [../01_overview/05_priorities_roadmap.md](../01_overview/05_priorities_roadmap.md) §코드 착수 항목).
+**도구 · 작업은 배정 단계에서 코드가 된다.** 이 문서는 작업의 계약이다. S0에서 Taskfile의 snapshot · restore · docs:lint와 pre-commit 게이트 ④가 먼저 생겼고(2026-09-24), 나머지 작업은 [../01_overview/05_priorities_roadmap.md](../01_overview/05_priorities_roadmap.md) §코드 착수 항목의 배정 단계에서 더한다(docs_plan 보정 #9).
 
 모듈 디렉터리 배치의 정본은 [../04_architecture/02_module_boundaries.md](../04_architecture/02_module_boundaries.md) §리포지터리 구조다. 이 문서는 그 구조 위의 **도구 파일 자리**만 더한다.
 
@@ -50,12 +51,12 @@
 ① Biome              린트 · 포맷 검사 — 수정은 하지 않고 실패만
 ② tsc strict         워크스페이스 전체 타입 검사
 ③ Vitest             단위 테스트 — Testcontainers 통합 테스트는 게이트 밖(수동 · 작업)
-④ docs:lint          문서군 린트 — 코드 착수 시 편입(01_overview/05)
+④ docs:lint          문서군 린트 — S0에서 편입(scripts/docs_lint.py)
 ```
 
 - **순서는 싼 것부터다.** 포맷 실패로 끝날 커밋에 타입 검사 · 테스트 시간을 쓰지 않는다.
 - **통합 테스트를 게이트에 넣지 않는다.** 저장소 컨테이너 기동이 커밋마다 수십 초를 더해 게이트를 우회하는 습관을 만든다 — 통합 테스트는 단계 합격 판정(01_overview/05) 전에 돌린다.
-- **④는 지금 게이트에 없다.** 문서군 린트는 git 추적 밖 로컬 스크립트(.omc/docs_lint.py)이고, 코드 착수 시 저장소 안 스크립트로 옮겨 docs:lint 작업으로 편입한다(docs_plan 보정 #9).
+- **④만 먼저 붙었다(S0).** 문서군 린트를 git 추적 밖 로컬 스크립트(.omc/docs_lint.py)에서 저장소 안 scripts/docs_lint.py로 옮기고, 훅 디렉터리 .githooks(git 설정 core.hooksPath)의 pre-commit이 task docs:lint를 부른다(docs_plan 보정 #9). ①~③은 코드가 생기는 S1부터 같은 훅에 앞순서로 붙는다. 훅 경로 설정은 저장소 복제마다 한 번 해야 한다 — 설정하지 않은 복제본에서는 게이트가 돌지 않는다.
 
 ## 마이그레이션 도구 판정
 
@@ -86,6 +87,7 @@
 | docs:lint | 문서군 기계 검사 | 없음 | 읽기 전용 | 오류 목록 · 비정상 종료 |
 
 - 검산: 작업 = 원본 5 + 코드 착수 1 = **6**
+- **S0 구현(2026-09-24) — snapshot · restore · docs:lint가 저장소 루트 Taskfile.yml에 있다.** migrate · seed(S3) · bench(S5)는 배정 단계에서 더한다. snapshot은 아직 없는 볼륨(api 이전의 spooldata)을 manifest에 absent로 적고 건너뛰며, restore는 아카이브에 있는 볼륨만 되돌린 뒤 저장소 3개 healthy까지 기다린다. 묶기와 풀기에 같은 태그 고정 이미지를 써서 볼륨 파일의 소유자 번호를 보존한다.
 - **seed가 채워진 볼륨을 거부하는 이유** — 시드 고정 생성기의 재현성은 빈 상태에서 출발할 때만 성립한다. 두 번 시드한 볼륨은 tag_id 공간이 달라 같은 시드의 두 실험이 다른 태그를 본다.
 - **bench의 CPU 집합 고정** — k6를 측정 대상과 겹치지 않는 집합에 둔다(배치 정본 [../04_architecture/03_execution_topology.md](../04_architecture/03_execution_topology.md) §cpuset 배치). 시나리오 정의의 정본은 [../10_observability/05_load_scenarios.md](../10_observability/05_load_scenarios.md), 기록 형식은 [../10_observability/04_experiment_protocol.md](../10_observability/04_experiment_protocol.md)다.
 - **snapshot · restore는 컨테이너를 정지한다.** 실행 중 볼륨을 묶으면 ClickHouse 파트 · PostgreSQL WAL이 중간 상태로 묶여 복원이 기동에 실패하거나 조용히 손상된다.
@@ -104,6 +106,9 @@ db_study/
 ├── Taskfile                  ← 작업 6
 ├── .env.example              ← 환경변수 이름 견본(정본 04_local_environment)
 ├── .gitignore                ← .env · snapshots/ · 빌드 산출물
+├── .nvmrc                    ← 호스트 Node 메이저(버전 관리자가 읽는다)
+├── .githooks/                ← pre-commit — 품질 게이트(git 설정 core.hooksPath)
+├── scripts/                  ← docs_lint.py(docs:lint) · lab/s0(S0 실습 · 판별 스크립트)
 ├── infra/
 │   ├── compose/              ← 기본 정의 + 프로파일 덮어쓰기 파일 3(부하 실험 · 개발 · 중간)
 │   ├── postgres/migrations/  ← node-pg-migrate 순번 파일
