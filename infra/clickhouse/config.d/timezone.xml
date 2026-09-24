@@ -1,0 +1,4 @@
+<!-- 서버 timezone = Asia/Seoul(W6 판정) — 스키마는 의존하지 않는다 · 정본 docs/09_tech_stack/03_data_infra.md §서버 timezone 판정 -->
+<clickhouse>
+    <timezone>Asia/Seoul</timezone>
+</clickhouse>

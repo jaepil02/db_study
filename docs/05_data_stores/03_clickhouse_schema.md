@@ -2,6 +2,7 @@
 
 > **대상**: ClickHouse 객체 9(테이블 5 · MV 3 · Dictionary 1)의 목록과 원시 · 판정 테이블 tag_raw · alarm_eval DDL · 코덱 · 파티션 · 정렬 키(ADR-15) · 중복 제거(ADR-14) · 시각 컬럼 시간대 표기 통일 · dict_tag DDL · 품질 코드 컬럼 판정 · 서버 설정 계약
 > **작성일**: 2026-09-24
+> **개정일**: 2026-09-24 — 측정 머신 전환 · S0 구현 반영 — background_pool_size 8의 파생 병합 설정 3(10 · 12 · 4) 등재 — 없으면 25.8이 기동을 거부한다(S0 확인)
 > **개정일**: 2026-09-24 — 최종 정밀 검수 — 빈 표 칸을 닫힌 어휘 해당 없음으로 채움(표 열 규약)
 > **개정일**: 2026-09-24 — W6 실험 채번 반영 — 실험 자리 W6 결과 반영(정본 10_observability/01 · 06)
 > **개정일**: 2026-09-24 — W6 판정 반영 — 서버 timezone 미확인 → **Asia/Seoul**(정본 09_tech_stack/03) · 스키마는 여전히 서버 설정에 기대지 않는다 — 설정 수 불변
@@ -206,6 +207,7 @@ LIFETIME(MIN 300 MAX 600);
 | materialized_views_ignore_errors | 0(끔) | MV 실패를 삽입 오류로 드러낸다(REQ-ING-16) | 켜면 원시는 있고 롤업은 빈 구간이 오류 없이 남는다 |
 | 서버 timezone | **Asia/Seoul**(W6 판정) | **스키마는 의존하지 않는다** — 모든 시각 컬럼에 시간대 명시 | 해당 없음 |
 
+- **background_pool_size 8은 병합 풀 파생 설정 3을 함께 낮춰야 기동한다(2026-09-24 S0 확인).** 25.8은 슬롯(풀 × 동시성 비율 2 = 16)보다 큰 여유 슬롯 문턱을 설정 오류로 보고 기동을 거부한다(Code 36) — 기본값 20 · 25 · 8(뮤테이션 · 파티션 전체 최적화 · 병합 크기 하향 문턱)은 기본 풀 16(슬롯 32) 전제다. 기본값의 슬롯 대비 비율을 옮긴 10 · 12 · 4를 서버 설정 merge_tree 절에 둔다([../09_tech_stack/03_data_infra.md](../09_tech_stack/03_data_infra.md) §ClickHouse 설정 파일과 서버 timezone). 파생값이라 아래 설정 수에 세지 않는다.
 - 검산: 설정 = 원본 6 + 신설 2(materialized_views_ignore_errors · 서버 timezone 의존 부정) = **8** · 원본 merge_tree.merge_max_block_size(8192 · 기본값)는 스키마 쪽 계약이 없어 뺐다
 - 접속 프로토콜 — api는 HTTP 8123만 쓰고 네이티브 9000은 CLI · 벤치마크 전용이다(원본 tech_stack.md §5.2). 삽입 형식은 JSONCompactEachRow + 요청 압축이다(REQ-ING-05).
 

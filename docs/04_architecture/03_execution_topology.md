@@ -2,6 +2,7 @@
 
 > **대상**: 로컬 실행 구성 — Compose 서비스 4 · healthcheck · 기동 순서 · 네트워크 · 호스트 포트 · named volume 4 · 메모리 프로파일 2 + 조건부 중간 · CPU 가중 · **cpuset 배치(정본)** · 스냅샷과 복원 · 재빌드 · 재시작 영향 · 조정값 소유처
 > **작성일**: 2026-09-24
+> **개정일**: 2026-09-24 — 측정 머신 전환 · S0 구현 반영 — cpuset 배치를 현행 측정 머신(macOS Docker Desktop VM · vCPU 14)으로 재설계(사용자 결정) — api · redis 0-4 · clickhouse 5-8 · postgres 9-10 · 부하 도구 11-12(컨테이너 · cpuset) · 관측 13 · 대조 실험 배치 5-7 · 8-10 신설 · WSL2 20스레드 배치는 이전 배치로 보존 · 미확인 등재에 S0 postgres healthcheck 계정(migrate 전 관리자) 추가
 > **개정일**: 2026-09-24 — W6 실험 채번 반영 — cpuset 표에 APP_ROLE=datagen 행(잠정 16-17 공유) · EXP 번호(정본 10_observability/01 · 06)
 > **개정일**: 2026-09-24 — W6 판정 반영 — api 정확 버전 링크 02_backend → **03_data_infra 버전 고정표** · 미확인 2행(관측 구성원 · 중간 프로파일)을 닫는다
 > **원천**: 원본 architecture.md §3 · §13 · §17 · §18(커밋 ff66a37) · 원본 tech_stack.md §10.1~§10.5 · §12(커밋 ff66a37) · 원본 implementation_plan.md §2 · §2.2~§2.5 · §8 · §9(커밋 ff66a37) · 원본 data_flow.md §11.3 · §12.4(커밋 ff66a37) · D-02 · D-10 · ADR-05 · ADR-18 · ADR-20 · ADR-22 · [../README.md](../README.md) 고정 기준(실행 구성 · 호스트 포트 · 실험 축) · [../03_requirements/13_nonfunctional.md](../03_requirements/13_nonfunctional.md) REQ-TEC-01~15
@@ -102,7 +103,7 @@
 
 | 조건 | 규칙 | 이 조건 없이 재면 |
 |------|------|------|
-| CPU 동일화 | clickhouse와 postgres의 CPU 집합 크기를 같게 둔다 — §cpuset 배치의 비대칭(clickhouse 6 · postgres 2)을 대조 실험에 쓰지 않는다 | 역전 지점이 저장 방식이 아니라 CPU 3배 차이를 잰다 |
+| CPU 동일화 | clickhouse와 postgres의 CPU 집합 크기를 같게 둔다 — §cpuset 배치의 비대칭(clickhouse 4 · postgres 2)을 대조 실험에 쓰지 않는다 · 값은 §대조 실험 배치 | 역전 지점이 저장 방식이 아니라 CPU 3배 차이를 잰다 |
 | 메모리 동일화 | 두 컨테이너의 메모리 상한을 같게 둔다 — 부하 실험 프로파일의 비대칭(5.0 GB · 2.0 GB)을 쓰지 않는다 | 캐시 적중 차이가 쿼리 시간 차이로 둔갑한다 |
 | PostgreSQL 커밋 동기화 끔 | synchronous_commit off를 표준 조건으로 한다 | 삽입 처리량 비교가 WAL fsync 대기를 재어 ClickHouse의 비동기 파트 기록과 조건이 달라진다 |
 | 기록 | 동일화한 값과 조건을 측정 기록 조건 칸에 적는다 | 대조 수치와 일반 부하 수치가 같은 프로파일 이름 아래 섞인다 |
@@ -126,20 +127,46 @@ CPU 가중은 절대량이 아니라 **상대 배분**이라 두 프로파일이
 
 ## cpuset 배치
 
-실측 머신은 20스레드다(원본 implementation_plan.md §2.1). 원본이 "로컬에서 지킬 수 없다"고 한 부하 생성기 격리를 **CPU 집합 분리로 부분 복원**한다. 이 표가 배치의 정본이다(REQ-TEC-13).
+**현행 측정 머신은 macOS의 Docker Desktop VM(vCPU 14)이다**(2026-09-24 사용자 결정 — 머신 정본 [../09_tech_stack/04_local_environment.md](../09_tech_stack/04_local_environment.md) §현행 측정 머신). 원본이 "로컬에서 지킬 수 없다"고 한 부하 생성기 격리를 **CPU 집합 분리로 부분 복원**한다. 이 표가 배치의 정본이다(REQ-TEC-13). 원본 실측 머신(WSL2 20스레드)의 배치는 아래 §이전 배치에 이력으로 남긴다.
 
-| 대상 | CPU 집합 | 근거 |
+| 대상 | CPU 집합(vCPU) | 근거 |
 |------|------|------|
-| api · redis | 0-7 | 지연 민감 · 단일 스레드 성능이 중요하다 |
-| clickhouse | 8-13 | 병렬 스캔 · 머지 |
-| postgres | 14-15 | 부하가 낮다 |
-| k6(호스트 프로세스) | 16-17(taskset) | **측정 대상과 CPU 집합이 겹치지 않는다** |
-| APP_ROLE=datagen 프로세스(생성기 모드 B · D) | 16-17(k6와 공유 · **잠정**) | 측정 대상 집합(0-15)과 겹치지 않게 부하 생성기 집합을 나눠 쓴다 — 두 생성기의 CPU 합으로 포화를 판정한다([../10_observability/05_load_scenarios.md](../10_observability/05_load_scenarios.md) §생성기 위치) |
-| Next.js 개발 서버 · 관측 스택 | 18-19 | 측정 대상 밖 |
+| api · redis | 0-4 | 지연 민감 · 단일 스레드 성능이 중요하다 · api가 수집 · 적재 · 조회 · 워커 풀을 한 프로세스로 떠안는다 |
+| clickhouse | 5-8 | 병렬 스캔 · 머지 |
+| postgres | 9-10 | 부하가 낮다 |
+| k6 · 저장소 네이티브 벤치마크 도구(컨테이너) | 11-12 | **측정 대상과 CPU 집합이 겹치지 않는다** · macOS에는 taskset이 없고 호스트 프로세스는 VM 밖이라 cpuset이 닿지 않는다 — **부하 도구는 컨테이너로 띄워 cpuset으로 고정한다** |
+| APP_ROLE=datagen 프로세스(생성기 모드 B · D) | 11-12(k6와 공유 · **잠정**) | 측정 대상 집합(0-10)과 겹치지 않게 부하 생성기 집합을 나눠 쓴다 — 두 생성기의 CPU 합으로 포화를 판정한다([../10_observability/05_load_scenarios.md](../10_observability/05_load_scenarios.md) §생성기 위치) |
+| 관측 스택(observability 프로파일) | 13 | 측정 대상 밖 |
 
-- 검산: 8 + 6 + 2 + 2 + 2 = **20** = 머신 스레드 수 · 겹치는 집합 0 — datagen 행은 k6 집합을 공유하므로 새 집합을 더하지 않는다(부하 생성기끼리의 공유 · 측정 대상과는 겹치지 않는다)
-- **완전한 격리가 아니다 — 잔여 둘.** ① WSL2는 P코어 · E코어 구분을 노출하지 않아 집합 16번이 어느 코어인지 매 실행 달라질 수 있다. ② 메모리 대역폭과 L3 캐시는 공유된다. 그래서 **같은 실험 3회 중앙값이 선택이 아니라 필수 규칙이다**(D-10 · REQ-TEC-11).
-- 이 배치는 20스레드 머신에 종속된다. 머신이 바뀌면 이 표를 다시 짜고 측정 기록의 조건 칸에 배치를 적는다.
+- 검산: 5 + 4 + 2 + 2 + 1 = **14** = VM vCPU 수 · 겹치는 집합 0 — datagen 행은 k6 집합을 공유하므로 새 집합을 더하지 않는다(부하 생성기끼리의 공유 · 측정 대상과는 겹치지 않는다)
+- **Next.js 개발 서버 · 브라우저 · IDE는 이 표 밖이다.** 호스트 macOS 프로세스라 VM의 vCPU 번호로 고정할 수 없다 — VM이 호스트 코어 14개를 전부 받으므로 호스트 프로세스는 하이퍼바이저 수준에서 VM과 경합한다. 부하 실험 중에는 호스트에서 무거운 작업을 띄우지 않고, 그 사실을 기록 조건 칸에 적는다.
+- **완전한 격리가 아니다 — 잔여 둘.** ① Docker Desktop VM은 성능 코어 · 효율 코어 구분을 노출하지 않아 vCPU 번호가 어느 물리 코어인지 매 실행 달라질 수 있다(macOS 스케줄러가 VM 스레드를 배치한다). ② 메모리 대역폭과 캐시는 공유된다. 그래서 **같은 실험 3회 중앙값이 선택이 아니라 필수 규칙이다**(D-10 · REQ-TEC-11).
+- 이 배치는 vCPU 14 VM에 종속된다. 머신 · VM CPU 수가 바뀌면 이 표를 다시 짜고 측정 기록의 조건 칸에 배치를 적는다 — 다른 배치의 기록끼리 비교하지 않는다.
+
+### 대조 실험 배치
+
+§대조 실험 자원 조건의 CPU 동일화를 이 배치에서 푸는 값이다. clickhouse · postgres 두 집합(5-10, 6개)을 반씩 나눈다.
+
+| 대상 | CPU 집합 | 일반 배치와의 차이 |
+|------|------|------|
+| clickhouse | 5-7 | 4 → 3 |
+| postgres | 8-10 | 2 → 3 |
+
+- 검산: 3 + 3 = **6** = 일반 배치 4 + 2 · 나머지 집합(api · redis · 부하 도구 · 관측)은 그대로
+
+### 이전 배치 — 원본 실측 머신(WSL2 20스레드)
+
+원본 실측 머신 기준의 W3 배치다. 그 머신으로 돌아가면 이 표를 다시 쓴다.
+
+| 대상 | CPU 집합 |
+|------|------|
+| api · redis | 0-7 |
+| clickhouse | 8-13 |
+| postgres | 14-15 |
+| k6(호스트 프로세스 · taskset) · datagen 프로세스 | 16-17 |
+| Next.js 개발 서버 · 관측 스택 | 18-19 |
+
+- 검산: 8 + 6 + 2 + 2 + 2 = **20**
 
 ## 스냅샷과 복원
 
@@ -148,7 +175,7 @@ CPU 가중은 절대량이 아니라 **상대 배분**이라 두 프로파일이
 ```plain
 ① task snapshot     컨테이너 정지 → 볼륨 4개를 볼륨별 아카이브로 snapshots/에 묶는다
 ② 실험 준비          컨테이너 기동 → 캐시 계열 키(cache · lock) 삭제 · 봉인 계열 유지 → 유휴 기준선 관측
-③ 부하 주입          주입 모드 하나 · k6 taskset · 관측 스택 on/off 기록
+③ 부하 주입          주입 모드 하나 · k6 컨테이너 cpuset · 관측 스택 on/off 기록
 ④ 회복 관측          랙 소진 · 파트 병합 완료까지
 ⑤ 정합성 검증        생성 수 대 행 수 · 중복 0
 ⑥ 기록              4요소(커밋 · 프로파일 · 티어 · 스위치) + 조건 칸
@@ -193,6 +220,7 @@ CPU 가중은 절대량이 아니라 **상대 배분**이라 두 프로파일이
 | observability 프로파일 구성원(prometheus · grafana · alertmanager · tempo) | **W6 판정** — 구성원 prometheus · grafana 2 · alertmanager 채택하지 않음(수신처 없음 · D-02) · tempo 현 범위 밖 · 조건부 | [../09_tech_stack/03_data_infra.md](../09_tech_stack/03_data_infra.md) |
 | 재기동 시간 · 결측 구간 길이 | 3계층 미확인 — 미확인 · 확정 전 임의 값 고정 금지 | EXP-28 · [../10_observability/06_experiment_catalog.md](../10_observability/06_experiment_catalog.md) |
 | 역할 분리 시 컨테이너별 메모리 · CPU 배분 | 미설계 — 원본은 all 기준으로만 산정했다 | [08_scaling_roadmap.md](./08_scaling_roadmap.md) 1단계 진입 시 |
+| postgres healthcheck의 계정 | S0 구현(2026-09-24) — 애플리케이션 계정 app_rw는 migrate가 만들므로 그 전에는 관리자 계정으로 확인한다 · migrate 도입 때 애플리케이션 계정으로 바꾼다 | [../05_data_stores/09_migrations_seed.md](../05_data_stores/09_migrations_seed.md) |
 | 중간 프로파일의 정식 채택 | **W6 판정** — 정식 프로파일로 올리지 않는다 · 조건부 대안 유지 | [../09_tech_stack/04_local_environment.md](../09_tech_stack/04_local_environment.md) |
 
 ## 관련 문서

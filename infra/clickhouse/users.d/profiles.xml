@@ -1,0 +1,12 @@
+<!-- 사용자 프로파일 수준 설정 — 정본 docs/05_data_stores/03_clickhouse_schema.md §서버 설정 계약 -->
+<clickhouse>
+    <profiles>
+        <default>
+            <!-- 적재는 단일 flusher 배치(ADR-09) · C안 비교 실험에서만 켠다 -->
+            <async_insert>0</async_insert>
+            <max_insert_block_size>1048576</max_insert_block_size>
+            <!-- MV 실패를 삽입 오류로 드러낸다(REQ-ING-16) -->
+            <materialized_views_ignore_errors>0</materialized_views_ignore_errors>
+        </default>
+    </profiles>
+</clickhouse>

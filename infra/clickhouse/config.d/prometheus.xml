@@ -1,0 +1,10 @@
+<!-- 내장 메트릭 엔드포인트 9363 — 정본 docs/04_architecture/03_execution_topology.md §네트워크와 호스트 포트 -->
+<clickhouse>
+    <prometheus>
+        <endpoint>/metrics</endpoint>
+        <port>9363</port>
+        <metrics>true</metrics>
+        <events>true</events>
+        <asynchronous_metrics>true</asynchronous_metrics>
+    </prometheus>
+</clickhouse>

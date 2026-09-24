@@ -2,6 +2,7 @@
 
 > **대상**: 로컬 전용 구성의 노출 경계 — 호스트 포트 전수와 바인드 · 저장소 포트를 여는 이유와 안전장치 · 웹 개발 서버의 바인드 · PlcSim 루프백 · WSL2 mirrored 네트워킹의 함의 · 127.0.0.1 바인드가 막는 것과 못 막는 것 · 노출 검증 절차
 > **작성일**: 2026-09-24
+> **개정일**: 2026-09-24 — 측정 머신 전환 · S0 구현 반영 — 현행 측정 머신 redis 호스트 포트 6380 반영
 > **원천**: 원본 architecture.md §2 · §3(커밋 ff66a37) · 원본 tech_stack.md §10.4(커밋 ff66a37) · 원본 implementation_plan.md §2.5(커밋 ff66a37) · D-02 · ADR-18 · REQ-GLB-18 · 19 · REQ-TEC-01 · 02 · [../04_architecture/03_execution_topology.md](../04_architecture/03_execution_topology.md) §네트워크와 호스트 포트 · [../09_tech_stack/04_local_environment.md](../09_tech_stack/04_local_environment.md) §WSL2 mirrored 네트워킹 · [../09_tech_stack/03_data_infra.md](../09_tech_stack/03_data_infra.md) · [../README.md](../README.md) 고정 기준 호스트 포트
 
 db_study는 배포하지 않는다(D-02). **노출 경계는 하나다 — 호스트 포트를 127.0.0.1에만 바인드한다**(ADR-18 · REQ-TEC-02 · REQ-GLB-19). 이 문서는 그 경계가 어디까지 막고 어디서 끝나는지를 적는다. 바인드 규칙 자체의 정본은 [../04_architecture/03_execution_topology.md](../04_architecture/03_execution_topology.md)이고 포트 값의 정본은 [../README.md](../README.md) 고정 기준이다.
@@ -20,7 +21,7 @@ db_study는 배포하지 않는다(D-02). **노출 경계는 하나다 — 호�
 | clickhouse HTTP | 127.0.0.1:8123 | 앱 · 사람 | 비밀번호 | 앱의 유일한 ClickHouse 포트 | Compose ports |
 | clickhouse 네이티브 | 127.0.0.1:9000 | 사람(clickhouse-client · clickhouse-benchmark) | 비밀번호 | CLI · 벤치마크 | Compose ports |
 | clickhouse 메트릭 | 127.0.0.1:9363 | Prometheus · 사람 | 없음 | 내장 메트릭 엔드포인트 | Compose ports |
-| redis | 127.0.0.1:6379 | 앱 · 사람(redis-cli) | 비밀번호 | 학습용 직접 조회 | Compose ports |
+| redis | 127.0.0.1:6379(현행 측정 머신 127.0.0.1:6380 — 호스트 redis-server 충돌) | 앱 · 사람(redis-cli) | 비밀번호 | 학습용 직접 조회 | Compose ports |
 | prometheus(프로파일) | 127.0.0.1:9090 | 사람 · Grafana | 없음 | 메트릭 저장 · 조회 | Compose ports |
 | grafana(프로파일) | 127.0.0.1:3002 | 사람 | 관리자 비밀번호 | 대시보드 | Compose ports |
 
@@ -113,7 +114,7 @@ REQ-GLB-19의 강제 주체는 Compose 포트 표기이고 잔여는 이 문서�
 
 ```plain
 ① Compose publish 확인     docker compose ps — PORTS 열이 전부 127.0.0.1: 접두인지
-② 호스트 수신 주소 확인     수신 소켓 목록 조회 — 3001 · 3000 · 5432 · 8123 · 9000 · 9363 · 6379(· 9090 · 3002)의 수신 주소가 127.0.0.1인지
+② 호스트 수신 주소 확인     수신 소켓 목록 조회 — 3001 · 3000 · 5432 · 8123 · 9000 · 9363 · 6379(현행 머신 6380)(· 9090 · 3002)의 수신 주소가 127.0.0.1인지
 ③ PlcSim 비공개 확인       호스트 수신 목록에 5020~5119가 없는지
 ④ LAN 쪽 확인             같은 네트워크의 다른 기기에서 호스트 IP의 위 포트로 접속 → 전부 실패
 ⑤ 저장소 인증 확인         비밀번호 없이 psql · redis-cli · clickhouse-client 접속 → 전부 거절

@@ -2,6 +2,7 @@
 
 > **대상**: 부하의 모양 — k6 부하 시나리오 5(Baseline · Ramp-up · Spike · Soak · Breakpoint) + 장애 주입 1(k6 밖) · 부하 단위(수집 부하 · 조회 부하) · 도구별 실행 계층 · 생성기 위치와 CPU 집합 · 주입 모드별 시나리오 대응 · **생성기 포화 판정** · 장애 주입 수단 · 판정 창 · 시나리오 조정값
 > **작성일**: 2026-09-24
+> **개정일**: 2026-09-24 — 측정 머신 전환 · S0 구현 반영 — 부하 도구 실행 위치를 컨테이너 · cpuset 11-12로 · 생성기 위치 CPU 집합을 현행 배치(api 0-4 · datagen 11-12)로
 > **원천**: 원본 tech_stack.md §8 · §10.6 · §14(커밋 ff66a37) · 원본 data_flow.md §11.3(커밋 ff66a37) · 원본 architecture.md §14 · §17(커밋 ff66a37) · 원본 implementation_plan.md §2.4 · §5 S5 · S6(커밋 ff66a37) · docs_plan.md 보정 #18(시나리오 5 + 장애 주입 1) · REQ-GEN-05 · 13 · 15 · REQ-TEC-12 · 13 · [../04_architecture/03_execution_topology.md](../04_architecture/03_execution_topology.md) §cpuset 배치 · [../06_pipeline/10_datagen_inject.md](../06_pipeline/10_datagen_inject.md) §주입 모드
 
 이 문서는 **부하를 어떤 모양으로 거는가**를 고정한다. 무엇을 판정하는지는 [06_experiment_catalog.md](./06_experiment_catalog.md)의 EXP-22~26(시나리오)과 EXP-16~20(장애 재현)이, 실행 규칙은 [04_experiment_protocol.md](./04_experiment_protocol.md)가 갖는다.
@@ -43,12 +44,12 @@
 
 | 도구 | 실행 계층 | 강점 | 약점 | 역할 | 실행 위치 · CPU 집합 |
 |------|------|------|------|------|------|
-| k6 | HTTP · WebSocket | 낮은 자원으로 높은 도착률 · 도착률 실행기 · 클라이언트 쪽 분위수 | 상태가 복잡하면 코드가 는다 | 조회 · CRUD · WebSocket · 모드 C 수집 | 호스트 프로세스 · 16-17(taskset) |
+| k6 | HTTP · WebSocket | 낮은 자원으로 높은 도착률 · 도착률 실행기 · 클라이언트 쪽 분위수 | 상태가 복잡하면 코드가 는다 | 조회 · CRUD · WebSocket · 모드 C 수집 | 컨테이너 · 11-12(cpuset — macOS에 taskset 없음) |
 | 생성기 모드 A · B · D | Node(데이터 평면 모듈) | 실제 페이로드 · 신호 프로파일 · 앱 코드 재사용 | 대상과 같은 CPU를 쓸 수 있다 | 수집 경로 상한 · 격자 채우기 | api 컨테이너(all) 또는 APP_ROLE=datagen 프로세스 — §생성기 위치 |
-| clickhouse-benchmark | ClickHouse 네이티브(9000) | HTTP · 앱 제외 순수 DB | API 경로 미포함 | ClickHouse 단독 상한 | 호스트 · 16-17 |
-| pgbench | PostgreSQL 네이티브 | 상동 | 상동 | PostgreSQL 단독 상한 | 호스트 · 16-17 |
-| redis-benchmark | Redis 네이티브 | 상동 | 상동 | Redis 단독 상한 · ops/s 병목(#5) 대조 | 호스트 · 16-17 |
-| psql · clickhouse-client | 저장소 CLI | 앱이 끼지 않는 대조 쿼리 | 부하 도구가 아니다 | 대조 쿼리 · 판정 SQL | 호스트 · 16-17 |
+| clickhouse-benchmark | ClickHouse 네이티브(9000) | HTTP · 앱 제외 순수 DB | API 경로 미포함 | ClickHouse 단독 상한 | 컨테이너 · 11-12 |
+| pgbench | PostgreSQL 네이티브 | 상동 | 상동 | PostgreSQL 단독 상한 | 컨테이너 · 11-12 |
+| redis-benchmark | Redis 네이티브 | 상동 | 상동 | Redis 단독 상한 · ops/s 병목(#5) 대조 | 컨테이너 · 11-12 |
+| psql · clickhouse-client | 저장소 CLI | 앱이 끼지 않는 대조 쿼리 | 부하 도구가 아니다 | 대조 쿼리 · 판정 SQL | 호스트 CLI 또는 저장소 컨테이너 안 — 부하 도구가 아니라 고정하지 않는다 |
 
 - 검산: 도구 = **6**
 - **네이티브 벤치마크는 시나리오가 아니다.** 앱 경로 없이 저장소 상한을 재어, 시나리오 결과의 병목이 앱인지 저장소인지 가르는 대조값이다 — 같은 조건(프로파일 · cpuset)에서 따로 기록한다.
@@ -58,12 +59,12 @@
 
 | 위치 | CPU 집합 | 오염 | 쓰는 때 |
 |------|------|------|------|
-| api 컨테이너 안(APP_ROLE all) | api와 같은 0-7 | **생성 CPU가 측정 대상 CPU를 먹는다** — 수집 · 적재 · 조회와 이벤트 루프를 나눈다 | S2~S4 기능 확인 · 모드 A(모드 A는 collector와 동거 필수 — ADR-22) |
-| APP_ROLE=datagen 프로세스 | 16-17(k6와 공유) | 측정 대상과 겹치지 않는다 · k6와 겹친다 | S5 모드 B · D 부하 · 격자 채우기 |
+| api 컨테이너 안(APP_ROLE all) | api와 같은 0-4 | **생성 CPU가 측정 대상 CPU를 먹는다** — 수집 · 적재 · 조회와 이벤트 루프를 나눈다 | S2~S4 기능 확인 · 모드 A(모드 A는 collector와 동거 필수 — ADR-22) |
+| APP_ROLE=datagen 프로세스 | 11-12(k6와 공유) | 측정 대상과 겹치지 않는다 · k6와 겹친다 | S5 모드 B · D 부하 · 격자 채우기 |
 
 - 검산: 위치 = **2**
 - **모드 A는 api 안에서만 돈다** — SIM 레지스터 갱신이 프로세스 안 호출이다(ADR-22). 그래서 모드 A 부하의 수치에는 생성 CPU가 늘 섞이고, 그 몫은 gen_worker_utilization으로 기록한다. 모드 A와 모드 B의 처리량 차이 일부는 이 위치 차이다 — 해석에 적는다.
-- **datagen 프로세스의 CPU 집합은 k6 집합(16-17) 공유가 잠정이다.** 두 생성기의 CPU 합을 포화 판정에 넣는다 — 배치 정본 [../04_architecture/03_execution_topology.md](../04_architecture/03_execution_topology.md) §cpuset 배치에 잠정 행으로 올랐다(W6).
+- **datagen 프로세스의 CPU 집합은 k6 집합(11-12) 공유가 잠정이다.** 두 생성기의 CPU 합을 포화 판정에 넣는다 — 배치 정본 [../04_architecture/03_execution_topology.md](../04_architecture/03_execution_topology.md) §cpuset 배치에 잠정 행으로 올랐다(W6).
 
 ## 주입 모드별 시나리오 대응
 
@@ -90,7 +91,7 @@
 ├─ ② 달성 조건 — 실제 발생 부하 = 지정 부하 ────────────────────────── 아니면 창 폐기
 │    k6: 도착률 실행기의 누락 반복(dropped iterations) 0 · 생성기: 발생 pps 대 지정 pps
 ├─ ③ CPU 조건 — 생성기 CPU < 포화 임계 ────────────────────────── 아니면 창 폐기
-│    k6: 16-17 집합 사용률 · 생성기: gen_worker_utilization · datagen 프로세스 CPU
+│    k6: 11-12 집합 사용률 · 생성기: gen_worker_utilization · datagen 프로세스 CPU
 └─ 셋 다 성립 ───────────────────────────────────────────── 신뢰 구간 — 수치 인용 가능
 ```
 

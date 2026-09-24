@@ -1,0 +1,20 @@
+# 개발 프로파일 — Docker 8 GB · 파이프라인 연결 확인 전용 · 성능 수치를 REQ-NFR과 비교하지 않는다
+# 정본: docs/09_tech_stack/04_local_environment.md §컨테이너 메모리 상한 · docs/05_data_stores/06_redis_memory.md
+services:
+  postgres:
+    mem_limit: 1536m
+    volumes:
+      - ../postgres/profile-dev.conf:/etc/postgresql/profile.conf:ro
+
+  clickhouse:
+    mem_limit: 3g
+
+  redis:
+    mem_limit: 1536m
+    command:
+      - redis-server
+      - /usr/local/etc/redis/redis.conf
+      - --requirepass
+      - ${REDIS_PASSWORD:?REDIS_PASSWORD 필요}
+      - --maxmemory
+      - 1gb

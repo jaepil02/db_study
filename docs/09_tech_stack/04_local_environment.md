@@ -2,6 +2,7 @@
 
 > **대상**: 로컬 머신 1대의 요구사항 · 원본 실측 환경(WSL2 · 20스레드 · 가용 RAM) · WSL2 메모리 조정 · **컨테이너 메모리 상한(정본)** · 메모리 프로파일 2 + 조건부 중간 · 대조 실험 메모리 조건 · networkingMode=mirrored · **환경변수 목록(정본)** · 기동 · 정지 · 스냅샷 명령 · 아카이브 위치 · 착수 전 조정
 > **작성일**: 2026-09-24
+> **개정일**: 2026-09-24 — 측정 머신 전환 · S0 구현 반영 — 현행 측정 머신(macOS · Docker Desktop VM vCPU 14) 절 신설 · 머신 요구사항 CPU · 플랫폼 행 갱신 · 접속 문자열 로컬 값 판정(PostgreSQL DB plc · 관리자 postgres · ClickHouse 계정 app)
 > **개정일**: 2026-09-24 — W7 검수 반영 — 원본 가정 칸 머신 RAM · 디스크 → **원본 요구 사양 32 GB · 200 GB**(금지어 명사형 제거 · 뜻 보존) · 미확인 표 웨이브 표지 (W7) 제거
 > **개정일**: 2026-09-24 — W7 보안 판정 반영 — 비밀 환경변수 **9** 등재(비밀 하나 = 변수 하나) · 환경변수 25 → **34** · 접속 문자열 비밀번호 자리는 변수 치환 · 웹 개발 서버 호스트 이름 **127.0.0.1** 명시(정본 12_security/02 · 05)
 > **원천**: 원본 tech_stack.md §10.1 · §10.2 · §10.3 · §10.5(커밋 ff66a37) · 원본 implementation_plan.md §2 · §2.1~§2.5 · §9(커밋 ff66a37) · 원본 architecture.md §3 · §13(커밋 ff66a37) · D-02 · D-10 · ADR-08 · ADR-18 · ADR-22 · REQ-TEC-01 · 04 · 07 · 08 · 13 · 14 · 웨이브 인계 W6 09_tech_stack 행(DATAGEN_BULK_ENABLED 등재 · health run 환경변수 이름 · 컨테이너 메모리 상한) · [../04_architecture/03_execution_topology.md](../04_architecture/03_execution_topology.md) · [../07_api/10_metrics.md](../07_api/10_metrics.md) run 필드 · [../07_api/09_datagen.md](../07_api/09_datagen.md) 게이트 · [../02_features/13_switch_matrix.md](../02_features/13_switch_matrix.md)
@@ -21,11 +22,27 @@
 | Docker 할당 메모리 | 12 GB | 8 GB | 컨테이너 상한 합 + VM 여유 0.5 GB | 상한 합이 VM에 들어가지 않아 VM 안 OOM이 컨테이너를 무작위로 죽인다 |
 | 머신 RAM | 32 GB | 16 GB | Docker 할당 + 호스트 몫 | 호스트 브라우저 · IDE가 스왑을 일으켜 측정 머신 전체가 느려진다 |
 | 디스크 여유 | 용량 티어별 정상 상태 디스크 이상 | 티어 S | 정본 [../04_architecture/07_capacity_planning.md](../04_architecture/07_capacity_planning.md) | 파트 머지가 공간 부족으로 멈추고 삽입이 too many parts로 거절된다 |
-| CPU | 원본 전제 4 vCPU급 · 실측 20스레드 | 상동 | cpuset 배치는 20스레드 머신 전제(04_architecture/03) | 스레드가 적으면 cpuset 배치를 다시 짜고 기록 조건 칸에 적는다 |
-| 실행 플랫폼 | macOS · Linux · Windows WSL2 | 상동 | 원본 전제는 macOS · Linux · 실측은 WSL2 | 해당 없음 — 플랫폼 차이는 §WSL2 mirrored 네트워킹이 다룬다 |
+| CPU | 원본 전제 4 vCPU급 · 원본 실측 20스레드 · **현행 Docker VM vCPU 14** | 상동 | cpuset 배치는 현행 측정 머신 전제(04_architecture/03) | VM vCPU 수가 바뀌면 cpuset 배치를 다시 짜고 기록 조건 칸에 적는다 |
+| 실행 플랫폼 | macOS · Linux · Windows WSL2 | 상동 | 원본 전제는 macOS · Linux · 원본 실측은 WSL2 · **현행 측정 머신은 macOS**(§현행 측정 머신) | 해당 없음 — WSL2 차이는 §WSL2 mirrored 네트워킹이 다룬다 |
 
 - 검산: 요구 항목 = **5**
 - **개발 프로파일은 성능 측정을 하지 않는다.** 목적은 파이프라인 연결 확인이고 용량 티어 S 전용이다(REQ-TEC-07).
+
+## 현행 측정 머신
+
+2026-09-24에 측정 머신을 이 macOS 머신으로 정했다(사용자 결정 — cpuset 배치 재설계 · [../04_architecture/03_execution_topology.md](../04_architecture/03_execution_topology.md) §cpuset 배치). 아래 §원본 실측 환경은 원본이 잰 WSL2 머신의 기록으로 남긴다.
+
+| 항목 | 현행 값(2026-09-24 확인) | 설계 요구 | 영향 | 조치 |
+|------|------|------|------|------|
+| 플랫폼 | macOS · Docker Desktop(엔진 29.5) | 해당 없음 | 컨테이너는 Linux VM 안에서 돈다 · 호스트 프로세스(웹 · 브라우저 · IDE)는 VM 밖 | cpuset은 VM vCPU 번호다 — 호스트 프로세스는 고정할 수 없다 |
+| 머신 CPU · RAM | 14코어 · 48 GB | 부하 실험 32 GB 이상 | 충분 | 없음 |
+| Docker VM vCPU | 14 | cpuset 배치의 전제 | 배치 합 14 | 없음 |
+| **Docker VM 메모리 할당** | **약 7.75 GB** | 부하 실험 12 GB · 개발 8 GB(§머신 요구사항) | **부하 실험 프로파일을 쓸 수 없다** · 개발 프로파일도 상한 합 + 여유(8 GB)에 0.25 GB 모자란다 — S0(저장소 3개 · 합 6.0 GB)은 들어간다 | Docker Desktop 설정에서 메모리를 12.5 GB 이상으로 올린다(부하 실험 11.5 + 여유 0.5 + 부하 도구 컨테이너) |
+| 부하 도구 CPU 고정 | macOS에 taskset 없음 | k6 · 벤치마크 도구를 측정 대상과 다른 CPU 집합에 | 호스트 프로세스로 띄우면 격리가 사라진다 | **k6 · 네이티브 벤치마크는 컨테이너로 띄워 cpuset 11-12에 고정한다** |
+| 레지스트리 자격 증명 | Docker Desktop 자격 증명 도우미가 응답하지 않아 이미지 풀이 멈춘 이력 | 해당 없음 | 공개 이미지 풀 불가 | 공개 이미지는 익명 풀로 받는다 · 도우미 문제는 Docker Desktop 쪽에서 푼다 |
+
+- 검산: 항목 = **6**
+- **메모리 할당이 이 머신의 첫 병목이다.** 원본 실측 머신(가용 15 GB)과 방향은 같다 — 머신 RAM은 충분하지만 Docker VM 할당이 설계 요구보다 작다. 할당을 올리기 전의 수치는 개발 프로파일 수치이며 REQ-NFR과 비교하지 않는다.
 
 ## 원본 실측 환경
 
@@ -149,6 +166,7 @@ swap=8GB
 
 - 검산: 표 행 = **13** · 이름 수 = 1 + 11 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 3 + 9 + 2 = **34** — 스위치 11 + 스위치 밖 23(APP_ROLE · DATAGEN_BULK_ENABLED · MEMORY_PROFILE · CAPACITY_TIER · COMMIT_HASH · NODE_OPTIONS · UV_THREADPOOL_SIZE · WORKER_POOL_SIZE · SIM_FAULT_PLAN · POSTGRES_URL · CLICKHOUSE_URL · REDIS_URL · 비밀 9 · API_BASE_URL · NEXT_PUBLIC_API_BASE_URL) = **34**
 - **이 표에서 이름을 새로 정한 것은 이 문서의 판정이다** — MEMORY_PROFILE · CAPACITY_TIER · COMMIT_HASH(health run 주입 · 인계 W5 07_api 행) · WORKER_POOL_SIZE · SIM_FAULT_PLAN · 접속 3 · 웹 2. 원본 이름은 APP_ROLE · NODE_OPTIONS · UV_THREADPOOL_SIZE이고, DATAGEN_BULK_ENABLED는 07_api/09가, 비밀 9는 W7 보안 리뷰([../12_security/02_secrets_config.md](../12_security/02_secrets_config.md))가 판정했다.
+- **접속 문자열의 로컬 값(판정 2026-09-24)** — PostgreSQL DB 이름 plc(ClickHouse 데이터베이스 plc와 같은 이름) · PostgreSQL 관리자 계정은 이미지 기본 postgres · ClickHouse 계정 이름 app. 셋 다 비밀이 아닌 설계 값이다([../12_security/02_secrets_config.md](../12_security/02_secrets_config.md) §비밀이 아닌 것).
 - **비밀 하나 = 변수 하나다.** migrate는 app_owner 비밀번호를 치환한 접속으로 돌고(api는 이 값을 읽지 않는다 — 런타임이 DDL 권한을 갖지 않게), 역할을 만들 때 APP_RW_PASSWORD · CH_READER_PASSWORD를 읽는다. 저장소 이미지의 초기화 변수 이름은 이미지가 정하므로 Compose 파일이 이 이름을 이미지 변수로 옮긴다.
 - **환경변수는 전부 기동 시 1회만 읽는다.** 전환은 환경변수 변경과 재기동뿐이다(D-06 · ADR-08). 실행 중에 다시 읽는 변수를 하나라도 두면 "재기동 없이 바뀌는 조건"이 생겨 기록의 조건 칸이 실제 실행과 어긋난다.
 - **MEMORY_PROFILE의 값은 프로파일 Compose 파일이 함께 준다.** 사람이 따로 적지 않는다 — 상한과 이름이 한 파일에서 나와야 둘이 어긋나지 않는다(§기동 · 정지 명령).

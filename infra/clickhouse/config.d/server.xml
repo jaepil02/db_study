@@ -1,0 +1,22 @@
+<!--
+  서버 수준 설정 — 정본 docs/05_data_stores/03_clickhouse_schema.md §서버 설정 계약
+  max_concurrent_queries · background_pool_size는 서버 설정이고 parts_to_delay/throw_insert는 merge_tree 절이다.
+  (설계 트리는 이 셋을 users.d/profiles.xml에 두었으나 적용 수준을 이미지의 config.xml로 확인해 서버 쪽에 둔다)
+  TTL 머지 최소 간격(merge_with_ttl_timeout)은 서버 기본값 유지 — 09_tech_stack/03 §TTL 머지 주기
+-->
+<clickhouse>
+    <max_concurrent_queries>32</max_concurrent_queries>
+    <background_pool_size>8</background_pool_size>
+    <merge_tree>
+        <parts_to_delay_insert>150</parts_to_delay_insert>
+        <parts_to_throw_insert>300</parts_to_throw_insert>
+        <!--
+          background_pool_size 8 × background_merges_mutations_concurrency_ratio 2 = 슬롯 16.
+          아래 셋의 기본값(20 · 25 · 8)은 기본 풀 16(슬롯 32)을 전제로 해 슬롯 16을 넘으면 기동을 거부한다(Code 36).
+          기본값의 슬롯 대비 비율(62.5% · 78% · 25%)을 슬롯 16에 옮긴 값이다.
+        -->
+        <number_of_free_entries_in_pool_to_execute_mutation>10</number_of_free_entries_in_pool_to_execute_mutation>
+        <number_of_free_entries_in_pool_to_execute_optimize_entire_partition>12</number_of_free_entries_in_pool_to_execute_optimize_entire_partition>
+        <number_of_free_entries_in_pool_to_lower_max_size_of_merge>4</number_of_free_entries_in_pool_to_lower_max_size_of_merge>
+    </merge_tree>
+</clickhouse>

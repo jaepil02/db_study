@@ -2,6 +2,7 @@
 
 > **대상**: Redis 단일 인스턴스의 Stream 엔트리 단위 설계 · 엔트리 크기와 용량 티어 · maxmemory 산정 · 프로파일별 산정(부하 실험 · 개발 · 중간) · volatile-lru 축출 대상 · **축출 연쇄** · MAXLEN과 maxmemory의 관계(ADR-21) · 컨테이너 상한 여유 · 메모리 측정 계약 — MAXLEN · maxmemory 조정값 정본
 > **작성일**: 2026-09-24
+> **개정일**: 2026-09-24 — 측정 머신 전환 · S0 구현 반영 — 머신 서술을 원본 실측 머신 · 현행 측정 머신으로 가름
 > **개정일**: 2026-09-24 — 최종 정밀 검수 — 합계 행 빈 칸 채움 · 빈 표 칸을 닫힌 어휘 해당 없음으로 · 백프레셔 하강 히스테리시스 행 닫힘(ADR-23)
 > **개정일**: 2026-09-24 — W6 실험 채번 반영 — S6 스풀 도달 문구 정정 · Pub/Sub 한도 소유 · EXP 번호(정본 10_observability/01 · 06)
 > **원천**: 원본 architecture.md §8 · §8.4 · §9.3 · §13 · §15 · §17 · §19(커밋 ff66a37) · 원본 tech_stack.md §5.3 · §10.2(커밋 ff66a37) · 원본 data_flow.md §12.1 · §14.1(커밋 ff66a37) · 원본 implementation_plan.md §2.1 · §2.3(커밋 ff66a37) · ADR-05 · ADR-21 · [05_redis_keyspace.md](./05_redis_keyspace.md) 키 패턴 · [../04_architecture/06_backpressure_failure.md](../04_architecture/06_backpressure_failure.md) 백프레셔 임계
@@ -10,7 +11,7 @@
 
 **아래 수치는 전부 원본 산정이다.** 엔트리 크기 · 캐시 예산은 원본의 어림값이고 실측 전 3계층 미확인이다. MAXLEN · maxmemory는 2계층 조정값이며 **이 문서가 값의 정본**이다. 백프레셔 임계 · 판정량의 정본은 [../04_architecture/06_backpressure_failure.md](../04_architecture/06_backpressure_failure.md), 컨테이너 메모리 상한의 정본은 [../09_tech_stack/04_local_environment.md](../09_tech_stack/04_local_environment.md)다(현행 인용 [../04_architecture/03_execution_topology.md](../04_architecture/03_execution_topology.md)).
 
-**이 머신에서는 메모리가 먼저 걸린다.** 실측 머신은 CPU 20스레드 · 가용 RAM 15 GB로, 원본이 가정한 "CPU 부족 · 메모리 여유"와 반대다(원본 implementation_plan.md §2.1). 병목이 Redis maxmemory 쪽으로 쏠리므로 이 문서의 산정이 학습 목표 ②의 관찰 자리가 된다.
+**이 머신에서는 메모리가 먼저 걸린다.** 원본 실측 머신은 CPU 20스레드 · 가용 RAM 15 GB였고 현행 측정 머신(macOS)도 Docker VM 할당이 설계 요구보다 작다([../09_tech_stack/04_local_environment.md](../09_tech_stack/04_local_environment.md) §현행 측정 머신) — 둘 다 원본이 가정한 "CPU 부족 · 메모리 여유"와 반대다(원본 implementation_plan.md §2.1). 병목이 Redis maxmemory 쪽으로 쏠리므로 이 문서의 산정이 학습 목표 ②의 관찰 자리가 된다.
 
 ## 엔트리 단위 설계
 

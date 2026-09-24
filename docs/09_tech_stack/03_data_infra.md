@@ -2,6 +2,7 @@
 
 > **대상**: 저장소 3종(PostgreSQL · ClickHouse · Redis)의 이미지 · 확장 · 설정 파일의 모양 · ClickHouse 서버 timezone 판정 · pg_partman 미리 만들기 · TTL 머지 주기 · Compose healthcheck와 health 타임아웃의 관계 · **observability 프로파일 구성원 판정(보정 #17)** · **버전 고정표(버전 문자열의 유일한 기재처)**
 > **작성일**: 2026-09-24
+> **개정일**: 2026-09-24 — 측정 머신 전환 · S0 구현 반영 — 관측 스택 cpuset 18-19 → 13(현행 측정 머신 배치) · 저장소 이미지 3행 태그 고정(18.6-alpine · 25.8.33.6 · 8.10.2-alpine — 레지스트리 확인 · 릴리스 노트 대조 대기) · 상태 재확인 대기 24 → **21** · 태그 고정 **3** 신설 · ClickHouse 설정 트리를 실제 적용 수준으로 교정(max_concurrent_queries · background_pool_size 서버 · parts_to_* merge_tree) · pg_partman 공식 이미지 미포함 등재 · ClickHouse 설정 트리에 풀 파생 여유 슬롯 문턱 3 추가
 > **개정일**: 2026-09-24 — 최종 정밀 검수 — §조정값 현행값 → §화면 조정값 현행값(절 이름 교정)
 > **개정일**: 2026-09-24 — W7 보안 판정 반영 — Redis 설정 바인드 · 보호 모드 행에 **requirepass 필수** 명시 · 버전 고정표에 Argon2id 해시 라이브러리 행 추가 35 → **36**(백엔드 12 → **13** · 미고정 10 → **11**)(정본 12_security/01 · 02)
 > **개정일**: 2026-09-24 — W6 실험 채번 반영 — EXP 번호 반영(정본 10_observability/01 · 06)
@@ -74,15 +75,15 @@ infra/postgres/postgresql.conf
 infra/clickhouse/
 ├── config.d/
 │   ├── memory.xml         max_server_memory_usage_to_ram_ratio            ← 05_data_stores/03 소유
-│   ├── merge.xml          background_pool_size · TTL 머지 주기           ← 05_data_stores/03 · 이 문서 §TTL 머지 주기
+│   ├── server.xml         max_concurrent_queries · background_pool_size · merge_tree(parts_to_delay_insert · parts_to_throw_insert · 풀 파생 여유 슬롯 문턱 3) · TTL 머지 주기   ← 05_data_stores/03 · 이 문서 §TTL 머지 주기
 │   ├── timezone.xml       서버 timezone = Asia/Seoul                      ← 이 문서 판정
 │   └── prometheus.xml     내장 메트릭 엔드포인트 9363
 ├── users.d/
-│   └── profiles.xml       max_concurrent_queries · parts_to_delay_insert · parts_to_throw_insert · async_insert · max_insert_block_size · materialized_views_ignore_errors   ← 05_data_stores/03 소유
+│   └── profiles.xml       async_insert · max_insert_block_size · materialized_views_ignore_errors   ← 05_data_stores/03 소유
 └── ddl/                   순번 DDL 001~                                    ← 05_data_stores/09 소유
 ```
 
-- **서버 설정과 사용자 프로파일 설정을 가른다.** 메모리 비율 · 머지 풀 · timezone은 서버 수준이고, 삽입 · 쿼리 제한은 사용자 프로파일 수준이다 — 한 파일에 섞으면 적용 수준이 다른 설정이 조용히 무시된다(어느 쪽이 어느 수준인지는 공식 참조 — 03_requirements/16 W7 등재로 착수 시 재확인).
+- **서버 설정과 사용자 프로파일 설정을 가른다.** 메모리 비율 · 머지 풀 · 동시 쿼리 상한 · timezone은 서버 수준이고, 파트 수 문턱은 서버 설정의 merge_tree 절이며, 삽입 방식 · 블록 크기 · MV 오류 처리는 사용자 프로파일 수준이다 — 한 파일에 섞으면 적용 수준이 다른 설정이 조용히 무시된다. **수준은 25.8.33.6 이미지의 기본 설정 파일로 확인했다(2026-09-24)** — 초판 트리는 동시 쿼리 상한 · 파트 수 문턱을 사용자 프로파일에 두었다.
 - 설정 조각의 이름은 설계 계약이며 파일 이름 형식은 구현이 정한다.
 
 ### 서버 timezone 판정
@@ -169,7 +170,7 @@ docs_plan 실행 계획 보정 #17을 닫는다. 원본 넷이 서로 다른 구
 
 - 검산: 구성원 = **2**
 - **스크레이프 주기 15초는 MetricsModule 수집 주기와 같다**(원본 tech_stack.md §9). 더 짧게 긁으면 같은 값을 두 번 읽을 뿐이고 관측 부하만 는다 — 이 값이 콘솔 폴링 주기 하한의 근거다([01_frontend.md](./01_frontend.md) §화면 조정값 현행값).
-- 두 구성원은 cpuset 18-19에 둔다 — 배치 정본 [../04_architecture/03_execution_topology.md](../04_architecture/03_execution_topology.md) §cpuset 배치.
+- 두 구성원은 cpuset 13에 둔다 — 배치 정본 [../04_architecture/03_execution_topology.md](../04_architecture/03_execution_topology.md) §cpuset 배치.
 
 ## 버전 고정표
 
@@ -180,9 +181,9 @@ docs_plan 실행 계획 보정 #17을 닫는다. 원본 넷이 서로 다른 구
 | 런타임 | Node.js | 22 LTS · 22.15 이상 | 부 버전까지 | api 이미지 · 호스트 웹 · 도구 | 재확인 대기 |
 | 런타임 | api 기반 이미지 | node 22 alpine | 태그 | api 멀티스테이지 빌드 | 재확인 대기 |
 | 런타임 | TypeScript | 원본 미기재 | 부 버전까지 | 전 패키지 | 미고정 |
-| 저장소 | PostgreSQL | 18 alpine | 부 버전 태그 | postgres 서비스 | 재확인 대기 |
-| 저장소 | ClickHouse | 25.8 LTS 이상 | LTS 패치 태그 | clickhouse 서비스 | 재확인 대기 |
-| 저장소 | Redis | 8 alpine | 부 버전 태그 | redis 서비스 | 재확인 대기 |
+| 저장소 | PostgreSQL | 18 alpine | 부 버전 태그 | postgres 서비스 | **태그 고정** 18.6-alpine(레지스트리 확인 2026-09-24 · 릴리스 노트 대조 대기) |
+| 저장소 | ClickHouse | 25.8 LTS 이상 | LTS 패치 태그 | clickhouse 서비스 | **태그 고정** 25.8.33.6(상동) |
+| 저장소 | Redis | 8 alpine | 부 버전 태그 | redis 서비스 | **태그 고정** 8.10.2-alpine(상동) |
 | 저장소 확장 | pg_partman | 원본 미기재 | 부 버전까지 | alarm_event 월 파티션 | 미고정 |
 | 저장소 확장 | pg_stat_statements · auto_explain | PostgreSQL 동봉 | 엔진 버전을 따른다 | 쿼리 통계 · 계획 로깅 | 재확인 대기 |
 | 백엔드 | NestJS | 11.x | 부 버전까지 | api 전체 | 재확인 대기 |
@@ -214,7 +215,7 @@ docs_plan 실행 계획 보정 #17을 닫는다. 원본 넷이 서로 다른 구
 | 관측 | Prometheus | 3.x | 부 버전 태그 | observability 프로파일 | 재확인 대기 |
 | 관측 | Grafana | 12.x | 부 버전 태그 | observability 프로파일 | 재확인 대기 |
 
-- 검산: 행 = 런타임 3 + 저장소 3 + 저장소 확장 2 + 백엔드 13 + 프론트엔드 6 + 공유 1 + 도구 5 + 부하 1 + 관측 2 = **36** · 상태 재확인 대기 24 + 미고정 11 + 해당 없음 1 = **36**
+- 검산: 행 = 런타임 3 + 저장소 3 + 저장소 확장 2 + 백엔드 13 + 프론트엔드 6 + 공유 1 + 도구 5 + 부하 1 + 관측 2 = **36** · 상태 태그 고정 3 + 재확인 대기 21 + 미고정 11 + 해당 없음 1 = **36**
 - **원본 고정표에서 뺀 행 1** — Prisma(원본 "pg + Prisma")는 마이그레이션 도구 판정에서 채택하지 않았다([05_tooling_devops.md](./05_tooling_devops.md) §마이그레이션 도구 판정 · [06_decisions_rationale.md](./06_decisions_rationale.md)). 원본의 pg 행은 남았다.
 - **원본에 없던 행 2** — pg-copy-streams(대조군 COPY가 스트림 복사를 요구) · 보안 헤더 플러그인(원본 tech_stack.md §10.4가 이름만 적음). 둘 다 미고정이다.
 - **고정 단위가 "부 버전까지"인 이유** — 메이저만 고정하면 부 버전 갱신이 설치 시점마다 달라 같은 커밋의 두 설치가 다른 코드를 받는다. 잠금 파일이 패치까지 고정하고, 이 표는 잠금 파일을 갱신할 때 넘지 않을 경계를 준다.
@@ -240,12 +241,13 @@ docs_plan 실행 계획 보정 #17을 닫는다. 원본 넷이 서로 다른 구
 
 | 항목 | 상태 | 확정 자리 |
 |------|------|------|
-| 버전 고정표 전 행의 확정 태그 | 원본 기준 — 착수 시 재확인 전까지 확정 아님 | 이 문서 §버전 고정표 · 착수 체크리스트 7번 |
+| 버전 고정표 전 행의 확정 태그 | 저장소 3행은 레지스트리 태그 확인 뒤 고정 · 릴리스 노트 대조 대기 · 나머지는 원본 기준 — 착수 시 재확인 전까지 확정 아님 | 이 문서 §버전 고정표 · 착수 체크리스트 7번 |
 | alpine 이미지의 시간대 데이터 포함 여부 | 신규 미확인 — Asia/Seoul 이름 해석 가능 여부 | 착수 시 이미지 확인 · 이 문서 |
 | @clickhouse/client의 zstd 요청 압축 지원 | 신규 미확인 — 원본은 "zstd(Node 22.15+) 또는 gzip" | 착수 시 공식 참조 · [02_backend.md](./02_backend.md) |
 | client-output-buffer-limit pubsub 값 | 값 미정 — 계약만(게이트웨이 소켓 한도보다 늦게) | S4 · 이 문서 · [../07_api/11_websocket.md](../07_api/11_websocket.md) 소켓 송신 대기량 한도와 같은 변경 단위 |
 | TTL 파티션 삭제 지연 | 3계층 미확인 — 확정 전 임의 값 고정 금지 | EXP-29 · [../10_observability/06_experiment_catalog.md](../10_observability/06_experiment_catalog.md) |
 | pg_partman 미리 만들기 · 워커 주기의 기본값 | 원본 미기재 · 도구 기본값(4개월 · 1시간으로 알려짐) — 착수 시 공식 참조로 확인 | 이 문서 |
+| pg_partman 설치 경로 | **신규 불일치** — Compose 표는 PostgreSQL 공식 alpine 이미지인데 공식 이미지에 pg_partman이 없다(2026-09-24 이미지 확인). S0은 공식 이미지 그대로 두고 선적재에서 뺐다(사용자 결정) — alarm_event 월 파티션(마이그레이션 004) 전에 파생 이미지로 도입하고 그때 버전을 고정한다 | 마이그레이션 004 착수 시 · 이 문서 · [../04_architecture/03_execution_topology.md](../04_architecture/03_execution_topology.md) |
 | tempo 진입 | 조건부 — SQL · 메트릭 구간 분해 불가가 실측될 때 | [../04_architecture/08_scaling_roadmap.md](../04_architecture/08_scaling_roadmap.md) 진입 조건 추가 제안 |
 
 ## 관련 문서

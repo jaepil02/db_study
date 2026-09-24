@@ -1,0 +1,4 @@
+<!-- 서버 메모리 비율 — 컨테이너 상한(프로파일별)의 비율 · 정본 docs/05_data_stores/03_clickhouse_schema.md §서버 설정 계약 -->
+<clickhouse>
+    <max_server_memory_usage_to_ram_ratio>0.8</max_server_memory_usage_to_ram_ratio>
+</clickhouse>
