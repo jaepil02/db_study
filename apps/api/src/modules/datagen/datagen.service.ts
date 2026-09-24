@@ -1,9 +1,9 @@
-// 생성기 서비스 — 프로세스당 piscina 풀 하나(09_tech_stack/02 §워커 풀) · 창 분할 · 상태 이어받기 · 계측
-import { resolve } from 'node:path';
+// 생성기 서비스 — 프로세스당 piscina 풀 하나를 공유한다(09_tech_stack/02 §워커 풀) · 창 분할 · 상태 이어받기 · 계측
 import { CAPACITY_TIERS, type CapacityTier, SIGNAL_PROFILES, type SignalProfile } from '@db-study/shared';
-import { Inject, Injectable, type OnModuleDestroy } from '@nestjs/common';
-import Piscina from 'piscina';
-import { Counter, Gauge, Registry } from 'prom-client';
+import { Inject, Injectable } from '@nestjs/common';
+import { Counter, Gauge } from 'prom-client';
+import { appRegistry } from '../../common/metrics/registry';
+import { WorkerPool } from '../../common/workers/worker-pool';
 import type { AppConfig } from '../../config/app-config';
 import { APP_CONFIG } from '../../config/config.module';
 import { type ProfileMix, profileFor } from './signal/assignment';
@@ -42,42 +42,36 @@ interface Chunk {
   k: number;
 }
 
+export const genPointsGenerated = new Counter({
+  name: 'gen_points_generated_total',
+  help: '생성 카운트 — 무손실 판정의 분모',
+  labelNames: ['mode', 'profile'],
+  registers: [appRegistry],
+});
+export const genPointsDropout = new Counter({
+  name: 'gen_points_dropout_total',
+  help: 'DROPOUT이 생략한 행',
+  labelNames: ['mode'],
+  registers: [appRegistry],
+});
+// 워커 스레드는 작업 사이에 쉬므로 이벤트 루프 사용률 = 작업 실행 시간 ÷ (경과 × 워커 수)로 잰다
+const genWorkerUtilization = new Gauge({
+  name: 'gen_worker_utilization',
+  help: '생성기 워커 스레드 이벤트 루프 사용률 — 생성기 CPU',
+  labelNames: ['mode'],
+  registers: [appRegistry],
+});
+
 @Injectable()
-export class DatagenService implements OnModuleDestroy {
-  readonly registry = new Registry();
-  private readonly generated = new Counter({
-    name: 'gen_points_generated_total',
-    help: '생성 카운트 — 무손실 판정의 분모',
-    labelNames: ['mode', 'profile'],
-    registers: [this.registry],
-  });
-  private readonly dropout = new Counter({
-    name: 'gen_points_dropout_total',
-    help: 'DROPOUT이 생략한 행',
-    labelNames: ['mode'],
-    registers: [this.registry],
-  });
-  // 워커 스레드는 작업 사이에 쉬므로 이벤트 루프 사용률 = 작업 실행 시간 ÷ (경과 × 워커 수)로 잰다
-  private readonly utilization = new Gauge({
-    name: 'gen_worker_utilization',
-    help: '생성기 워커 스레드 이벤트 루프 사용률 — 생성기 CPU',
-    labelNames: ['mode'],
-    registers: [this.registry],
-  });
-  readonly pool: Piscina;
+export class DatagenService {
+  private readonly generated = genPointsGenerated;
+  private readonly dropout = genPointsDropout;
+  private readonly utilization = genWorkerUtilization;
 
-  constructor(@Inject(APP_CONFIG) readonly cfg: AppConfig) {
-    this.pool = new Piscina({
-      filename: resolve(__dirname, 'worker.js'),
-      minThreads: cfg.workerPoolSize,
-      maxThreads: cfg.workerPoolSize,
-      idleTimeout: 60_000,
-    });
-  }
-
-  async onModuleDestroy() {
-    await this.pool.destroy();
-  }
+  constructor(
+    @Inject(APP_CONFIG) readonly cfg: AppConfig,
+    private readonly workers: WorkerPool,
+  ) {}
 
   /** 티어 · 구성에서 설비 묶음을 만든다 — 태그 배정은 시드로 정해져 묶음 경계와 무관하다 */
   private chunksFor(tier: CapacityTier, mix: ProfileMix, seed: number, count: number): Chunk[] {
@@ -112,7 +106,7 @@ export class DatagenService implements OnModuleDestroy {
     };
     const transferList = c.state ? [c.state.buffer as ArrayBuffer] : [];
     c.state = null; // 소유권이 워커로 간다
-    return this.pool.run(task, { transferList }) as Promise<WindowResult>;
+    return this.workers.pool.run(task, { transferList }) as Promise<WindowResult>;
   }
 
   /**

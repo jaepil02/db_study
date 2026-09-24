@@ -18,3 +18,12 @@ services:
       - ${REDIS_PASSWORD:?REDIS_PASSWORD 필요}
       - --maxmemory
       - 1gb
+
+  api:
+    mem_limit: 1536m
+    environment:
+      MEMORY_PROFILE: dev
+      WORKER_POOL_SIZE: "1"
+      # V8 힙 상한은 컨테이너 상한보다 낮게 — OOM Killer보다 GC 압박이 먼저 신호를 낸다(04_architecture/03)
+      NODE_OPTIONS: --max-old-space-size=1024
+      UV_THREADPOOL_SIZE: "8"

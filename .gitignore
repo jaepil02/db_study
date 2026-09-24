@@ -4,3 +4,4 @@ snapshots/
 node_modules/
 dist/
 *.tsbuildinfo
+.next/

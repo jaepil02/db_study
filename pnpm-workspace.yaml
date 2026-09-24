@@ -4,6 +4,8 @@ packages:
 
 # 의존성 빌드 스크립트 허용 목록 — 결정하지 않은 항목이 있으면 pnpm이 설치를 거부한다.
 # msgpackr-extract(msgpackr의 선택적 네이티브 해제 가속기)는 끈다 — 호스트와 컨테이너가 같은 순수 JS 경로로 돈다.
-# 해제 성능이 측정 변수가 되는 S2(Ingest)에서 다시 판정한다.
+# S2 재판정 — 끔 유지: 슬라이스 · 티어 S의 해제 부하는 병목이 아니고, 두 실행 경로가 같아야 E2E 기준선이 호스트 · 컨테이너에서 같은 코드를 잰다.
+# @serialport/bindings-cpp(modbus-serial의 직렬 포트 네이티브 바인딩)도 끈다 — Collector는 Modbus TCP만 쓴다.
 allowBuilds:
+  '@serialport/bindings-cpp': false
   msgpackr-extract: false

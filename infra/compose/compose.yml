@@ -1,4 +1,4 @@
-# db_study 기본 정의 — S0 저장소 3개(api 컨테이너는 S1 이후 코드가 생기면 추가)
+# db_study 기본 정의 — 저장소 3개(S0) + api 1(S2) · 웹은 호스트 프로세스(Compose 밖)
 # 정본: docs/04_architecture/03_execution_topology.md(서비스 · 포트 · 볼륨 · CPU 가중 · cpuset)
 #       docs/09_tech_stack/03_data_infra.md(버전 고정표 · 설정 파일 · healthcheck)
 # 프로파일(메모리 상한 · 프로파일별 설정)은 덮어쓰기 파일 하나로 고른다:
@@ -19,9 +19,9 @@ services:
       - ../postgres/postgresql.conf:/etc/postgresql/postgresql.conf:ro
     ports:
       - "127.0.0.1:5432:5432"
-    # 애플리케이션 계정(app_rw)은 migrate가 만든다 — 그 전까지는 관리자 계정으로 확인한다
+    # pg_isready는 인증하지 않는다 — 애플리케이션 계정(app_rw)은 migrate가 만들지만 그 전에도 이 확인은 성립한다
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres -d plc"]
+      test: ["CMD-SHELL", "pg_isready -U app_rw -d plc"]
       interval: 5s
       timeout: 3s
       retries: 10
@@ -86,7 +86,57 @@ services:
     cpu_shares: 512
     cpuset: "0-4"
 
+  api:
+    # 로컬 빌드 — 커밋 해시는 빌드 인자로만 준다(09_tech_stack/04 · task up이 git 해시를 넘긴다)
+    build:
+      context: ../..
+      dockerfile: apps/api/Dockerfile
+      args:
+        COMMIT_HASH: ${COMMIT_HASH:-}
+    image: db_study-api:${COMMIT_HASH:-dev}
+    restart: unless-stopped
+    environment:
+      APP_ROLE: ${APP_ROLE:-all}
+      POSTGRES_URL: ${POSTGRES_URL:?POSTGRES_URL 필요}
+      CLICKHOUSE_URL: ${CLICKHOUSE_URL:?CLICKHOUSE_URL 필요}
+      REDIS_URL: ${REDIS_URL:?REDIS_URL 필요}
+      REDIS_STREAM_BUFFER: ${REDIS_STREAM_BUFFER:-on}
+      REDIS_LATEST_CACHE: ${REDIS_LATEST_CACHE:-on}
+      REDIS_QUERY_CACHE: ${REDIS_QUERY_CACHE:-on}
+      CACHE_KEY_TIME_SNAP: ${CACHE_KEY_TIME_SNAP:-on}
+      CACHE_STAMPEDE_LOCK: ${CACHE_STAMPEDE_LOCK:-on}
+      REDIS_PUBSUB_FANOUT: ${REDIS_PUBSUB_FANOUT:-on}
+      WS_THROTTLE_MS: ${WS_THROTTLE_MS:-100}
+      INGEST_IDEMPOTENCY: ${INGEST_IDEMPOTENCY:-on}
+      CONTROL_TABLE_ENABLED: ${CONTROL_TABLE_ENABLED:-off}
+      COLLECTOR_DEADBAND: ${COLLECTOR_DEADBAND:-off}
+      LATEST_VALUE_WRITER: ${LATEST_VALUE_WRITER:-ingest}
+      CAPACITY_TIER: ${CAPACITY_TIER:-}
+      TZ: Asia/Seoul
+      # MEMORY_PROFILE · WORKER_POOL_SIZE · NODE_OPTIONS · UV_THREADPOOL_SIZE는 프로파일 덮어쓰기 파일이 준다 — 상한과 이름이 한 파일에서 나온다
+    volumes:
+      - spooldata:/app/spool
+    ports:
+      - "127.0.0.1:3000:3000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      clickhouse:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    # 관계식 — timeout 3초 > health 저장소 타임아웃 1,000 ms(병렬) · 정본 09_tech_stack/03 §Compose healthcheck와 health 타임아웃
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO /dev/null http://127.0.0.1:3000/api/v1/health || exit 1"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 30s
+    cpu_shares: 1536
+    cpuset: "0-4"
+
 volumes:
   pgdata:
   chdata:
   redisdata:
+  spooldata:

@@ -1,3 +1,4 @@
+export * from './api';
 export * from './codec';
 export * from './enums';
 export * from './stream-entry';

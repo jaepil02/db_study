@@ -1,7 +1,10 @@
 # db_study 작업 정의 — 정본 docs/09_tech_stack/05_tooling_devops.md §Taskfile 작업
-# 작업 6(migrate · seed · snapshot · restore · bench · docs:lint) 중 S0 배정분 3개만 둔다.
-# migrate · seed(S3) · bench(S5)는 그 단계에서 더한다(docs/01_overview/05_priorities_roadmap.md §코드 착수 항목).
+# 작업 6(migrate · seed · snapshot · restore · bench · docs:lint) 중 S0 3 + S2 2(migrate · seed)를 둔다 · bench(S5)는 그 단계에서.
+# S2 보조 작업: api-build · up — 기동 순서(04_architecture/03): 저장소 healthy → migrate → seed(빈 볼륨) → api healthy.
 version: '3'
+
+# 비밀은 .env에서 읽어 명령 환경으로만 넘긴다 — migrate가 관리자 · app_owner 비밀번호를 쓴다(12_security/02)
+dotenv: ['.env']
 
 vars:
   PROJECT: db_study
@@ -11,7 +14,13 @@ vars:
   # 볼륨 보관 도구 — 버전 고정표에 이미 있는 태그 고정 이미지를 쓴다(busybox tar) · 소유자 번호는 --numeric-owner로 보존한다
   TAR_IMAGE: postgres:18.6-alpine
   COMPOSE: docker compose --env-file .env -f infra/compose/compose.yml
+  # 메모리 프로파일 — load(기본) · dev · mid. 덮어쓰기 파일 하나가 상한 · MEMORY_PROFILE · 워커 수를 함께 준다(09_tech_stack/04)
+  PROFILE: '{{.PROFILE | default "load"}}'
+  COMPOSE_P: '{{.COMPOSE}} -f infra/compose/compose.{{.PROFILE}}.yml'
   HEALTH_TIMEOUT: 120
+  # 이미지에 들어가는 것 전부가 커밋돼 있을 때만 커밋 해시를 빌드 인자로 준다 — 아니면 null(그 기동의 측정은 인용 불가)
+  CLEAN_HASH:
+    sh: 'if [ -z "$(git status --porcelain -- apps packages infra/postgres/migrations infra/clickhouse/ddl package.json pnpm-lock.yaml pnpm-workspace.yaml tsconfig.base.json .dockerignore)" ]; then git rev-parse --short HEAD; fi'
 
 tasks:
   snapshot:
@@ -107,6 +116,54 @@ tasks:
           if [ "$(date +%s)" -ge "$deadline" ]; then echo "healthy 대기 {{.HEALTH_TIMEOUT}}초 초과" >&2; exit 1; fi
           sleep 2
         done
+
+  api-build:
+    desc: api 이미지 빌드 — 작업 트리가 깨끗하면 커밋 해시를 빌드 인자로(health run.commitHash) · 아니면 null
+    cmds:
+      - 'COMMIT_HASH={{.CLEAN_HASH}} {{.COMPOSE_P}} build api'
+      - 'echo "api 이미지 — COMMIT_HASH={{if .CLEAN_HASH}}{{.CLEAN_HASH}}{{else}}(null · 미커밋 변경 있음){{end}}"'
+
+  migrate:
+    desc: PostgreSQL 순번 마이그레이션 → ClickHouse DDL 순번(멱등) — 저장소 3 healthy 뒤
+    deps: [api-build]
+    cmds:
+      - >-
+        COMMIT_HASH={{.CLEAN_HASH}} {{.COMPOSE_P}} run --rm --no-deps
+        -e POSTGRES_ADMIN_PASSWORD -e APP_OWNER_PASSWORD -e APP_RW_PASSWORD -e CH_READER_PASSWORD
+        api node dist/db/migrate.js
+
+  seed:
+    desc: '마스터 시드 — 빈 볼륨 전용 · 사용: task seed -- --slice s2 | task seed -- --tier S'
+    cmds:
+      - 'COMMIT_HASH={{.CLEAN_HASH}} {{.COMPOSE_P}} run --rm --no-deps api node dist/db/seed.js {{.CLI_ARGS}}'
+
+  up:
+    desc: '전 구성 기동 — 저장소 → migrate → (SEED가 있으면 seed) → api healthy · 사용: task up [PROFILE=load] [SEED="--slice s2"]'
+    cmds:
+      - '{{.COMPOSE_P}} up -d postgres clickhouse redis'
+      - task: wait-healthy
+      - task: migrate
+      - |
+        {{if .SEED}}COMMIT_HASH={{.CLEAN_HASH}} {{.COMPOSE_P}} run --rm --no-deps api node dist/db/seed.js {{.SEED}}{{else}}echo "seed 생략 — SEED 없음"{{end}}
+      - 'COMMIT_HASH={{.CLEAN_HASH}} {{.COMPOSE_P}} up -d --no-deps api'
+      - task: wait-api
+
+  wait-api:
+    internal: true
+    cmds:
+      - |
+        deadline=$(( $(date +%s) + {{.HEALTH_TIMEOUT}} ))
+        while :; do
+          st=$(docker inspect -f '{{"{{"}}.State.Health.Status{{"}}"}}' "{{.PROJECT}}-api-1" 2>/dev/null || true)
+          if [ "$st" = healthy ]; then echo "api healthy"; break; fi
+          if [ "$(date +%s)" -ge "$deadline" ]; then echo "api healthy 대기 {{.HEALTH_TIMEOUT}}초 초과" >&2; exit 1; fi
+          sleep 2
+        done
+
+  test-surface:
+    desc: 표면 계약 테스트 — 떠 있는 api(127.0.0.1:3000)에 블랙박스로 붙는다(task up 뒤)
+    cmds:
+      - SURFACE_BASE_URL=http://127.0.0.1:3000 pnpm --filter @db-study/api exec vitest run test/surface.test.ts
 
   docs:lint:
     desc: 문서군 기계 검사(읽기 전용) — 인자는 task docs:lint -- --final 처럼 넘긴다
