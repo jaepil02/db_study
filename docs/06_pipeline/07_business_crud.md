@@ -2,6 +2,8 @@
 
 > **대상**: F-05 흐름의 기전 정본 — 읽기 · 쓰기 경로 · BFF 경유 기준 · **캐시 무효화 체인 6단(ADR-12)의 단계 번호 정본** · 도메인별 체인 적용 · 작업지시 no-store · 층별 옛 값의 창 · 체인 실패와 degrade · 인증 흐름의 BFF 경유 · 감사 트랜잭션
 > **작성일**: 2026-09-24
+> **개정일**: 2026-09-24 — W6 실험 채번 반영 — 메트릭 이름 · EXP 번호 반영(정본 10_observability/01 · 06)
+> **개정일**: 2026-09-24 — W6 판정 반영 — staleTime 설정값 미정을 닫는다(09_tech_stack/01 파생표) · BFF revalidate 현행 30초 소유 09_tech_stack/01 — 체인 단 수 불변
 > **개정일**: 2026-09-24 — W5 판정 반영 — 미확인 "⑥ 신호 키 → 브라우저 쿼리 키 대응"을 닫는다(08_screen/01 §무효화 신호 수신 — 신호 키 4 · staleTime 관계식) · staleTime 값만 09_tech_stack/01(W6)에 남는다 — 체인 단 수 불변
 > **개정일**: 2026-09-24 — W5 판정 반영 — 사이트 · 라인 체인 행의 "사이트 목록 사본" → **Redis 사본 없음**(② · ③ · ⑥ 없음 · ⑤만) · 목록 BFF 경유 행에 사이트 · 라인 · 태그 목록 Redis 사본 부재 명시 — 쓰기 유형 수 불변
 > **원천**: 원본 data_flow.md §7 · §7.1 · §7.2 · §17(커밋 ff66a37) · 원본 architecture.md §10.1 · §11.2 · §12(커밋 ff66a37) · 원본 implementation_plan.md §7.4(커밋 ff66a37) · docs_plan.md 보정 #5 · 웨이브 인계(작업지시 BFF 캐시 키 · 무효화 층별 반영 시간) · ADR-02 · ADR-12 · ADR-16 · ADR-19 · D-04 · REQ-GLB-12 · REQ-MST-01~14 · REQ-WRK-01~09 · REQ-AUT-14 · REQ-ALM-02 · 13 · 14 · REQ-RLT-15 · [../05_data_stores/05_redis_keyspace.md](../05_data_stores/05_redis_keyspace.md) · [../05_data_stores/07_cross_store_consistency.md](../05_data_stores/07_cross_store_consistency.md) §즉시 반영
@@ -124,7 +126,7 @@ W3 판정(cache:workorders Hash · BFF no-store)의 기전이다.
 |------|------|------|------|
 | Redis cache 계열 | 커밋 직후 0 — 응답 전에 지운다 | TTL까지(현행 참고 600초) | TTL · 소유 [../05_data_stores/05_redis_keyspace.md](../05_data_stores/05_redis_keyspace.md) |
 | ClickHouse Dictionary | 응답 뒤 재적재 시간 | LIFETIME 최대(현행 참고 600초 · 원본 예상치 최대 10분) | LIFETIME · 소유 [../05_data_stores/03_clickhouse_schema.md](../05_data_stores/03_clickhouse_schema.md) |
-| BFF 서버 fetch 캐시 | BFF 경유 쓰기면 0 | revalidate 창(현행 참고 30초) | [../09_tech_stack/01_frontend.md](../09_tech_stack/01_frontend.md)(W6) |
+| BFF 서버 fetch 캐시 | BFF 경유 쓰기면 0 | revalidate 창(현행 참고 30초) | [../09_tech_stack/01_frontend.md](../09_tech_stack/01_frontend.md) |
 | 브라우저 쿼리 캐시 | 신호 도달 시간 | staleTime | 상동 |
 | 시계열 조회 캐시(cache:q) | **체인 대상 아님** — 결과에 붙은 이름이 TTL만큼 옛 이름 | 상동 | 완전 과거 TTL · [06_timeseries_read.md](./06_timeseries_read.md) |
 
@@ -164,11 +166,11 @@ W3 판정(cache:workorders Hash · BFF no-store)의 기전이다.
 
 | 항목 | 상태 | 확정 자리 |
 |------|------|------|
-| 층별 반영 시간 · CRUD p95 | 3계층 미확인 — 원본 예상치 Dictionary 최대 10분(④ 생략 시) · BFF 최대 30초 · CRUD 원본 목표 100 ms | EXP(W6 채번) · REQ-NFR-09 |
-| ⑥ 신호 키 → 브라우저 쿼리 키 대응 · staleTime 값 | **대응은 닫힘**(W5 — 신호 키 4 · staleTime은 가장 가까운 서버 층 수명 하한과 같다는 관계식) · staleTime 설정값만 미정 | [../08_screen/01_standards.md](../08_screen/01_standards.md) §무효화 신호 수신 · [../09_tech_stack/01_frontend.md](../09_tech_stack/01_frontend.md)(W6) |
+| 층별 반영 시간 · CRUD p95 | 3계층 미확인 — 원본 예상치 Dictionary 최대 10분(④ 생략 시) · BFF 최대 30초 · CRUD 원본 목표 100 ms | EXP-29(AC-06) · EXP-36 · REQ-NFR-09 |
+| ⑥ 신호 키 → 브라우저 쿼리 키 대응 · staleTime 값 | **대응은 닫힘**(W5 — 신호 키 4 · staleTime은 가장 가까운 서버 층 수명 하한과 같다는 관계식) · staleTime 설정값 **W6 판정**(관계식 파생표 — 240 · 24 · 30 · 60 · 0초) | [../08_screen/01_standards.md](../08_screen/01_standards.md) §무효화 신호 수신 · [../09_tech_stack/01_frontend.md](../09_tech_stack/01_frontend.md)(W6) |
 | BFF를 거치지 않은 쓰기의 ⑤ 누락 | 잔여 — revalidate 창만큼 | 한계 등재(W4 반영) |
 | 체인 번호 표기 통일(5단 → 6단) | 대응표로 읽는다 | W4 반영 |
-| 캐시 삭제 · 재적재 · 발행 실패 계수 이름 | 미정 | [../10_observability/01_metrics_catalog.md](../10_observability/01_metrics_catalog.md)(W6) |
+| 캐시 삭제 · 재적재 · 발행 실패 계수 이름 | **W6 판정** — mst_cache_delete_failures_total · mst_dict_reloads_total{result} · rlt_publish_failures_total{channel} | [../10_observability/01_metrics_catalog.md](../10_observability/01_metrics_catalog.md) |
 
 ## 관련 문서
 

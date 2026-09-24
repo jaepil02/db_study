@@ -2,6 +2,7 @@
 
 > **대상**: 용량 티어 S · M · M+ · L의 정의와 원본 산정 · 정상 상태 디스크 · 파생 지표(Modbus 요청 · Stream 발행 · 삽입 횟수 · 컨슈머 · 디스크 쓰기) · **보정 7.1과 ADR-09가 무효화한 원본 산정** · 원본 산정이 빠뜨린 저장 객체 · 확정 절차
 > **작성일**: 2026-09-24
+> **개정일**: 2026-09-24 — W6 실험 채번 반영 — EXP 번호 반영(정본 10_observability/01 · 06)
 > **개정일**: 2026-09-24 — W4 판정 반영 — 파생 지표 산술 보정 — 삽입 횟수 M 초당 1회 · M+ 초당 2회 → **2회 유지** · L 초당 10회(현행 R 50,000) · M+ 배치 100,000행 → **50,000행** · Modbus 요청은 시드 data_type이 정한다(FLOAT32면 M 초당 200회) · 지표 상태 의미 변경 1 → **2**
 > **원천**: 원본 architecture.md §7.1 · §8.4 · §15 · §16(커밋 ff66a37) · 원본 data_flow.md §4.1 · §4.2 · §11.2 · §13(커밋 ff66a37) · 원본 tech_stack.md §7 · §10.2(커밋 ff66a37) · 원본 implementation_plan.md §2.1 · §7.1(커밋 ff66a37) · D-05 · D-10 · ADR-09 · ADR-15 · [../README.md](../README.md) 고정 기준(실험 축 — 용량 티어 4) · [../03_requirements/13_nonfunctional.md](../03_requirements/13_nonfunctional.md) REQ-NFR-13 · 14
 
@@ -116,7 +117,7 @@
 
 | 항목 | 상태 | 확정 자리 |
 |------|------|------|
-| 압축 후 행당 크기 · 롤업 행 크기 | 3계층 미확인 — 원본 산정 4 B · 약 9 B | [../10_observability/06_experiment_catalog.md](../10_observability/06_experiment_catalog.md)(W6) |
+| 압축 후 행당 크기 · 롤업 행 크기 | 3계층 미확인 — 원본 산정 4 B · 약 9 B | EXP-35 · [../10_observability/06_experiment_catalog.md](../10_observability/06_experiment_catalog.md) |
 | 티어별 정상 상태 디스크 | 원본 산정 — 미확인 | 상동 |
 | tag_1d · alarm_eval · 대조군 · 관측 스택 디스크 | 미산정 | [../05_data_stores/08_retention_lifecycle.md](../05_data_stores/08_retention_lifecycle.md) · [../05_data_stores/10_olap_vs_rdb_control.md](../05_data_stores/10_olap_vs_rdb_control.md) |
 | 배치당 행 수 상한 · flusher 메모리(M+ · L) | 미확인 — ADR-09로 생긴 새 경계 | [../06_pipeline/03_ingest_batch.md](../06_pipeline/03_ingest_batch.md)(W4) · S5 |

@@ -2,6 +2,8 @@
 
 > **대상**: GEN 도메인 표면 — 모드 C 부하 주입 POST /api/v1/ingest/bulk의 게이트(환경변수 이름) · 인증 · 요청 본문(엔트리 계약 변환) · 백프레셔 거절 datagen.stream_full/503 · 부분 수용 · 레이트 리밋 등급 · **생성기 실행 제어 표면 판정** · **실행 중 주입 제어 표면 필요 여부 판정**
 > **작성일**: 2026-09-24
+> **개정일**: 2026-09-24 — W6 실험 채번 반영 — EXP 번호 · 기록 칸 반영(정본 10_observability/01 · 06)
+> **개정일**: 2026-09-24 — W6 판정 반영 — DATAGEN_BULK_ENABLED를 환경변수 정본(09_tech_stack/04)에 등재했다
 > **원천**: 원본 architecture.md §9.3 · §11 · §18(커밋 ff66a37) · 원본 data_flow.md §11 · §11.1 · §12.1 · §14.1(커밋 ff66a37) · REQ-GEN-02 · 05 · 08 · 09 · 15 · REQ-GLB-10 · 21 · REQ-AUT-16 · ADR-21 · ADR-23 · D-06 · D-07 · [../02_features/05_datagen.md](../02_features/05_datagen.md) GEN-07 · [../02_features/12_permission_matrix.md](../02_features/12_permission_matrix.md) §GEN · OBS 표면 인가 · [../06_pipeline/10_datagen_inject.md](../06_pipeline/10_datagen_inject.md) §모드 C 표면 · §SIM 주입 제어 · [../06_pipeline/12_data_contract.md](../06_pipeline/12_data_contract.md) 3단계 · docs_plan.md 실행 계획 보정 #11 · 웨이브 인계 W5 07_api 행(생성기 실행 제어 · 실행 중 주입 제어)
 
 GEN이 가진 표면은 **하나뿐이다.** 모드 C 부하 주입 표면(GEN-07)이며, 경로에 ingest가 들어 있지만 ING 표면이 아니다 — 호출 주체가 부하 주입이고 거절을 판정하는 것도 ING 소비 루프가 아니라 표면이 XADD 전에 하는 적체 검사다(docs_plan 보정 #11). 그래서 에러 네임스페이스도 datagen이다. 생성 · 모드 A · B · D · 대조군 백필(GEN-01~06 · 08~10)은 실행 인자와 환경변수로 도는 내부 동작이며 표면이 없다.
@@ -129,11 +131,11 @@ GEN이 가진 표면은 **하나뿐이다.** 모드 C 부하 주입 표면(GEN-0
 
 | 항목 | 상태 | 확정 자리 |
 |------|------|------|
-| 요청당 엔트리 상한 · 본문 크기 상한 | 2계층 미정 — 소유 이 문서 · S5 실측으로 정한다 | 이 문서 · [../10_observability/05_load_scenarios.md](../10_observability/05_load_scenarios.md)(W6) |
+| 요청당 엔트리 상한 · 본문 크기 상한 | 2계층 미정 — 소유 이 문서 · S5 실측으로 정한다 | 이 문서 · [../10_observability/05_load_scenarios.md](../10_observability/05_load_scenarios.md) · EXP-37 |
 | 부하 주입 등급 한도 값 · class 이름 | 2계층 미정 — 조건만 이 문서 | [../12_security/03_api_surface_defense.md](../12_security/03_api_surface_defense.md)(W7) |
-| 게이트 상태의 기록 자리 | health 본문에 싣지 않는다(스위치가 아니다) · 모드 C 측정 기록의 실험 조건 칸에 사람이 적는다 | [../10_observability/04_experiment_protocol.md](../10_observability/04_experiment_protocol.md)(W6) |
-| 모드 C 처리량 · 인증 비용 | 3계층 미확인 — 확정 전 임의 값 고정 금지 | [../10_observability/06_experiment_catalog.md](../10_observability/06_experiment_catalog.md)(W6) |
-| 게이트 환경변수 이름 등재 | 이 문서 판정 DATAGEN_BULK_ENABLED — 환경변수 목록 정본 반영 필요 | [../09_tech_stack/04_local_environment.md](../09_tech_stack/04_local_environment.md) · [../12_security/02_secrets_config.md](../12_security/02_secrets_config.md)(W6 · W7) |
+| 게이트 상태의 기록 자리 | health 본문에 싣지 않는다(스위치가 아니다) · 모드 C 측정 기록의 실험 조건 칸에 사람이 적는다 | [../10_observability/04_experiment_protocol.md](../10_observability/04_experiment_protocol.md) §조건 칸(게이트 · SIM 주입 계획) |
+| 모드 C 처리량 · 인증 비용 | 3계층 미확인 — 확정 전 임의 값 고정 금지 · 인증 비용은 S7 기록의 aut_token_verify_seconds | EXP-37 · [../10_observability/06_experiment_catalog.md](../10_observability/06_experiment_catalog.md) |
+| 게이트 환경변수 이름 등재 | 이 문서 판정 DATAGEN_BULK_ENABLED — **W6 등재 완료**(환경변수 정본 · 스위치 목록 밖) · 보안 리뷰는 W7 | [../09_tech_stack/04_local_environment.md](../09_tech_stack/04_local_environment.md) · [../12_security/02_secrets_config.md](../12_security/02_secrets_config.md)(W6 · W7) |
 
 ## 관련 문서
 

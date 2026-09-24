@@ -2,6 +2,7 @@
 
 > **대상**: 수집(COL · NestJS collector 모듈)의 동작 계약 — 정의 로드 · 폴링 · 블록 병합 · 디코딩 · 품질 판정 · SIMULATED 표지 · 데드밴드 · Stream 발행 · 발행량 감축 · 스풀 전환과 재발행 · 관측 — REQ-COL-NN 채번 정본
 > **작성일**: 2026-09-24
+> **개정일**: 2026-09-24 — W6 실험 채번 반영 — 메트릭 이름 반영(정본 10_observability/01 · 06)
 > **개정일**: 2026-09-24 — W4 판정 반영 — REQ-COL-01 기동 로드 원천 → **PostgreSQL** · 실행 중 마스터 변경 재기동 전 미반영 → **ch:cacheinv 반영** · 미확인 4행 W4 판정 반영 — REQ 수 불변
 > **개정일**: 2026-09-24 — W3 판정 반영 — REQ-COL-10 판정량을 XLEN에서 그룹 적체(lag + pending)로 교정(ADR-21)
 > **원천**: 원본 data_flow.md §3 · §3.1 · §3.2 · §3.3 · §12.1 · §12.2 · §14.1 · §15 · §16 · §17(커밋 ff66a37) · 원본 architecture.md §3 · §4 · §8.1 · §9 · §9.3 · §17(커밋 ff66a37) · 원본 tech_stack.md §5.3 · §6(커밋 ff66a37) · 원본 implementation_plan.md §4.1 · §5 S2 · S3 · S6 · §7.2 · §7.5(커밋 ff66a37) · D-08 · [../02_features/03_collector.md](../02_features/03_collector.md) COL-01~09 · [../02_features/13_switch_matrix.md](../02_features/13_switch_matrix.md) SW-01 · SW-10 · [01_global_rules.md](./01_global_rules.md) REQ-GLB-03 · 10 · 18
@@ -97,7 +98,7 @@ COL의 요구가 깨질 때 무엇이 보이는지를 한 표로 모은다. 에�
 | 백프레셔 하강 히스테리시스 | 경고 해제 · 스풀 종료 조건의 떨림 방지 없음 | 상동 |
 | BAD_TIMEOUT "기록"의 자리 | **W4 판정** — 메트릭만 · 행 · 최신값 갱신 없음 | [../06_pipeline/02_collect.md](../06_pipeline/02_collect.md) |
 | FLOAT64 4워드 순서 · 레지스터 비트 BOOL | **W4 판정** — 두 축 조합 · 레지스터 비트 BOOL 미지원 | 상동 |
-| 품질 코드별 계수 · Modbus 왕복 히스토그램의 메트릭 이름 | **신규 미확인** — REQ-COL-15가 요구한다 | [../10_observability/01_metrics_catalog.md](../10_observability/01_metrics_catalog.md)(W6) |
+| 품질 코드별 계수 · Modbus 왕복 히스토그램의 메트릭 이름 | **W6 판정** — col_points_by_quality_total · col_modbus_rtt_seconds | [../10_observability/01_metrics_catalog.md](../10_observability/01_metrics_catalog.md) |
 | 폴링 주기 여유 · Modbus 왕복 지연 | 3계층 미확인 — 미확인 · 확정 전 임의 값 고정 금지. 원본 목표(4 vCPU 가정) Modbus 왕복 p95 30 ms | [13_nonfunctional.md](./13_nonfunctional.md) REQ-NFR-04 |
 
 ## 관련 문서

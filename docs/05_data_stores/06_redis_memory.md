@@ -2,6 +2,7 @@
 
 > **대상**: Redis 단일 인스턴스의 Stream 엔트리 단위 설계 · 엔트리 크기와 용량 티어 · maxmemory 산정 · 프로파일별 산정(부하 실험 · 개발 · 중간) · volatile-lru 축출 대상 · **축출 연쇄** · MAXLEN과 maxmemory의 관계(ADR-21) · 컨테이너 상한 여유 · 메모리 측정 계약 — MAXLEN · maxmemory 조정값 정본
 > **작성일**: 2026-09-24
+> **개정일**: 2026-09-24 — W6 실험 채번 반영 — S6 스풀 도달 문구 정정 · Pub/Sub 한도 소유 · EXP 번호(정본 10_observability/01 · 06)
 > **원천**: 원본 architecture.md §8 · §8.4 · §9.3 · §13 · §15 · §17 · §19(커밋 ff66a37) · 원본 tech_stack.md §5.3 · §10.2(커밋 ff66a37) · 원본 data_flow.md §12.1 · §14.1(커밋 ff66a37) · 원본 implementation_plan.md §2.1 · §2.3(커밋 ff66a37) · ADR-05 · ADR-21 · [05_redis_keyspace.md](./05_redis_keyspace.md) 키 패턴 · [../04_architecture/06_backpressure_failure.md](../04_architecture/06_backpressure_failure.md) 백프레셔 임계
 
 단일 인스턴스의 메모리는 **봉인 계열(축출 불가)과 캐시 계열(축출 가능)의 합**으로 산정한다. 봉인 계열의 상한을 캐시 예산 바깥에 먼저 떼어 두면 수집이 폭주해도 세션 · 조회 캐시가 밀려나지 않고, 그 상한을 넘기 전에 애플리케이션이 백프레셔를 건다(ADR-21). 이 문서는 그 산정과, 산정이 깨졌을 때 한 인스턴스 안에서 벌어지는 **축출 연쇄**를 고정한다.
@@ -36,7 +37,7 @@ Stream 엔트리를 포인트 단위가 아니라 **스캔 사이클 단위**로
 
 - 검산: 티어 = **4**(S · M · M+ · L) · 용량 티어 정본 [../04_architecture/07_capacity_planning.md](../04_architecture/07_capacity_planning.md)
 - **A형 — M 티어에서는 Stream이 1.4 GB에 닿지 않는다.** 통념은 "MAXLEN 200000 = 1.4 GB"이다. 그러나 1.4 GB는 태그 500 엔트리(L 구성)의 값이고, M 티어의 엔트리는 약 2.8 KB라 MAXLEN에 닿아도 약 0.56 GB다. 진짜 축은 엔트리 수가 아니라 **엔트리 수 × 설비당 태그 수**다. 대체 경로 — 축출 연쇄 실험(§축출 연쇄)은 태그 500 설비로 생성하거나 maxmemory를 엔트리 크기에 맞춰 낮춰야 재현된다.
-- **마지막 열이 "ClickHouse가 몇 분 멈춰도 되는가"다.** 소비가 멈추면 미확인 적체(그룹 lag + pending)가 발행 속도로 늘고, 위험 임계(현행 180,000 · 부하 실험 프로파일)까지의 시간이 스풀 전환 전 흡수 창이다. S6의 "ClickHouse 5분 중단" 실험은 M+ · L에서 스풀 전환까지 가고 M에서는 가지 않는다.
+- **마지막 열이 "ClickHouse가 몇 분 멈춰도 되는가"다.** 소비가 멈추면 미확인 적체(그룹 lag + pending)가 발행 속도로 늘고, 위험 임계(현행 180,000 · 부하 실험 프로파일)까지의 시간이 스풀 전환 전 흡수 창이다. S6의 "ClickHouse 5분 중단" 실험은 **L에서만** 스풀 전환까지 간다 — M+는 5분에 150,000(500 × 300)이라 위험 임계 180,000에 닿지 않고 6분이 필요하며, M은 약 1시간이 걸린다(W6 정정). 스풀 경로 관찰은 삽입 지연 유발 실험(EXP-20)이 맡는다.
 - **정상 운전에서도 Stream은 MAXLEN까지 찬다.** XACK는 엔트리를 PEL에서 뺄 뿐 Stream에서 지우지 않아, 확인된 엔트리가 트리밍 전까지 남는다(판정 정본 [../04_architecture/06_backpressure_failure.md](../04_architecture/06_backpressure_failure.md) §판정량). 그래서 발행 누적이 MAXLEN에 닿은 뒤(M 티어 약 67분 · 200,000 ÷ 50)로는 Stream 점유 메모리가 **상시 MAXLEN × 엔트리 크기**다 — 이 표의 메모리 열은 최악이 아니라 정상 상태 값이다.
 
 ## maxmemory 산정 — 부하 실험 프로파일
@@ -155,7 +156,7 @@ ADR-21의 메모리 쪽 계약이다. 세 장치가 서로 다른 순서로 걸�
 
 - 검산: 항목 = **4** · maxmemory 밖 3 + 안 1
 - **appendonly yes(fsync everysec)는 Stream 내구성 우선의 선택이다.** 캐시 키까지 AOF에 쓰이는 비용은 감수한다 — 재기동 뒤 미소비 엔트리와 PEL이 남아야 at-least-once가 성립한다(원본 tech_stack.md §5.3 · REQ-TEC-06).
-- **Pub/Sub 출력 버퍼는 maxmemory 안의 숨은 소비자다.** 구독자가 게이트웨이 하나뿐이라 그 소켓이 막히면 버퍼 한도까지 쌓인다 — 한도 값은 미확인이며 [../10_observability/01_metrics_catalog.md](../10_observability/01_metrics_catalog.md)(W6) 인계 항목이다.
+- **Pub/Sub 출력 버퍼는 maxmemory 안의 숨은 소비자다.** 구독자가 게이트웨이 하나뿐이라 그 소켓이 막히면 버퍼 한도까지 쌓인다 — 한도 값의 소유는 [../09_tech_stack/03_data_infra.md](../09_tech_stack/03_data_infra.md)(W6)이고 한도 접근 메트릭(redis_client_output_buffer_bytes · rlt_subscriber_disconnects_total)은 [../10_observability/01_metrics_catalog.md](../10_observability/01_metrics_catalog.md)다.
 
 ## 메모리 측정 계약
 
@@ -177,11 +178,11 @@ ADR-21의 메모리 쪽 계약이다. 세 장치가 서로 다른 순서로 걸�
 
 | 항목 | 상태 | 확정 자리 |
 |------|------|------|
-| 엔트리 실제 크기 · 태그당 바이트 | 3계층 미확인 — 원본 산정 약 7 KB(태그 500) · 도출 약 14 B/태그. 7 KB 엔트리는 Stream 노드 기본 크기를 넘어 노드당 엔트리 1이 될 수 있다 — 오버헤드 미확인 | S1 · S5 실측 · [../10_observability/06_experiment_catalog.md](../10_observability/06_experiment_catalog.md)(W6) |
+| 엔트리 실제 크기 · 태그당 바이트 | 3계층 미확인 — 원본 산정 약 7 KB(태그 500) · 도출 약 14 B/태그. 7 KB 엔트리는 Stream 노드 기본 크기를 넘어 노드당 엔트리 1이 될 수 있다 — 오버헤드 미확인 | S1 · S5 실측 · EXP-39 · [../10_observability/06_experiment_catalog.md](../10_observability/06_experiment_catalog.md) |
 | 캐시 계열 실제 점유 | 원본 산정 약 0.4 GB | 상동 |
 | DLQ MAXLEN의 프로파일별 값 | 원본 한 값(10000)뿐 | 이 문서 — S3 DLQ 실험 뒤 |
-| Pub/Sub 출력 버퍼 한도 | 미확인 | [../10_observability/01_metrics_catalog.md](../10_observability/01_metrics_catalog.md)(W6) |
-| 축출 시작 시점 · 히트율 하락 곡선 | 3계층 미확인 — 확정 전 임의 값 고정 금지 | 축출 연쇄 실험(W6 채번) |
+| Pub/Sub 출력 버퍼 한도 | 값 소유 이전(W6) — S4 확정 | [../09_tech_stack/03_data_infra.md](../09_tech_stack/03_data_infra.md) · 메트릭 [../10_observability/01_metrics_catalog.md](../10_observability/01_metrics_catalog.md) |
+| 축출 시작 시점 · 히트율 하락 곡선 | 3계층 미확인 — 확정 전 임의 값 고정 금지 | 축출 연쇄 실험 EXP-18 |
 | 백프레셔 하강 히스테리시스 | 메모리 쪽 영향 없음 — 임계 정본의 몫 | [../04_architecture/06_backpressure_failure.md](../04_architecture/06_backpressure_failure.md) |
 
 ## 관련 문서

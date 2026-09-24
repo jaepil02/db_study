@@ -2,6 +2,8 @@
 
 > **대상**: ClickHouse 객체 9(테이블 5 · MV 3 · Dictionary 1)의 목록과 원시 · 판정 테이블 tag_raw · alarm_eval DDL · 코덱 · 파티션 · 정렬 키(ADR-15) · 중복 제거(ADR-14) · 시각 컬럼 시간대 표기 통일 · dict_tag DDL · 품질 코드 컬럼 판정 · 서버 설정 계약
 > **작성일**: 2026-09-24
+> **개정일**: 2026-09-24 — W6 실험 채번 반영 — 실험 자리 W6 결과 반영(정본 10_observability/01 · 06)
+> **개정일**: 2026-09-24 — W6 판정 반영 — 서버 timezone 미확인 → **Asia/Seoul**(정본 09_tech_stack/03) · 스키마는 여전히 서버 설정에 기대지 않는다 — 설정 수 불변
 > **개정일**: 2026-09-24 — W4 판정 반영 — Dictionary 즉시 반영 단 번호 ③ → **④**(무효화 체인 6단 표기)
 > **원천**: 원본 architecture.md §5 · §7.1 · §7.3 · §7.4 · §7.5 · §12 · §15(커밋 ff66a37) · 원본 tech_stack.md §5.2(커밋 ff66a37) · 원본 data_flow.md §4 · §4.3 · §11.2 · §14.1 · §14.2(커밋 ff66a37) · docs_plan.md 보정 #16 · 웨이브 인계(ingested_at · alarm_eval.ts 시간대 표기 통일) · ADR-03 · ADR-14 · ADR-15 · ADR-16 · [../11_glossary/05_units_and_time.md](../11_glossary/05_units_and_time.md) 시각 의미론 정본
 
@@ -116,7 +118,7 @@ docs_plan 보정 #16의 W3 몫 "ingested_at · alarm_eval.ts 시간대 표기 �
 | tag_1m · tag_1h · tag_1d | bucket | DateTime(인자 없음) | **DateTime('Asia/Seoul')** | 월 · 년 파티션 · 상위 롤업 버킷 — [04_clickhouse_rollup.md](./04_clickhouse_rollup.md) |
 
 - 검산: 시각 컬럼 = ts · ingested_at · alarm_eval.ts · bucket 3 = **6** · 인자를 새로 단 컬럼 5
-- **시간대를 명시하면 서버 timezone 설정이 스키마에서 빠진다.** 인자 없는 컬럼의 달력 경계는 서버 설정을 따르는데 그 설정은 미확인이다([../09_tech_stack/03_data_infra.md](../09_tech_stack/03_data_infra.md) W6). 서버가 UTC로 기동하면 alarm_eval 파티션이 KST 09:00에 갈리고 tag_1m 월 파티션이 KST 1일 09:00에 넘어간다 — 컬럼에 박으면 서버 설정과 무관해진다.
+- **시간대를 명시하면 서버 timezone 설정이 스키마에서 빠진다.** 인자 없는 컬럼의 달력 경계는 서버 설정을 따른다 — W6이 서버 timezone을 Asia/Seoul로 판정했지만([../09_tech_stack/03_data_infra.md](../09_tech_stack/03_data_infra.md)) 스키마는 그 값에 기대지 않는다. 서버가 UTC로 기동하면 alarm_eval 파티션이 KST 09:00에 갈리고 tag_1m 월 파티션이 KST 1일 09:00에 넘어간다 — 컬럼에 박으면 서버 설정과 무관해진다.
 - **적재는 시각을 epoch 정수로 보낸다.** 정수는 정밀도 3에 맞춘 epoch ms로 해석되어 파싱에 시간대가 개입하지 않는다. 문자열로 보내면 컬럼 시간대로 파싱되어 보내는 쪽 시간대와 어긋난다.
 - **달력 경계 시간대 Asia/Seoul은 시스템 단일 값이다.** PostgreSQL alarm_event 월 파티션 경계 · site.timezone CHECK · tag_1d 하루가 같은 값을 쓴다([02_postgresql_constraints.md](./02_postgresql_constraints.md) · [01_postgresql_schema.md](./01_postgresql_schema.md)).
 
@@ -190,7 +192,7 @@ LIFETIME(MIN 300 MAX 600);
 
 ## 서버 설정 계약
 
-**이 표의 현행 참고가 값의 정본이다**([../04_architecture/03_execution_topology.md](../04_architecture/03_execution_topology.md) §메모리 프로파일이 ClickHouse 내부 설정의 소유처로 이 문서를 가리킨다). 서버 timezone만 [../09_tech_stack/03_data_infra.md](../09_tech_stack/03_data_infra.md)(W6)가 확정하며, 설정 파일의 모양도 그 문서가 갖는다(원본 architecture.md §7.5 · 부하 실험 프로파일 참고값).
+**이 표의 현행 참고가 값의 정본이다**([../04_architecture/03_execution_topology.md](../04_architecture/03_execution_topology.md) §메모리 프로파일이 ClickHouse 내부 설정의 소유처로 이 문서를 가리킨다). 서버 timezone만 [../09_tech_stack/03_data_infra.md](../09_tech_stack/03_data_infra.md)가 확정하며(W6 판정 — Asia/Seoul), 설정 파일의 모양도 그 문서가 갖는다(원본 architecture.md §7.5 · 부하 실험 프로파일 참고값).
 
 | 설정 | 현행 참고 | 스키마 쪽 계약 | 어기면 |
 |------|------|------|------|
@@ -201,7 +203,7 @@ LIFETIME(MIN 300 MAX 600);
 | async_insert | 0 | 적재는 단일 flusher 배치(ADR-09) · C안 비교 실험에서만 켠다 | 켜 둔 채 A안을 재면 서버 병합이 섞여 세 안 비교가 무효 |
 | max_insert_block_size | 1048576 | 대량 배치 삽입 | |
 | materialized_views_ignore_errors | 0(끔) | MV 실패를 삽입 오류로 드러낸다(REQ-ING-16) | 켜면 원시는 있고 롤업은 빈 구간이 오류 없이 남는다 |
-| 서버 timezone | 미확인(W6) | **스키마는 의존하지 않는다** — 모든 시각 컬럼에 시간대 명시 | |
+| 서버 timezone | **Asia/Seoul**(W6 판정) | **스키마는 의존하지 않는다** — 모든 시각 컬럼에 시간대 명시 | |
 
 - 검산: 설정 = 원본 6 + 신설 2(materialized_views_ignore_errors · 서버 timezone 의존 부정) = **8** · 원본 merge_tree.merge_max_block_size(8192 · 기본값)는 스키마 쪽 계약이 없어 뺐다
 - 접속 프로토콜 — api는 HTTP 8123만 쓰고 네이티브 9000은 CLI · 벤치마크 전용이다(원본 tech_stack.md §5.2). 삽입 형식은 JSONCompactEachRow + 요청 압축이다(REQ-ING-05).
@@ -212,8 +214,8 @@ LIFETIME(MIN 300 MAX 600);
 |------|------|------|
 | 원시 삽입 성공 · MV 실패 뒤 같은 토큰 재시도가 MV를 다시 실행하는가 | **신규 미확인** — 원시가 중복 제거되면 종속 MV 삽입이 함께 건너뛰어질 수 있다(deduplicate_blocks_in_dependent_materialized_views 동작 · 버전 종속). 건너뛰면 롤업 공백이 재시도로 메워지지 않는다 | S0 저장소 수동 실습 실측 · [../06_pipeline/09_rollup.md](../06_pipeline/09_rollup.md)(W4) |
 | 압축률(프로파일별) · 코덱 대안 효과 | 3계층 미확인 — 확정 전 임의 값 고정 금지. 원본 예상치 혼합 8~15배 · RANDOM_WALK 2~4배 | [../03_requirements/13_nonfunctional.md](../03_requirements/13_nonfunctional.md) REQ-NFR-14 |
-| 서버 timezone 설정 | 스키마는 의존하지 않는다 — 수동 쿼리 표시에만 영향 | [../09_tech_stack/03_data_infra.md](../09_tech_stack/03_data_infra.md)(W6) |
-| index_granularity 4096 실험 | 원본 실험 후보 | [../10_observability/06_experiment_catalog.md](../10_observability/06_experiment_catalog.md)(W6) |
+| 서버 timezone 설정 | **W6 판정 — Asia/Seoul** · 스키마는 의존하지 않는다 — 수동 쿼리 · 시스템 테이블 표시에만 영향 | [../09_tech_stack/03_data_infra.md](../09_tech_stack/03_data_infra.md) |
+| index_granularity 4096 실험 | 원본 실험 후보 — **W6 미채번**(카탈로그 39에 없다 · 필요해지면 EXP-40부터 말미 채번) | [../10_observability/06_experiment_catalog.md](../10_observability/06_experiment_catalog.md) |
 | 대량 태그 시 Dictionary 레이아웃 전환 | 원본 "수만 행을 넘으면 LIFETIME 확대 또는 CACHE 레이아웃" — 비활성 포함 적재로 행 수가 단조 증가한다 | [07_cross_store_consistency.md](./07_cross_store_consistency.md) |
 
 ## 관련 문서

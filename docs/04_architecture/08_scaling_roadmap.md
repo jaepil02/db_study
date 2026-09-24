@@ -2,6 +2,8 @@
 
 > **대상**: 확장 4단계(역할 분리 · api 다중 인스턴스 · Redis 분리 · 큐 교체) · **실측 진입 조건(정본)** · 단계별 교체 대상과 불변 경계 · 진입 기록 계약 · 삭제한 단계와 이유 · 로드맵 밖 조건부 분리
 > **작성일**: 2026-09-24
+> **개정일**: 2026-09-24 — W6 실험 채번 반영 — Stream 점유 메모리 메트릭 · EXP 번호(정본 10_observability/01 · 06)
+> **개정일**: 2026-09-24 — W6 판정 반영 — 미확인 등재에 분산 추적(tempo) 진입 조건 행 신설
 > **원천**: 원본 architecture.md §8.4 · §13 · §17 · §19(커밋 ff66a37) · 원본 tech_stack.md §1 · §3.4 · §5.1 · §5.3 · §10.6 · §13(커밋 ff66a37) · 원본 data_flow.md §4.2 · §9 · §12.1 · §16(커밋 ff66a37) · 원본 implementation_plan.md §5 S6(커밋 ff66a37) · D-02 · ADR-04 · ADR-05 · ADR-06 · ADR-07 · ADR-19 · ADR-21 · ADR-22 · [../03_requirements/01_global_rules.md](../03_requirements/01_global_rules.md) REQ-GLB-22 · [../01_overview/02_goals_scope.md](../01_overview/02_goals_scope.md) §조건부 범위
 
 현재 구성은 **컨테이너 4개 — api 1 + 저장소 3**이다. 확장은 네 단계이며 **각 단계는 실측 진입 조건으로만 들어간다**(루트 README 고정 기준 · REQ-GLB-22). 추측으로 단계를 앞당기면 무엇이 병목이었는지 배울 수 없고, 분리 전 기준선이 없어 분리의 효과를 잴 수 없다. **진입 조건 값의 정본은 이 문서다.**
@@ -133,7 +135,8 @@
 | 단계 1~3 진입 조건의 현행 값 · 관측 창 | 3계층 미확인 — 원본 목표만 있다 | S5 · S6 기준선 실측 후 이 문서 |
 | 역할 분리 시 컨테이너별 메모리 · CPU 배분 | 미설계 | 1단계 진입 시 [03_execution_topology.md](./03_execution_topology.md) |
 | 4단계에서 백프레셔 1차 신호 · 스풀의 의미 | 미설계 — 단계 진입 시 재판정 | ADR-21 |
-| 3단계 진입 판정의 Stream 점유 메모리 산출 | 미확인 — 키 접두별 샘플링 추정 | [../10_observability/01_metrics_catalog.md](../10_observability/01_metrics_catalog.md)(W6) · [../05_data_stores/06_redis_memory.md](../05_data_stores/06_redis_memory.md) |
+| **분산 추적(tempo) 도입** | **W6 판정** — 현 범위 밖 · 진입 조건은 SQL(ingested_at − ts)과 구간 메트릭으로 구간 분해가 불가능하다는 실측 · 도입 시 추적 SDK on/off를 다른 측정 조건으로 기록한다 · 확장 단계가 아니라 관측 구성원 추가다 | [../09_tech_stack/03_data_infra.md](../09_tech_stack/03_data_infra.md) §observability 프로파일 구성원 판정 |
+| 3단계 진입 판정의 Stream 점유 메모리 산출 | **W6 판정** — redis_prefix_memory_bytes{prefix="stream"}(stream 키 직접 측정) · 역상관 판독은 EXP-18 | [../10_observability/01_metrics_catalog.md](../10_observability/01_metrics_catalog.md) · [../05_data_stores/06_redis_memory.md](../05_data_stores/06_redis_memory.md) |
 
 ## 관련 문서
 

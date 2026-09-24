@@ -2,6 +2,7 @@
 
 > **대상**: db_study의 기술 결정 — ADR-01~25 · 결정 색인 · 분류 검산 · 상태 · 원본 보정 5건 대응 · D-NN과의 경계 — ADR-NN 채번 정본
 > **작성일**: 2026-09-24
+> **개정일**: 2026-09-24 — W6 실험 채번 반영 — 후속 판정 등재 W6 결과 반영(정본 10_observability/01 · 06)
 > **개정일**: 2026-09-24 — W4 판정 반영 — ADR-09 파급 산술 보정 — M · M+ 모두 초당 1회 → **M 초당 1회 · M+ 초당 2회 · L 초당 10회**(현행 R 50,000) · M+ 배치 100,000행 → **50,000행** — ADR 수 · 상태 불변
 > **원천**: 원본 tech_stack.md §1 · §2 · §3 · §4.1 · §5 · §10 · §13(커밋 ff66a37) · 원본 architecture.md §1 · §3 · §4 · §6 · §7.1 · §7.4 · §8 · §9 · §12 · §14 · §17 · §19(커밋 ff66a37) · 원본 data_flow.md §4 · §7 · §8 · §9 · §12.1(커밋 ff66a37) · 원본 implementation_plan.md §2.3 · §4.3 · §7(커밋 ff66a37) · D-01~D-12([../01_overview/06_design_decisions.md](../01_overview/06_design_decisions.md)) · [README.md](./README.md) ADR 선점표 · docs_plan 학습 목표 1 · 웨이브 인계 W3 행
 
@@ -125,7 +126,7 @@
 - **맥락**: Ingest · Alarm의 발행자와 WebSocket 게이트웨이가 같은 프로세스에 있어 직접 호출이 더 빠르다(원본 architecture.md §8.2 · 원본 data_flow.md §9).
 - **결정**: 실시간 값(ch:rt)과 알람 이벤트(ch:alarm)는 **Pub/Sub을 지난다.** 마스터 무효화 신호(ch:cacheinv)도 같은 채널 계층이다. Pub/Sub은 저장이 아니라 표시 전용이며 저장은 별도 경로(ClickHouse)가 맡는다.
 - **버린 대안**: ① **게이트웨이 직접 호출** — api 다중 인스턴스(확장 2단계)에서 다른 인스턴스에 붙은 소켓이 값을 받지 못해 팬아웃 코드를 새로 써야 한다(SW-06 off의 측정 경로가 이것이다). ② **팬아웃도 Stream** — 전달 보장이 필요 없는 표시 데이터에 PEL · XACK · 인스턴스별 컨슈머 그룹을 얹어 메모리와 코드만 늘고, 재연결 공백은 REST 최신값 동기화로 이미 메워진다. ③ **Socket.IO 어댑터** — 고빈도 푸시에 프로토콜 오버헤드가 붙어 스로틀 효과 측정에 라이브러리 비용이 섞인다.
-- **파급**: 대가는 loopback 1홉(원본 예상치 1 ms 미만)이다. 느린 구독자는 출력 버퍼 한도로 끊는다 — 한도 값은 [../10_observability/01_metrics_catalog.md](../10_observability/01_metrics_catalog.md)(W6) 미확인. SW-06의 대상 채널은 ch:rt · ch:alarm뿐이다([02_module_boundaries.md](./02_module_boundaries.md)).
+- **파급**: 대가는 loopback 1홉(원본 예상치 1 ms 미만)이다. 느린 구독자는 출력 버퍼 한도로 끊는다 — 한도 값의 소유는 [../09_tech_stack/03_data_infra.md](../09_tech_stack/03_data_infra.md)(W6)다. SW-06의 대상 채널은 ch:rt · ch:alarm뿐이다([02_module_boundaries.md](./02_module_boundaries.md)).
 
 ## ADR-08 — 역할 스위치는 DI 포트 · 구현 둘
 
@@ -224,7 +225,7 @@
 - **맥락**: 버퍼가 차면 조용히 버리지 말고 실패시켜야 한다. Redis에는 두 한계가 있다 — MAXLEN 트리밍(오류 없이 오래된 엔트리를 버린다)과 maxmemory(캐시를 축출하고 결국 OOM). 원본은 1차 신호를 "Collector의 XLEN 검사"로 적었다(원본 architecture.md §9.3 · 원본 data_flow.md §12.1).
 - **결정**: ① **1차 신호는 발행자(Collector · 모드 B · 모드 C)가 발행 전에 하는 적체 검사**다. ② **판정량은 원시 XLEN이 아니라 컨슈머 그룹의 미확인 적체(그룹 lag + pending)**다 — 확인된 엔트리는 MAXLEN까지 남아 XLEN은 정상 운전에서도 상한으로 차오른다. ③ 걸리는 순서는 **위험 임계 < MAXLEN < maxmemory**다 — MAXLEN × 엔트리 크기 + 캐시 예산이 maxmemory 안에 들게 산정해 Stream이 세션 · 토큰을 밀어내지 않게 한다. ④ MAXLEN 트리밍은 검사를 우회한 발행자를 막는 최후 안전장치이며 미소비분이 잘리면 결함으로 계측한다.
 - **버린 대안**: ① **XLEN으로 단계 판정(원본 문구)** — 정상 운전에서 발행 누적이 MAXLEN × 90%에 닿는 순간(M 티어 원본 산정 약 한 시간) 적체 없이 위험 단계에 들어가 스풀로 전환하고, 이후 모든 수집이 스풀을 거친다. ② **Redis OOM을 1차 신호로** — Stream이 캐시 · 세션 예산을 다 먹은 뒤에야 신호가 와서 그 전에 사용자가 로그아웃된다. ③ **MAXLEN 트리밍에 맡김** — 오류 없이 미소비 엔트리가 잘려 유실을 인지하지 못한 채 틀린 처리량 수치를 얻는다. ④ **발행자 일부만 검사** — 검사하지 않는 발행자가 곧 우회 발행자가 되어 트리밍이 그 몫을 조용히 자른다.
-- **파급**: 임계는 MAXLEN 비율로 정의한다([06_backpressure_failure.md](./06_backpressure_failure.md) §프로파일별 임계). Stream 점유 메모리가 적체가 아니라 충전량을 따르므로 **축출 연쇄 실험과 확장 3단계 진입 조건의 해석이 바뀐다** — [../05_data_stores/06_redis_memory.md](../05_data_stores/06_redis_memory.md) 반영 대상. 컨슈머 랙 산출식의 정본 판정은 [../10_observability/01_metrics_catalog.md](../10_observability/01_metrics_catalog.md)(W6)이며 이 결정과 같은 변경 단위에서 맞춘다. Kafka 전환(확장 4단계) 때 재판정한다.
+- **파급**: 임계는 MAXLEN 비율로 정의한다([06_backpressure_failure.md](./06_backpressure_failure.md) §프로파일별 임계). Stream 점유 메모리가 적체가 아니라 충전량을 따르므로 **축출 연쇄 실험과 확장 3단계 진입 조건의 해석이 바뀐다** — [../05_data_stores/06_redis_memory.md](../05_data_stores/06_redis_memory.md) 반영 대상. 컨슈머 랙 산출식의 정본 판정은 [../10_observability/01_metrics_catalog.md](../10_observability/01_metrics_catalog.md)이며 W6이 이 결정의 판정량과 같은 양(그룹 lag + pending)으로 닫았다. Kafka 전환(확장 4단계) 때 재판정한다.
 
 ## ADR-22 — APP_ROLE 역할 배정
 
@@ -245,7 +246,7 @@
 - **맥락**: 경고 단계의 반응은 "Collector가 데드밴드를 임시 강화해 발행량 감축"인데, 데드밴드 스위치 SW-10의 기본은 off(데드밴드 0)다. 데드밴드가 꺼진 상태에서 "강화"의 뜻이 원본에 없다(웨이브 인계 W3 행 · COL-08).
 - **결정**: **데드밴드 강화는 SW-10 on에서만 동작한다.** SW-10 off면 경고 단계의 발행량 감축은 무동작이고 deadband_boost_active는 0에 머물며 단계 진입만 계측한다. 강화는 태그별 설정값에 **계수를 곱하는** 형태다(가산 아님 · 설정 0인 태그는 강화돼도 0).
 - **버린 대안**: ① **경고 단계 동안 태그 설정값 적용(스위치 무시)** — 측정 기록의 스위치 상태는 off인데 행이 걸러져 **같은 조건이라 믿은 두 측정의 행 수가 다르다**(D-08의 실패가 백프레셔 도달 여부에 따라 조용히 생긴다). 무손실 판정도 거짓 유실을 낸다. ② **전역 기본 데드밴드** — 공학 단위가 다른 태그에 한 값을 적용해 어떤 태그는 무의미하고 어떤 태그는 전부 차단된다. ③ **가산 강화** — 같은 문제가 설정값이 있는 태그에서도 생긴다.
-- **파급**: 개발 · 측정 기본 구성에서 경고 단계 반응이 비지만 위험 단계 스풀이 최종 방어라 유실이 없다. S6에서 경고 반응을 보려면 SW-10 on으로 따로 실행하고 무손실 판정에서 데드밴드 생략분을 뺀다 — 생략분 메트릭은 [../10_observability/01_metrics_catalog.md](../10_observability/01_metrics_catalog.md)(W6) 신설 대상. COL-08 · 02_features/13 미확인 행을 닫는다 — 리드 반영.
+- **파급**: 개발 · 측정 기본 구성에서 경고 단계 반응이 비지만 위험 단계 스풀이 최종 방어라 유실이 없다. S6에서 경고 반응을 보려면 SW-10 on으로 따로 실행하고 무손실 판정에서 데드밴드 생략분을 뺀다 — 생략분 메트릭은 col_deadband_skipped_total([../10_observability/01_metrics_catalog.md](../10_observability/01_metrics_catalog.md)). COL-08 · 02_features/13 미확인 행을 닫는다 — 리드 반영.
 
 ## ADR-25 — CPU 바운드 작업은 piscina worker_threads로 격리
 
@@ -284,8 +285,8 @@ ADR이 결정을 내렸지만 값이나 인접 판정이 남은 자리다.
 | ADR-09 | B · C안 비교 결과 · fan-in 배치 토큰 재료 | S3 실측 · [../06_pipeline/03_ingest_batch.md](../06_pipeline/03_ingest_batch.md)(W4) |
 | ADR-10 | 최종안 · 확정 뒤 SW-11 기본값 · 존속 | S6 실측 · [../02_features/13_switch_matrix.md](../02_features/13_switch_matrix.md)(리드) |
 | ADR-11 | 판정을 flusher와 같은 흐름에서 기다리는가 · 판정 구간 예산 | [../06_pipeline/08_alarm.md](../06_pipeline/08_alarm.md)(W4) · 실측 |
-| ADR-17 | 대조 실험 자원 동일화 값 · 구간 count 대조 절차 | [../05_data_stores/10_olap_vs_rdb_control.md](../05_data_stores/10_olap_vs_rdb_control.md)(W3) · [../10_observability/04_experiment_protocol.md](../10_observability/04_experiment_protocol.md)(W6) |
-| ADR-21 | 컨슈머 랙 산출식 · Stream 점유 메모리 해석 | [../10_observability/01_metrics_catalog.md](../10_observability/01_metrics_catalog.md)(W6) · [../05_data_stores/06_redis_memory.md](../05_data_stores/06_redis_memory.md)(W3) |
+| ADR-17 | 대조 실험 자원 동일화 값 · 구간 count 대조 절차 | [../05_data_stores/10_olap_vs_rdb_control.md](../05_data_stores/10_olap_vs_rdb_control.md)(W3) · [../10_observability/04_experiment_protocol.md](../10_observability/04_experiment_protocol.md) — 메모리 3.5 · 3.5 GB · 구간 count 대조는 격자 단계 ②(W6 닫힘) |
+| ADR-21 | 컨슈머 랙 산출식 · Stream 점유 메모리 해석 | **W6 닫힘** — lag + pending · 점유 메모리 = redis_prefix_memory_bytes · [../10_observability/01_metrics_catalog.md](../10_observability/01_metrics_catalog.md) · [../05_data_stores/06_redis_memory.md](../05_data_stores/06_redis_memory.md)(W3) |
 | ADR-23 · ADR-24 | 히스테리시스 폭 · 유지 시간 · 강화 계수 | S6 실측 · [06_backpressure_failure.md](./06_backpressure_failure.md) |
 
 - 검산: 등재 행 = **6**

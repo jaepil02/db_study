@@ -2,6 +2,7 @@
 
 > **대상**: 수집 → 조회 가능까지의 구간별 p95 예산 · 구간 경계(측정 시작 · 끝 시각) · 지배 구간과 플러시 주기 트레이드오프 · **ADR-09 반영 시 구간 변화** · 조회 경로 예산 · **알람 판정 구간 신설** · 측정 지점 · 로컬 해석 규칙
 > **작성일**: 2026-09-24
+> **개정일**: 2026-09-24 — W6 실험 채번 반영 — 메트릭 이름 · EXP 번호 반영(정본 10_observability/01 · 06)
 > **개정일**: 2026-09-24 — W4 판정 반영 — Stream 대기 시작점 통일 기록(REQ-ING-18 · 11_glossary/05) · M+ 이상 행 트리거 지배 · 판정 인계 깊이 1 판정 반영(미설계 → **판정**)
 > **원천**: 원본 data_flow.md §4 · §4.1 · §4.2 · §8 · §9.1 · §15 · §16(커밋 ff66a37) · 원본 architecture.md §9.1 · §15 · §16(커밋 ff66a37) · 원본 implementation_plan.md §7.1 · §7.3(커밋 ff66a37) · 원본 tech_stack.md §10.6(커밋 ff66a37) · ADR-09 · ADR-11 · ADR-25 · [../03_requirements/13_nonfunctional.md](../03_requirements/13_nonfunctional.md) REQ-NFR-03 · 04 · 07 · 08 · 09 · 15 · [../11_glossary/05_units_and_time.md](../11_glossary/05_units_and_time.md)
 
@@ -32,7 +33,7 @@ M 티어 정상 상태의 원본 구간이다. 누적은 원본 목표를 더한
 
 ### 구간 경계 판정 — Stream 대기의 시작점
 
-원본 측정식은 Stream 대기를 "XREADGROUP 수신 시각 − 엔트리 t0"로 적었다(원본 data_flow.md §15). **t0은 스캔 사이클의 기준 시각(폴링 시점)이라 이 식은 #2~#5를 Stream 대기에 함께 센다.** 판정 — **Stream 대기의 시작점은 엔트리 ID의 밀리초 부분(Redis가 XADD를 받은 시각)이다.** 컨테이너들이 호스트 시계를 공유하므로 Redis 시각과 api 시각을 같은 축에서 뺄 수 있다. 원본 식을 쓰면 Modbus 지연이 늘어난 실험에서 Stream 대기가 늘어난 것으로 보여 **플러시 주기를 줄이는 잘못된 튜닝**으로 이어진다. 히스토그램 이름의 정본은 [../10_observability/01_metrics_catalog.md](../10_observability/01_metrics_catalog.md)(W6)다. REQ-ING-18 · [../11_glossary/05_units_and_time.md](../11_glossary/05_units_and_time.md)의 옛 식(수신 − t0)은 W4에서 이 시작점으로 통일했다.
+원본 측정식은 Stream 대기를 "XREADGROUP 수신 시각 − 엔트리 t0"로 적었다(원본 data_flow.md §15). **t0은 스캔 사이클의 기준 시각(폴링 시점)이라 이 식은 #2~#5를 Stream 대기에 함께 센다.** 판정 — **Stream 대기의 시작점은 엔트리 ID의 밀리초 부분(Redis가 XADD를 받은 시각)이다.** 컨테이너들이 호스트 시계를 공유하므로 Redis 시각과 api 시각을 같은 축에서 뺄 수 있다. 원본 식을 쓰면 Modbus 지연이 늘어난 실험에서 Stream 대기가 늘어난 것으로 보여 **플러시 주기를 줄이는 잘못된 튜닝**으로 이어진다. 히스토그램 이름의 정본은 [../10_observability/01_metrics_catalog.md](../10_observability/01_metrics_catalog.md)다 — 6a ing_stream_residence_seconds(W6). REQ-ING-18 · [../11_glossary/05_units_and_time.md](../11_glossary/05_units_and_time.md)의 옛 식(수신 − t0)은 W4에서 이 시작점으로 통일했다.
 
 ## 지배 구간 — Stream 대기와 플러시 주기
 
@@ -103,7 +104,7 @@ api는 한 프로세스라 수집 · 적재 · 판정 · 조회가 같은 이벤
 
 | 경합 원인 | 영향받는 구간 | 격리 수단 | 판정 지표 | 넘으면 |
 |------|------|------|------|------|
-| 디코딩 · MessagePack 해제 | 6b · 조회 전 경로 | piscina 워커(ADR-25) | nodejs_eventloop_lag p95 | 역할 분리 진입 조건 검토 |
+| 디코딩 · MessagePack 해제 | 6b · 조회 전 경로 | piscina 워커(ADR-25) | nodejs_eventloop_lag_p95_seconds | 역할 분리 진입 조건 검토 |
 | LTTB 다운샘플 · gzip | 시계열 조회 | 상동 | 상동 | 상동 |
 | 판정 조건 평가 | A3 · 조회 전 경로 | 배치 단위 평가 · 필요 시 워커 | 상동 | 상동 |
 | WebSocket 팬아웃 | Pub/Sub → WebSocket | 스로틀 병합(SW-07) | 상동 | 스로틀 창 확대 → 역할 분리 후 api 증설 |
@@ -122,7 +123,7 @@ api는 한 프로세스라 수집 · 적재 · 판정 · 조회가 같은 이벤
 | **E2E 지연** | **ClickHouse에서 ingested_at − ts의 분위수** | 주기 쿼리 → 게이지(OBS-04) | E2E |
 | 알람 판정 | 판정 호출 · 마지막 쓰기 완료 시각 차 | Alarm 히스토그램 | 판정 구간 · A1~A6 |
 | API 지연 | 요청 · 응답 시각 차 | 미들웨어 히스토그램 | 조회 경로 5 |
-| 이벤트 루프 지연 | nodejs_eventloop_lag | /metrics 기본 메트릭 | 전 구간 계수 |
+| 이벤트 루프 지연 | nodejs_eventloop_lag_seconds · p95는 nodejs_eventloop_lag_p95_seconds | /metrics 기본 메트릭 + p95 게이지 | 전 구간 계수 |
 
 - 검산: 측정 지점 = **8**
 - **E2E를 두 컬럼의 차로 설계한 것이 이 예산의 핵심이다.** 별도 추적 시스템 없이 SQL 한 줄로 파이프라인 전체의 건강을 본다 — 이 컬럼 차가 없으면 E2E를 한 번에 잴 방법이 분산 추적뿐이고, 그것은 선택 프로파일이다.
@@ -157,11 +158,11 @@ WHERE ts > now() - INTERVAL 5 MINUTE
 
 | 항목 | 상태 | 확정 자리 |
 |------|------|------|
-| 구간 #1~#9 · E2E · 조회 경로 5의 현행 목표 | 3계층 미확인 — 미확인 · 확정 전 임의 값 고정 금지 | [../10_observability/06_experiment_catalog.md](../10_observability/06_experiment_catalog.md)(W6) · [../03_requirements/13_nonfunctional.md](../03_requirements/13_nonfunctional.md) |
+| 구간 #1~#9 · E2E · 조회 경로 5의 현행 목표 | 3계층 미확인 — 미확인 · 확정 전 임의 값 고정 금지 | EXP-30 · [../10_observability/06_experiment_catalog.md](../10_observability/06_experiment_catalog.md) · [../03_requirements/13_nonfunctional.md](../03_requirements/13_nonfunctional.md) |
 | 알람 판정 구간 · A1~A6 · 알람 통지 지연 | **신설 · 미확인** | 상동 |
 | 6a · 6b · 6c 분할 목표 | 신설 · 미확인 — 원본은 #6 하나로 셌다 | 상동 · S3 배치 세 안 비교 |
 | 판정을 flusher와 같은 흐름에서 기다리는가 | **W4 판정** — 직렬 판정기 · 인계 깊이 1 | [../06_pipeline/08_alarm.md](../06_pipeline/08_alarm.md)(W4) |
-| 히스토그램 · 게이지 메트릭 이름 | 미정 | [../10_observability/01_metrics_catalog.md](../10_observability/01_metrics_catalog.md)(W6) |
+| 히스토그램 · 게이지 메트릭 이름 | **W6 판정** — col_modbus_rtt_seconds · ing_stream_residence_seconds · ing_decode_seconds · ing_fanin_wait_seconds · insert_duration · alm_eval_duration_seconds{phase} · e2e_latency | [../10_observability/01_metrics_catalog.md](../10_observability/01_metrics_catalog.md) |
 
 ## 관련 문서
 

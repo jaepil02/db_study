@@ -2,6 +2,7 @@
 
 > **대상**: 백프레셔 5단계 · **판정량(미확인 적체)** · **프로파일별 임계(2계층 조정값 정본)** · **하강 히스테리시스 판정** · MAXLEN과 maxmemory의 관계 · **SW-10 off일 때 경고 단계 데드밴드 강화의 의미 판정** · 장애 시나리오 10 · degrade 원칙 · **ClickHouse 중단 시 최신값 정지**
 > **작성일**: 2026-09-24
+> **개정일**: 2026-09-24 — W6 실험 채번 반영 — 컨슈머 랙 판정 · 메트릭 이름 · EXP 번호 반영(정본 10_observability/01 · 06)
 > **개정일**: 2026-09-24 — W4 판정 반영 — 장애 #1 ClickHouse 중단에 **알람 판정 정지** 추가 · 복구 중 rt:latest 순서 역전 · DLQ 재처리 경로 미확인 → **W4 판정** — 시나리오 수 불변
 > **원천**: 원본 architecture.md §1 · §8 · §8.4 · §9.2 · §9.3 · §13 · §17(커밋 ff66a37) · 원본 data_flow.md §5 · §12.1~§12.4 · §13(커밋 ff66a37) · 원본 tech_stack.md §5.3(커밋 ff66a37) · 원본 implementation_plan.md §2.3 · §4.1 · §5 S6 · §7.2 · §7.5(커밋 ff66a37) · D-08 · ADR-05 · ADR-09 · ADR-10 · ADR-13 · ADR-21 · ADR-23 · ADR-24 · [../11_glossary/03_enums_state_machines.md](../11_glossary/03_enums_state_machines.md) 상태 머신 3 · [../03_requirements/01_global_rules.md](../03_requirements/01_global_rules.md) REQ-GLB-05 · 09 · 10
 
@@ -19,11 +20,11 @@
 |------|------|------|------|
 | 미확인 적체 = 그룹 lag + pending | 적재 경로가 아직 확정하지 않은 엔트리 | **백프레셔 단계 판정 · 스트림 적체 알림** | 해당 없음 — 판정량 |
 | XLEN | 스트림에 남은 엔트리 전수(확인분 포함) | Stream 점유 메모리 · 트리밍 감시 | 정상 운전이 발행 누적만으로 위험 단계에 들어간다 |
-| consumer_lag(원본 이름) | 원본마다 산출식이 다르다 — tech §9 "Stream 길이 − 처리 완료 오프셋" · arch §16 "XLEN − PEL 처리량" | 산출식 확정 전 판정에 쓰지 않는다 | 산출식에 따라 확인분 포함 여부가 달라 단계가 흔들린다 |
+| consumer_lag(원본 이름) | 원본마다 산출식이 달랐다 — tech §9 "Stream 길이 − 처리 완료 오프셋" · arch §16 "XLEN − PEL 처리량" · **W6 판정으로 그룹 lag + pending(= 미확인 적체)** | 관측 지표(consumer_lag) — 단계 판정은 발행자의 적체 검사가 한다 | 산출식에 따라 확인분 포함 여부가 달라 단계가 흔들린다 |
 
 - 검산: 양 = **3**
 - **그룹 lag를 산출할 수 없는 응답이면**(스트림 중간 삭제 등으로 lag가 비는 경우) 단계를 정상으로 두지 않고 **직전 단계를 유지**한다. 판정량이 없을 때 정상으로 떨어지면 적체가 쌓이는 중에 반응이 풀린다.
-- 컨슈머 랙 산출식 불일치의 정본 판정은 [../10_observability/01_metrics_catalog.md](../10_observability/01_metrics_catalog.md)(W6) 몫이며, 이 문서는 단계 판정량만 고정한다. 판정이 다르게 나면 이 절과 같은 변경 단위에서 맞춘다.
+- 컨슈머 랙 산출식 불일치의 정본 판정은 [../10_observability/01_metrics_catalog.md](../10_observability/01_metrics_catalog.md) §컨슈머 랙 판정이다 — **W6 판정: consumer_lag = 그룹 lag + pending으로 이 절의 판정량과 같은 양이다.** 이 문서는 단계 판정량만 고정한다.
 
 ## 백프레셔 5단계
 
@@ -106,7 +107,7 @@
 | ③ 전역 기본 데드밴드 | 태그 설정과 무관한 기본값을 적용 | 공학 단위가 다른 태그에 한 값을 쓰는 문제가 ②에 더해진다 | 버림 |
 
 - 검산: 안 = **3**
-- **B형 — 경고 단계에서 아무 반응이 없는 것은 결함이 아니다.** 경고 단계의 발행량 감축은 스풀 전에 적체를 늦추는 완화책일 뿐 안전장치가 아니다 — 안전장치는 위험 단계의 스풀이다. 반대로 스위치 상태를 어기면서 감축을 켜면 측정 조건이 기록되지 않는 결함이 되며, 그것은 스풀로도 복구되지 않는다. **파생 지침**: S6 백프레셔 재현에서 경고 반응을 관찰하려면 SW-10 on으로 별도 실행하고, 그 실행의 무손실 판정은 데드밴드 생략분을 생성 측에서 뺀다(REQ-NFR-01). 생략분 계수 메트릭은 [../10_observability/01_metrics_catalog.md](../10_observability/01_metrics_catalog.md)(W6) 신설 대상이다.
+- **B형 — 경고 단계에서 아무 반응이 없는 것은 결함이 아니다.** 경고 단계의 발행량 감축은 스풀 전에 적체를 늦추는 완화책일 뿐 안전장치가 아니다 — 안전장치는 위험 단계의 스풀이다. 반대로 스위치 상태를 어기면서 감축을 켜면 측정 조건이 기록되지 않는 결함이 되며, 그것은 스풀로도 복구되지 않는다. **파생 지침**: S6 백프레셔 재현에서 경고 반응을 관찰하려면 SW-10 on으로 별도 실행하고, 그 실행의 무손실 판정은 데드밴드 생략분을 생성 측에서 뺀다(REQ-NFR-01). 생략분 계수 메트릭은 col_deadband_skipped_total이다([../10_observability/01_metrics_catalog.md](../10_observability/01_metrics_catalog.md)).
 - 이 판정은 [../02_features/03_collector.md](../02_features/03_collector.md) COL-08과 [../02_features/13_switch_matrix.md](../02_features/13_switch_matrix.md)의 신규 미확인 행을 닫는다 — 리드 반영 대상이다.
 
 ## MAXLEN과 maxmemory
@@ -188,10 +189,10 @@ api 컨테이너가 죽으면 조회뿐 아니라 수집 · 적재 · 판정까�
 |------|------|------|
 | 히스테리시스 폭 · 유지 시간 | 2계층 조정값 · 원본 값 없음 — S6에서 정한다 | 이 문서(S6 실측 후 갱신) |
 | 데드밴드 강화 계수 | 2계층 조정값 · 원본 값 없음 | 상동 |
-| 컨슈머 랙 산출식 · 단계 게이지 · 데드밴드 생략분 메트릭 이름 | 미확인 · 신설 | [../10_observability/01_metrics_catalog.md](../10_observability/01_metrics_catalog.md)(W6) |
+| 컨슈머 랙 산출식 · 단계 게이지 · 데드밴드 생략분 메트릭 이름 | **W6 판정** — consumer_lag(그룹 lag + pending) · backpressure_stage{publisher} · col_deadband_skipped_total | [../10_observability/01_metrics_catalog.md](../10_observability/01_metrics_catalog.md) |
 | 최신값 갱신 주체의 최종안 · SW-11 기본값 | 잠정 A(SW-11 기본 ingest) — S6 실측 | ADR-10 · [../02_features/13_switch_matrix.md](../02_features/13_switch_matrix.md) |
 | 복구 중 rt:latest 덮어쓰기 순서 역전 | **W4 판정** — 조건부 쓰기 | [../06_pipeline/05_realtime_read.md](../06_pipeline/05_realtime_read.md)(W4) |
-| 소진 시간 · 재기동 시간 · 결측 구간 길이 | 3계층 미확인 — 미확인 · 확정 전 임의 값 고정 금지 | [../10_observability/06_experiment_catalog.md](../10_observability/06_experiment_catalog.md)(W6) |
+| 소진 시간 · 재기동 시간 · 결측 구간 길이 | 3계층 미확인 — 미확인 · 확정 전 임의 값 고정 금지 | EXP-16 · EXP-28 · [../10_observability/06_experiment_catalog.md](../10_observability/06_experiment_catalog.md) |
 | 실제 Stream 엔트리 크기 | 미확인 — 원본 산정 약 7 KB(태그 500) | [../05_data_stores/06_redis_memory.md](../05_data_stores/06_redis_memory.md) · 실측 |
 | DLQ 엔트리의 재처리 경로 | **W4 판정** — 원 토큰 직접 삽입 절차 · 재발행 금지 | [../06_pipeline/11_backpressure_failure.md](../06_pipeline/11_backpressure_failure.md)(W4) |
 

@@ -2,6 +2,7 @@
 
 > **대상**: 데이터 흐름 10종의 채번 정본(F-01~F-10) — 원본 대응 · 방향 · 주 경로 · 성격 · 목표 지연 · 참여 도메인 · 관련 기능 · 스위치 · 요구사항 파일 · 기전 문서 · 전체 흐름도 · 흐름별 병목 후보 · 흐름 검증 항목 · 검산
 > **작성일**: 2026-09-24
+> **개정일**: 2026-09-24 — W6 실험 채번 반영 — 메트릭 이름 · EXP 번호 반영(정본 10_observability/01 · 06)
 > **원천**: 원본 data_flow.md §1 · §2 · §16 · §17(커밋 ff66a37) · 원본 architecture.md §9(커밋 ff66a37) · docs_plan.md 실행 계획 보정 #6 · #19 · ADR-06 · ADR-07 · ADR-09 · ADR-11 · [../README.md](../README.md) 고정 기준(데이터 흐름 · 도메인 공백) · [../11_glossary/04_id_conventions.md](../11_glossary/04_id_conventions.md) 원본 흐름 표기 대응 · [../02_features/13_switch_matrix.md](../02_features/13_switch_matrix.md) 관련 흐름 열 · [../02_features](../02_features/README.md) 도메인 파일 흐름 열
 
 이 문서는 **F-NN을 새로 만들 수 있는 유일한 자리**다. 다른 문서는 흐름을 번호로 인용만 하고, 흐름을 더하거나 폐지하면 이 표와 [../README.md](../README.md) 고정 기준을 같은 변경 단위에서 고친다. 번호는 식별자이지 순서가 아니다 — 새 흐름은 F-11부터 말미에 채번하고 결번을 재사용하지 않는다.
@@ -143,7 +144,7 @@ flowchart TB
 
 ## 흐름별 병목 후보
 
-원본 data_flow.md §16의 11행에 이 문서군이 더한 3행이다. 확인 지표의 메트릭 이름 정본은 [../10_observability/01_metrics_catalog.md](../10_observability/01_metrics_catalog.md)(W6)이며 아래 이름은 원본 표기다.
+원본 data_flow.md §16의 11행에 이 문서군이 더한 3행이다. 확인 지표의 메트릭 이름 정본은 [../10_observability/01_metrics_catalog.md](../10_observability/01_metrics_catalog.md)이며 아래 이름은 원본 표기다 — 카탈로그 이름 대응은 그 문서 §인계 메트릭 대응 검산의 끝 불릿(W6).
 
 | # | 흐름 | 1차 병목 후보 | 증상 | 확인 지표 | 대응 |
 |:-:|------|------|------|------|------|
@@ -206,9 +207,9 @@ flowchart TB
 
 | 항목 | 상태 | 확정 자리 |
 |------|------|------|
-| 흐름별 현행 목표 지연 전 행 | 3계층 미확인 — 미확인 · 확정 전 임의 값 고정 금지 | [../03_requirements/13_nonfunctional.md](../03_requirements/13_nonfunctional.md) · [../10_observability/06_experiment_catalog.md](../10_observability/06_experiment_catalog.md)(W6) |
+| 흐름별 현행 목표 지연 전 행 | 3계층 미확인 — 미확인 · 확정 전 임의 값 고정 금지 | [../03_requirements/13_nonfunctional.md](../03_requirements/13_nonfunctional.md) · EXP-30 · 22~26 · [../10_observability/06_experiment_catalog.md](../10_observability/06_experiment_catalog.md) |
 | F-06 · F-08의 흐름 목표 | 원본 목표만(2초 · 즉시) — 판정 구간 · MV 캐스케이드 예산은 미확인 | [../04_architecture/05_latency_budget.md](../04_architecture/05_latency_budget.md) |
-| 병목 확인 지표의 메트릭 이름 | 원본 표기 — 신설 3행 포함 이름 미정 | [../10_observability/01_metrics_catalog.md](../10_observability/01_metrics_catalog.md)(W6) |
+| 병목 확인 지표의 메트릭 이름 | **W6 판정** — 원본 표기는 유지하고 카탈로그 이름 대응을 정본이 갖는다(신설 3행 = ing_fanin_wait_seconds · alm_handoff_wait_seconds · alm_eval_duration_seconds · gen_worker_utilization) | [../10_observability/01_metrics_catalog.md](../10_observability/01_metrics_catalog.md) |
 | 스위치 참여 합 | 해소 — 스위치 매트릭스가 SW-11 collector의 F-01 참여를 세어 18로 맞췄다 | [../02_features/13_switch_matrix.md](../02_features/13_switch_matrix.md) |
 
 ## 관련 문서

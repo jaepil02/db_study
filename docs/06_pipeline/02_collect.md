@@ -2,6 +2,7 @@
 
 > **대상**: F-01 수집 흐름의 기전 정본 — 기동 로드(PostgreSQL 태그 목록 선조회) · 스캔 그룹 폴링 · 레지스터 블록 병합 · 디코딩(FLOAT64 4워드 순서 · BOOL 판정) · 모드 A ts 채취 시점 · 품질 판정(SIMULATED · BAD_TIMEOUT 기록 자리 · UNCERTAIN 부여 주체) · 데드밴드(SW-10) · XADD와 그룹 적체 조회 · 스풀 진입 · 실행 중 마스터 변경 반영 · FC01 · FC02 해제 조건
 > **작성일**: 2026-09-24
+> **개정일**: 2026-09-24 — W6 실험 채번 반영 — 메트릭 이름 · EXP 번호 반영(정본 10_observability/01 · 06)
 > **원천**: 원본 data_flow.md §3 · §3.1 · §3.2 · §3.3 · §14.1 · §15(커밋 ff66a37) · 원본 architecture.md §4 · §9 · §9.3 · §17(커밋 ff66a37) · 원본 tech_stack.md §6(커밋 ff66a37) · docs_plan.md 웨이브 인계 W4 06_pipeline/02 행 전부 · ADR-06 · ADR-10 · ADR-21 · ADR-22 · ADR-24 · ADR-25 · D-08 · REQ-COL-01~16 · REQ-SIM-04~07 · REQ-GLB-01 · 03 · 10 · 18 · [../02_features/03_collector.md](../02_features/03_collector.md) · [../11_glossary/03_enums_state_machines.md](../11_glossary/03_enums_state_machines.md) · [../05_data_stores/05_redis_keyspace.md](../05_data_stores/05_redis_keyspace.md)
 
 F-01은 **값이 레지스터에서 Stream 엔트리가 되기까지**다. 모듈은 셋이 한 프로세스에 산다 — SIM(Modbus 서버) · COL(Modbus 클라이언트 · 디코딩 · 발행) · GEN 모드 A(레지스터 갱신). 같은 프로세스여도 SIM과 COL 사이는 실제 루프백 TCP 소켓이고(REQ-SIM-07), COL과 적재 사이는 Redis Stream이다(ADR-06). **COL은 ClickHouse에 쓰지 않고 Ingest를 부르지 않는다** — 예외는 실험 전용 SW-01 off뿐이다(REQ-COL-10).
@@ -174,7 +175,7 @@ FC01 · FC02 시드 금지의 **해제 조건**은 넷이며 같은 변경 단�
 
 - 검산: 항목 = **7**
 - **데드밴드는 코덱이 아니라 행 수를 바꾼다.** 원본 전송률 표(RANDOM_WALK 0.1% 약 85% · STEP 약 3%)는 원본 예상치이며 실측은 SW-10 실험이다(원본 data_flow.md §3.3).
-- 생략분 계수의 메트릭 이름은 [../10_observability/01_metrics_catalog.md](../10_observability/01_metrics_catalog.md)(W6)가 정한다.
+- 생략분 계수의 메트릭 이름은 col_deadband_skipped_total이다([../10_observability/01_metrics_catalog.md](../10_observability/01_metrics_catalog.md)).
 
 ## 발행 · 적체 조회 · 스풀 진입
 
@@ -210,12 +211,12 @@ FC01 · FC02 시드 금지의 **해제 조건**은 넷이며 같은 변경 단�
 
 | 항목 | 상태 | 확정 자리 |
 |------|------|------|
-| 폴링 지연 · Modbus 왕복 · 요청 수의 실측 | 3계층 미확인 — 확정 전 임의 값 고정 금지. 원본 예상치 설비당 약 5요청 | [../10_observability/06_experiment_catalog.md](../10_observability/06_experiment_catalog.md)(W6) |
+| 폴링 지연 · Modbus 왕복 · 요청 수의 실측 | 3계층 미확인 — 확정 전 임의 값 고정 금지. 원본 예상치 설비당 약 5요청 | EXP-23(모드 A) · EXP-30 · [../10_observability/06_experiment_catalog.md](../10_observability/06_experiment_catalog.md) |
 | 허용 갭 20의 적정성 | 2계층 현행 참고 — 시드 주소 배치(갭 0)에서는 효과가 없다 | S3 실측 · 이 문서 |
 | 데드밴드 강화 계수 | 2계층 · 원본 값 없음 | [../04_architecture/06_backpressure_failure.md](../04_architecture/06_backpressure_failure.md) S6 |
 | 32비트 반쪽 교환 word_order | 현 범위 밖 잔여 | [../11_glossary/03_enums_state_machines.md](../11_glossary/03_enums_state_machines.md) |
 | 비트 요청 상한(FC01 · FC02) | 원본 미기재 — 해제 조건 #3 | 상동 |
-| 타임아웃 · 생략분 · 기동 미준비 메트릭 이름 | 미정 | [../10_observability/01_metrics_catalog.md](../10_observability/01_metrics_catalog.md)(W6) |
+| 타임아웃 · 생략분 · 기동 미준비 메트릭 이름 | **W6 판정** — col_poll_timeouts_total · col_deadband_skipped_total · col_ready | [../10_observability/01_metrics_catalog.md](../10_observability/01_metrics_catalog.md) |
 
 ## 관련 문서
 

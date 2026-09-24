@@ -2,13 +2,15 @@
 
 > **대상**: 관측(OBS · NestJS metrics 모듈) 기능 목록 · 기능별 경계 · 의존 도메인 · 실패 시 보이는 것 — 기능 ID OBS-NN 채번 정본
 > **작성일**: 2026-09-24
+> **개정일**: 2026-09-24 — W6 실험 채번 반영 — 스위치 상태 레이블 이름 반영(정본 10_observability/01 · 06)
+> **개정일**: 2026-09-24 — W6 판정 반영 — observability 프로파일 구성원 prometheus · grafana 2(정본 09_tech_stack/03) — 기능 수 불변
 > **개정일**: 2026-09-24 — SW-11 LATEST_VALUE_WRITER 신설 반영(D-13 · 사용자 확정) — 스위치 10 → **11**
 > **개정일**: 2026-09-24 — W2 요구사항 판정 반영 — 헬스 부분 실패는 503 + 저장소별 상태 본문 · 코드 없음(REQ-OBS-09)
 > **원천**: 원본 architecture.md §3 · §4 · §11 · §14 · §16(커밋 ff66a37) · 원본 tech_stack.md §9(커밋 ff66a37) · 원본 data_flow.md §15 · §16(커밋 ff66a37) · 원본 implementation_plan.md §4.1 · §5 S2 · S5 · S6 · §8(커밋 ff66a37) · 저장소 루트 docs_plan.md 보정 #12 · D-06 · D-10 · [13_switch_matrix.md](./13_switch_matrix.md)
 
 OBS는 **측정 대상과 측정 도구를 가르는 별도 평면의 도메인**이다. 전 도메인의 카운터와 세 저장소의 통계를 주기적으로 모아 api 컨테이너의 /metrics **하나**로 노출한다 — exporter 컨테이너를 두지 않는 이유는 로컬 메모리 예산과, 관측 도구가 측정 대상의 CPU를 덜 잡아먹게 하려는 것이다(원본 tech_stack.md §9). 헬스체크 /api/v1/health도 OBS가 소유한다(docs_plan 보정 #12).
 
-**OBS는 의존 그래프 밖에 있다.** 모든 도메인이 자기 계측을 노출할 책임을 지고 OBS는 모으기만 한다 — "계측 없는 스위치는 장식이다"(전역 불변식 "계측 우선"). **소유 저장 객체도 없고**(메트릭은 앱 저장소에 앉지 않는다) **흐름 F-01~F-10 어디에도 주 경로로 참여하지 않는다** — 계측은 흐름이 아니라 관측이다([../01_overview/04_domain_map.md](../01_overview/04_domain_map.md)). 메트릭 이름 · 전수의 정본은 [../10_observability/01_metrics_catalog.md](../10_observability/01_metrics_catalog.md)(W6)이며 이 문서는 기능의 존재와 경계만 고정한다.
+**OBS는 의존 그래프 밖에 있다.** 모든 도메인이 자기 계측을 노출할 책임을 지고 OBS는 모으기만 한다 — "계측 없는 스위치는 장식이다"(전역 불변식 "계측 우선"). **소유 저장 객체도 없고**(메트릭은 앱 저장소에 앉지 않는다) **흐름 F-01~F-10 어디에도 주 경로로 참여하지 않는다** — 계측은 흐름이 아니라 관측이다([../01_overview/04_domain_map.md](../01_overview/04_domain_map.md)). 메트릭 이름 · 전수의 정본은 [../10_observability/01_metrics_catalog.md](../10_observability/01_metrics_catalog.md)이며 이 문서는 기능의 존재와 경계만 고정한다.
 
 ## 기능 목록
 
@@ -83,9 +85,9 @@ OBS에는 유효 에러 코드가 없다(metrics 네임스페이스는 정의만
 |------|------|------|
 | OBS의 APP_ROLE | 원본 미지정(W1 등재) — 역할 분리 시 각 컨테이너가 자기 /metrics를 내는지 한 곳이 모으는지 없다 | [../04_architecture/02_module_boundaries.md](../04_architecture/02_module_boundaries.md)(W3) |
 | 헬스 부분 실패 응답 | **W2 판정 완료** — 503 + 저장소별 상태 · 코드 없음 | [../03_requirements/12_metrics.md](../03_requirements/12_metrics.md) |
-| 스위치 상태 레이블 이름 · 메트릭 이름 규약 | 미정 | [../10_observability/01_metrics_catalog.md](../10_observability/01_metrics_catalog.md)(W6) |
+| 스위치 상태 레이블 이름 · 메트릭 이름 규약 | **W6 판정** — obs_switch_info(switch · env · value · impl) · 이름 규약 | [../10_observability/01_metrics_catalog.md](../10_observability/01_metrics_catalog.md) |
 | 수집 주기 · E2E 게이지 창 | 2계층 조정값 — 현행 15초 · 5분(원본) | 상동 |
-| observability 프로파일 구성원 | W6 판정(docs_plan 보정 #17) | [../09_tech_stack/03_data_infra.md](../09_tech_stack/03_data_infra.md)(W6) |
+| observability 프로파일 구성원 | **W6 판정** — 구성원 prometheus · grafana 2 · alertmanager 채택하지 않음(수신처 없음 · D-02) · tempo 현 범위 밖 · 조건부 | [../09_tech_stack/03_data_infra.md](../09_tech_stack/03_data_infra.md) |
 
 ## 관련 문서
 

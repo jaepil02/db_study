@@ -2,6 +2,7 @@
 
 > **대상**: 스키마 적용의 저장소 간 순서 · PostgreSQL 순번 마이그레이션 · ClickHouse DDL 순번 · 도구 관리 테이블 · 시드(사이트 · 라인 · 설비 · 접속 설정 · 태그 · 계정 · 역할) · 스키마 변경 절차 · 스냅샷과의 관계
 > **작성일**: 2026-09-24
+> **개정일**: 2026-09-24 — W6 판정 반영 — 마이그레이션 도구 선택 → **node-pg-migrate**(SQL 순번 파일 · Prisma Migrate 채택하지 않음 — 정본 09_tech_stack/05)
 > **원천**: 원본 tech_stack.md §5.1 · §10.3 · §10.5 · §11(커밋 ff66a37) · 원본 architecture.md §3 · §6 · §7 · §18(커밋 ff66a37) · 원본 data_flow.md §10.2 · §14.2(커밋 ff66a37) · 웨이브 인계 W3 05_data_stores/01 · 09 행(무인증 기간 감사 행위자) · [../03_requirements/13_nonfunctional.md](../03_requirements/13_nonfunctional.md) REQ-TEC-05 · REQ-TEC-08 · [../02_features/03_collector.md](../02_features/03_collector.md) 모드 A SIMULATED 판정 · [../03_requirements/02_auth.md](../03_requirements/02_auth.md) REQ-AUT-17
 
 **스키마는 순번 마이그레이션으로만 바뀐다**(REQ-TEC-05). 수동 DDL은 스냅샷 복원 · 새 환경에서 재현되지 않아 **같은 커밋에서 다른 스키마로 측정**하게 만든다. 기동 순서는 migrate(PostgreSQL 마이그레이션 + ClickHouse DDL 순번 파일) → seed다(원본 tech_stack.md §10.5). 스키마 소유권은 api(NestJS) 쪽에 둔다.
@@ -44,7 +45,7 @@
 | 008~ | 이후 변경 — 말미 채번 · 재배치 금지 | 변경한 문서 | |
 
 - 검산: 초기 대역 = 001~007 = **7** · 초기 테이블 = MST 6 + AUT 3 + ALM 2 + WRK 3 + 대조군 1 = **15**
-- **도구가 무엇이든 원시 SQL 마이그레이션을 쓸 수 있어야 한다.** 파티션 · 트리거 · 권한 · 확장 · BRIN은 ORM 모델 선언으로 표현되지 않는다 — 원본 후보(Prisma Migrate · node-pg-migrate) 중 무엇을 고르든 이 제약이 선택 조건이다([../09_tech_stack/05_tooling_devops.md](../09_tech_stack/05_tooling_devops.md)).
+- **도구가 무엇이든 원시 SQL 마이그레이션을 쓸 수 있어야 한다.** 파티션 · 트리거 · 권한 · 확장 · BRIN은 ORM 모델 선언으로 표현되지 않는다 — 원본 후보(Prisma Migrate · node-pg-migrate) 중 이 제약으로 **node-pg-migrate**를 골랐다(W6 판정 · [../09_tech_stack/05_tooling_devops.md](../09_tech_stack/05_tooling_devops.md) §마이그레이션 도구 판정).
 - **대조군은 SW-09 기본 off여도 초기 스키마에 만든다.** 스위치로 테이블이 생기고 사라지면 스위치 전환이 재기동이 아니라 마이그레이션이 되어, 스위치 = DI 구현 교체라는 제약(ADR-08)이 깨진다.
 
 ## ClickHouse DDL 순번
@@ -145,7 +146,7 @@ migrate 뒤 seed가 넣는 행이다. 기본 시드는 용량 티어 S(설비 5 
 
 | 항목 | 상태 | 확정 자리 |
 |------|------|------|
-| 마이그레이션 도구 선택 | 원본 후보 둘 — 원시 SQL 지원이 선택 조건 | [../09_tech_stack/05_tooling_devops.md](../09_tech_stack/05_tooling_devops.md)(W6) |
+| 마이그레이션 도구 선택 | **W6 판정** — node-pg-migrate SQL 순번 파일 · ClickHouse는 도구 없이 순번 SQL | [../09_tech_stack/05_tooling_devops.md](../09_tech_stack/05_tooling_devops.md) |
 | M · M+ · L 티어의 시드 태그 구성 | 규칙만 — 설비 · 태그 수 확대 | [../06_pipeline/10_datagen_inject.md](../06_pipeline/10_datagen_inject.md)(W4) |
 | 알람 규칙 시연용 시드 여부(S7) | 원본 없음 — 현행 0행 | [../06_pipeline/08_alarm.md](../06_pipeline/08_alarm.md)(W4) |
 | 학습자 계정 비밀번호 주입 방식 | 환경 변수 원칙만 | [../12_security/02_secrets_config.md](../12_security/02_secrets_config.md)(W7) |

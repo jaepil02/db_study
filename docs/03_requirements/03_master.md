@@ -2,6 +2,7 @@
 
 > **대상**: 마스터 데이터(MST · NestJS master 모듈)의 동작 계약 — 사이트 · 라인 · 설비 · Modbus 접속 설정 · 태그 마스터 쓰기 · 논리 삭제 · 스케일 변경 · 캐시 무효화 체인 · Dictionary 원천 — REQ-MST-NN 채번 정본
 > **작성일**: 2026-09-24
+> **개정일**: 2026-09-24 — W6 실험 채번 반영 — EXP 번호 · 메트릭 이름 반영(정본 10_observability/01 · 06)
 > **개정일**: 2026-09-24 — W5 판정 반영 — Modbus 매핑 변경 판정 — **PATCH 허용 + 감사 기록**(해석 교정 · 새 태그 발급 대상 아님) — REQ 수 불변
 > **개정일**: 2026-09-24 — W4 판정 반영 — REQ-MST-03 · 08 실행 중 마스터 변경 재기동 전 미반영 → **ch:cacheinv로 Collector 반영**(modbus_config도 신호) · REQ-MST-09 체인 5단 표기 → **6단 번호**(① 커밋) — REQ 수 불변
 > **원천**: 원본 architecture.md §5 · §6 · §7.4 · §8.2 · §10.1 · §11 · §12 · §17 · §18(커밋 ff66a37) · 원본 data_flow.md §3 · §5 · §7 · §7.1 · §17(커밋 ff66a37) · 원본 implementation_plan.md §5 S2 · S4 · §7.4 · §7.5(커밋 ff66a37) · 저장소 루트 docs_plan.md 보정 #15 · D-04 · D-11 · [../02_features/02_master.md](../02_features/02_master.md) MST-01~09 · [../11_glossary/02_error_codes.md](../11_glossary/02_error_codes.md) 채번 보류 · [01_global_rules.md](./01_global_rules.md) REQ-GLB-12 · 14
@@ -105,8 +106,8 @@
 | 실행 중 마스터 변경의 Collector 반영 | **W4 판정** — ch:cacheinv 구독 · REQ-MST-03 · 08 반영 | [../06_pipeline/02_collect.md](../06_pipeline/02_collect.md) |
 | 비활성 태그를 가리키는 알람 규칙 | 판정을 멈추는지 규칙을 남기는지 없다 | [../06_pipeline/08_alarm.md](../06_pipeline/08_alarm.md)(W4) |
 | tag_master_history 컬럼 | REQ-MST-07이 기록 내용(이전 · 새 tag_id · 변경 전후 값)만 요구한다 | [../05_data_stores/01_postgresql_schema.md](../05_data_stores/01_postgresql_schema.md)(W3) |
-| 캐시 삭제 실패 계수의 메트릭 이름 | **신규 미확인** — REQ-MST-10이 요구한다 | [../10_observability/01_metrics_catalog.md](../10_observability/01_metrics_catalog.md)(W6) |
-| 무효화 층별 반영 시간 | 3계층 미확인 — 미확인 · 확정 전 임의 값 고정 금지. 원본 예상치: Dictionary 최대 10분(③ 생략 시) · BFF 최대 30초 | [../06_pipeline/07_business_crud.md](../06_pipeline/07_business_crud.md)(W4) · EXP(W6 채번) |
+| 캐시 삭제 실패 계수의 메트릭 이름 | **W6 판정** — mst_cache_delete_failures_total · mst_dict_reloads_total | [../10_observability/01_metrics_catalog.md](../10_observability/01_metrics_catalog.md) |
+| 무효화 층별 반영 시간 | 3계층 미확인 — 미확인 · 확정 전 임의 값 고정 금지. 원본 예상치: Dictionary 최대 10분(③ 생략 시) · BFF 최대 30초 | [../06_pipeline/07_business_crud.md](../06_pipeline/07_business_crud.md)(W4) · EXP-29(AC-06 기록) |
 
 ## 관련 문서
 

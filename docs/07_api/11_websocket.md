@@ -2,6 +2,7 @@
 
 > **대상**: /ws/realtime 한 표면의 프로토콜 — 핸드셰이크 Origin 검증 · 첫 메시지 인증 · **구독 방식 판정(쿼리 파라미터 대 subscribe 메시지)** · 메시지 봉투와 스키마 · 스로틀 병합(SW-07) · 알람 · 무효화 신호 중계 · ping · 재연결 · 종료 코드 정본
 > **작성일**: 2026-09-24
+> **개정일**: 2026-09-24 — W6 실험 채번 반영 — EXP 번호 반영(정본 10_observability/01 · 06)
 > **개정일**: 2026-09-24 — W5 판정 반영 — §STALE과 푸시의 화면 판정 기준을 화면 시계 → **servedAt(서버 시계) 기준 + 화면 오프셋 보정**으로 정렬(06_realtime) — 표 행 수 불변
 > **개정일**: 2026-09-24 — W5 판정 반영 — 느린 구독자 절단 불일치 → **닫힘**(REQ-RLT-12 · RLT-07 · 06_pipeline/05 반영 — 브라우저 단위 4413 · 출력 버퍼는 구독 연결 보호의 최후선) — 표면 · 종료 코드 수 불변
 > **원천**: 원본 architecture.md §11 · §11.2 · §18(커밋 ff66a37) · 원본 data_flow.md §9 · §9.1 · §9.2(커밋 ff66a37) · REQ-RLT-09~15 · 17 · 18 · REQ-AUT-08 · 13 · ADR-07 · [../02_features/08_realtime.md](../02_features/08_realtime.md) RLT-05~09 · [../02_features/13_switch_matrix.md](../02_features/13_switch_matrix.md) SW-06 · SW-07 · [../06_pipeline/05_realtime_read.md](../06_pipeline/05_realtime_read.md) §F-07 실시간 푸시 한 사이클 · §푸시 조정값 · [../06_pipeline/12_data_contract.md](../06_pipeline/12_data_contract.md) 봉인 계열 값과 채널 페이로드 · docs_plan.md 웨이브 인계 W5 07_api 행(구독 방식)
@@ -160,7 +161,7 @@ WebSocket은 **RLT가 소유하는 횡단 표면**이다. 설비 최신값 푸�
 | 소켓 송신 대기량 한도 · 인증 대기 시간 · 구독 설비 상한 | 2계층 미정 — 소유 이 문서 · S4 실측 | 이 문서 |
 | 4503 뒤 Redis 복구 시 구독 복원 | 게이트웨이가 스스로 재구독하지 않고 클라이언트 재연결로 복원한다(판정) — 재연결 폭주 폭은 백오프가 흩는다 | 이 문서 |
 | 푸시 도달 지연 · 연결 수 상한 | 3계층 미확인 — 원본 목표 500 ms | [../03_requirements/13_nonfunctional.md](../03_requirements/13_nonfunctional.md) REQ-NFR-12 |
-| 프레임 수 on/off 차이 | 3계층 미확인 — 원본 예상치 초당 5,000 → 10 프레임 | [../10_observability/06_experiment_catalog.md](../10_observability/06_experiment_catalog.md)(W6) |
+| 프레임 수 on/off 차이 | 3계층 미확인 — 원본 예상치 초당 5,000 → 10 프레임 | EXP-12 · [../10_observability/06_experiment_catalog.md](../10_observability/06_experiment_catalog.md) |
 
 ## 관련 문서
 

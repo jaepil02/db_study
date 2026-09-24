@@ -2,6 +2,7 @@
 
 > **대상**: AUT 도메인이 소유하는 REST 표면 — 로그인 · 토큰 갱신 · 로그아웃의 요청 · 응답 · 실패 · 경로 계약 · 계정 · 역할 관리 표면의 부재 판정
 > **작성일**: 2026-09-24
+> **개정일**: 2026-09-24 — W6 실험 채번 반영 — 실험 자리 W6 결과 반영(정본 10_observability/01 · 06)
 > **원천**: 원본 architecture.md §11 · §11.2 · §18(커밋 ff66a37) · 원본 data_flow.md §7.2(커밋 ff66a37) · REQ-AUT-01~06 · 14 · 15 · 16 · 17 · D-07 · ADR-02 · [../02_features/01_auth.md](../02_features/01_auth.md) AUT-01~03 · [../02_features/12_permission_matrix.md](../02_features/12_permission_matrix.md) · [../06_pipeline/07_business_crud.md](../06_pipeline/07_business_crud.md) 인증 흐름 · [01_conventions.md](./01_conventions.md)
 
 AUT는 **표면 셋만 소유하고 나머지 전 표면에 끼어드는 도메인**이다. 신원 확인 · 역할 대조 · 레이트 리밋 · 출처 방어(AUT-04~07)는 표면이 아니라 횡단 검사이며, 그 헤더 · 응답 규약은 [01_conventions.md](./01_conventions.md) §인증 헤더와 출처 방어가 갖는다. 이 문서는 토큰을 **발급 · 교환 · 폐기**하는 세 표면만 적는다.
@@ -116,7 +117,7 @@ AUT는 **표면 셋만 소유하고 나머지 전 표면에 끼어드는 도메�
 | 리프레시 토큰 회전 · 재사용 탐지 | 미설계 — 원본에 없다 · 이 문서는 회전 없음으로 둔다 | [../12_security/01_authn_authz.md](../12_security/01_authn_authz.md)(W7) |
 | 로그인 시도 제한 | 레이트 리밋이 user_id 기준이라 로그인은 계수 밖이다 · IP 기준은 로컬에서 무의미 | [../12_security/03_api_surface_defense.md](../12_security/03_api_surface_defense.md)(W7) |
 | auth 표면의 CORS 제외 판정 | 이 폴더 판정 — 방어 리뷰 대상 | [../12_security/03_api_surface_defense.md](../12_security/03_api_surface_defense.md)(W7) |
-| 로그인 · 갱신 p50 · 해시 비용 | 3계층 미확인 — 확정 전 임의 값 고정 금지 | [../10_observability/06_experiment_catalog.md](../10_observability/06_experiment_catalog.md)(W6) |
+| 로그인 · 갱신 p50 · 해시 비용 | 3계층 미확인 — 확정 전 임의 값 고정 금지 · **W6 미채번**(카탈로그 39에 없다 · 필요해지면 EXP-40부터) | [../10_observability/06_experiment_catalog.md](../10_observability/06_experiment_catalog.md) |
 
 ## 관련 문서
 

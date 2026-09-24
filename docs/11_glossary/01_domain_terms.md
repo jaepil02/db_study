@@ -2,6 +2,7 @@
 
 > **대상**: db_study 문서군이 쓰는 산업 프로토콜 · 수집 · 시계열 저장 · Redis 스트림 · 조회 캐시 · 흐름 제어 · 실행 환경 · 실험 용어 — 용어 정의 정본
 > **작성일**: 2026-09-24
+> **개정일**: 2026-09-24 — W6 실험 채번 반영 — 컨슈머 랙 정의를 lag + pending으로(정본 10_observability/01 · 06)
 > **원천**: 원본 tech_stack.md §5.3 · §6 · §7 · §10.1 · §10.3(커밋 ff66a37) · 원본 data_flow.md §3 · §3.1 · §3.3 · §4 · §4.2 · §4.3 · §6 · §7.2 · §9 · §10 · §12(커밋 ff66a37) · 원본 architecture.md §7 · §8 · §9 · §10 · §12(커밋 ff66a37)
 
 용어마다 **정의 · 이 시스템에서의 쓰임 · 혼동하기 쉬운 인접 용어 · 정본**을 적는다. 정의는 일반 뜻이고, 쓰임은 이 시스템이 그 용어로 가리키는 구체 대상이다. 둘이 다르면 쓰임이 우선한다 — 예컨대 이 시스템의 "PLC"는 실장비가 아니라 PlcSim 모듈이 흉내 내는 Modbus 서버다.
@@ -70,7 +71,7 @@
 | PEL | Pending Entries List — 전달됐으나 XACK되지 않은 엔트리 목록 | 삽입 성공 전까지 엔트리가 여기 머문다. at-least-once의 근거이자 컨슈머 랙의 원천 | DLQ — 포기한 배치의 격리처 | [03_enums_state_machines.md](./03_enums_state_machines.md) |
 | XACK | 엔트리 처리 완료를 알려 PEL에서 빼는 명령 | **ClickHouse 삽입 성공 뒤에만** 한다. DLQ로 옮긴 배치도 반드시 한다 | 삭제 — XACK는 엔트리를 지우지 않는다 | [03_enums_state_machines.md](./03_enums_state_machines.md) |
 | XAUTOCLAIM | 일정 시간 idle인 PEL 엔트리를 다른 컨슈머로 넘기는 명령 | 주기 타이머로 돌려 죽은 컨슈머 이름에 남은 PEL을 회수한다. idle 기준은 2계층 | XCLAIM — 엔트리를 하나씩 지정 | [03_enums_state_machines.md](./03_enums_state_machines.md) |
-| 컨슈머 랙 | 그룹이 아직 처리하지 못한 양 | consumer_lag. 백프레셔 정상 단계의 계측 지표이고, XACK 누락이 있으면 영원히 0이 되지 않는다 | 스트림 길이 — 트리밍 전 전체 엔트리 수 · 랙은 미처리분 | [../10_observability/01_metrics_catalog.md](../10_observability/01_metrics_catalog.md) |
+| 컨슈머 랙 | 그룹이 아직 처리하지 못한 양 = 그룹 lag(미배달) + pending(미확인) — XLEN이 아니다 | consumer_lag. 백프레셔 판정량(ADR-21)과 같은 양이며 정상 단계의 계측 지표이고, XACK 누락이 있으면 영원히 0이 되지 않는다 | 스트림 길이 — 트리밍 전 전체 엔트리 수 · 랙은 미처리분 | [../10_observability/01_metrics_catalog.md](../10_observability/01_metrics_catalog.md) |
 | DLQ | Dead Letter Queue — 재시도를 소진한 배치의 격리처 | stream:plc:dlq에 배치와 오류 사유를 넣는다. dlq_count가 늘면 알린다 | 스풀 — 발행 실패의 임시 버퍼 | [../06_pipeline/03_ingest_batch.md](../06_pipeline/03_ingest_batch.md) |
 | MAXLEN 트리밍 | XADD 때 길이 상한을 넘는 오래된 엔트리를 잘라내는 것 | **최후 안전장치**다. 오류 없이 조용히 버리므로 미소비 엔트리가 잘리면 stream_trimmed_unacked로 결함 계측한다. 1차 백프레셔 신호는 길이 검사가 만든다 | 축출 — 메모리 정책이 키를 지우는 것 | [../04_architecture/06_backpressure_failure.md](../04_architecture/06_backpressure_failure.md) |
 | 봉인 계열 · 캐시 계열 | TTL 금지 키 접두(stream · rt · alarm)와 TTL 필수 키 접두(cache · lock · rl · sess · auth) | 단일 인스턴스에서 **접두 하나가 생존 정책의 경계**다. 실패 전략도 정반대 — 봉인은 명시적 실패, 캐시는 조용한 degrade | 영속 · 휘발 — 봉인은 "축출되지 않는다"이지 "영속"이 아니다. rt:latest는 봉인 계열이면서 ClickHouse에서 재구성하는 휘발 사본이다 | [../05_data_stores/05_redis_keyspace.md](../05_data_stores/05_redis_keyspace.md) |

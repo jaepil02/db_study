@@ -2,13 +2,15 @@
 
 > **대상**: 08_screen 화면 명세 전부가 따르는 공통 규격 — 명세 템플릿 · 상태 4행 · 단계별 화면 가용성 · 요청 경로와 공통 셸 · 차트 표준(uPlot 주력 · ECharts 보조) · 시각 표시(Asia/Seoul) · 에러 코드별 사용자 표시 · TanStack Query staleTime과 Redis TTL 정렬 · 무효화 체인 ⑥단 신호 수신
 > **작성일**: 2026-09-24
+> **개정일**: 2026-09-24 — W6 실험 채번 반영 — EXP 번호 반영(정본 10_observability/01 · 06)
+> **개정일**: 2026-09-24 — W6 판정 반영 — staleTime · gcTime · 링 버퍼 창 현행값 확정(09_tech_stack/01 — 관계식 파생 staleTime · 시계열 gcTime 60초 · 링 버퍼 3,000슬롯) · 관계식 불변
 > **원천**: 원본 tech_stack.md §4.1 · §4.2 · §4.3(커밋 ff66a37) · 원본 data_flow.md §5 · §6.2 · §6.3 · §7.2 · §9 · §9.2(커밋 ff66a37) · 원본 architecture.md §11 · §11.2(커밋 ff66a37) · 원본 implementation_plan.md §5 S2 · §7.4(커밋 ff66a37) · REQ-GLB · REQ-AUT-04 · 05 · REQ-RLT-03 · 06 · 13 · 15 · REQ-TSQ-05 · 10 · REQ-WRK-03 · AC-04 · AC-06 · [README.md](./README.md) 화면 인벤토리 · [../06_pipeline/07_business_crud.md](../06_pipeline/07_business_crud.md) 무효화 체인 6단 · [../11_glossary/02_error_codes.md](../11_glossary/02_error_codes.md) · [../11_glossary/05_units_and_time.md](../11_glossary/05_units_and_time.md) 표시 시간대
 
 이 문서는 화면 문서 5본(03~07)이 인용하는 **공통 규격의 정본**이다. 화면 코드와 소속 파일의 정본은 [README.md](./README.md) 화면 인벤토리이고, 이 문서는 그 코드들이 지켜야 할 명세 모양 · 상태 표시 · 시각 · 에러 · 캐시 규칙을 고정한다. 개별 화면이 표준과 다르게 처리하면 그 화면 블록의 비고에 사유를 적는다.
 
 **화면은 데이터를 소유하지 않는다.** 모든 수치는 07_api 표면을 거쳐 오고, 화면 명세는 어느 표면을 어떤 빈도로 부르는지와 그 응답을 어느 캐시 층이 얼마 동안 들고 있는지를 고정한다. 표면은 **메서드 + 경로**로 인용한다. 원본에 없는 표면은 07_api 해당 파일의 확정을 기다리며 "07_api/{파일} 확정 대기"로 적는다.
 
-**이 문서가 닫는 인계 1건** — 무효화 체인 ⑥단의 신호 키 → 브라우저 쿼리 키 대응([../06_pipeline/07_business_crud.md](../06_pipeline/07_business_crud.md) 미확인 등재)을 §무효화 신호 수신에서 고정한다. staleTime의 라이브러리 설정값은 [../09_tech_stack/01_frontend.md](../09_tech_stack/01_frontend.md)(W6)가 갖고, 이 문서는 값이 따라야 할 관계식을 갖는다.
+**이 문서가 닫는 인계 1건** — 무효화 체인 ⑥단의 신호 키 → 브라우저 쿼리 키 대응([../06_pipeline/07_business_crud.md](../06_pipeline/07_business_crud.md) 미확인 등재)을 §무효화 신호 수신에서 고정한다. staleTime의 라이브러리 설정값은 [../09_tech_stack/01_frontend.md](../09_tech_stack/01_frontend.md)가 갖고, 이 문서는 값이 따라야 할 관계식을 갖는다.
 
 ## 화면 명세 템플릿
 
@@ -30,7 +32,7 @@
 
 - 검산: 필드 = **11**
 - **요소 표의 기능 ID 열이 추적성의 정본 자리다.** [02_traceability.md](./02_traceability.md)는 이 열을 모아 세며, 요소 표에 없는 기능을 화면에 매핑하지 않는다.
-- 레이아웃 펜스는 plain 와이어프레임이다. 픽셀 · 색 · 간격은 화면 명세가 아니라 [../09_tech_stack/01_frontend.md](../09_tech_stack/01_frontend.md)(W6)의 구성 선택을 따른다.
+- 레이아웃 펜스는 plain 와이어프레임이다. 픽셀 · 색 · 간격은 화면 명세가 아니라 [../09_tech_stack/01_frontend.md](../09_tech_stack/01_frontend.md)의 구성 선택을 따른다.
 
 화면 블록의 골격이다.
 
@@ -144,7 +146,7 @@
 |------|------|------|
 | 클라이언트 재축소 금지 | 브라우저는 받은 점을 다시 줄이지 않는다 · 점 수가 차트 폭 대비 과하면 서버 계약 위반으로 표시한다 | meta.downsampled 거짓인 응답이 화면에서 줄어 "원시를 봤다"는 판단이 틀린다 |
 | 요청 점 상한 | 조회 요청의 maxPoints는 플롯 영역 픽셀 폭 기준으로 정한다 · 값은 2계층(원본 참고 1,200픽셀 → 2,000점 · 소유 [../07_api/05_timeseries.md](../07_api/05_timeseries.md)) | 폭보다 많이 받으면 시각적으로 무의미한 점이 응답 크기와 캐시 메모리만 키운다 |
-| 실시간 링 버퍼 | WebSocket 프레임은 태그별 고정 길이 링 버퍼(Zustand 스토어)에 쌓고 uPlot에는 버퍼 참조를 넘긴다 · 버퍼 창 길이는 2계층(소유 이 문서 · 현행 미정 — S2 고정) | 프레임마다 배열을 새로 만들면 초당 10프레임에서 GC가 트렌드를 끊는다 |
+| 실시간 링 버퍼 | WebSocket 프레임은 태그별 고정 길이 링 버퍼(Zustand 스토어)에 쌓고 uPlot에는 버퍼 참조를 넘긴다 · 버퍼 창 길이는 2계층(계약 이 문서 · 현행값 3,000슬롯 — [../09_tech_stack/01_frontend.md](../09_tech_stack/01_frontend.md) W6 판정 · S2 고정) | 프레임마다 배열을 새로 만들면 초당 10프레임에서 GC가 트렌드를 끊는다 |
 | 이어 그리기 기준 | 같은 태그의 점은 ts 오름차순으로만 붙인다 · 기존 마지막 ts 이하인 프레임 값은 버린다 | 재연결 동기화 값과 늦은 프레임이 섞여 선이 뒤로 꺾인다 |
 | 극값 보존 | 알람 분석 차트는 버킷의 min · max 쌍을 밴드로 그린다 · 평균선만 그리지 않는다 | 임계값 근처 순간 초과가 사라져 오탐 분석 근거가 없어진다(REQ-ALM-17) |
 | 품질 표현 | 품질 2 · 4 · 5 점은 선을 끊고 표지를 단다 · 9 SIMULATED는 선을 잇고 범례에 표기한다 | BAD 값을 이어 그리면 통신 불량이 급변처럼 보인다 |
@@ -213,7 +215,7 @@
 
 ## 갱신 주기와 캐시 층 정렬
 
-브라우저 쿼리 캐시는 TanStack Query다(원본 tech_stack.md §4.3). **staleTime은 그 응답을 낸 가장 가까운 서버 층의 수명 하한과 같게 둔다** — 이 관계식이 이 절의 정본이고 라이브러리 설정값은 [../09_tech_stack/01_frontend.md](../09_tech_stack/01_frontend.md)(W6)가 관계식에서 파생한다. 서버 층 TTL의 소유처는 [../05_data_stores/05_redis_keyspace.md](../05_data_stores/05_redis_keyspace.md) · [../06_pipeline/06_timeseries_read.md](../06_pipeline/06_timeseries_read.md)다.
+브라우저 쿼리 캐시는 TanStack Query다(원본 tech_stack.md §4.3). **staleTime은 그 응답을 낸 가장 가까운 서버 층의 수명 하한과 같게 둔다** — 이 관계식이 이 절의 정본이고 라이브러리 설정값은 [../09_tech_stack/01_frontend.md](../09_tech_stack/01_frontend.md)가 관계식에서 파생한다. 서버 층 TTL의 소유처는 [../05_data_stores/05_redis_keyspace.md](../05_data_stores/05_redis_keyspace.md) · [../06_pipeline/06_timeseries_read.md](../06_pipeline/06_timeseries_read.md)다.
 
 | 쿼리 | 쿼리 키 | 가장 가까운 서버 층 | 서버 층 수명(현행 참고) | staleTime 관계 | 새 값을 얻는 수단 |
 |------|------|------|------|------|------|
@@ -232,7 +234,7 @@
 
 - 검산: 쿼리 = **12**
 - **관계식의 근거는 2단 캐시 실험이다**(원본 tech_stack.md §4.3). staleTime이 서버 수명보다 길면 서버가 새 값을 가진 뒤에도 화면이 옛 값을 보이고, 0에 가깝게 짧으면 브라우저 재조회가 같은 서버 사본만 다시 받아 브라우저 층과 서버 층의 기여를 측정에서 가를 수 없다. 지터 계열은 하한(TTL × 0.8)에 맞춘다 — 평균에 맞추면 절반의 재조회가 만료 전 사본을 다시 받는다.
-- **gcTime은 시계열 쿼리만 짧게 둔다.** 시계열 응답은 수백 KB이고 사용자별이라 화면을 떠난 뒤 오래 들고 있으면 탭 메모리가 범위 조회 횟수에 비례해 는다 — 값은 [../09_tech_stack/01_frontend.md](../09_tech_stack/01_frontend.md)(W6).
+- **gcTime은 시계열 쿼리만 짧게 둔다.** 시계열 응답은 수백 KB이고 사용자별이라 화면을 떠난 뒤 오래 들고 있으면 탭 메모리가 범위 조회 횟수에 비례해 는다 — 현행값 60초 · 소유 [../09_tech_stack/01_frontend.md](../09_tech_stack/01_frontend.md).
 - **작업지시 · 실적의 다른 사용자 화면은 cache:workorders TTL만큼 늦는 것을 허용한다.** 체인 ③ · ⑥을 걸지 않는 판정([../06_pipeline/07_business_crud.md](../06_pipeline/07_business_crud.md))의 화면 쪽 결과이며, 쓴 사람의 화면은 자기 쓰기 성공으로 즉시 무효화한다.
 - 쿼리 키 표기의 가운뎃점은 키 배열의 원소 구분이다 — 구현에서는 배열 원소가 된다.
 
@@ -258,8 +260,8 @@
 
 | 항목 | 상태 | 확정 자리 |
 |------|------|------|
-| staleTime · gcTime · 링 버퍼 창 값 | 2계층 — 관계식은 이 문서 · 값은 W6 | [../09_tech_stack/01_frontend.md](../09_tech_stack/01_frontend.md) |
-| 신호 도달 지연 · 화면 반영 시간 | 3계층 미확인 — 확정 전 임의 값 고정 금지 | AC-06 기록 · EXP(W6 채번) |
+| staleTime · gcTime · 링 버퍼 창 값 | **W6 판정** — 관계식은 이 문서 · 현행값은 09_tech_stack/01(staleTime 파생표 · 시계열 gcTime 60초 · 링 버퍼 3,000슬롯 — S2 고정) | [../09_tech_stack/01_frontend.md](../09_tech_stack/01_frontend.md) |
+| 신호 도달 지연 · 화면 반영 시간 | 3계층 미확인 — 확정 전 임의 값 고정 금지 | AC-06 기록 · EXP-29 |
 
 ## 관련 문서
 

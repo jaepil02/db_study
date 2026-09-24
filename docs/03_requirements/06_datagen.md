@@ -2,6 +2,7 @@
 
 > **대상**: 데이터 생성(GEN · NestJS datagen 모듈)의 동작 계약 — 신호 프로파일 · SIMULATED 표지와 결측 · 시드 재현성 · 부하 티어 · 주입 모드 A~D · 부하 주입 표면 · 백필 절차 · 생성기 여유 · 대조군 동일 행 — REQ-GEN-NN 채번 정본
 > **작성일**: 2026-09-24
+> **개정일**: 2026-09-24 — W6 실험 채번 반영 — EXP 번호 · 메트릭 이름 반영 · 이벤트 루프 p95 메트릭 이름 통일(정본 10_observability/01 · 06)
 > **개정일**: 2026-09-24 — W4 판정 반영 — REQ-GEN-07 · 09 스트림 길이 검사 → **미확인 적체 검사**(ADR-21) · 모드 B 검사 기전 W4 판정 반영 — REQ 수 불변
 > **개정일**: 2026-09-24 — W3 판정 반영 — 모드 B 검사의 판정량을 그룹 적체로 교정(ADR-21)
 > **원천**: 원본 tech_stack.md §3.4 · §7 · §8 · §10.6(커밋 ff66a37) · 원본 data_flow.md §10.2 · §10.3 · §11 · §11.1 · §11.2 · §11.3 · §12.1(커밋 ff66a37) · 원본 architecture.md §4 · §9.3 · §11 · §14 · §15 · §18(커밋 ff66a37) · 원본 implementation_plan.md §5 S1 · S5(커밋 ff66a37) · 저장소 루트 docs_plan.md 보정 #11 · D-05 · D-07 · D-12 · [../02_features/05_datagen.md](../02_features/05_datagen.md) GEN-01~10 · [../11_glossary/02_error_codes.md](../11_glossary/02_error_codes.md) datagen 네임스페이스 · [01_global_rules.md](./01_global_rules.md) REQ-GLB-10 · 17 · 18 · 21
@@ -16,7 +17,7 @@
 
 | ID | 요구 | 근거 | 위반 시 구체적 실패 | 검증 방법 | 관련 기능 | 관련 흐름 | 관련 에러 코드 |
 |------|------|------|------|------|------|------|------|
-| **REQ-GEN-01** | 태그마다 신호 프로파일 8종(SINE · RANDOM_WALK · RAMP · STEP · BINARY · COUNTER · SPIKE · DROPOUT) 중 하나로 값을 만든다. 태그 N × 시점 M을 TypedArray에 한 번에 채우고 worker_threads 풀에서 병렬화한다 — 생성 연산을 이벤트 루프에서 하지 않는다. S2는 SINE 1종이다 | 원본 tech_stack.md §7 · 원본 data_flow.md §11 · REQ-GLB-20 | 이벤트 루프에서 생성하면 같은 프로세스의 수집 · 조회가 생성 부하에 밀려, 측정한 조회 p95가 생성기 비용을 포함한다 | 생성 중 nodejs_eventloop_lag 대 생성 중지 시 대조 · 프로파일별 샘플 파형 확인 | GEN-01 | F-09 | 해당 없음 |
+| **REQ-GEN-01** | 태그마다 신호 프로파일 8종(SINE · RANDOM_WALK · RAMP · STEP · BINARY · COUNTER · SPIKE · DROPOUT) 중 하나로 값을 만든다. 태그 N × 시점 M을 TypedArray에 한 번에 채우고 worker_threads 풀에서 병렬화한다 — 생성 연산을 이벤트 루프에서 하지 않는다. S2는 SINE 1종이다 | 원본 tech_stack.md §7 · 원본 data_flow.md §11 · REQ-GLB-20 | 이벤트 루프에서 생성하면 같은 프로세스의 수집 · 조회가 생성 부하에 밀려, 측정한 조회 p95가 생성기 비용을 포함한다 | 생성 중 nodejs_eventloop_lag_p95_seconds 대 생성 중지 시 대조 · 프로파일별 샘플 파형 확인 | GEN-01 | F-09 | 해당 없음 |
 | **REQ-GEN-02** | 모드 B · C · D의 산출 행은 **전부 SIMULATED(9)**로 싣는다. DROPOUT의 결측은 BAD 코드를 다는 대신 **행을 생략**한다. SPIKE는 기저값 위 확률적 이상치다. 모드 A의 표지는 Collector가 단다 | 원본 data_flow.md §3.2 · §11 · REQ-GLB-18 · W1 판정 [../11_glossary/03_enums_state_machines.md](../11_glossary/03_enums_state_machines.md) | 결측에 BAD를 달면 그 행의 품질 칸이 출처 표지(9)를 잃어 생성 데이터를 구분할 수 없게 된다. 모드 B 산출이 0으로 저장되면 실데이터와 섞인 뒤 복원할 방법이 없다 | 모드 B · C · D 적재 후 quality 분포(9뿐) · DROPOUT 태그의 기대 행 수 대비 실제 행 수 조회 | GEN-02 | F-09 | 해당 없음 |
 | **REQ-GEN-03** | 난수 시드를 실행 인자로 받고 고정한다. 같은 시드 · 같은 구간 · 같은 태그 집합은 **같은 행 집합**을 만든다. 시드는 측정 기록의 실험 조건에 적는다 | 원본 tech_stack.md §7 · 원본 data_flow.md §11 · D-05 · REQ-GLB-17 | 시드가 없으면 on/off 비교의 두 실행이 다른 데이터를 받아 차이의 원인이 스위치인지 데이터인지 가를 수 없다. 대조군 백필(REQ-GEN-14)이 같은 행 집합을 얻지 못한다 | 같은 시드로 2회 생성한 결과의 행 수 · 값 합 대조 | GEN-03 | F-09 | 해당 없음 |
 | **REQ-GEN-04** | 생성 규모는 용량 티어 S · M · M+ · L(설비 수 · 설비당 태그 · 주기)로 받는다. 티어 값의 정본은 [../04_architecture/07_capacity_planning.md](../04_architecture/07_capacity_planning.md)이며 생성기는 티어를 정의하지 않는다. 티어는 측정 기록 4요소의 하나다 | 원본 architecture.md §15 · 원본 data_flow.md §11 · REQ-GLB-17 | 생성기가 티어 값을 따로 가지면 같은 이름의 티어가 문서와 생성기에서 다른 pps를 뜻한다 | 티어별 생성 pps 실측과 티어 정본 초당 포인트 대조 | GEN-04 | F-09 | 해당 없음 |
@@ -107,12 +108,12 @@ GEN-07 표면만 코드를 낸다. 인용 코드는 [../11_glossary/02_error_cod
 
 | 항목 | 상태 | 확정 자리 |
 |------|------|------|
-| 모드 B 적체 검사의 기전 · 발행 중단 계수 메트릭 이름 | 기전 **W4 판정**(XADD + XINFO GROUPS 파이프라인 · 위험이면 중단 · 주의 임계 미만 재개) · 메트릭 이름 미정 | [../06_pipeline/10_datagen_inject.md](../06_pipeline/10_datagen_inject.md)(W4) · [../10_observability/01_metrics_catalog.md](../10_observability/01_metrics_catalog.md)(W6) |
+| 모드 B 적체 검사의 기전 · 발행 중단 계수 메트릭 이름 | 기전 **W4 판정**(XADD + XINFO GROUPS 파이프라인 · 위험이면 중단 · 주의 임계 미만 재개) · 메트릭 이름 **W6 판정** — gen_publish_halted_entries_total · gen_publish_halted_points_total · backpressure_stage{publisher} | [../06_pipeline/10_datagen_inject.md](../06_pipeline/10_datagen_inject.md)(W4) · [../10_observability/01_metrics_catalog.md](../10_observability/01_metrics_catalog.md) |
 | 모드 D 대조군 동일 행 절차 | 절차 미설계 | [../06_pipeline/10_datagen_inject.md](../06_pipeline/10_datagen_inject.md)(W4) |
 | 생성기 실행 제어 표면 | 원본 API 표에 없다 — 이 문서는 표면을 요구하지 않는다 | [../07_api/09_datagen.md](../07_api/09_datagen.md)(W5) · 리드 판정 |
 | 부하 주입 표면 게이트 환경변수 이름 · 요청 본문 | 표면 명세 | [../07_api/09_datagen.md](../07_api/09_datagen.md)(W5) |
-| 생성 모드의 과거 ts와 STALE | 실시간 화면 실험은 현재 시각으로 생성한다 | [../10_observability/04_experiment_protocol.md](../10_observability/04_experiment_protocol.md)(W6) |
-| 생성기 단독 처리량 · 프로파일별 압축률 | 3계층 미확인 — 미확인 · 확정 전 임의 값 고정 금지 | [13_nonfunctional.md](./13_nonfunctional.md) REQ-NFR-14 · 17 · EXP(W6 채번) |
+| 생성 모드의 과거 ts와 STALE | 실시간 화면 실험은 현재 시각으로 생성한다 | [../10_observability/04_experiment_protocol.md](../10_observability/04_experiment_protocol.md) |
+| 생성기 단독 처리량 · 프로파일별 압축률 | 3계층 미확인 — 미확인 · 확정 전 임의 값 고정 금지 | [13_nonfunctional.md](./13_nonfunctional.md) REQ-NFR-14 · 17 · EXP-35 · EXP-21 |
 
 ## 관련 문서
 

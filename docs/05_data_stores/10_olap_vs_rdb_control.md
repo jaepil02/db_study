@@ -2,6 +2,8 @@
 
 > **대상**: 학습 목표 ① 설계 정본 — PostgreSQL 대조군 plc_tag_raw_control의 tag_raw 동형 설계(BRIN · 일자 파티션) · SW-09 동시 적재 · 삽입 실패 의미론과 멱등 수단 판정 · 동일 쿼리 5종(양쪽 SQL) · 비교 축 6 · 역전 지점 탐색 설계(행 수 격자) · 측정 조건 · EXP-01~05 예약 대역 연결
 > **작성일**: 2026-09-24
+> **개정일**: 2026-09-24 — W6 실험 채번 반영 — 격자 6단계 보존 판정 · 조정값 · EXP 반영(정본 10_observability/01 · 06)
+> **개정일**: 2026-09-24 — W6 판정 반영 — 대조 실험 자원 조건의 메모리 동일화 값 → ClickHouse 3.5 GB · PostgreSQL 3.5 GB(정본 09_tech_stack/04 · 합계 불변)
 > **원천**: docs_plan.md 학습 목표 1(대조군 설계) · 웨이브 인계 W3 05/10 · W4 06/04 행(SW-09 삽입 실패 의미론 · PostgreSQL 멱등 수단) · 원본 tech_stack.md §5.1 "왜 여기에 시계열을 넣지 않나" · §5.2(커밋 ff66a37) · 원본 architecture.md §7.1 · §13 · §15(커밋 ff66a37) · 원본 data_flow.md §10.1 · §11.1 · §11.2(커밋 ff66a37) · 원본 implementation_plan.md §2.4 · §5 S5(커밋 ff66a37) · D-05 · D-10 · D-12 · ADR-17 · [../01_overview/01_purpose_learning_goals.md](../01_overview/01_purpose_learning_goals.md) 목표 ① · [../03_requirements/07_ingest.md](../03_requirements/07_ingest.md) REQ-ING-15 · [../03_requirements/13_nonfunctional.md](../03_requirements/13_nonfunctional.md) REQ-NFR-18
 
 **학습 목표 ①은 "시계열을 왜 RDB가 아니라 컬럼형으로 다루는가"를 측정으로 아는 것이다**([../01_overview/01_purpose_learning_goals.md](../01_overview/01_purpose_learning_goals.md)). 원본에는 RDB 대조 실험이 아예 없었고, PostgreSQL에 시계열을 넣지 않는 이유는 타인의 벤치마크 범위로만 적혀 있었다(원본 tech_stack.md §5.1 · §5.2). 이 문서는 그 이유를 이 머신 · 이 스키마 · 이 쿼리에서 재는 **실험의 설계**다(D-05 · ADR-17).
@@ -259,7 +261,7 @@ SELECT count(*) FROM plc_tag_raw_control WHERE value > $v;
 - 검산: 기본 격자 = **6**단계 · 행 수 = 1만 태그 × 초 · 6단계 상한 = 10,000 × 604,800 ≈ 6.05 × 10^9(원본 M 티어 7일 행 수 60.5억과 같다)
 - **구성을 고정하고 기간으로 키운다.** 시스템이 실제로 쌓이는 순서 그대로라 쿼리 창과 데이터 밀도(태그당 1 Hz)가 단계마다 같다. 태그 수로 키우면 Q3(설비 전체)의 결과 행 수가 단계마다 달라져 역전이 데이터 폭의 효과와 섞인다.
 - **정밀화 — 역전이 두 단계 사이에서 일어나면 그 사이를 로그 중점으로 두 번 나눈다.** 교차 구간 하나당 점 2개가 늘어난다. 교차가 없으면 "관측 범위 안에서 역전 없음"과 그 범위를 기록한다 — 역전이 나올 때까지 조건을 조정하면 측정이 아니라 연출이다.
-- **상한은 원시 보존 창이다.** 6단계를 넘기려면 보존을 늘려야 하고, 백필 ts는 보존 창 안이어야 한다([04_clickhouse_rollup.md](./04_clickhouse_rollup.md) §백필 절차). 이 머신에서 PostgreSQL이 6단계를 적재 · 저장할 수 있는지(시간 · 디스크)는 미확인이다 — 중단 규칙이 판정한다.
+- **상한은 원시 보존 창이다 — 6단계는 현행 보존에서 수행할 수 없다(W6 판정).** 단계 k의 채우기 시작 ~ 마지막 쿼리 경과는 원시 보존 기간 − 데이터 기간 D_k보다 짧아야 한다(1계층 관계 — 넘으면 TTL이 tag_raw 머리 파티션을 지워 ② 정합이 깨지고, 대조군은 GEN이 지우므로 남는다). 6단계는 D가 약 7일이라 이 예산이 0에 수렴한다 — **5단계(D 약 28시간)에서 멈추고 관측 범위 10^9행으로 기록하거나, 보존을 늘리는 순번 마이그레이션을 실험 조건으로 적용하고 기록에 적는다**(수동 DDL 금지 — REQ-TEC-05 · 조정값 정본 [../10_observability/06_experiment_catalog.md](../10_observability/06_experiment_catalog.md) §대조 실험 조정값). 6단계를 넘기려면 보존을 늘려야 하고, 백필 ts는 보존 창 안이어야 한다([04_clickhouse_rollup.md](./04_clickhouse_rollup.md) §백필 절차). 이 머신에서 PostgreSQL이 6단계를 적재 · 저장할 수 있는지(시간 · 디스크)는 미확인이다 — 중단 규칙이 판정한다.
 
 단계 하나의 절차다.
 
@@ -274,7 +276,7 @@ SELECT count(*) FROM plc_tag_raw_control WHERE value > $v;
 
 - **②가 실패하면 그 단계의 모든 수치가 무효다.** 행 수가 어긋난 단계의 역전은 저장소 차이가 아니라 데이터 차이를 가리킨다(REQ-NFR-18).
 - **③을 건너뛰면 축 5가 비어 보인다.** 추가 전용 PostgreSQL 테이블의 autovacuum · 동결은 적재가 끝난 뒤에 돈다 — 적재 직후 재면 증폭이 0에 가깝게 보인다.
-- 적재 시간 · 디스크 예산 값은 2계층 조정값이며 [../10_observability/06_experiment_catalog.md](../10_observability/06_experiment_catalog.md)가 소유한다.
+- 적재 시간 예산은 1계층 관계(위 불릿) · 디스크 예산은 식이 고정된 2계층 조정값이며 [../10_observability/06_experiment_catalog.md](../10_observability/06_experiment_catalog.md)가 소유한다.
 
 ## 측정 조건
 
@@ -282,7 +284,7 @@ SELECT count(*) FROM plc_tag_raw_control WHERE value > $v;
 |------|------|------|
 | 스위치 | SW-09 on(동시 적재 단계) · SW-10 off · 나머지 기본값 | 데드밴드가 행 수를 바꾼다 |
 | 인덱스 변형 | I1 · I2 중 하나를 명시 | 변형이 섞인 수치가 한 선에 그려진다 |
-| 자원 | **두 컨테이너의 vCPU 수 · 메모리 상한을 같게 둔 조건을 표준으로 한다** | 부하 실험 프로파일은 ClickHouse 5.0 GB · PostgreSQL 2.0 GB이고 cpuset 안도 ClickHouse 6 · PostgreSQL 2 vCPU다(원본 implementation_plan.md §2.4) — 역전이 엔진이 아니라 자원 배분을 가리킨다 |
+| 자원 | **두 컨테이너의 vCPU 수 · 메모리 상한을 같게 둔 조건을 표준으로 한다** — 메모리 현행 3.5 GB · 3.5 GB(W6 판정 · [../09_tech_stack/04_local_environment.md](../09_tech_stack/04_local_environment.md) §대조 실험 메모리 조건) | 부하 실험 프로파일은 ClickHouse 5.0 GB · PostgreSQL 2.0 GB이고 cpuset 안도 ClickHouse 6 · PostgreSQL 2 vCPU다(원본 implementation_plan.md §2.4) — 역전이 엔진이 아니라 자원 배분을 가리킨다 |
 | 내구성 | 대조군 적재 세션은 synchronous_commit off | ClickHouse 기본 삽입은 파트 fsync를 기다리지 않는다 — PostgreSQL만 WAL 플러시를 기다리면 삽입 축이 내구성 수준의 차를 잰다 |
 | 병렬도 | ClickHouse max_threads · PostgreSQL 병렬 작업자 수를 기록 | 한쪽만 병렬 스캔이면 Q4 · Q5가 코어 수의 차를 잰다 |
 | 캐시 상태 | 콜드 = 컨테이너 재기동 직후 첫 실행 · 웜 = 1회 예열 뒤 반복 | OS 페이지 캐시는 Docker VM 안이라 비울 수 없다 — 콜드는 근사이며 기록에 밝힌다 |
@@ -295,7 +297,7 @@ SELECT count(*) FROM plc_tag_raw_control WHERE value > $v;
 
 ## EXP 예약 대역 연결
 
-EXP-01~05는 대조군 동일 쿼리 5종의 예약 대역이다([../11_glossary/04_id_conventions.md](../11_glossary/04_id_conventions.md)). 채번과 실행 절차는 W6([../10_observability/06_experiment_catalog.md](../10_observability/06_experiment_catalog.md))가 확정한다.
+EXP-01~05는 대조군 동일 쿼리 5종의 예약 대역이다([../11_glossary/04_id_conventions.md](../11_glossary/04_id_conventions.md)). 채번과 실행 절차는 [../10_observability/06_experiment_catalog.md](../10_observability/06_experiment_catalog.md)가 확정했다(W6 — 다섯 실험이 조건 · 절차를 공유하고 쿼리만 다르다).
 
 | EXP | 쿼리 | 주 축 | 함께 싣는 비 쿼리 축(제안) |
 |------|------|------|------|
@@ -306,7 +308,7 @@ EXP-01~05는 대조군 동일 쿼리 5종의 예약 대역이다([../11_glossary
 | EXP-05 | Q5 전체 스캔 count | 쿼리 시간 · 읽은 바이트 | VACUUM/WAL 증폭 |
 
 - 검산: EXP = **5** · 쿼리와 1:1
-- **비 쿼리 축은 단계마다 한 번 잰다.** 쿼리와 무관하게 테이블 상태의 값이라 다섯 EXP가 같은 단계의 같은 값을 공유한다 — 오른쪽 열은 어느 기록에 주로 싣는지의 제안이며 배치는 W6이 정한다.
+- **비 쿼리 축은 단계마다 한 번 잰다.** 쿼리와 무관하게 테이블 상태의 값이라 다섯 EXP가 같은 단계의 같은 값을 공유한다 — **W6 판정 — 비 쿼리 축은 격자 단계 기록 하나에 싣고 EXP-01~05가 그 기록을 공유한다**(기계 판독 블록의 axes · [../10_observability/04_experiment_protocol.md](../10_observability/04_experiment_protocol.md)). 오른쪽 열은 해석에서 주로 짝짓는 축이다.
 
 ## 예상 결과
 
@@ -330,10 +332,10 @@ EXP-01~05는 대조군 동일 쿼리 5종의 예약 대역이다([../11_glossary
 | 쿼리별 역전 지점 · 비교 축 6의 값 | 3계층 미확인 — 확정 전 임의 값 고정 금지 | EXP-01~05 · [../03_requirements/13_nonfunctional.md](../03_requirements/13_nonfunctional.md) REQ-NFR-18 |
 | 동시 적재 기전(flusher 안의 위치 · 전용 커넥션 관리) | 저장소 계약만 확정 | [../06_pipeline/04_routing.md](../06_pipeline/04_routing.md)(W4) |
 | 모드 D 구간의 대조군 같은 행 채우기 절차 | GEN-10 기능만 | [../06_pipeline/10_datagen_inject.md](../06_pipeline/10_datagen_inject.md)(W4) |
-| 대조 실험 전용 자원 조건 | 이 문서 판정 · 배치 · 상한 정본과 정합 필요 | [../04_architecture/03_execution_topology.md](../04_architecture/03_execution_topology.md) · [../09_tech_stack/04_local_environment.md](../09_tech_stack/04_local_environment.md) |
-| 적재 시간 · 디스크 예산(중단 규칙) | 2계층 조정값 미정 | [../10_observability/06_experiment_catalog.md](../10_observability/06_experiment_catalog.md)(W6) |
-| 대조군 실패 계수 · 무효 구간 기록의 메트릭 이름 | 미정 | [../10_observability/01_metrics_catalog.md](../10_observability/01_metrics_catalog.md)(W6) |
-| Q5 문턱 {v}의 선택도 | 신호 프로파일 확정 뒤 | [../10_observability/06_experiment_catalog.md](../10_observability/06_experiment_catalog.md)(W6) |
+| 대조 실험 전용 자원 조건 | **W6 판정 반영** — 메모리 3.5 · 3.5 GB(09_tech_stack/04) · CPU 집합 크기 동일(04_architecture/03 §대조 실험 자원 조건) | [../04_architecture/03_execution_topology.md](../04_architecture/03_execution_topology.md) · [../09_tech_stack/04_local_environment.md](../09_tech_stack/04_local_environment.md) |
+| 적재 시간 · 디스크 예산(중단 규칙) | **W6 판정** — 적재 시간은 1계층 관계(경과 < 보존 − D_k) · 디스크 예산은 식 고정 · 값은 실험 시작 시 실측 | [../10_observability/06_experiment_catalog.md](../10_observability/06_experiment_catalog.md) §대조 실험 조정값 |
+| 대조군 실패 계수 · 무효 구간 기록의 메트릭 이름 | **W6 판정** — ing_control_copy_failures_total + 구조화 로그 이벤트 control_copy_failed | [../10_observability/01_metrics_catalog.md](../10_observability/01_metrics_catalog.md) |
+| Q5 문턱 {v}의 선택도 | **W6 판정** — 격자 1단계 적재 직후 quantileExact(0.5)(value)로 한 번 정해 고정 · 선택도 50% | [../10_observability/06_experiment_catalog.md](../10_observability/06_experiment_catalog.md) |
 
 ## 관련 문서
 

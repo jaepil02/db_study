@@ -2,6 +2,8 @@
 
 > **대상**: DSH-REALTIME — 설비별 최신값 표 · 실시간 트렌드 · STALE 표시 · WebSocket 연결과 재연결 표시 · SW-02 · SW-06 · SW-07 · SW-11 영향 표시
 > **작성일**: 2026-09-24
+> **개정일**: 2026-09-24 — W6 실험 채번 반영 — EXP 번호 · 메트릭 이름 반영(정본 10_observability/01 · 06)
+> **개정일**: 2026-09-24 — W6 판정 반영 — 트렌드 창 길이 5분 · 최대 태그 8 현행값(09_tech_stack/01 · S2 고정)
 > **원천**: 원본 data_flow.md §5 · §9 · §9.1 · §9.2 · §12.2(커밋 ff66a37) · 원본 implementation_plan.md §5 S2 · §7.2(커밋 ff66a37) · 원본 architecture.md §11 · §17(커밋 ff66a37) · REQ-RLT-01~18 · REQ-TSQ-13 · AC-10 · AC-11 · AC-17 · AC-18 · AC-41 · 기능 RLT-01~09 · TSQ-01 · TSQ-08 · MST-01 · MST-02 · [../06_pipeline/05_realtime_read.md](../06_pipeline/05_realtime_read.md) · [../02_features/08_realtime.md](../02_features/08_realtime.md) · [01_standards.md](./01_standards.md)
 
 이 문서는 현장 운영자가 상시 띄워 두는 화면 하나를 명세한다. **이 화면은 거의 전부 Redis만 본다** — 최신값은 rt:latest HGETALL 1회, 실시간 변화는 ch:rt Pub/Sub 푸시다. ClickHouse에 닿는 것은 진입 시 트렌드 채움 한 번과 SW-02 off 실험뿐이며, 그래서 이 화면의 체감 속도는 대개 Redis 역할 스위치 하나의 상태로 설명된다([../01_overview/03_personas_roles.md](../01_overview/03_personas_roles.md)).
@@ -112,7 +114,7 @@
 | SW-01 REDIS_STREAM_BUFFER | off | 표시는 같다 · 부팅 경고 상태를 배지로 옮긴다 | "Stream 경계 없음 — 실험 전용" |
 
 - 검산: 표시 스위치 = **5** · 나머지 6(SW-03 · 04 · 05 · 08 · 09 · 10)은 이 화면의 표시를 바꾸지 않는다 — 트렌드 채움의 최근 구간은 캐시하지 않으므로 SW-03~05도 닿지 않는다 · 5 + 6 = **11**
-- **수신 프레임/초는 화면 쪽 관찰 보조다.** AC-41의 기록값은 서버 메트릭(연결당 초당 프레임 · nodejs_eventloop_lag)이며 화면 수치는 기록에 올리지 않는다 — 4요소가 없다.
+- **수신 프레임/초는 화면 쪽 관찰 보조다.** AC-41의 기록값은 서버 메트릭(연결당 초당 프레임 · nodejs_eventloop_lag_p95_seconds)이며 화면 수치는 기록에 올리지 않는다 — 4요소가 없다.
 - **SW-11 비교 중에는 SW-02가 on이어야 차이가 이 화면에 보인다**(조합 제약 #7). SW-02 off면 최신값 REST가 rt:latest를 읽지 않아 갱신 주체의 차이가 표에 드러나지 않는다.
 
 ### 장애 시 보이는 것
@@ -139,8 +141,8 @@
 
 | 항목 | 상태 | 확정 자리 |
 |------|------|------|
-| 트렌드 창 길이 · 트렌드 최대 태그 수 | 2계층 — 소유 이 문서 · 현행 미정(S2 고정) | 이 문서 · [../09_tech_stack/01_frontend.md](../09_tech_stack/01_frontend.md) |
-| 최신값 p95 · 푸시 도달 지연 · 복원 지연 | 3계층 미확인 — 확정 전 임의 값 고정 금지 | [../03_requirements/13_nonfunctional.md](../03_requirements/13_nonfunctional.md) REQ-NFR · EXP(W6 채번) |
+| 트렌드 창 길이 · 트렌드 최대 태그 수 | **W6 판정** — 계약 이 문서 · 현행값 창 5분 · 최대 태그 8(09_tech_stack/01) · S2 고정 | 이 문서 · [../09_tech_stack/01_frontend.md](../09_tech_stack/01_frontend.md) |
+| 최신값 p95 · 푸시 도달 지연 · 복원 지연 | 3계층 미확인 — 확정 전 임의 값 고정 금지 | [../03_requirements/13_nonfunctional.md](../03_requirements/13_nonfunctional.md) REQ-NFR · EXP-07 · EXP-11 · EXP-30 |
 
 ## 관련 문서
 

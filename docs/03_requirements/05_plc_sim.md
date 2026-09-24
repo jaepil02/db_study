@@ -2,6 +2,7 @@
 
 > **대상**: 시뮬레이션(SIM · NestJS plc-sim 모듈)의 동작 계약 — 설비당 Modbus TCP 서버 · 포트 대역 · 레지스터 응답 · 레지스터 갱신 경계 · 지연 · 오류 주입 · 배치 제약 · 결측 해석 — REQ-SIM-NN 채번 정본
 > **작성일**: 2026-09-24
+> **개정일**: 2026-09-24 — W6 실험 채번 반영 — 메트릭 이름 반영(정본 10_observability/01 · 06)
 > **원천**: 원본 tech_stack.md §3.4 · §6 · §7 · §10.1(커밋 ff66a37) · 원본 architecture.md §3 · §4 · §15 · §17(커밋 ff66a37) · 원본 data_flow.md §3 · §11.1 · §12.4 · §14.1 · §17(커밋 ff66a37) · 원본 implementation_plan.md §5 S2 · S3 · S6(커밋 ff66a37) · D-02 · [../02_features/04_plc_sim.md](../02_features/04_plc_sim.md) SIM-01~05 · [01_global_rules.md](./01_global_rules.md) REQ-GLB-03 · 16 · 19
 
 이 문서는 SIM 기능 5개의 동작 계약을 고정한다. SIM은 실 PLC 대신 Modbus TCP 서버로 응답하고, 값을 만들지 않으며(값은 GEN 모드 A가 넣는다), 지연과 오류를 주입해 수집 경로의 실패를 재현한다.
@@ -84,7 +85,7 @@ SIM이 의도적으로 재현하지 않는 것과 재현하는 것을 가른다.
 | 지연 · 오류 주입의 제어 수단 | **미설계** — 환경변수인지 실행 중 제어인지, 대상 지정 방법이 없다. REQ-SIM-10이 기록 요구만 둔다 | [../06_pipeline/02_collect.md](../06_pipeline/02_collect.md)(W4) · 표면이 필요하면 [../07_api/09_datagen.md](../07_api/09_datagen.md)(W5) |
 | FC01 · FC02 응답 영역 | 미확인 — REQ-SIM-05가 확정 전 시드 금지만 둔다 | [../06_pipeline/02_collect.md](../06_pipeline/02_collect.md)(W4) |
 | SIM의 APP_ROLE 배정 | REQ-SIM-11이 제약(collector와 동행)을 요구한다 | [../04_architecture/02_module_boundaries.md](../04_architecture/02_module_boundaries.md)(W3) |
-| 기동 실패 포트 계수의 메트릭 이름 | **신규 미확인** — REQ-SIM-03이 요구한다 | [../10_observability/01_metrics_catalog.md](../10_observability/01_metrics_catalog.md)(W6) |
+| 기동 실패 포트 계수의 메트릭 이름 | **W6 판정** — sim_listen_failed_ports · 적용 중 주입 sim_fault_injection_active | [../10_observability/01_metrics_catalog.md](../10_observability/01_metrics_catalog.md) |
 | Python 시뮬레이터 분리 시 SIMULATED 판정 | 분리하면 host가 서비스명이 되어 루프백 규칙이 깨진다(원본 tech_stack.md §3.4 조건부 경로) | [../02_features/03_collector.md](../02_features/03_collector.md) 재판정 · [../09_tech_stack/06_decisions_rationale.md](../09_tech_stack/06_decisions_rationale.md) |
 | 신호 생성 → 레지스터 반영 지연 | 3계층 미확인 — 미확인 · 확정 전 임의 값 고정 금지. 원본 목표(4 vCPU 가정) p95 2 ms | [13_nonfunctional.md](./13_nonfunctional.md) REQ-NFR-04 |
 

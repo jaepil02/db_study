@@ -2,6 +2,7 @@
 
 > **대상**: 측정값 하나가 계층을 지나며 바뀌는 모양의 정본 — 단계별 스키마(와이어 → 디코딩 → Stream 엔트리 → ClickHouse 행 → API 응답) · 스키마 버전 필드 v · t0 · dt 규칙 · 최신값 Hash 값 · Pub/Sub 페이로드 · 스풀 프레임 · DLQ 엔트리 · 계약 변경 규칙 · 발행자 공통 계약
 > **작성일**: 2026-09-24
+> **개정일**: 2026-09-24 — W6 실험 채번 반영 — 메트릭 이름 반영(정본 10_observability/01 · 06)
 > **원천**: 원본 data_flow.md §14 · §14.1 · §14.2 · §15(커밋 ff66a37) · 원본 architecture.md §9.3(커밋 ff66a37) · docs_plan.md 파일 목차(06_pipeline/12) · ADR-01 · ADR-04 · ADR-14 · ADR-15 · REQ-GLB-01 · 02 · 21 · REQ-COL-09 · REQ-GEN-07 · REQ-ING-01 · 05 · REQ-TSQ-05 · [../11_glossary/05_units_and_time.md](../11_glossary/05_units_and_time.md) 기준값 + 오프셋 인코딩 · [../05_data_stores/03_clickhouse_schema.md](../05_data_stores/03_clickhouse_schema.md) tag_raw · [../05_data_stores/05_redis_keyspace.md](../05_data_stores/05_redis_keyspace.md) 봉인 계열 값 모양
 
 모듈 사이의 결합은 **데이터 계약 하나로만** 한다(REQ-GLB-21). Collector와 Ingest는 같은 프로세스에 있어도 서로의 코드를 부르지 않고 Stream 엔트리의 모양으로만 만난다 — 역할 분리(APP_ROLE) 뒤에는 두 모듈이 서로 다른 시점에 배포되어 **두 버전이 공존하는 구간이 반드시 생긴다.** 이 문서가 그 모양과 버전 규칙의 정본이다.
@@ -194,7 +195,7 @@ stream:plc:dlq 엔트리 하나 = **실패한 원 엔트리 하나**다(W3 판�
 | 모드 C 요청 본문 모양 | 미정 — 이 계약으로 변환된다 | [../07_api/09_datagen.md](../07_api/09_datagen.md)(W5) |
 | 응답 시각 형식 · WebSocket 프레임 · 채널 필드 이름 | 미정 | [../07_api/01_conventions.md](../07_api/01_conventions.md) · [../07_api/11_websocket.md](../07_api/11_websocket.md)(W5) |
 | DLQ 엔트리 원 배치 토큰 필드 | 판정 — 키 공간 값 모양 갱신 필요 | [../05_data_stores/05_redis_keyspace.md](../05_data_stores/05_redis_keyspace.md)(W4 반영) |
-| 음수 dt · 잘린 스풀 프레임 계수 이름 | 미정 | [../10_observability/01_metrics_catalog.md](../10_observability/01_metrics_catalog.md)(W6) |
+| 음수 dt · 잘린 스풀 프레임 계수 이름 | **W6 판정** — ing_negative_dt_total · col_spool_truncated_frames_total | [../10_observability/01_metrics_catalog.md](../10_observability/01_metrics_catalog.md) |
 
 ## 관련 문서
 

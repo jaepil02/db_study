@@ -2,6 +2,8 @@
 
 > **대상**: F-09 주입 흐름의 기전 정본 — 생성 엔진 → 모드 A~D · 한 번에 한 계층 원칙 · 모드 A 레지스터 갱신 · **모드 B 적체 검사 기전(판정량은 그룹 적체)** · 모드 C 표면 · 모드 D 백필 실행 · **모드 D 대조군 동일 행 절차** · 대조군 파티션 정리 · **SIM 지연 · 오류 주입 제어 수단** · 티어 시드 구성 · 생성기 포화 · 부하 실행 절차
 > **작성일**: 2026-09-24
+> **개정일**: 2026-09-24 — W6 실험 채번 반영 — 메트릭 이름 · EXP 번호 · 디스크 예산 반영(정본 10_observability/01 · 06)
+> **개정일**: 2026-09-24 — W6 판정 반영 — 주입 계획 파일 형식 → JSON + zod 검증 · infra/sim-plans · SIM_FAULT_PLAN(정본 09_tech_stack/05 · 04) · 노출 필드 이름만 미정
 > **원천**: 원본 data_flow.md §11 · §11.1 · §11.2 · §11.3 · §10.3 · §12.1(커밋 ff66a37) · 원본 architecture.md §4 · §9.3 · §11 · §17(커밋 ff66a37) · 원본 tech_stack.md §3.4(커밋 ff66a37) · docs_plan.md 웨이브 인계 W4 06_pipeline/10 행 전부 · SIM 지연 · 오류 주입 제어 수단 · D-05 · D-12 · ADR-17 · ADR-19 · ADR-21 · ADR-22 · ADR-23 · REQ-GEN-01~15 · REQ-SIM-08~11 · REQ-GLB-10 · 18 · 23 · REQ-TEC-08~13 · [../05_data_stores/10_olap_vs_rdb_control.md](../05_data_stores/10_olap_vs_rdb_control.md) · [../05_data_stores/08_retention_lifecycle.md](../05_data_stores/08_retention_lifecycle.md) §대조군 보존 정합 · [../04_architecture/07_capacity_planning.md](../04_architecture/07_capacity_planning.md) 티어
 
 F-09는 **생성기가 만든 값이 네 계층 중 하나에 들어가기까지**다. 주입 모드는 넷이고 각 모드는 다른 계층부터 부하를 준다 — A는 Modbus부터, B는 Stream부터, C는 HTTP 표면부터, D는 ClickHouse만. **측정 원칙은 한 번에 한 계층만 부하를 주는 것이다**(REQ-GEN-05) — 모드 A와 B를 동시에 돌리면 병목이 Modbus인지 적재인지 가를 수 없다.
@@ -87,7 +89,7 @@ F-09는 **생성기가 만든 값이 네 계층 중 하나에 들어가기까지
 | 모드 B 단계 게이지 | 모드 B가 본 적체 단계 | Collector 단계와 같은 판정인지 대조 |
 | 생성기 CPU | 생성 · 인코딩 스레드 사용률 | 포화 구간 폐기(REQ-GEN-13) |
 
-- 검산: 계측 = **3** · 이름은 [../10_observability/01_metrics_catalog.md](../10_observability/01_metrics_catalog.md)(W6)가 정한다
+- 검산: 계측 = **3** · 이름은 [../10_observability/01_metrics_catalog.md](../10_observability/01_metrics_catalog.md)가 정한다 — gen_publish_halted_entries_total · gen_publish_halted_points_total · backpressure_stage{publisher} · gen_worker_utilization(W6)
 
 ## 모드 C 표면
 
@@ -201,11 +203,11 @@ F-09는 **생성기가 만든 값이 네 계층 중 하나에 들어가기까지
 | 항목 | 상태 | 확정 자리 |
 |------|------|------|
 | 생성기 단독 처리량 | 3계층 미확인 — 판정은 M 티어의 3배 · 원본 목표 30,000 pps | REQ-NFR-17 · AC-16 |
-| 티어별 초당 Modbus 요청의 실측 · 폴링 주기 초과 여부 | 3계층 미확인 — 위 표는 구조 계산 | S5 · [../10_observability/06_experiment_catalog.md](../10_observability/06_experiment_catalog.md)(W6) |
-| 주입 계획의 파일 형식 · 노출 필드 이름 | 미정 | [../09_tech_stack/05_tooling_devops.md](../09_tech_stack/05_tooling_devops.md) · [../10_observability/01_metrics_catalog.md](../10_observability/01_metrics_catalog.md)(W6) |
+| 티어별 초당 Modbus 요청의 실측 · 폴링 주기 초과 여부 | 3계층 미확인 — 위 표는 구조 계산 | S5 · EXP-23(모드 A) · [../10_observability/06_experiment_catalog.md](../10_observability/06_experiment_catalog.md) |
+| 주입 계획의 파일 형식 · 노출 필드 이름 | 형식 **W6 판정** — JSON 하나 · shared zod 검증 · 검증 실패 시 기동 거부 · 경로 SIM_FAULT_PLAN · 노출 필드 이름만 미정 | [../09_tech_stack/05_tooling_devops.md](../09_tech_stack/05_tooling_devops.md) · [../10_observability/01_metrics_catalog.md](../10_observability/01_metrics_catalog.md) — 노출은 sim_fault_injection_active{kind}(W6) |
 | 실행 중 주입 제어 표면의 필요 여부 | 판정 — 두지 않는다 · 필요하면 표면 판정 | [../07_api/09_datagen.md](../07_api/09_datagen.md)(W5) |
 | bulk 본문 모양 | 미정 | 상동 |
-| 대조군 정리의 디스크 예산 · 중단 규칙 | 2계층 미정 | [../10_observability/06_experiment_catalog.md](../10_observability/06_experiment_catalog.md)(W6) |
+| 대조군 정리의 디스크 예산 · 중단 규칙 | **W6 판정** — 디스크 예산은 식 고정(여유 − 잔여 알림 문턱 − 다음 스냅샷 ≥ 다음 단계 도출 크기) · 적재 시간은 1계층 관계 | [../10_observability/06_experiment_catalog.md](../10_observability/06_experiment_catalog.md) §대조 실험 조정값 |
 
 ## 관련 문서
 

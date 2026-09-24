@@ -2,6 +2,7 @@
 
 > **대상**: db_study가 "동작한다" · "그 단계를 마쳤다" · "학습 목표를 산출했다"고 말할 수 있는 조건 — 흐름 검증 체크리스트 · 학습 단계 S0~S7 합격 판정 · 학습 목표 산출물(대조군 역전 지점 · 축출 연쇄 · 스위치 on/off 비교) · 롤업 부동소수 허용 오차 판정 · 캐시 정합성 판정 — **AC-NN 채번 정본**
 > **작성일**: 2026-09-24
+> **개정일**: 2026-09-24 — W6 실험 채번 반영 — AC-19 문구 보정(그룹 lag 0 · pending 유계 · 0 복귀) · p95 확정 실험 EXP-31 · 컨슈머 랙 정의 닫음(정본 10_observability/01 · 06)
 > **개정일**: 2026-09-24 — W5 판정 반영 — §캐시 정합성 판정의 체인 단 번호를 5단 표기 → **6단 정본**(② ③ ④ · ⑤ · ⑥)으로 · API 직결 층의 "Dictionary 재적재가 응답 전에 끝난다" → **④는 응답 뒤 — 재적재 완료가 사건**(06_pipeline/07) — 판정 층 수 불변
 > **개정일**: 2026-09-24 — SW-11 LATEST_VALUE_WRITER 신설 반영(D-13 · 사용자 확정) — 스위치 10 → **11**
 > **원천**: 원본 data_flow.md §12.3 · §13 · §15 · §17(커밋 ff66a37) · 원본 implementation_plan.md §2.4 · §5 · §5.1 · §7.1 · §7.2 · §7.4 · §8(커밋 ff66a37) · 원본 architecture.md §8.4 · §14 · §16 · §17(커밋 ff66a37) · 원본 tech_stack.md §14(커밋 ff66a37) · 저장소 루트 docs_plan.md 웨이브 인계 W2 행(롤업 대 원시 부동소수 허용 오차) · D-05 · D-10 · D-11 · D-12 · [../01_overview/05_priorities_roadmap.md](../01_overview/05_priorities_roadmap.md) 진입 조건과 합격 판정 · [../01_overview/01_purpose_learning_goals.md](../01_overview/01_purpose_learning_goals.md) 산출물과 성공 판정 · [../11_glossary/05_units_and_time.md](../11_glossary/05_units_and_time.md) 부동소수와 오차 허용 비교
@@ -98,7 +99,7 @@ W1이 이 문서로 넘긴 값이다(11_glossary/05 · 웨이브 인계 W2 행).
 | **AC-16** | 생성기 단독 처리량 | 생성기 단독 실행 경로로 워커 수별 처리량 측정 | 워커 수별 수치 **기록** · 처리량 ≥ M 티어 초당 포인트의 **3배**. 미달이면 원본 tech_stack.md §3.4 전환 조건 발동 | F-09 | GEN-09 · GEN-01 | [06_datagen.md](./06_datagen.md) | S1 |
 | **AC-17** | 수직 슬라이스 육안 확인 | 설비 1 · 태그 8 · SINE · 모드 A로 기동 → 웹 1페이지 | 차트에 새 점이 연속으로 그려지고 최신값 표가 갱신된다 | F-01 · F-02 · F-03 · F-04 · F-07 | TSQ-01 · RLT-01 · RLT-05 | [08_timeseries.md](./08_timeseries.md) · [09_realtime.md](./09_realtime.md) | S2 |
 | **AC-18** | SW-02 첫 비교 | 같은 부하로 SW-02 on · off 각각 최신값 API p95 측정 | 두 수치가 4요소와 함께 **기록**(판정 아님 · 원본 예상치 off 30~150 ms · on 0.3~1 ms — 미확인) | F-03 | RLT-01 · RLT-02 | [09_realtime.md](./09_realtime.md) | S2 |
-| **AC-19** | 컨슈머 랙 | S 티어 부하 지속 중 컨슈머 랙 추이 | 랙이 **0으로 유지**된다 — 지표 정의(산출식 · 샘플 주기)는 [../10_observability/01_metrics_catalog.md](../10_observability/01_metrics_catalog.md) | F-02 | ING-01 · ING-07 · OBS-01 | [07_ingest.md](./07_ingest.md) · [12_metrics.md](./12_metrics.md) | S3 |
+| **AC-19** | 컨슈머 랙 | S 티어 부하 지속 중 컨슈머 랙 추이 | 그룹 lag(미배달)가 **0으로 유지**되고 pending(미확인)이 in-flight 2배치 분량 안에서 유계이며 부하 정지 뒤 consumer_lag(= 그룹 lag + pending)가 **0으로 복귀**한다 — 산출식 · 샘플 주기 정본은 [../10_observability/01_metrics_catalog.md](../10_observability/01_metrics_catalog.md) | F-02 | ING-01 · ING-07 · OBS-01 | [07_ingest.md](./07_ingest.md) · [12_metrics.md](./12_metrics.md) | S3 |
 | **AC-20** | SW-08 재시도 중복 | 삽입 성공 뒤 XACK 전에 실패를 강제해 재시도를 유발 · SW-08 off/on | off — 중복 행 **1건 이상** · on — **0건** | F-02 | ING-04 · ING-05 | [07_ingest.md](./07_ingest.md) | S3 |
 | **AC-21** | SW-09 동시 적재 | SW-09 on으로 적재 → 같은 구간 두 저장소 행 수 대조 | count(tag_raw) = count(plc_tag_raw_control) — **차 0** | F-02 · F-09 | ING-11 · GEN-10 | [07_ingest.md](./07_ingest.md) · [06_datagen.md](./06_datagen.md) | S3 |
 | **AC-22** | 배치 트리거 세 안 | 읽기 · 삽입 분리 · 컨슈머 1 + 배치 확대 · 서버 측 비동기 삽입을 같은 부하로 비교 | 세 안의 파트 생성률 · E2E 지연이 **기록**된다(원본 산술 — 독립 플러시 시 파트 생성률 3배 · 미확인) | F-02 | ING-02 · ING-07 | [07_ingest.md](./07_ingest.md) | S3 |
@@ -130,7 +131,7 @@ W1이 이 문서로 넘긴 값이다(11_glossary/05 · 웨이브 인계 W2 행).
 |------|------|------|------|------|------|------|------|
 | **AC-39** | SW-03 on/off | 같은 반복 조회 부하로 SW-03 on · off | 조회 p95 · ClickHouse 쿼리 실행 수가 on/off 쌍으로 **기록**(원본 예상치 히트 시 250 ms → 15 ms — 미확인) | F-04 | TSQ-04 | [08_timeseries.md](./08_timeseries.md) | S4 |
 | **AC-40** | SW-06 on/off | 같은 발행 부하로 SW-06 on · off · api 인스턴스 1 | 발행 → 수신 지연이 on/off 쌍으로 **기록** · 두 조건의 수신 프레임 내용 **동일** | F-06 · F-07 | RLT-05 · RLT-08 · ALM-06 · ING-08 | [09_realtime.md](./09_realtime.md) · [10_alarms.md](./10_alarms.md) | S4 |
-| **AC-41** | SW-07 on/off | 같은 갱신 부하로 SW-07 기본값 · 0 | 연결당 초당 프레임 · nodejs_eventloop_lag가 쌍으로 **기록**(원본 예상치 초당 5,000 → 10 프레임 — 미확인) | F-07 | RLT-06 | [09_realtime.md](./09_realtime.md) | S4 |
+| **AC-41** | SW-07 on/off | 같은 갱신 부하로 SW-07 기본값 · 0 | 연결당 초당 프레임 · nodejs_eventloop_lag_p95_seconds가 쌍으로 **기록**(원본 예상치 초당 5,000 → 10 프레임 — 미확인) | F-07 | RLT-06 | [09_realtime.md](./09_realtime.md) | S4 |
 | **AC-42** | SW-10 off/on | 신호 프로파일별로 SW-10 off · on | 전송량 · tag_raw 행 수 · 압축률이 프로파일별 쌍으로 **기록**(원본 예상치 전송률 3~100% — 미확인) | F-01 | COL-06 · GEN-01 | [04_collector.md](./04_collector.md) | S3 |
 | **AC-43** | 역할별 on/off 차이 완결 | 스위치 전수(정본 02_features/13)의 on/off 기록을 모은다 | 전수 **전부** off · on 쌍이 4요소 · 3회 중앙값과 함께 존재 · 한쪽만 잰 스위치 0 | 해당 없음 — 횡단 | OBS-06 | [12_metrics.md](./12_metrics.md) · [01_global_rules.md](./01_global_rules.md) | S6 |
 | **AC-44** | 목표 ① 비교 축별 수치표 | AC-29와 같은 용량 단계에서 비교 축을 잰다 | 비교 축 **6축 전부**가 같은 용량 단계에서 양 저장소 값을 갖는다 — 쿼리 시간만 있고 저장 비용 축이 빈 표는 불합격 | F-02 · F-09 | ING-11 · GEN-10 | [07_ingest.md](./07_ingest.md) · [13_nonfunctional.md](./13_nonfunctional.md) | S5 |
@@ -170,7 +171,7 @@ W1이 이 문서로 넘긴 값이다(11_glossary/05 · 웨이브 인계 W2 행).
 | S0 | 저장소 3개 healthy · 메모리 상한 적용 | AC-14 · AC-15 |
 | S1 | 생성기 단독 처리량 ≥ M 티어 3배 · 워커 수별 기록 | AC-16 |
 | S2 | ① 육안 ② 무손실 ③ E2E 기록 ④ SW-02 on/off p95 | ① AC-17 ② AC-01 ③ AC-03 ④ AC-18 |
-| S3 | ① S 티어 무손실 ② 랙 0 ③ SW-08 off/on ④ 원시 대 1분 롤업 avg ⑤ SW-09 행 수 ⑥ 배치 트리거 세 안 | ① AC-01 ② AC-19 ③ AC-20 ④ AC-05 ⑤ AC-21 ⑥ AC-22 |
+| S3 | ① S 티어 무손실 ② 그룹 lag 0 · 0 복귀 ③ SW-08 off/on ④ 원시 대 1분 롤업 avg ⑤ SW-09 행 수 ⑥ 배치 트리거 세 안 | ① AC-01 ② AC-19 ③ AC-20 ④ AC-05 ⑤ AC-21 ⑥ AC-22 |
 | S4 | ① 히트율 ② SW-04 off 0 수렴 ③ SW-05 쿼리 횟수 | ① AC-23 ② AC-24 ③ AC-25 |
 | S5 | ① 시나리오 5종 ② 변곡점 ③ 목표표 실측 ④ 대조 쿼리 역전 지점 | ① AC-26 ② AC-27 ③ AC-28 ④ AC-29 |
 | S6 | ① 백프레셔 전이 ② ClickHouse 중단 복구 ③ Redis 중단 ④ 축출 연쇄 ⑤ SW-01 off ⑥ DLQ ⑦ 갱신 주체 비교 | ① AC-30 ② AC-11 ③ AC-31 ④ AC-32 ⑤ AC-33 ⑥ AC-12 ⑦ AC-34 |
@@ -201,12 +202,12 @@ W1이 이 문서로 넘긴 값이다(11_glossary/05 · 웨이브 인계 W2 행).
 
 | 항목 | 원본에서 확인되는 것 | 상태 | 확정 수단 · 자리 |
 |------|------|------|------|
-| p95 원시 대 롤업의 근사 허용 범위 | TDigest는 근사다 — 부동소수 허용 오차로 비교하지 않는다(W1) | 미확인 — 확정 전 임의 값 고정 금지 | S3에서 롤업 p95 값의 원시 내 순위(값 이하 행 수 ÷ n)와 0.95의 차를 버킷별로 3회 측정해 분포를 기록 → [../10_observability/06_experiment_catalog.md](../10_observability/06_experiment_catalog.md) 실험 결과로 이 문서에 순위 오차 기준을 올린다 |
+| p95 원시 대 롤업의 근사 허용 범위 | TDigest는 근사다 — 부동소수 허용 오차로 비교하지 않는다(W1) | 미확인 — 확정 전 임의 값 고정 금지 | S3에서 롤업 p95 값의 원시 내 순위(값 이하 행 수 ÷ n)와 0.95의 차를 버킷별로 3회 측정해 분포를 기록 → [../10_observability/06_experiment_catalog.md](../10_observability/06_experiment_catalog.md) EXP-31 결과로 이 문서에 순위 오차 기준을 올린다 |
 | 성능 목표 전부(E2E p95 · 조회 p95 · 히트율 · 소진 시간 · 처리량) | 원본 목표(4 vCPU 가정) | 미확인 — 확정 전 임의 값 고정 금지 | [13_nonfunctional.md](./13_nonfunctional.md) · EXP-NN |
 | 쿼리별 역전 지점 · 시스템 변곡점 | 없다 — 산출물이다 | 미확인 — 확정 전 임의 값 고정 금지 | AC-27 · AC-29 실측 |
 | 축출 연쇄가 관찰되는 메모리 조건 | 원본 실험 조건 maxmemory 하향 | 2계층 조정값 · 관찰 결과는 미확인 | [../05_data_stores/06_redis_memory.md](../05_data_stores/06_redis_memory.md) |
 | 시뮬레이터 지연 · 오류 주입 제어 수단 | 주입 기능은 있고 제어 표면은 없다 | 미설계(W2a 등재) | [../06_pipeline/02_collect.md](../06_pipeline/02_collect.md)(W4) · [../07_api](../07_api/README.md)(W5) |
-| 컨슈머 랙 지표 정의 | "Stream 길이 − 처리 완료 오프셋"(원본 tech_stack.md §9) · "XLEN − PEL 처리량"(원본 architecture.md §16) | 신규 불일치 — 두 산출식이 다르다 | [../10_observability/01_metrics_catalog.md](../10_observability/01_metrics_catalog.md)(W6) |
+| 컨슈머 랙 지표 정의 | "Stream 길이 − 처리 완료 오프셋"(원본 tech_stack.md §9) · "XLEN − PEL 처리량"(원본 architecture.md §16) | **W6 판정** — 두 원본 식을 버리고 consumer_lag = 그룹 lag + pending(ADR-21 판정량과 같다) | [../10_observability/01_metrics_catalog.md](../10_observability/01_metrics_catalog.md) §컨슈머 랙 판정 |
 | 보존 적용 시점 | TTL DELETE(파티션 DROP) | 2계층 | [../05_data_stores/08_retention_lifecycle.md](../05_data_stores/08_retention_lifecycle.md)(W3) |
 
 ## 관련 문서

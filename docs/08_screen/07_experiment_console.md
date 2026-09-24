@@ -2,6 +2,8 @@
 
 > **대상**: ★ EXP-CONSOLE(스위치 11종의 실제 주입 구현 표시 · 저장소 상태 · 조합 경고 · 메트릭 요약 · 전환 절차 안내 · 측정 기록 4요소 조건 블록) · EXP-COMPARE(on/off · 구현값 비교 · 측정 창 · 대조군 역전 지점 표시) — 인증 사용자 전원 · **표시 전용**
 > **작성일**: 2026-09-24
+> **개정일**: 2026-09-24 — W6 실험 채번 반영 — 기계 판독 형식 · 메트릭 이름 · EXP 번호 반영 · 조합 경고 7 → 9(정본 10_observability/01 · 06)
+> **개정일**: 2026-09-24 — W6 판정 반영 — 콘솔 폴링 주기 현행값 15초(스크레이프 주기와 같음 · 09_tech_stack/01)
 > **원천**: 원본 implementation_plan.md §3.1 · §4 · §4.1 · §4.2 · §4.3 · §5 S2 · §8(커밋 ff66a37) · 원본 architecture.md §3 · §11 · §14(커밋 ff66a37) · docs_plan.md 실행 계획 보정 #14 · D-06 · D-10 · REQ-OBS-01~12 · AC-18 · AC-20 · AC-24 · AC-25 · AC-29 · AC-33 · AC-34 · AC-39~AC-44 · 기능 OBS-01~06 · [../02_features/13_switch_matrix.md](../02_features/13_switch_matrix.md) · [../02_features/12_permission_matrix.md](../02_features/12_permission_matrix.md) §실험 수행자와 실험 콘솔 · [../04_architecture/02_module_boundaries.md](../04_architecture/02_module_boundaries.md) · [../07_api/09_datagen.md](../07_api/09_datagen.md) 실행 제어 표면 판정 · [../10_observability/README.md](../10_observability/README.md) · [01_standards.md](./01_standards.md)
 
 이 문서는 학습 목표 2축의 산출이 사람 눈에 닿는 자리 두 곳을 명세한다. **실험 콘솔은 스위치를 켜고 끄는 화면이 아니다.** 스위치는 환경변수 + DI 초기화 선택이라 전환에 api 재기동이 필요하고(D-06), 콘솔은 **지금 무엇이 주입됐는지 표시 · 전환 절차 안내 · 측정 창 비교**만 한다(보정 #14 · REQ-OBS-12). 생성기 실행 · 부하 주입 게이트 · 저장소 수동 실습도 전부 호스트 셸의 일이다 — 생성기 실행 · 상태 표면은 두지 않기로 판정됐다([../07_api/09_datagen.md](../07_api/09_datagen.md)).
@@ -57,7 +59,7 @@
 | 정밀 측정 모드 | 바닥 | 켜면 이 화면의 모든 폴링을 멈추고 "관찰 정지" 표지 — 브라우저 안 설정 | 해당 없음 — 화면 동작 | 해당 없음 |
 
 - 검산: 요소 = **10** · 이 화면이 호출하는 기능 = OBS 6(01 보조 · 02 · 03 · 04 · 05 · 06)
-- **메트릭 이름은 이 문서가 정하지 않는다.** 요약 카드는 계열(컨슈머 랙 · E2E · 백프레셔 단계 등)로 적고 이름과 레이블은 [../10_observability/01_metrics_catalog.md](../10_observability/01_metrics_catalog.md)(W6)가 채번한다. BFF 해석 결과의 필드 모양은 [../07_api/10_metrics.md](../07_api/10_metrics.md)가 정한다.
+- **메트릭 이름은 이 문서가 정하지 않는다.** 요약 카드는 계열(컨슈머 랙 · E2E · 백프레셔 단계 등)로 적고 이름과 레이블은 [../10_observability/01_metrics_catalog.md](../10_observability/01_metrics_catalog.md)가 정한다(W6 — 컨슈머 랙 consumer_lag · 단계 backpressure_stage · E2E e2e_latency 등). BFF 해석 결과의 필드 모양은 [../07_api/10_metrics.md](../07_api/10_metrics.md)가 정한다.
 - **가장 중요한 단일 지표는 컨슈머 랙이다**([../10_observability/README.md](../10_observability/README.md)). 요약 카드의 첫 자리에 두고, 백프레셔 단계(정상 · 주의 · 경고 · 위험 · 복구)를 그 옆에 둔다 — 랙이 오르는데 단계가 정상이면 판정량(미확인 적체)과 랙의 산출식 차이를 의심할 자리다.
 
 ### 스위치 11 표시
@@ -85,7 +87,7 @@
 
 ### 조합 경고
 
-[../02_features/13_switch_matrix.md](../02_features/13_switch_matrix.md) §조합 제약 7건을 현재 주입 구현만으로 판정해 띄운다. 제약의 강제는 [../10_observability/04_experiment_protocol.md](../10_observability/04_experiment_protocol.md)가 하고 화면은 알리기만 한다.
+[../02_features/13_switch_matrix.md](../02_features/13_switch_matrix.md) §조합 제약 9건을 현재 주입 구현만으로 판정해 띄운다. 제약의 강제는 [../10_observability/04_experiment_protocol.md](../10_observability/04_experiment_protocol.md)가 하고 화면은 알리기만 한다.
 
 | 조합 제약 | 화면 판정 조건 | 경고 문구 |
 |------|------|------|
@@ -96,8 +98,10 @@
 | #5 | SW-10 on | "데드밴드가 켜졌다 — 처리량 · 행 수 · 압축률 성능 측정에 쓰지 않는다" |
 | #6 | SW-06 대안 | "팬아웃 직접 호출 — api 인스턴스 1에서만 성립한다" |
 | #7 | SW-02 대안 | "SW-11 비교를 이 구성으로 재지 않는다 — 최신값 조회가 rt:latest를 읽지 않는다" |
+| #8 | SW-10 대안(on) | "데드밴드는 주입 모드 A에서만 돈다 — 모드 B · C · D로 재지 않는다" |
+| #9 | SW-11 대안(collector) | "collector 갱신은 주입 모드 A에서만 돈다 — 모드 B · C · D에서는 최신값을 쓰는 주체가 없다" |
 
-- 검산: 조합 제약 = **7** · 스위치 상태만으로 판정 가능 7 · 판정 불가 0 — #2의 "모드"와 #6의 "인스턴스 수"는 화면이 모르므로 경고는 조건을 알리기만 한다
+- 검산: 조합 제약 = **9** · 스위치 상태만으로 판정 가능 9 · 판정 불가 0 — #2 · #8 · #9의 "모드"와 #6의 "인스턴스 수"는 화면이 모르므로 경고는 조건을 알리기만 한다
 - **경고는 측정을 막지 않는다.** 콘솔은 표시 전용이다 — 막을 수단이 있다면 그것이 곧 실험 손잡이의 인가 판정이 되어 "실험은 앱 권한으로 막는다"는 오해를 만든다(권한 매트릭스 버린 대안 ①).
 
 ### 전환 절차
@@ -134,7 +138,7 @@
 
 - 검산: 표면 = **2**
 - **정밀 측정 중에는 이 화면이 측정 대상을 건드린다(B형).** 결론 — health 폴링은 매번 세 저장소에 실제 왕복을 하고(REQ-OBS-08), metrics 폴링은 api의 텍스트 생성과 BFF 해석을 같은 머신에 더한다(/metrics 자체는 저장소를 조회하지 않고 주기 수집의 마지막 값을 낸다). 반대 시나리오 — 콘솔을 띄운 채 측정하면 health 주기마다 세 저장소에 왕복이 끼어 p95 꼬리가 콘솔 주기에 맞춰 튄다. 파생 지침 — 정밀 측정 세션에서는 정밀 측정 모드로 폴링을 멈추거나 화면을 닫는다([../01_overview/03_personas_roles.md](../01_overview/03_personas_roles.md) — 관측 대시보드를 끄는 것과 같은 규칙).
-- 폴링 주기는 2계층 조정값이다 — 소유 이 문서 · 현행 미정. 계약은 "Prometheus 스크레이프 주기보다 짧지 않게"다 — 더 짧으면 콘솔이 스크레이프보다 큰 관측 부하가 된다. 캐시 층이 없어 staleTime은 0이다([01_standards.md](./01_standards.md) §갱신 주기와 캐시 층 정렬).
+- 폴링 주기는 2계층 조정값이다 — 계약 이 문서 · 현행값 15초([../09_tech_stack/01_frontend.md](../09_tech_stack/01_frontend.md) W6 판정). 계약은 "Prometheus 스크레이프 주기보다 짧지 않게"다 — 더 짧으면 콘솔이 스크레이프보다 큰 관측 부하가 된다. 캐시 층이 없어 staleTime은 0이다([01_standards.md](./01_standards.md) §갱신 주기와 캐시 층 정렬).
 
 ### 스위치 영향
 
@@ -221,7 +225,7 @@
 
 ### 대조군 역전 지점
 
-**데이터 원천은 Next.js BFF가 docs/measurements 기록을 읽기 전용으로 읽는 것이다**(W5 리드 판정 — 후보 ①). api 컨테이너 표면을 신설하지 않는다 — 측정 기록은 설계 정본이 아니라 실측 파일이고 api는 그 파일을 모른다. 기록의 기계 판독 형식(어느 자리에서 용량 단계 · 저장소 · 쿼리 시간 · 4요소를 읽는가)의 정본은 [../10_observability/04_experiment_protocol.md](../10_observability/04_experiment_protocol.md)(W6)이고, 이 절은 그 값을 그리는 표시 계약을 고정한다.
+**데이터 원천은 Next.js BFF가 docs/measurements 기록을 읽기 전용으로 읽는 것이다**(W5 리드 판정 — 후보 ①). api 컨테이너 표면을 신설하지 않는다 — 측정 기록은 설계 정본이 아니라 실측 파일이고 api는 그 파일을 모른다. 기록의 기계 판독 형식(어느 자리에서 용량 단계 · 저장소 · 쿼리 시간 · 4요소를 읽는가)의 정본은 [../10_observability/04_experiment_protocol.md](../10_observability/04_experiment_protocol.md) §기계 판독 블록이고, 이 절은 그 값을 그리는 표시 계약을 고정한다.
 
 | 계약 | 내용 | 어기면 |
 |------|------|------|
@@ -267,10 +271,10 @@
 | BFF 메트릭 해석 결과 모양 | **이 문서 판정** — 화면용 요약 JSON 표면을 두지 않는 07_api/10_metrics 판정에 따라 해석은 웹(BFF Route Handler) 내부 계약이다 · EXP-CONSOLE은 계열별 순간값, EXP-COMPARE는 누적 카운터 · 히스토그램 버킷을 받는다 | 이 문서 · [../09_tech_stack/01_frontend.md](../09_tech_stack/01_frontend.md)(W6) |
 | 커밋 해시 · 메모리 프로파일 · 용량 티어의 화면 원천 | **닫힘** — health에 노출(W5 리드 판정) · 필드 이름은 07_api/10_metrics | [../07_api/10_metrics.md](../07_api/10_metrics.md) |
 | 부하 주입 게이트(모드 C 표면) 켜짐 여부 | **닫힘** — health에 싣지 않는다(07_api/10_metrics 판정 · 스위치가 아니다) · 기록 조건 블록에 수기 칸으로 둔다 | [../07_api/10_metrics.md](../07_api/10_metrics.md) |
-| 대조군 역전 지점 패널의 데이터 원천 | **닫힘** — BFF가 docs/measurements를 읽기 전용으로 읽는다(W5 리드 판정) · 기계 판독 형식은 W6 | [../10_observability/04_experiment_protocol.md](../10_observability/04_experiment_protocol.md)(W6) |
-| 메트릭 이름 · 스위치 상태 레이블 이름 | W6 채번 대기 | [../10_observability/01_metrics_catalog.md](../10_observability/01_metrics_catalog.md) |
-| 스위치별 EXP 번호(SW-09의 EXP-01~05 예약 제외) | W6 채번 대기 | [../10_observability/06_experiment_catalog.md](../10_observability/06_experiment_catalog.md) |
-| 콘솔 폴링 주기 · 편차 폐기 기준 | 2계층 — 폴링은 이 문서 · 현행 미정 · 편차 기준은 W6 | 이 문서 · [../10_observability/04_experiment_protocol.md](../10_observability/04_experiment_protocol.md) |
+| 대조군 역전 지점 패널의 데이터 원천 | **닫힘** — BFF가 docs/measurements를 읽기 전용으로 읽는다(W5 리드 판정) · 기계 판독 형식 **닫힘(W6)** — json 펜스 1개 · schema measurement/v1 · BFF 판독 규칙 7(§기계 판독 블록) | [../10_observability/04_experiment_protocol.md](../10_observability/04_experiment_protocol.md) |
+| 메트릭 이름 · 스위치 상태 레이블 이름 | **닫힘(W6)** — 이름 전수 · 스위치 상태는 obs_switch_info(switch · env · value · impl) | [../10_observability/01_metrics_catalog.md](../10_observability/01_metrics_catalog.md) |
+| 스위치별 EXP 번호(SW-09의 EXP-01~05 제외) | **닫힘(W6)** — SW-01~08 · 10 · 11 = EXP-06~15 | [../10_observability/06_experiment_catalog.md](../10_observability/06_experiment_catalog.md) |
+| 콘솔 폴링 주기 · 편차 폐기 기준 | 2계층 — 폴링은 계약 이 문서 · **현행값 15초(W6 판정 · 09_tech_stack/01)** · 편차 기준 (최대 − 최소) ÷ 중앙값 · 현행 참고 20%(W6 판정) | 이 문서 · [../10_observability/04_experiment_protocol.md](../10_observability/04_experiment_protocol.md) |
 | 스위치 on/off 차이 전 행 · 역전 지점 | 3계층 미확인 — 확정 전 임의 값 고정 금지 | 각 EXP 실측 결과 |
 
 ## 관련 문서

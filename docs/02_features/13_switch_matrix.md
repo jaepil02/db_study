@@ -2,6 +2,7 @@
 
 > **대상**: 역할 스위치 11종의 채번 · 환경변수 · 기본값 · off · on 동작 · 측정 대상 · 교체되는 포트 · 관련 기능 · 흐름 · 원본 예상치 · 실험 자리 · 조합 제약 — SW-NN 채번 정본
 > **작성일**: 2026-09-24
+> **개정일**: 2026-09-24 — W6 실험 채번 반영 — 스위치 상태 레이블 obs_switch_info · 스위치별 EXP 번호 채번 · 조합 제약 #8 · #9 신설(7 → 9)(정본 10_observability/01 · 06)
 > **개정일**: 2026-09-24 — W4 판정 반영 — SW-11 관련 흐름에 F-01 추가(collector 구현이 발행 파이프라인에서 실행) · 흐름 참여 합 17 → **18** · 세는 기준 명시 — 스위치 수 불변
 > **개정일**: 2026-09-24 — **SW-11 LATEST_VALUE_WRITER 신설**(사용자 결정 D-13) · 스위치 10 → **11** · SW-02 포트 LatestValuePort → **LatestValueReadPort** 개명(W3 04/02 확정) · 포트 이름 잠정 · SW-10 off 경고 강화 미확인 행을 닫는다(ADR-24 — 무동작)
 > **원천**: 원본 implementation_plan.md §3.1 · §3.2 · §4 · §4.1 · §4.2 · §4.3 · §5 · §8(커밋 ff66a37) · 원본 data_flow.md §3.3 · §5 · §6 · §9.1 · §11.1(커밋 ff66a37) · 원본 architecture.md §4 · §9 · §17(커밋 ff66a37) · 저장소 루트 docs_plan.md(두 목표를 관통하는 축 — 역할 스위치 SW-NN · 보정 #2 · #14) · D-05 · D-06 · D-08 · D-10 · [README.md](./README.md) 스위치 목록 순서
@@ -39,17 +40,17 @@ SW-01~SW-10의 순서는 [README.md](./README.md) 고정 기준의 목록 순서
 
 | ID | 측정 대상 | 교체되는 포트(구현 둘) | 관련 기능 | 관련 흐름 | 예상 차이(원본 예상치 — 확정 아님) | 실험 자리 |
 |------|------|------|------|------|------|------|
-| SW-01 | 백프레셔 흡수력 · 유실 | PointBufferPort — RedisStreamBuffer · InProcessQueueBuffer | COL-07 · ING-01 | F-01 · F-02 · F-10 | off — ClickHouse 중단 시 폴링 주기 붕괴 + 유실 · on — 무손실 | [../10_observability/06_experiment_catalog.md](../10_observability/06_experiment_catalog.md) — W6 채번 |
-| SW-02 | 점조회 비용 | LatestValueReadPort — RedisLatestValueReader · ClickHouseLatestValueReader | RLT-01 · RLT-02 | F-03 | 30~150 ms → 0.3~1 ms | 상동 — W6 채번 |
-| SW-03 | 반복 조회 흡수 | TimeseriesCachePort — RedisTimeseriesCache · NoopTimeseriesCache | TSQ-04 | F-04 | 히트 시 250 ms → 15 ms | 상동 — W6 채번 |
-| SW-04 | 키 파편화 | CacheKeyNormalizerPort — TimeSnapKeyNormalizer · RawTimeKeyNormalizer | TSQ-03 | F-04 | 히트율 약 0% → 80% 이상 | 상동 — W6 채번 |
-| SW-05 | 스탬피드 | RebuildLockPort — RedisRebuildLock · NoopRebuildLock | TSQ-05 | F-04 | 동시 100요청 시 ClickHouse 쿼리 100회 → 1회 | 상동 — W6 채번 |
-| SW-06 | 팬아웃 경계 비용 | RealtimeFanoutPort — RedisPubSubFanout · DirectGatewayFanout | ING-08 · ALM-06 · RLT-05 · RLT-08 | F-06 · F-07 | 루프백 1홉(1 ms 미만) 대 확장 가능성 | 상동 — W6 채번 |
-| SW-07 | 프레임 폭증 | FrameThrottlePort — WindowMergeThrottle · PassthroughThrottle | RLT-06 | F-07 | 초당 5,000 → 10 프레임(태그 500 · 10 Hz) | 상동 — W6 채번 |
-| SW-08 | 재시도 중복 | BatchTokenPort — DeterministicBatchToken · NoBatchToken | ING-04 | F-02 | off — 재시도 시 중복 행 발생 · on — 미발생 | 상동 — W6 채번 |
-| SW-09 | 목표 ①의 실행 — 쿼리별 역전 지점 · 비교 축 6 | ControlTableSinkPort — PostgresControlSink · NoopControlSink | ING-11 · GEN-10 | F-02 · F-09 | 원본 예상치 없음 — 역전 지점이 산출물이다 | 상동 — **EXP-01~EXP-05 대조군 예약 대역**([../11_glossary/04_id_conventions.md](../11_glossary/04_id_conventions.md)) |
-| SW-10 | 전송량 · ClickHouse 행 수 · 압축률 | DeadbandFilterPort — TagDeadbandFilter · PassthroughFilter | COL-06 | F-01 | 프로파일별 전송률 3~100%(원본 data_flow.md §3.3) | 상동 — W6 채번 |
-| SW-11 | ClickHouse 중단 중 최신값 갱신 지속 · 적재 경로와 최신값의 결합도 | LatestValueWritePort — IngestLatestValueWriter · CollectorLatestValueWriter | ING-08 · COL-07 | F-01 · F-02 · F-03 · F-10 | 원본 예상치 없음 — ingest는 ClickHouse 중단 동안 최신값이 멈추고 collector는 계속 갱신된다는 구조적 차이만 있다(원본 implementation_plan.md §7.2) | 상동 — W6 채번 |
+| SW-01 | 백프레셔 흡수력 · 유실 | PointBufferPort — RedisStreamBuffer · InProcessQueueBuffer | COL-07 · ING-01 | F-01 · F-02 · F-10 | off — ClickHouse 중단 시 폴링 주기 붕괴 + 유실 · on — 무손실 | [../10_observability/06_experiment_catalog.md](../10_observability/06_experiment_catalog.md) — **EXP-06** |
+| SW-02 | 점조회 비용 | LatestValueReadPort — RedisLatestValueReader · ClickHouseLatestValueReader | RLT-01 · RLT-02 | F-03 | 30~150 ms → 0.3~1 ms | 상동 — **EXP-07** |
+| SW-03 | 반복 조회 흡수 | TimeseriesCachePort — RedisTimeseriesCache · NoopTimeseriesCache | TSQ-04 | F-04 | 히트 시 250 ms → 15 ms | 상동 — **EXP-08** |
+| SW-04 | 키 파편화 | CacheKeyNormalizerPort — TimeSnapKeyNormalizer · RawTimeKeyNormalizer | TSQ-03 | F-04 | 히트율 약 0% → 80% 이상 | 상동 — **EXP-09** |
+| SW-05 | 스탬피드 | RebuildLockPort — RedisRebuildLock · NoopRebuildLock | TSQ-05 | F-04 | 동시 100요청 시 ClickHouse 쿼리 100회 → 1회 | 상동 — **EXP-10** |
+| SW-06 | 팬아웃 경계 비용 | RealtimeFanoutPort — RedisPubSubFanout · DirectGatewayFanout | ING-08 · ALM-06 · RLT-05 · RLT-08 | F-06 · F-07 | 루프백 1홉(1 ms 미만) 대 확장 가능성 | 상동 — **EXP-11** |
+| SW-07 | 프레임 폭증 | FrameThrottlePort — WindowMergeThrottle · PassthroughThrottle | RLT-06 | F-07 | 초당 5,000 → 10 프레임(태그 500 · 10 Hz) | 상동 — **EXP-12** |
+| SW-08 | 재시도 중복 | BatchTokenPort — DeterministicBatchToken · NoBatchToken | ING-04 | F-02 | off — 재시도 시 중복 행 발생 · on — 미발생 | 상동 — **EXP-13** |
+| SW-09 | 목표 ①의 실행 — 쿼리별 역전 지점 · 비교 축 6 | ControlTableSinkPort — PostgresControlSink · NoopControlSink | ING-11 · GEN-10 | F-02 · F-09 | 원본 예상치 없음 — 역전 지점이 산출물이다 | 상동 — **EXP-01~EXP-05**(대조군 쿼리 5종)([../11_glossary/04_id_conventions.md](../11_glossary/04_id_conventions.md)) |
+| SW-10 | 전송량 · ClickHouse 행 수 · 압축률 | DeadbandFilterPort — TagDeadbandFilter · PassthroughFilter | COL-06 | F-01 | 프로파일별 전송률 3~100%(원본 data_flow.md §3.3) | 상동 — **EXP-14** |
+| SW-11 | ClickHouse 중단 중 최신값 갱신 지속 · 적재 경로와 최신값의 결합도 | LatestValueWritePort — IngestLatestValueWriter · CollectorLatestValueWriter | ING-08 · COL-07 | F-01 · F-02 · F-03 · F-10 | 원본 예상치 없음 — ingest는 ClickHouse 중단 동안 최신값이 멈추고 collector는 계속 갱신된다는 구조적 차이만 있다(원본 implementation_plan.md §7.2) | 상동 — **EXP-15** |
 
 - **포트 이름의 정본은 [../04_architecture/02_module_boundaries.md](../04_architecture/02_module_boundaries.md)다(W3 확정).** SW-02는 쓰기 포트(SW-11)와 가르기 위해 LatestValueReadPort로 개명됐다. 이 표는 "포트 하나에 구현 둘"이라는 모양과 교체 대상 기능을 고정한다.
 - **예상 차이는 전부 3계층 미확인이다** — 4요소가 없는 원본 예상치이며 목표가 아니다. 확정은 해당 실험의 실측 결과로만 한다([../CLAUDE.md](../CLAUDE.md) 수치 3계층).
@@ -94,8 +95,10 @@ SW-01~SW-10의 순서는 [README.md](./README.md) 고정 기준의 목록 순서
 | 5 | SW-10 on + 성능 측정 | 섞지 않는다 — 성능은 off로 잰다 | 데드밴드는 원본 파형을 잃고 전송량을 바꿔 처리량 수치가 의미를 잃는다(원본 data_flow.md §3.3) |
 | 6 | SW-06 off + api 다중 인스턴스(확장 2단계) | 조합 금지 | 직접 호출은 같은 프로세스의 게이트웨이에만 닿아 다른 인스턴스의 소켓이 값을 받지 못한다 |
 | 7 | SW-11 비교 + SW-02 off | 측정하지 않는다 — SW-11 비교는 SW-02 on으로 한다 | SW-02 off면 최신값 API가 rt:latest를 읽지 않아 갱신 주체를 바꿔도 조회 결과에 차이가 드러나지 않는다 |
+| **8** | SW-10 on + 주입 모드 B · C · D | **조합 금지 — SW-10 on 실험은 모드 A로만 한다** | 데드밴드 필터는 Collector 발행 파이프라인 안에서만 돈다 — 모드 B · C · D는 Collector를 거치지 않아 필터가 한 번도 돌지 않고 "데드밴드 효과 0"이 거짓으로 기록된다 |
+| **9** | SW-11 collector + 주입 모드 B · C · D | **조합 금지 — SW-11 collector는 모드 A로만 기동한다** | collector 구현은 Collector 발행 파이프라인에서만 rt:latest를 쓴다 — 모드 B · C · D에서는 rt:latest를 쓰는 주체가 하나도 없어 최신값이 복원 창 뒤 빈 목록이 된다 |
 
-- 검산: 조합 제약 = **7**
+- 검산: 조합 제약 = **9** — 원본 · W2 7 + W6 신설 2(#8 · #9 — 실험 카탈로그 EXP-14 · 15 조건에서 도출 · [../10_observability/06_experiment_catalog.md](../10_observability/06_experiment_catalog.md))
 - **두 학습 축의 비교 방향은 반대다** — 목표 ①은 데이터를 고정하고 저장소를 바꾸며(SW-09), 목표 ②는 저장소를 고정하고 역할을 바꾼다(SW-01~08). 제약 #4가 두 축을 가르는 자리다([../01_overview/01_purpose_learning_goals.md](../01_overview/01_purpose_learning_goals.md)).
 
 ## 스위치별 판정
@@ -122,8 +125,8 @@ SW-01~SW-10의 순서는 [README.md](./README.md) 고정 기준의 목록 순서
 
 | 항목 | 상태 | 확정 자리 |
 |------|------|------|
-| 스위치 상태 레이블 이름 | 미정 | [../10_observability/01_metrics_catalog.md](../10_observability/01_metrics_catalog.md)(W6) |
-| 스위치별 실험 EXP 번호(SW-09 제외) | W6 채번 — 스위치마다 최소 1개 | [../10_observability/06_experiment_catalog.md](../10_observability/06_experiment_catalog.md)(W6) |
+| 스위치 상태 레이블 이름 | **W6 판정** — 정보 메트릭 obs_switch_info(레이블 switch · env · value · impl) + obs_switch_warning | [../10_observability/01_metrics_catalog.md](../10_observability/01_metrics_catalog.md) |
+| 스위치별 실험 EXP 번호(SW-09 제외) | **채번 완료(W6)** — SW-01~08 · 10 · 11 = EXP-06~15 · 스위치당 1 | [../10_observability/06_experiment_catalog.md](../10_observability/06_experiment_catalog.md) |
 | SW-09 on에서 대조군 삽입 실패의 의미론 · 대조군 멱등 수단 | **신규 미확인** — [06_ingest.md](./06_ingest.md) §미확인 · 미설계 등재 | [../06_pipeline/04_routing.md](../06_pipeline/04_routing.md)(W4) · [../05_data_stores/10_olap_vs_rdb_control.md](../05_data_stores/10_olap_vs_rdb_control.md)(W3) |
 | SW-01 off에서의 배치 토큰 재료 | **신규 미확인** — 조합 제약 #3 | [../06_pipeline/03_ingest_batch.md](../06_pipeline/03_ingest_batch.md)(W4) |
 | 예상 차이 전 행 | 미확인 — 확정 전 임의 값 고정 금지 | 각 실험의 실측 결과 |

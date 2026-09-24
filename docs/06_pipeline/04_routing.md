@@ -2,6 +2,7 @@
 
 > **대상**: ★★ 학습 목표 ②의 기전 정본 — 어느 모듈이 어떤 판정으로 어느 저장소에 쓰는가 · 분기 판정 트리 · ① 원시값 · ② 알람 판정(PostgreSQL 확정 · ClickHouse 전수 · Redis 핫 상태) · **생산 카운터 기전 판정** · ③ 업무 쓰기가 Stream을 타지 않는 경로 · 사본 쓰기(최신값 SW-11 · 캐시) · **대조군 동시 적재 기전(SW-09 · COPY 1회 · 재시도 없음)** · 모듈 × 저장소 쓰기 행렬 · 분기 계측 · 스위치별 경로 변화 · 정책 문서와의 1:1 대응 검산
 > **작성일**: 2026-09-24
+> **개정일**: 2026-09-24 — W6 실험 채번 반영 — 메트릭 이름 · 기록 형식 · COPY 타임아웃 관계(정본 10_observability/01 · 06)
 > **원천**: 원본 data_flow.md §2 · §4 · §7 · §8 · §8.2 · §13(커밋 ff66a37) · 원본 architecture.md §5 · §9(커밋 ff66a37) · 원본 implementation_plan.md §7.2 · §7.3(커밋 ff66a37) · docs_plan.md 실행 계획 보정 #4 · 웨이브 인계 W4 06_pipeline/04 행 전부 · W3 05/10 · W4 06/04 행 · D-01 · D-04 · D-05 · ADR-03 · ADR-06 · ADR-10 · ADR-11 · ADR-17 · REQ-GLB-11 · 12 · 13 · REQ-ING-10 · 14 · 15 · REQ-WRK-01 · 05 · [../04_architecture/04_storage_split.md](../04_architecture/04_storage_split.md) 정책 정본 · [../05_data_stores/10_olap_vs_rdb_control.md](../05_data_stores/10_olap_vs_rdb_control.md) 대조군 저장소 계약
 
 분기의 **정책**(무엇이 어디로 왜 가는가)은 [../04_architecture/04_storage_split.md](../04_architecture/04_storage_split.md)가 갖고, 이 문서는 **기전**(어느 모듈이 어느 시점에 어떤 판정으로 어느 호출을 하는가)을 갖는다. 둘을 가르는 이유는 기전이 바뀌어도 정책이 흔들리지 않게 하기 위해서다 — SW-11이 최신값 쓰기 주체를 Ingest에서 Collector로 옮겨도 "최신값은 Redis 휘발 사본 · 진실은 ClickHouse"는 그대로다.
@@ -146,7 +147,7 @@
 
 - 검산: 계약 = **5**
 
-대조 실험 직전의 구간 count 대조 절차다. 판정 조건(정확 일치 구간에서만 대조)은 REQ-ING-15 · REQ-NFR-18이며 기록 형식은 [../10_observability/04_experiment_protocol.md](../10_observability/04_experiment_protocol.md)(W6)가 갖는다.
+대조 실험 직전의 구간 count 대조 절차다. 판정 조건(정확 일치 구간에서만 대조)은 REQ-ING-15 · REQ-NFR-18이며 기록 형식은 [../10_observability/04_experiment_protocol.md](../10_observability/04_experiment_protocol.md)가 갖는다(W6 — 격자 단계 기록의 기계 판독 블록).
 
 ```plain
 ① 대상 구간을 KST 일 파티션 단위로 나눈다        두 저장소의 파티션 경계가 같다(08_retention_lifecycle)
@@ -195,7 +196,7 @@
 
 - 검산: 대조 = **4**
 - **②의 기대 관계에 "판정 = 확정"이 없는 이유** — 디바운스가 PENDING 판정 대부분을 확정 없이 끝낸다. 판정 수 대비 확정 수의 비가 곧 디바운스의 오탐 억제량이다(학습 목표 ② 합격 판정 — S7).
-- 계측 메트릭의 이름은 [../10_observability/01_metrics_catalog.md](../10_observability/01_metrics_catalog.md)(W6)가 정한다.
+- 계측 메트릭의 이름은 [../10_observability/01_metrics_catalog.md](../10_observability/01_metrics_catalog.md)가 정한다 — ing_routed_rows_total{layer} · alm_evaluations_total · alm_events_opened_total · redis_stream_entries_added_total(W6).
 
 ## 스위치별 경로 변화
 
@@ -249,9 +250,9 @@
 | 항목 | 상태 | 확정 자리 |
 |------|------|------|
 | 생산 카운터 파생 사실의 목적지 · 판정기 | 판정 — 현 범위에 두지 않는다 · 도입 조건 4 | 정책 문서 #12 · 이 문서 |
-| 대조군 COPY 타임아웃 값 | 2계층 · 현행 미정 | S3 · 이 문서 |
-| 분기 대조 · 대조군 실패 계수 메트릭 이름 | 미정 | [../10_observability/01_metrics_catalog.md](../10_observability/01_metrics_catalog.md)(W6) |
-| 구간 count 대조의 기록 형식 | 절차만 확정 | [../10_observability/04_experiment_protocol.md](../10_observability/04_experiment_protocol.md)(W6) |
+| 대조군 COPY 타임아웃 값 | 2계층 · 현행 미정 — 관계 COPY 타임아웃 + ClickHouse 삽입 p95 < 창 폭 W(W6 · [../10_observability/06_experiment_catalog.md](../10_observability/06_experiment_catalog.md) §대조 실험 조정값) | S3 · 이 문서 · AC-21 동시 적재 기록 |
+| 분기 대조 · 대조군 실패 계수 메트릭 이름 | **W6 판정** — ing_routed_rows_total{layer} · ing_control_copy_failures_total | [../10_observability/01_metrics_catalog.md](../10_observability/01_metrics_catalog.md) |
+| 구간 count 대조의 기록 형식 | **W6 판정** — 격자 단계 기록(절차 ②) · 기계 판독 블록 | [../10_observability/04_experiment_protocol.md](../10_observability/04_experiment_protocol.md) |
 | COUNTER 랩어라운드 조회 보정 | 조회 시점 몫 — 롤업만으로는 불가 | [06_timeseries_read.md](./06_timeseries_read.md) · [../07_api/05_timeseries.md](../07_api/05_timeseries.md)(W5) |
 
 ## 관련 문서

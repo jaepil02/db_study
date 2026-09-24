@@ -2,6 +2,7 @@
 
 > **대상**: ALM-CONSOLE(활성 · 미확인 · 이력 · 확인) · ALM-RULES(규칙 관리 · 판정 이력 분석 — min · max 쌍 차트) — ACK 허용 조건 · alarms.ack_not_allowed/409 표시 · 역할 OPERATOR · ENGINEER
 > **작성일**: 2026-09-24
+> **개정일**: 2026-09-24 — W6 실험 채번 반영 — 무효 구간 자리 판정 · EXP 번호 반영(정본 10_observability/01 · 06)
 > **원천**: 원본 data_flow.md §6.3 · §8 · §8.1 · §8.2 · §9.2(커밋 ff66a37) · 원본 architecture.md §6 · §7.3 · §11 · §18(커밋 ff66a37) · REQ-ALM-01~20 · REQ-RLT-14 · AC-09 · AC-35 · AC-36 · AC-38 · 기능 ALM-01 · 07 · 08 · 09 · RLT-08 · MST-04 · [../06_pipeline/08_alarm.md](../06_pipeline/08_alarm.md) · [../02_features/09_alarms.md](../02_features/09_alarms.md) · [../02_features/12_permission_matrix.md](../02_features/12_permission_matrix.md) · [../11_glossary/03_enums_state_machines.md](../11_glossary/03_enums_state_machines.md) · [01_standards.md](./01_standards.md)
 
 이 문서는 알람 화면 둘을 명세한다. ALM-CONSOLE은 현장 운영자가 알람을 받고 확인하는 자리이고, ALM-RULES는 엔지니어가 판정 전수를 분석해 임계값을 고치는 자리다. **쓰기 주체는 역할 하나씩이다** — 확인은 OPERATOR, 규칙 변경은 ENGINEER다([../02_features/12_permission_matrix.md](../02_features/12_permission_matrix.md)). 같은 쓰기를 두 역할에 열면 감사 로그의 행위자로 책임 축을 읽을 수 없다.
@@ -221,8 +222,8 @@
 
 | 항목 | 상태 | 확정 자리 |
 |------|------|------|
-| 분석 무효 구간의 기록 자리 · 응답 표지 | 신규 미설계(07_api/07_alarms 등재) — 화면은 evalCount 0 주의 표지로 버틴다 | [../06_pipeline/08_alarm.md](../06_pipeline/08_alarm.md) · [../10_observability/01_metrics_catalog.md](../10_observability/01_metrics_catalog.md)(W6) |
-| 알람 통지 도달 지연 · 판정 구간 지연 | 3계층 미확인 — 확정 전 임의 값 고정 금지 | [../04_architecture/05_latency_budget.md](../04_architecture/05_latency_budget.md) · EXP(W6 채번) |
+| 분석 무효 구간의 기록 자리 · 응답 표지 | **W6 판정** — 자리는 계수 alm_eval_gap_* + 구조화 로그 이벤트 · 분석 API 응답 표지는 두지 않는다 — 화면은 evalCount 0 주의 표지로 버틴다 | [../06_pipeline/08_alarm.md](../06_pipeline/08_alarm.md) · [../10_observability/02_instrumentation.md](../10_observability/02_instrumentation.md) §구간 기록 |
+| 알람 통지 도달 지연 · 판정 구간 지연 | 3계층 미확인 — 확정 전 임의 값 고정 금지 | [../04_architecture/05_latency_budget.md](../04_architecture/05_latency_budget.md) · EXP-30 · EXP-33 |
 | 비활성 태그의 열린 알람을 닫는 수단 | 범위 밖 — 확인만 가능 | [../02_features/09_alarms.md](../02_features/09_alarms.md)(리드) |
 
 ## 관련 문서

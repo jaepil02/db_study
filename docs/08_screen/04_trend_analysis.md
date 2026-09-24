@@ -2,6 +2,7 @@
 
 > **대상**: ANL-TREND — 시간 범위 조회 · 해상도 표시(meta.interval) · 다운샘플 표시(meta.downsampled) · 캐시 표시(meta.cached) · 진행 구간 분할 · 원시 내보내기
 > **작성일**: 2026-09-24
+> **개정일**: 2026-09-24 — W6 실험 채번 반영 — EXP 번호 반영(정본 10_observability/01 · 06)
 > **원천**: 원본 data_flow.md §6 · §6.1 · §6.2 · §6.3 · §14.1(커밋 ff66a37) · 원본 architecture.md §11 · §11.1 · §10.2(커밋 ff66a37) · 원본 tech_stack.md §4.2(커밋 ff66a37) · REQ-TSQ-01~17 · REQ-MST-08 · AC-04 · AC-23 · AC-24 · AC-39 · 기능 TSQ-01 · 02 · 06 · 07 · 08 · 09 · MST-01 · 02 · 04 · [../06_pipeline/06_timeseries_read.md](../06_pipeline/06_timeseries_read.md) · [../02_features/07_timeseries.md](../02_features/07_timeseries.md) · [01_standards.md](./01_standards.md)
 
 이 문서는 엔지니어가 과거 시계열을 범위로 보는 화면 하나를 명세한다. **엔지니어는 해상도를 고르지 않는다** — 범위 길이에 따라 서버가 raw · 1m · 1h · 1d 중 하나를 고르고, 예상 점 수가 상한을 넘으면 한 단계 올린다(REQ-TSQ-03 · 04). 이 화면의 일은 그 결정을 숨기지 않고 보이는 것이다 — 요청한 해상도와 받은 해상도가 다르면 사용자가 버그로 신고하기 전에 화면이 먼저 말한다.
@@ -161,7 +162,7 @@
 | 항목 | 상태 | 확정 자리 |
 |------|------|------|
 | 태그 상한 · maxPoints 기본값 | 2계층 — 소유 07_api(현행 참고 50 · 2000) · 화면은 값을 박지 않고 표면 응답 · 설정에서 읽는다 | [../07_api/05_timeseries.md](../07_api/05_timeseries.md) |
-| 캐시 히트 · 미스 응답 p95 · 히트율 | 3계층 미확인 — 원본 목표 20 ms · 300 ms · 80% | [../03_requirements/13_nonfunctional.md](../03_requirements/13_nonfunctional.md) · EXP(W6 채번) |
+| 캐시 히트 · 미스 응답 p95 · 히트율 | 3계층 미확인 — 원본 목표 20 ms · 300 ms · 80% | [../03_requirements/13_nonfunctional.md](../03_requirements/13_nonfunctional.md) · EXP-08 · EXP-09 |
 
 ## 관련 문서
 

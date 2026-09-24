@@ -2,6 +2,7 @@
 
 > **대상**: F-08 롤업 흐름의 기전 정본 — 삽입 한 번이 발동하는 MV 연쇄 · 계층별 담당 조회 · MV 실패의 감지 · **원시 성공 · MV 실패 뒤 같은 토큰 재시도의 MV 재실행 미확인과 그 대응** · **롤업 공백 구간 재계산 절차** · 늦게 도착한 데이터 · 백필(모드 D)과의 관계 · 보존 경계와 정합 대조
 > **작성일**: 2026-09-24
+> **개정일**: 2026-09-24 — W6 실험 채번 반영 — 메트릭 이름 · EXP 번호 반영(정본 10_observability/01 · 06)
 > **원천**: 원본 data_flow.md §10 · §10.1 · §10.2 · §10.3 · §13 · §17(커밋 ff66a37) · 원본 architecture.md §7.2(커밋 ff66a37) · docs_plan.md 웨이브 인계 W4 06_pipeline 행(MV 재실행 여부) · ADR-14 · ADR-15 · REQ-ING-12 · 16 · REQ-GEN-10 · REQ-GLB-15 · REQ-TSQ-07 · [../05_data_stores/04_clickhouse_rollup.md](../05_data_stores/04_clickhouse_rollup.md) 롤업 DDL · MV 제약 8 · 백필 절차 · [../05_data_stores/03_clickhouse_schema.md](../05_data_stores/03_clickhouse_schema.md) 미확인 등재 · [../05_data_stores/08_retention_lifecycle.md](../05_data_stores/08_retention_lifecycle.md)
 
 F-08은 **tag_raw 삽입 블록이 분 · 시간 · 일 롤업으로 접히기까지**다. 애플리케이션이 하는 일이 없는 흐름이다 — tag_raw 삽입이 mv_tag_1m을 발동하고, tag_1m 삽입이 mv_tag_1h를, tag_1h 삽입이 mv_tag_1d를 발동한다(ING-12). 배치 잡 · 락 · 스케줄러가 없다. 그래서 **이 흐름의 기전은 정상 경로가 아니라 실패 경로에 있다** — MV는 원자적이지 않고, 삽입 블록만 보며, 재시도와의 관계가 미확인이다.
@@ -58,7 +59,7 @@ flusher INSERT plc.tag_raw(배치 · 토큰 T)
 | MV 오류 계수 | 오류 수 · 재시도 성공 수 | flusher | 알림 · S0 판별 결과의 운영 지표 |
 
 - 검산: 기록 = **2**
-- 의심 구간 기록은 메트릭 · 로그다 — 저장 테이블이 아니다(고정 기준 테이블 수 불변). 이름은 [../10_observability/01_metrics_catalog.md](../10_observability/01_metrics_catalog.md)(W6)가 정한다.
+- 의심 구간 기록은 메트릭 · 로그다 — 저장 테이블이 아니다(고정 기준 테이블 수 불변). 이름은 [../10_observability/01_metrics_catalog.md](../10_observability/01_metrics_catalog.md)가 정한다 — ing_rollup_suspect_batches_total · ing_mv_errors_total · 로그 이벤트 rollup_suspect(W6).
 
 ## 정합 대조
 
@@ -148,10 +149,10 @@ flusher INSERT plc.tag_raw(배치 · 토큰 T)
 | 항목 | 상태 | 확정 자리 |
 |------|------|------|
 | 원시 성공 · MV 실패 뒤 같은 토큰 재시도가 MV를 다시 실행하는가(ⓐ · ⓑ) | **미확인** — 재실행을 가정하지 않고 의심 구간 대조 · 재계산으로 메운다 | S0 실측 · 이 문서 |
-| 여러 블록으로 쪼개진 INSERT의 ingested_at 동일성 | 미확인 — 확인 전 경로 A 제한 | S0 실측 |
+| 여러 블록으로 쪼개진 INSERT의 ingested_at 동일성 | 미확인 — 확인 전 경로 A 제한 | S0 실측 · EXP-32 |
 | MV 캐스케이드 지연 · MV가 삽입 처리량에 더하는 비용 | 3계층 미확인 — 원본 예상치 100 ms | REQ-NFR-04 |
 | p95 원시 대 롤업 허용 범위 | 3계층 미확인 | [../03_requirements/14_acceptance_criteria.md](../03_requirements/14_acceptance_criteria.md) |
-| 롤업 의심 구간 · MV 오류 계수 메트릭 이름 | 미정 | [../10_observability/01_metrics_catalog.md](../10_observability/01_metrics_catalog.md)(W6) |
+| 롤업 의심 구간 · MV 오류 계수 메트릭 이름 | **W6 판정** — ing_rollup_suspect_batches_total · ing_mv_errors_total{result} | [../10_observability/01_metrics_catalog.md](../10_observability/01_metrics_catalog.md) |
 
 ## 관련 문서
 

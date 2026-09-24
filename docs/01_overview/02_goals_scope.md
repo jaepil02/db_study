@@ -2,6 +2,7 @@
 
 > **대상**: 전원 — db_study가 무엇을 만들고 무엇을 만들지 않는가, 그리고 만들지 않는 것이 측정에 남기는 한계
 > **작성일**: 2026-09-24
+> **개정일**: 2026-09-24 — W6 판정 반영 — E2E 분산 추적 행의 상태를 관측 구성원 판정(tempo 현 범위 밖 · 조건부)으로 채운다
 > **개정일**: 2026-09-24 — SW-11 LATEST_VALUE_WRITER 신설 반영(D-13 · 사용자 확정) — 스위치 10 → **11**
 > **원천**: 원본 tech_stack.md §1 · §3.4 · §10.6 · §13(커밋 ff66a37) · 원본 architecture.md §2 · §17 · §18 · §19(커밋 ff66a37) · 원본 implementation_plan.md §2(커밋 ff66a37) · [06_design_decisions.md](./06_design_decisions.md) D-01 · D-02 · D-11 · [../README.md](../README.md) 고정 기준 · 전역 불변식
 
@@ -55,7 +56,7 @@ db_study의 범위는 **학습 목표 2축(D-01)을 측정으로 닫는 데 필�
 | 확장 4단계 — Kafka 전환 | Redis 메모리로 보존 기간을 감당할 수 없거나 재처리 요구 발생 | Ingest 소스 인터페이스만 추상화 | 상동 |
 | Python 데이터 평면 분리 | 생성기 처리량 미달 · 시뮬레이터 기능 부족 · Arrow 직삽입 필요 중 하나가 실측됨(원본 tech_stack.md §3.4) | 데이터 계약을 Stream 페이로드 하나로 고정 | [../09_tech_stack/06_decisions_rationale.md](../09_tech_stack/06_decisions_rationale.md) |
 | 중간 메모리 프로파일 | WSL2 메모리 상향이 불가능할 때(원본 implementation_plan.md §2.3) | 부하 실험 프로파일을 쓴다 | [../09_tech_stack/04_local_environment.md](../09_tech_stack/04_local_environment.md) |
-| E2E 분산 추적 | 부하 측정 단계의 선택 항목 | observability 프로파일 구성원 판정에 따른다 | [../09_tech_stack/03_data_infra.md](../09_tech_stack/03_data_infra.md) |
+| E2E 분산 추적 | 부하 측정 단계의 선택 항목 — W6 판정 진입 조건: SQL(ingested_at − ts)과 구간 메트릭으로 구간 분해가 불가능하다는 실측 | **tempo를 두지 않는다** — E2E는 두 시각 컬럼의 차로 잰다(W6 판정) | [../09_tech_stack/03_data_infra.md](../09_tech_stack/03_data_infra.md) |
 
 - 진입 조건의 임계 수치는 원본이 적었지만 4 vCPU급 가정의 값이라 **이 머신에서는 미확인**이다. 임계의 정본은 [../04_architecture/08_scaling_roadmap.md](../04_architecture/08_scaling_roadmap.md)가 갖는다.
 

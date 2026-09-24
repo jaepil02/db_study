@@ -1,9 +1,9 @@
 # docs/ 설계 문서군 구축 계획
 
-> **상태**: W5 완료(2026-09-24) · W6 착수
-> **완료된 것**: 실행 계획 확정(아래 "실행 계획 보정" 절) · docs/ 12폴더 재생성 · W0 14본(docs/README.md · docs/CLAUDE.md · 폴더 README 12본 골격판) · 린트 .omc/docs_lint.py 오류 0건 · W1 11본(11_glossary 5 · 01_overview 6) — 에러 코드 14 · D-01~D-12 · W2a 13본(02_features) — 기능 91 · SW 10 · 역할 3 · W2b 14본(03_requirements 01~14) — REQ 228 · AC 45 · 에러 코드 19 · W3 20본(04_architecture 9 · 05_data_stores 11) — ADR 25 · SW 11(D-13) · 키 패턴 18 · 봉인 26 · W4 12본(06_pipeline) — F-01~F-10 · 분기 기전 19행 · 한계 등재 17 · W5 18본(07_api 11 · 08_screen 7) — API 표면 43 · 화면 10 · 에러 22 · 린트 표 열 수 검사 추가
-> **다음 작업**: W6 — 팀원 2명(w6-stack: 09_tech_stack 01~06 / w6-obs: 10_observability 01~07 · EXP-NN 채번). 웨이브 인계 표의 W6 행 전부 포함
-> **팀원 누적**: 10 / 15 — w1-glossary · w1-overview · w2-features · w2-req-a · w2-req-b · w3-arch · w3-stores · w4-pipeline · w5-api · w5-screen(전원 종료)
+> **상태**: W6 완료(2026-09-24) · W7 착수 대기
+> **완료된 것**: 실행 계획 확정(아래 "실행 계획 보정" 절) · docs/ 12폴더 재생성 · W0 14본(docs/README.md · docs/CLAUDE.md · 폴더 README 12본 골격판) · 린트 .omc/docs_lint.py 오류 0건 · W1 11본(11_glossary 5 · 01_overview 6) — 에러 코드 14 · D-01~D-12 · W2a 13본(02_features) — 기능 91 · SW 10 · 역할 3 · W2b 14본(03_requirements 01~14) — REQ 228 · AC 45 · 에러 코드 19 · W3 20본(04_architecture 9 · 05_data_stores 11) — ADR 25 · SW 11(D-13) · 키 패턴 18 · 봉인 26 · W4 12본(06_pipeline) — F-01~F-10 · 분기 기전 19행 · 한계 등재 17 · W5 18본(07_api 11 · 08_screen 7) — API 표면 43 · 화면 10 · 에러 22 · 린트 표 열 수 검사 추가 · W6 13본(09_tech_stack 6 · 10_observability 7) — 관측 구성원 2 · 환경변수 25 · 버전 고정표 35행 · EXP 39
+> **다음 작업**: W6 커밋 → W7 — w7-security(12_security 01~05) → 리드 03_requirements/15 · 16 → w7-review 전수 검수 → 결함 수정 · 이관 누락 대조 · --final 린트 · 루트 4본 삭제 · 루트 README 교체 · 최종 커밋
+> **팀원 누적**: 12 / 15 — w1-glossary · w1-overview · w2-features · w2-req-a · w2-req-b · w3-arch · w3-stores · w4-pipeline · w5-api · w5-screen(종료) · w6-stack · w6-obs(종료). 남은 3 중 W7에 2(w7-security · w7-review)
 > **참고**: 기존 루트 4본(architecture.md · data_flow.md · tech_stack.md · implementation_plan.md)은 **W7까지 삭제하지 않는다** — 이관 누락을 검증할 원본이 필요하다
 
 ## 실행 계획 보정 (2026-09-23 확정)
@@ -28,7 +28,7 @@
 | 14 | 스위치는 환경변수 + DI 초기화 선택이라 런타임 토글이 안 되는데 08_screen/07은 "스위치 제어" | 07_experiment_console은 **스위치 상태 표시 · 실험 실행 기록 · 비교** 화면이다. 전환은 재기동 절차로 안내한다(W5) |
 | 15 | 태그 변경 이력 테이블 — architecture §12가 요구하고 §6 ERD에 없다 | **tag_master_history 신설** → PostgreSQL 업무 테이블 13 + 1 = **14** · 대조군 1 별도 |
 | 16 | tag_raw.ts가 DateTime64(3, 'Asia/Seoul')인데 "모든 시각 UTC 저장" | ClickHouse 컬럼 시간대는 표시·파싱 속성이고 저장값은 epoch다. 정본 11_glossary/05(W1). ingested_at · alarm_eval.ts 시간대 표기 통일은 W3 |
-| 17 | observability 프로파일 구성원 불일치 — prometheus · grafana(tech §10) · alertmanager(arch §14) · tempo(tech §2) | W6(09_tech_stack/03 · 10_observability/03)이 판정 |
+| 17 | **(W6 닫힘 — prometheus · grafana 2)** observability 프로파일 구성원 불일치 — prometheus · grafana(tech §10) · alertmanager(arch §14) · tempo(tech §2) | W6(09_tech_stack/03 · 10_observability/03)이 판정 |
 | 18 | k6 시나리오 "5종"과 tech_stack §8 표 6행 | 부하 시나리오 5 + 장애 주입 1(k6 아님)로 가른다(W6) |
 | 19 | 원본의 sequenceDiagram 다수 | mermaid 3종 한정 규약에 따라 plain 펜스로 변환 |
 | 20 | 알람 상태 머신 5상태(NORMAL · PENDING · ACTIVE · CLEARING · ACKED)와 alarm_event.state 값(ACTIVE · CLEARED) 대응 미정 | 11_glossary/03(W1)이 대응표를 소유 |
@@ -82,6 +82,10 @@ W1 w1-glossary 판정 · 미확인 — 행선지 웨이브가 확정한다.
 | W3 04_architecture/02 · 09 | SIM · OBS의 APP_ROLE 배정 · 보정 7.2 결정 시점(S3 전 잠정안 + 교체 가능한 포트 · S6 실측으로 최종) |
 | W3 05_data_stores | 롤업 테이블 · MV 도메인 귀속(잠정 ING) · audit_log 소유(WRK) vs MST 트랜잭션 쓰기 — 한계 등재(05/02) |
 | W4 06_pipeline/04 | ②계층 "생산 카운터"(스트림 유래)와 production_log(WRK CRUD)의 구분과 분기 기전 |
+
+W6 처리(10_observability): 실험 39(EXP-01~39 · 대조군 01~05 · 신설 EXP-40부터) · 메트릭 이름 136 · 알림 14 · 대시보드 6 · 컨슈머 랙 = 그룹 lag + pending · 스위치 상태 레이블 obs_switch_info · 기계 판독 블록(json 펜스 · schema measurement/v1) · 스위치 → EXP 누락 0 · AC 45/45 · REQ-NFR 18/18 · 조합 제약 7 → 9(SW-10 on · SW-11 collector 모드 A 전용) · 선행 문서 59본 EXP · 메트릭 이름 반영 · 이벤트 루프 p95 이름 nodejs_eventloop_lag_p95_seconds(버전 고정 때 prom-client 문서 확인) · REQ-OBS-06 레이블 집합에 설비 · 05/06 S6 스풀 전환은 L만 · cpuset datagen 행(잠정) · AC-19 문구 보정 · 대조 격자 6단계는 보존 7일에서 수행 불가(05/10) — W6 10 행 전부 닫혔다. **미결(확장 판정)**: ADR-09 배치 안 C(async_insert)가 적재 코드 경로를 바꾸면 스위치 신설 판정이 필요하다(현행 EXP-34 조건 칸 처리). 신규 미확인 행선지: 생성기 포화 CPU 임계(EXP-21 → 10/05) · 스파이크 지속·계단 폭(EXP-24 · 23) · 메모리 표본 오차(EXP-39) · 관측 간섭(EXP-38) · 편차 20% 적합성(첫 10기록) · 구조화 로그 보관 · 기록 블록 생성 도구 · 대시보드 정의 형식 · 시나리오 파일 형식(09/05) · 히스토그램 버킷 경계(코드 착수).
+
+W6 처리(09_tech_stack): 관측 구성원 2 · CH 서버 timezone Asia/Seoul · 환경변수 정본 09/04(25) · 버전 고정표 35행(09/03 유일) · node-pg-migrate · SIM 주입 계획 JSON + zod · healthcheck timeout 3초 · pg_partman 기본 · TTL 머지 기본 · 대조 실험 메모리 3.5 · 3.5 GB · Pub/Sub 출력 버퍼 값 소유 09/03(S4) — W6 09 행은 닫혔다. 16 공식 참조 후보 19건은 W7 리드.
 
 W5 처리(08_screen): 화면 10 확정 · 기능 → 화면 91 누락 0 · 인용 표면 42(bulk만 미인용) · GEN 화면 없음 · EXP-COMPARE 대조군 데이터는 BFF가 docs/measurements 읽기 · health에 커밋 · 프로파일 · 티어 노출.
 

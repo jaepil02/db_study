@@ -2,6 +2,7 @@
 
 > **대상**: TSQ 도메인 표면 — 시계열 조회(POST /api/v1/timeseries/query) 요청 스키마 · 해상도 규칙의 표면 모양 · meta · points 열 구성 · 다운샘플 모드 · 진행 구간 분할의 호출 모양 · 원시 내보내기 스트림 · **내보내기 스트림 중단 종료 표지 판정** · 태그 상한 · 최대 포인트 수(2계층 소유)
 > **작성일**: 2026-09-24
+> **개정일**: 2026-09-24 — W6 실험 채번 반영 — 메트릭 이름 반영(정본 10_observability/01 · 06)
 > **원천**: 원본 architecture.md §11 · §11.1 · §18(커밋 ff66a37) · 원본 data_flow.md §6 · §6.1 · §6.2 · §6.3 · §14.1 5단계(커밋 ff66a37) · REQ-TSQ-01~17 · ADR-25 · [../02_features/07_timeseries.md](../02_features/07_timeseries.md) TSQ-01~09 · [../06_pipeline/06_timeseries_read.md](../06_pipeline/06_timeseries_read.md) · [../06_pipeline/12_data_contract.md](../06_pipeline/12_data_contract.md) 5단계 · docs_plan.md 웨이브 인계 W5 07_api 행(내보내기 스트림 중단 종료 표지)
 
 TSQ 표면은 **요청한 것이 아니라 서버가 고른 것을 돌려주는 표면**이다. 해상도는 범위 길이와 최대 포인트 수로 서버가 정하고(보호 장치 — 원본 data_flow.md §6.1), 결과가 여전히 크면 LTTB로 줄인다. 요청이 무엇이었든 실제로 무엇을 받았는지는 meta가 말한다 — 그래서 이 문서는 meta를 계약의 중심에 둔다.
@@ -159,7 +160,7 @@ TSQ 표면은 **요청한 것이 아니라 서버가 고른 것을 돌려주는 
 
 - 검산: 안 = **4**
 - **B형 — 끊긴 다운로드가 "오류 코드 없음"으로 끝나는 것은 누락이 아니다.** 결론 — 상태 줄 200이 이미 나간 뒤라 어떤 코드도 보낼 수 없다(REQ-TSQ-15 계열 판정). 반대 시나리오 — 표지를 본문에 넣으면 정상 파일의 형식이 깨지고, 표지를 못 본 도구는 잘린 파일을 완전한 것으로 적재한다. 파생 지침 — 클라이언트는 **종결 청크 수신 여부**로 완결을 판정한다. fetch 스트림 읽기가 오류로 끝나면 불완전 파일이다. Parquet은 꼬리(footer)가 없으면 파일 자체가 열리지 않아 이중으로 드러난다.
-- 도중 중단은 계수한다(내보내기 중단 수 — 이름은 [../10_observability/01_metrics_catalog.md](../10_observability/01_metrics_catalog.md) W6). 잘린 CSV의 행 수 대조는 사람이 ClickHouse 직접 count로 한다([../03_requirements/08_timeseries.md](../03_requirements/08_timeseries.md) 판정).
+- 도중 중단은 계수한다(tsq_export_aborted_total — [../10_observability/01_metrics_catalog.md](../10_observability/01_metrics_catalog.md)). 잘린 CSV의 행 수 대조는 사람이 ClickHouse 직접 count로 한다([../03_requirements/08_timeseries.md](../03_requirements/08_timeseries.md) 판정).
 
 ## 미확인 · 미설계 등재
 
@@ -169,7 +170,7 @@ TSQ 표면은 **요청한 것이 아니라 서버가 고른 것을 돌려주는 
 | 내보내기 범위 상한 · 등급별 한도 | 2계층 미정 | [../12_security/03_api_surface_defense.md](../12_security/03_api_surface_defense.md)(W7) |
 | 조회 p95 · 히트율 | 3계층 미확인 — 원본 목표 히트 20 ms · 미스 300 ms · 80% | [../03_requirements/13_nonfunctional.md](../03_requirements/13_nonfunctional.md) REQ-NFR-08 · 10 |
 | COUNTER 랩어라운드 구간 증가량 | 조회 시점 몫 — 이 표면은 max − min을 계산하지 않는다 · 증가량 집계 요청 필드 없음 | [../06_pipeline/04_routing.md](../06_pipeline/04_routing.md) §생산 카운터 기전 판정 |
-| 내보내기 중단 계수 이름 | 미정 | [../10_observability/01_metrics_catalog.md](../10_observability/01_metrics_catalog.md)(W6) |
+| 내보내기 중단 계수 이름 | **W6 판정** — tsq_export_aborted_total | [../10_observability/01_metrics_catalog.md](../10_observability/01_metrics_catalog.md) |
 
 ## 관련 문서
 

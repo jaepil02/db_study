@@ -2,6 +2,7 @@
 
 > **대상**: F-02 적재 흐름의 기전 정본 — 소비 루프 · 단일 flusher fan-in(ADR-09) · **배치 트리거 산술 보정** · 창 정렬 배치와 결정적 토큰(fan-in · SW-01 off 토큰 재료) · 배치 행 수 상한 · flusher 메모리 경계 · 중복 제거 윈도우 관계식 · 재시도 · DLQ(원 엔트리 단위) · XAUTOCLAIM 주기 회수 · 소진 모드 · SW-08 · 확인 뒤 후속 단계 순서 · 적재 행 조합 검증 · MV 재실행 미확인
 > **작성일**: 2026-09-24
+> **개정일**: 2026-09-24 — W6 실험 채번 반영 — 메트릭 이름 · EXP 번호 반영(정본 10_observability/01 · 06)
 > **원천**: 원본 data_flow.md §4 · §4.1 · §4.2 · §4.3 · §12.3 · §15(커밋 ff66a37) · 원본 architecture.md §7.5 · §9 · §9.1 · §9.2(커밋 ff66a37) · 원본 implementation_plan.md §7.1(커밋 ff66a37) · docs_plan.md 웨이브 인계 W4 06_pipeline/03 행 전부 · ADR-06 · ADR-09 · ADR-14 · ADR-21 · ADR-25 · REQ-GLB-05 · 06 · 07 · REQ-ING-01~13 · 17 · 18 · [../11_glossary/03_enums_state_machines.md](../11_glossary/03_enums_state_machines.md) 상태 머신 1 · [../04_architecture/07_capacity_planning.md](../04_architecture/07_capacity_planning.md) 파생 지표 · [../05_data_stores/03_clickhouse_schema.md](../05_data_stores/03_clickhouse_schema.md) 중복 제거
 
 F-02는 **Stream 엔트리가 ClickHouse 행으로 확정되고 XACK되기까지**다. 원본은 컨슈머마다 독립 플러시였지만 그 구성은 파트 생성률을 컨슈머 수만큼 곱해 배치 정책을 무효화했다(보정 7.1). ADR-09가 **읽기와 삽입을 갈랐다** — 컨슈머 N개는 XREADGROUP · 디코딩만 하고, 디코딩된 행은 **단일 flusher**로 모여 한 곳에서 삽입 · XACK된다. 이 문서는 그 구조를 기전으로 풀고, ADR-09가 남긴 세 질문(fan-in 배치의 토큰 재료 · 행 수 상한 · flusher 메모리)을 판정한다.
@@ -195,9 +196,9 @@ ClickHouse가 복구된 직후 적체를 빼는 동안의 배치 규칙이다(RE
 | 원시 삽입 성공 · MV 실패 뒤 같은 토큰 재시도가 MV를 다시 실행하는가 | **미확인(S0 실측)** — 재실행을 가정하지 않고 롤업 의심 구간 대조로 메운다 | S0 · [09_rollup.md](./09_rollup.md) |
 | B · C안(컨슈머 1 + 배치 확대 · async_insert)과의 비교 | S3 실측 | AC-22 · ADR-09 |
 | M+ · L에서 R 값(시간 트리거 지배 여부) | 2계층 — 현행 50,000은 M+에서 행 트리거 지배 | S3 · S5 · 리드 제안 |
-| 창 닫힘 유예 · 행당 메모리 · flusher 메모리 상한 | 유예 2계층 미정 · 나머지 3계층 미확인 | S3 · S5 |
+| 창 닫힘 유예 · 행당 메모리 · flusher 메모리 상한 | 유예 2계층 미정 · 나머지 3계층 미확인 | S3 · S5 · EXP-34(유예) · EXP-26(flusher 메모리) |
 | 소진 모드 전환 중 크래시 재전달 중복 | 잔여 — 검출만 | [../05_data_stores/02_postgresql_constraints.md](../05_data_stores/02_postgresql_constraints.md) 한계 등재 #15(W4 반영) |
-| Stream 체류 · fan-in 대기 · 컨슈머 정지 · 쓰인 행 수 0 메트릭 이름 | 미정 | [../10_observability/01_metrics_catalog.md](../10_observability/01_metrics_catalog.md)(W6) |
+| Stream 체류 · fan-in 대기 · 컨슈머 정지 · 쓰인 행 수 0 메트릭 이름 | **W6 판정** — ing_stream_residence_seconds · ing_fanin_wait_seconds · ing_consumer_paused_seconds_total · ing_dedup_ignored_batches_total | [../10_observability/01_metrics_catalog.md](../10_observability/01_metrics_catalog.md) |
 
 ## 관련 문서
 

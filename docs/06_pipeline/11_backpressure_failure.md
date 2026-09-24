@@ -2,6 +2,7 @@
 
 > **대상**: F-10 흐름의 기전 정본 — 백프레셔 전파 체인(판정량 그룹 적체 · 히스테리시스 ADR-23) · 스풀 진입 · 재발행 · 종료 · 축출 연쇄 · **ClickHouse 중단 복구와 SW-11 두 구현의 차이** · Redis 중단(두 degrade 동시) · PostgreSQL 중단 · **DLQ 재처리 경로** · 재빌드 · 재시작 영향 · 장애 × 흐름 영향 행렬
 > **작성일**: 2026-09-24
+> **개정일**: 2026-09-24 — W6 실험 채번 반영 — EXP 번호 반영(정본 10_observability/01 · 06)
 > **원천**: 원본 data_flow.md §12 · §12.1 · §12.2 · §12.3 · §12.4 · §13(커밋 ff66a37) · 원본 architecture.md §9.3 · §17(커밋 ff66a37) · 원본 implementation_plan.md §7.2 · §5 S6(커밋 ff66a37) · docs_plan.md 보정 #5(7.2 → 06_pipeline/11) · 웨이브 인계(DLQ 재처리 경로) · ADR-05 · ADR-09 · ADR-10 · ADR-13 · ADR-21 · ADR-23 · ADR-24 · D-13 · REQ-GLB-05 · 09 · 10 · REQ-COL-12 · 13 · REQ-ING-17 · REQ-NFR-01 · 02 · 16 · [../04_architecture/06_backpressure_failure.md](../04_architecture/06_backpressure_failure.md) 임계 · 단계 · 시나리오 정본 · [../05_data_stores/06_redis_memory.md](../05_data_stores/06_redis_memory.md)
 
 F-10은 정상 흐름이 아니라 **흐름이 막혔을 때 데이터가 어디로 비켜 가고 어떻게 돌아오는가**다. 원칙은 하나다 — **버퍼가 차면 조용히 버리지 않고 실패시키고 계측한다**(REQ-GLB-10). 단계의 이름 · 임계 · 하강 규칙 · 장애 시나리오 10행의 정본은 [../04_architecture/06_backpressure_failure.md](../04_architecture/06_backpressure_failure.md)이고, 이 문서는 그 단계가 **어느 모듈의 어느 호출로 실행되는가**(스풀 · 재발행 · 소진 · 재처리 · 복원 순서)를 고정한다.
@@ -216,10 +217,10 @@ ADR-10이 S6 실측으로 미룬 비교의 측정 자리다. 채번 · 기본값
 
 | 항목 | 상태 | 확정 자리 |
 |------|------|------|
-| 소진 시간 · 재기동 시간 · 결측 구간 길이 | 3계층 미확인 — 확정 전 임의 값 고정 금지 | [../10_observability/06_experiment_catalog.md](../10_observability/06_experiment_catalog.md)(W6) |
+| 소진 시간 · 재기동 시간 · 결측 구간 길이 | 3계층 미확인 — 확정 전 임의 값 고정 금지 | EXP-16 · EXP-28 · [../10_observability/06_experiment_catalog.md](../10_observability/06_experiment_catalog.md) |
 | SW-11 최종안 · collector 채택 시 진실 문구 | 잠정 ingest — S6 실측 | ADR-10 · AC-34 |
-| 히스테리시스 폭 · 유지 시간 · 강화 계수 | 2계층 · 원본 값 없음 | [../04_architecture/06_backpressure_failure.md](../04_architecture/06_backpressure_failure.md) S6 |
-| 스풀 재발행 속도 상한 | 2계층 · 현행 미정 — 적체를 주의 임계 위로 밀지 않는 속도 | S6 · 이 문서 |
+| 히스테리시스 폭 · 유지 시간 · 강화 계수 | 2계층 · 원본 값 없음 | [../04_architecture/06_backpressure_failure.md](../04_architecture/06_backpressure_failure.md) S6 · EXP-20 |
+| 스풀 재발행 속도 상한 | 2계층 · 현행 미정 — 적체를 주의 임계 위로 밀지 않는 속도 · 계측 spool_drain_rate | S6 · 이 문서 · EXP-20 |
 | DLQ 재처리 전용 그룹 이름 · DLQ MAXLEN 프로파일별 값 | 미정 | [../05_data_stores/05_redis_keyspace.md](../05_data_stores/05_redis_keyspace.md) · [../05_data_stores/06_redis_memory.md](../05_data_stores/06_redis_memory.md) |
 | 장애 시나리오 #1에 알람 정지 추가 | 판정 — W4 반영 | [../04_architecture/06_backpressure_failure.md](../04_architecture/06_backpressure_failure.md) |
 

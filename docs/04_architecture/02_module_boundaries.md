@@ -2,6 +2,7 @@
 
 > **대상**: api 프로세스 안 모듈 사이의 경계 — Stream 경계 원칙과 근거 4 · 경계 예외(알람 직접 호출)의 근거 · APP_ROLE 5값과 모듈 배정 · worker_threads 격리 대상 · **스위치 = DI 포트 확정 표(포트 · 구현 이름 정본)** · 리포지터리 구조
 > **작성일**: 2026-09-24
+> **개정일**: 2026-09-24 — W6 실험 채번 반영 — 스위치 상태 레이블 · 이벤트 루프 메트릭 이름(정본 10_observability/01 · 06)
 > **원천**: 원본 architecture.md §1 · §4 · §8.2 · §9(커밋 ff66a37) · 원본 tech_stack.md §1 · §3.1 · §3.3 · §3.4 · §5.3 · §11(커밋 ff66a37) · 원본 data_flow.md §4.2 · §8 · §9 · §15(커밋 ff66a37) · 원본 implementation_plan.md §4.3 · §6 · §7.2 · §7.3 · §7.5(커밋 ff66a37) · D-06 · ADR-06 · ADR-07 · ADR-08 · ADR-10 · ADR-11 · ADR-22 · ADR-25 · [../01_overview/04_domain_map.md](../01_overview/04_domain_map.md) · [../02_features/13_switch_matrix.md](../02_features/13_switch_matrix.md)
 
 11개 모듈은 api 컨테이너 **한 프로세스** 안에 산다. 그런데도 모듈 사이는 호출 스택이 아니라 Redis Stream · Pub/Sub · Modbus 소켓으로 잇는다. 이 경계가 확장 로드맵 1단계(APP_ROLE 역할 분리)를 **코드 변경 없이 기동 값만 바꾸는 일**로 만든다 — 경계를 미리 지불해 둔 값이 거기서 회수된다(원본 architecture.md §19).
@@ -16,7 +17,7 @@
 |------|------|------|------|------|
 | ① | 백프레셔 흡수 | 수집 속도와 적재 속도가 분리된다 | ClickHouse 삽입 지연이 Modbus 폴링 주기로 곧장 역류한다 — 폴링 주기가 삽입 지연을 따라 늘어난다 | SW-01 off + ClickHouse 중단(S6) — poll_duration 대 scan_rate |
 | ② | at-least-once 재시도 · DLQ | PEL과 XAUTOCLAIM이 미처리 엔트리를 보존 · 회수한다 | 재시도가 메모리 안의 임시 상태가 되어 프로세스가 죽으면 함께 사라진다 | api 재기동 후 XPENDING 보존 · 생성 수 대 행 수 |
-| ③ | 이벤트 루프 격리 | 폴링 루프와 배치 삽입이 각자의 주기로 돈다 | 한 호출 스택을 공유해 한쪽의 지연이 다른 쪽의 스케줄링을 밀어낸다 | nodejs_eventloop_lag 대 수집 부하 |
+| ③ | 이벤트 루프 격리 | 폴링 루프와 배치 삽입이 각자의 주기로 돈다 | 한 호출 스택을 공유해 한쪽의 지연이 다른 쪽의 스케줄링을 밀어낸다 | nodejs_eventloop_lag_p95_seconds 대 수집 부하 |
 | ④ | 재처리 · 역할 분리 대비 | APP_ROLE로 모듈을 떼어도 호출부가 그대로다 | 역할 분리 순간 호출부를 전부 다시 써야 한다 | 확장 1단계 진입 시 코드 diff 0 |
 
 - 검산: 근거 = **4**
@@ -125,7 +126,7 @@ CPU 바운드 작업은 piscina worker_threads 풀에서 돈다(ADR-25 · REQ-GL
 - **SW-02를 개명한 이유 — 최신값에는 포트가 둘 생긴다.** 보정 7.2의 갱신 주체를 교체 가능하게 두려면 쓰기 쪽 포트가 필요한데(ADR-10), 읽기 포트가 LatestValuePort라는 이름을 가지면 두 포트의 이름이 겹쳐 "SW-02 off가 갱신도 끄는가"라는 오독이 생긴다. SW-02는 **읽기 포트만 교체한다**(02_features/13 §스위치별 판정) — 이름이 그 판정을 싣는다.
 - **SW-07만 값이 밀리초다.** WindowMergeThrottle은 창 크기(0 초과)를 주입받고, 0이면 PassthroughThrottle을 주입한다 — 창 0의 WindowMergeThrottle을 만들지 않는다. 창 0을 병합 구현으로 돌리면 "병합 없음"과 "병합하되 창이 0"이 계측에서 갈리지 않는다.
 - **SW-06의 대상 채널은 ch:rt · ch:alarm뿐이다.** ch:cacheinv는 DirectGatewayFanout으로 바뀌지 않는다 — 구독자가 게이트웨이가 아니라 다른 api 인스턴스다.
-- 노출 값: OBS가 health · /metrics에 내는 스위치 상태는 **기동 시 실제로 주입된 구현**을 기준으로 한다(REQ-OBS-11). 레이블 이름은 [../10_observability/01_metrics_catalog.md](../10_observability/01_metrics_catalog.md)(W6)가 정한다.
+- 노출 값: OBS가 health · /metrics에 내는 스위치 상태는 **기동 시 실제로 주입된 구현**을 기준으로 한다(REQ-OBS-11). 레이블 이름은 [../10_observability/01_metrics_catalog.md](../10_observability/01_metrics_catalog.md)가 정한다 — obs_switch_info(switch · env · value · impl)(W6).
 
 ### 스위치가 아닌 교체 포트
 

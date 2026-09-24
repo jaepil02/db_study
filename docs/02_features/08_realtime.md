@@ -2,6 +2,7 @@
 
 > **대상**: 실시간(RLT · NestJS realtime 모듈) 기능 목록 · 기능별 경계 · 스위치 교체 · 의존 도메인 · 실패 시 보이는 것 — 기능 ID RLT-NN 채번 정본
 > **작성일**: 2026-09-24
+> **개정일**: 2026-09-24 — W6 실험 채번 반영 — EXP 번호 · 메트릭 이름 반영(정본 10_observability/01 · 06)
 > **개정일**: 2026-09-24 — W5 판정 반영 — RLT-07 느린 구독자 절단 — 브라우저 단위 소켓 송신 대기량 한도 · Redis 출력 버퍼는 api 구독 연결 보호의 최후선으로 가름 — 기능 수 불변
 > **개정일**: 2026-09-24 — W4 판정 반영 — RLT-09 무효화 체인 ⑤단 → **⑥단**(6단 번호 표기) — 기능 수 불변
 > **원천**: 원본 data_flow.md §2 · §5 · §7.2 · §9 · §9.1 · §9.2 · §12.2 · §16 · §17(커밋 ff66a37) · 원본 architecture.md §5 · §8.1 · §8.2 · §11 · §11.2 · §17(커밋 ff66a37) · 원본 implementation_plan.md §4.1 · §5 S2 · S4 · §7.2 · §7.4(커밋 ff66a37) · [13_switch_matrix.md](./13_switch_matrix.md) SW-02 · SW-06 · SW-07 · [../11_glossary/05_units_and_time.md](../11_glossary/05_units_and_time.md) STALE 판정
@@ -90,7 +91,7 @@ RLT-04의 두 갈래다. 같은 "값이 없다"가 반대의 응답을 만든다
 | 수집 정지 · 생성 모드의 과거 ts | STALE 경고 | STALE 비율 | RLT-03 |
 | 느린 구독자 | 그 소켓만 절단(4413) · 클라이언트 재연결 — 출력 버퍼 한도 초과면 인스턴스 전원 푸시 중단(4503) | WebSocket 연결 수 · 종료 수 | RLT-07 |
 | WebSocket 인증 실패 · Origin 불일치 | 연결 종료 — HTTP 코드가 아니다 | 종료 코드 정본 [../07_api/11_websocket.md](../07_api/11_websocket.md) | RLT-05 |
-| 스로틀 창 0(SW-07 off) | 프레임 폭증 · 이벤트 루프 지연 | 초당 프레임 · nodejs_eventloop_lag | RLT-06 |
+| 스로틀 창 0(SW-07 off) | 프레임 폭증 · 이벤트 루프 지연 | 초당 프레임 · nodejs_eventloop_lag_p95_seconds | RLT-06 |
 
 - **B형 — ClickHouse가 멈췄는데 대시보드가 멈추는 것은 현행 설계의 알려진 결합이다.** 최신값 갱신이 삽입 성공 뒤에 오기 때문이다. 결합을 끊는 안(Collector 갱신)은 S6 실측으로 결정한다(보정 7.2) — 그 전까지는 STALE 표시가 유일한 신호다.
 
@@ -108,7 +109,7 @@ RLT-04의 두 갈래다. 같은 "값이 없다"가 반대의 응답을 만든다
 | 항목 | 원본에서 확인되는 것 | 상태 | 확정 자리 |
 |------|------|------|------|
 | 구독 방식 | API 표는 /ws/realtime?devices=1,2,3(쿼리 파라미터 · 원본 architecture.md §11), 흐름 시퀀스는 연결 뒤 subscribe 메시지(원본 data_flow.md §9) | **신규 불일치** — 둘 중 하나로 고정해야 구독 레지스트리의 갱신 시점이 정해진다 | [../07_api/11_websocket.md](../07_api/11_websocket.md)(W5) |
-| 최신값 조회 on/off 차이 | 원본 예상치 off 30~150 ms · on 0.3~1 ms | 미확인 — 확정 전 임의 값 고정 금지 | [../10_observability/06_experiment_catalog.md](../10_observability/06_experiment_catalog.md)(W6) |
+| 최신값 조회 on/off 차이 | 원본 예상치 off 30~150 ms · on 0.3~1 ms | 미확인 — 확정 전 임의 값 고정 금지 | EXP-07 · [../10_observability/06_experiment_catalog.md](../10_observability/06_experiment_catalog.md) |
 | 최신값 갱신 주체 | 현행 Ingest · 대안 Collector | S6 실측 결정 | ADR(W3) |
 | STALE 배수 · 복원 창 · ping 주기 · 스로틀 창 | 현행 참고 값만 있다 | 2계층 조정값 — 소유처 미정 | [../07_api/06_realtime.md](../07_api/06_realtime.md) · [../07_api/11_websocket.md](../07_api/11_websocket.md)(W5) |
 

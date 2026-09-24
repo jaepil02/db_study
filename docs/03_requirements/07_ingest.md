@@ -2,6 +2,7 @@
 
 > **대상**: 적재·분기(ING · NestJS ingest 모듈)의 동작 계약 — Stream 소비 · 배치 플러시 · ClickHouse 삽입 · 멱등 · XACK · 재시도 · DLQ · PEL 회수 · 다중 컨슈머 · 최신값 · 알람 전달 · 3계층 분기 실행 · 대조군 동시 적재 · 롤업 발동 · 백프레셔 대응 · 관측 — REQ-ING-NN 채번 정본
 > **작성일**: 2026-09-24
+> **개정일**: 2026-09-24 — W6 실험 채번 반영 — 메트릭 이름 반영 · 이벤트 루프 p95 메트릭 이름 통일(정본 10_observability/01 · 06)
 > **개정일**: 2026-09-24 — W4 판정 반영 — REQ-ING-18 Stream 대기 시작점 t0 → **엔트리 ID 시각**(04_architecture/05 판정과 통일) — REQ 수 불변
 > **개정일**: 2026-09-24 — W3 판정 반영 — 롤업 객체 귀속 잠정 ING → **ING 확정**
 > **원천**: 원본 architecture.md §5 · §7.1 · §7.2 · §7.5 · §9 · §9.1 · §9.2 · §9.3 · §14 · §17(커밋 ff66a37) · 원본 data_flow.md §4 · §4.1 · §4.2 · §4.3 · §8.2 · §10.2 · §12.2 · §12.3 · §12.4 · §15 · §17(커밋 ff66a37) · 원본 tech_stack.md §5.3(커밋 ff66a37) · 원본 implementation_plan.md §4.1 · §5 S3 · S6 · S7 · §7.1 · §7.2 · §7.3 · §7.5(커밋 ff66a37) · D-04 · D-05 · D-12 · [../02_features/06_ingest.md](../02_features/06_ingest.md) ING-01~13 · [../02_features/13_switch_matrix.md](../02_features/13_switch_matrix.md) · [01_global_rules.md](./01_global_rules.md) REQ-GLB-04~07 · 11 · 12
@@ -17,7 +18,7 @@
 | ID | 요구 | 근거 | 위반 시 구체적 실패 | 검증 방법 | 관련 기능 | 관련 흐름 | 관련 에러 코드 |
 |------|------|------|------|------|------|------|------|
 | **REQ-ING-01** | 기동 시 컨슈머 그룹 grp:ingest를 만들고(MKSTREAM) XREADGROUP으로 읽는다. 엔트리의 스키마 버전 v로 디코더를 고른다. **해독할 수 없는 엔트리(모르는 v · 손상 페이로드)는 재시도하지 않고 오류 사유와 함께 DLQ로 격리한 뒤 XACK한다.** SW-01 off면 프로세스 안 큐에서 받는다 | 원본 data_flow.md §4 · §17 DLQ 검증 · REQ-GLB-21 · 04 | 재시작 시점에 구버전 엔트리가 적체돼 있으면 v를 보지 않는 디코더는 그 엔트리를 영원히 실패시킨다. 해독 불가 엔트리를 재시도하면 백오프를 전부 소진하는 동안 **같은 배치의 정상 행까지 묶여** 지연된다 | 잘못된 데이터 주입 → DLQ 엔트리 증가 · dlq_count · XPENDING 0 · 구버전 v 엔트리 적체 후 재기동 → 정상 소진 | ING-01 | F-02 | 해당 없음 — dlq_count |
-| **REQ-ING-02** | MessagePack 해제 · 행 배열 전개는 worker_threads 풀에서 한다. 소비 루프의 이벤트 루프에서 대량 디코딩을 하지 않는다 | 원본 architecture.md §4 IngestModule 확장 방식 · REQ-GLB-20 | 이벤트 루프에서 디코딩하면 M 티어에서 조회 API p95가 적재 부하에 비례해 악화된다 | 적재 부하 단계별 nodejs_eventloop_lag p95 기록 | ING-01 | F-02 | 해당 없음 — 이벤트 루프 지연 |
+| **REQ-ING-02** | MessagePack 해제 · 행 배열 전개는 worker_threads 풀에서 한다. 소비 루프의 이벤트 루프에서 대량 디코딩을 하지 않는다 | 원본 architecture.md §4 IngestModule 확장 방식 · REQ-GLB-20 | 이벤트 루프에서 디코딩하면 M 티어에서 조회 API p95가 적재 부하에 비례해 악화된다 | 적재 부하 단계별 nodejs_eventloop_lag_p95_seconds 기록 | ING-01 | F-02 | 해당 없음 — 이벤트 루프 지연 |
 | **REQ-ING-03** | 배치는 행 수 · 경과 시간 · 페이로드 크기 세 트리거 중 **먼저 도달한 조건**에서 플러시한다. 값은 2계층 조정값이며 조회 계약은 [../06_pipeline/03_ingest_batch.md](../06_pipeline/03_ingest_batch.md) 소유(현행 참고 50,000행 · 1,000 ms · 32 MB). S2는 시간 트리거만이다 | 원본 architecture.md §9.1 · 원본 data_flow.md §4.1 | 시간 트리거가 없으면 저부하에서 행이 무한정 대기한다. 크기 트리거가 없으면 백프레셔 소진 중 배치가 메모리를 넘는다 | 저부하에서 플러시 간격 ≤ 시간 트리거 · 배치 크기 분포(batch_size) 기록 | ING-02 | F-02 | 해당 없음 — batch_size |
 | **REQ-ING-04** | 컨슈머 N개는 읽기와 디코딩만 하고 **삽입은 단일 flusher 한 곳**에서 한다(보정 7.1 A안). XACK은 flusher가 삽입 성공 후 엔트리 ID를 되돌려 수행한다. S3에서 B안(컨슈머 1 + 배치 확대) · C안(async_insert)과 파트 생성률 · E2E 지연을 비교 측정해 기록한다 | 원본 implementation_plan.md §7.1 · ADR [../04_architecture/09_decision_records.md](../04_architecture/09_decision_records.md) | 컨슈머마다 독립 플러시하면 M 티어에서 **행 수 트리거는 도달하지 않고** 시간 트리거가 지배해 파트 생성률이 컨슈머 수에 비례한다 — 컨슈머 3개면 초당 3회로 ClickHouse 권장 상한을 넘는다 | 컨슈머 수 1 · 3에서 초당 삽입 횟수 · 활성 파트 수 대조(A안은 컨슈머 수와 무관해야 한다) | ING-02 · ING-07 | F-02 | 해당 없음 — 활성 파트 수 |
 
@@ -126,7 +127,7 @@ ING 요구가 깨질 때 무엇이 보이는지를 모은다. 에러 코드 표�
 | fan-in 배치의 토큰 재료 · SW-01 off 토큰 재료 | **신규 미확인** — REQ-ING-06이 결정성만 요구한다 | [../06_pipeline/03_ingest_batch.md](../06_pipeline/03_ingest_batch.md)(W4) |
 | 최신값 덮어쓰기의 순서 역전 | **신규 미확인** — 원본은 "항상 덮어쓰기"(원본 architecture.md §10.1)이고 컨슈머 간 순서는 보장하지 않는다(REQ-GLB-07). 두 컨슈머가 같은 설비의 배치를 역순으로 확인하면 더 오래된 값이 rt:latest에 남을 수 있다 — ts 비교 덮어쓰기 여부가 없다 | [../06_pipeline/05_realtime_read.md](../06_pipeline/05_realtime_read.md)(W4) |
 | 롤업 객체의 도메인 귀속 | **W3 확정 — ING** | [../05_data_stores/04_clickhouse_rollup.md](../05_data_stores/04_clickhouse_rollup.md) |
-| 계층별 쓰기 계수 · 대조군 실패 계수의 메트릭 이름 | **신규 미확인** — REQ-ING-14 · 15 · 18이 요구한다 | [../10_observability/01_metrics_catalog.md](../10_observability/01_metrics_catalog.md)(W6) |
+| 계층별 쓰기 계수 · 대조군 실패 계수의 메트릭 이름 | **W6 판정** — ing_routed_rows_total · ing_control_copy_failures_total | [../10_observability/01_metrics_catalog.md](../10_observability/01_metrics_catalog.md) |
 | Stream 대기 · 삽입 · MV 지연 · 소진 시간 | 3계층 미확인 — 미확인 · 확정 전 임의 값 고정 금지 | [13_nonfunctional.md](./13_nonfunctional.md) REQ-NFR-04 · 16 |
 
 ## 관련 문서

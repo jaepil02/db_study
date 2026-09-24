@@ -2,6 +2,7 @@
 
 > **대상**: db_study의 시각 의미론(ts · ingested_at) · 시각 인코딩 · 저장 시간대와 표시 시간대 · 버킷 경계 · 공학 단위 · 부동소수 비교 · 수치 단위 표기 — 시각 의미론 정본
 > **작성일**: 2026-09-24
+> **개정일**: 2026-09-24 — W6 판정 반영 — ClickHouse 서버 timezone → **Asia/Seoul**(정본 09_tech_stack/03)
 > **개정일**: 2026-09-24 — W4 판정 반영 — Stream 대기 시작점 t0 → **엔트리 ID 시각** · t0 = 엔트리 ts 최솟값 · dt ≥ 0 판정 반영(06_pipeline/12)
 > **개정일**: 2026-09-24 — W3 판정 반영 — 시간대 표기 통일 경계 → **닫힘**(ClickHouse 전 시각 컬럼 Asia/Seoul 명시 · 정본 05_data_stores/03) · 버킷 · 파티션 경계 미확인 → **KST 확정**(tag_1d · tag_1m · tag_1h · alarm_eval · alarm_event) · site.timezone 미확인 → **CHECK Asia/Seoul 고정**(05_data_stores/01)
 > **개정일**: 2026-09-24 — W2 판정 반영 — 롤업 대 원시 허용 오차 미확인 → avg 상계식 · count · min · max · last 정확 일치 · p95만 미확인(정본 03_requirements/14)
@@ -68,7 +69,7 @@
 | epoch 비교 · 차 | 영향 없음 | 영향 없음 | 없음 |
 
 - **적재는 시각을 epoch 숫자로 보낸다(판정).** Stream의 t0 + dt는 이미 epoch ms이므로 문자열로 바꾸지 않고 넘기면 파싱 개입이 사라진다. 문자열 경유는 서버 시간대 설정 하나로 전 행이 어긋나는 경로다.
-- **ClickHouse 서버 시간대 설정은 스키마에서 빠졌다(W3).** 모든 시각 컬럼이 시간대를 명시하므로 달력 경계가 서버 timezone에 의존하지 않는다. 서버 설정은 수동 조회의 표시에만 영향이 남으며 확정 자리는 [../09_tech_stack/03_data_infra.md](../09_tech_stack/03_data_infra.md)(W6)다.
+- **ClickHouse 서버 시간대 설정은 스키마에서 빠졌다(W3).** 모든 시각 컬럼이 시간대를 명시하므로 달력 경계가 서버 timezone에 의존하지 않는다. 서버 설정은 수동 조회의 표시에만 영향이 남으며, W6이 **Asia/Seoul**로 판정했다([../09_tech_stack/03_data_infra.md](../09_tech_stack/03_data_infra.md)) — 달력 경계 시간대와 같은 값이라 수동 조회의 날짜도 KST로 맞는다.
 
 ## 버킷 경계 · 파티션 경계와 시간대
 

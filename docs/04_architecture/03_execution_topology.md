@@ -2,6 +2,8 @@
 
 > **대상**: 로컬 실행 구성 — Compose 서비스 4 · healthcheck · 기동 순서 · 네트워크 · 호스트 포트 · named volume 4 · 메모리 프로파일 2 + 조건부 중간 · CPU 가중 · **cpuset 배치(정본)** · 스냅샷과 복원 · 재빌드 · 재시작 영향 · 조정값 소유처
 > **작성일**: 2026-09-24
+> **개정일**: 2026-09-24 — W6 실험 채번 반영 — cpuset 표에 APP_ROLE=datagen 행(잠정 16-17 공유) · EXP 번호(정본 10_observability/01 · 06)
+> **개정일**: 2026-09-24 — W6 판정 반영 — api 정확 버전 링크 02_backend → **03_data_infra 버전 고정표** · 미확인 2행(관측 구성원 · 중간 프로파일)을 닫는다
 > **원천**: 원본 architecture.md §3 · §13 · §17 · §18(커밋 ff66a37) · 원본 tech_stack.md §10.1~§10.5 · §12(커밋 ff66a37) · 원본 implementation_plan.md §2 · §2.2~§2.5 · §8 · §9(커밋 ff66a37) · 원본 data_flow.md §11.3 · §12.4(커밋 ff66a37) · D-02 · D-10 · ADR-05 · ADR-18 · ADR-20 · ADR-22 · [../README.md](../README.md) 고정 기준(실행 구성 · 호스트 포트 · 실험 축) · [../03_requirements/13_nonfunctional.md](../03_requirements/13_nonfunctional.md) REQ-TEC-01~15
 
 실행 단위는 **Docker Compose 컨테이너 4개(api 1 + postgres · clickhouse · redis) + 호스트 프로세스 웹**이다(루트 README 고정 기준). 관측 스택은 observability 프로파일로만 뜬다. 이 문서는 그 구성이 **같은 초기 상태에서 반복 측정 가능하도록** 묶이는 방식을 고정한다 — 기동 순서 · 자원 상한 · CPU 배치 · 스냅샷이 전부 "두 측정이 같은 조건이었다"를 보장하는 장치다(D-10).
@@ -12,7 +14,7 @@
 
 | 서비스 | 이미지 | 재시작 정책 | healthcheck | depends_on | 역할 |
 |------|------|------|------|------|------|
-| api | 로컬 빌드(Node LTS 멀티스테이지 · 정확 버전 [../09_tech_stack/02_backend.md](../09_tech_stack/02_backend.md)) | unless-stopped | /api/v1/health 왕복(무인증) | postgres · clickhouse · redis 전부 service_healthy | NestJS 단일 프로세스 — 모듈 11 · APP_ROLE 기본 all |
+| api | 로컬 빌드(Node LTS 멀티스테이지 · 정확 버전 [../09_tech_stack/03_data_infra.md](../09_tech_stack/03_data_infra.md) §버전 고정표) | unless-stopped | /api/v1/health 왕복(무인증) | postgres · clickhouse · redis 전부 service_healthy | NestJS 단일 프로세스 — 모듈 11 · APP_ROLE 기본 all |
 | postgres | PostgreSQL 18 공식 alpine 이미지 | unless-stopped | pg_isready(애플리케이션 계정 · DB) | 없음 | OLTP — 업무 14 · 대조군 1 |
 | clickhouse | ClickHouse 25.8 공식 서버 이미지 | unless-stopped | HTTP ping(8123) | 없음 | OLAP — 원시 · 롤업 · 판정 전수 |
 | redis | Redis 8 공식 alpine 이미지 | unless-stopped | redis-cli ping | 없음 | Stream · 최신값 · 알람 상태 · 캐시 · 세션 · Pub/Sub |
@@ -132,9 +134,10 @@ CPU 가중은 절대량이 아니라 **상대 배분**이라 두 프로파일이
 | clickhouse | 8-13 | 병렬 스캔 · 머지 |
 | postgres | 14-15 | 부하가 낮다 |
 | k6(호스트 프로세스) | 16-17(taskset) | **측정 대상과 CPU 집합이 겹치지 않는다** |
+| APP_ROLE=datagen 프로세스(생성기 모드 B · D) | 16-17(k6와 공유 · **잠정**) | 측정 대상 집합(0-15)과 겹치지 않게 부하 생성기 집합을 나눠 쓴다 — 두 생성기의 CPU 합으로 포화를 판정한다([../10_observability/05_load_scenarios.md](../10_observability/05_load_scenarios.md) §생성기 위치) |
 | Next.js 개발 서버 · 관측 스택 | 18-19 | 측정 대상 밖 |
 
-- 검산: 8 + 6 + 2 + 2 + 2 = **20** = 머신 스레드 수 · 겹치는 집합 0
+- 검산: 8 + 6 + 2 + 2 + 2 = **20** = 머신 스레드 수 · 겹치는 집합 0 — datagen 행은 k6 집합을 공유하므로 새 집합을 더하지 않는다(부하 생성기끼리의 공유 · 측정 대상과는 겹치지 않는다)
 - **완전한 격리가 아니다 — 잔여 둘.** ① WSL2는 P코어 · E코어 구분을 노출하지 않아 집합 16번이 어느 코어인지 매 실행 달라질 수 있다. ② 메모리 대역폭과 L3 캐시는 공유된다. 그래서 **같은 실험 3회 중앙값이 선택이 아니라 필수 규칙이다**(D-10 · REQ-TEC-11).
 - 이 배치는 20스레드 머신에 종속된다. 머신이 바뀌면 이 표를 다시 짜고 측정 기록의 조건 칸에 배치를 적는다.
 
@@ -187,10 +190,10 @@ CPU 가중은 절대량이 아니라 **상대 배분**이라 두 프로파일이
 
 | 항목 | 상태 | 확정 자리 |
 |------|------|------|
-| observability 프로파일 구성원(prometheus · grafana · alertmanager · tempo) | docs_plan 보정 #17 — W6 판정 | [../09_tech_stack/03_data_infra.md](../09_tech_stack/03_data_infra.md) |
-| 재기동 시간 · 결측 구간 길이 | 3계층 미확인 — 미확인 · 확정 전 임의 값 고정 금지 | [../10_observability/06_experiment_catalog.md](../10_observability/06_experiment_catalog.md)(W6) |
+| observability 프로파일 구성원(prometheus · grafana · alertmanager · tempo) | **W6 판정** — 구성원 prometheus · grafana 2 · alertmanager 채택하지 않음(수신처 없음 · D-02) · tempo 현 범위 밖 · 조건부 | [../09_tech_stack/03_data_infra.md](../09_tech_stack/03_data_infra.md) |
+| 재기동 시간 · 결측 구간 길이 | 3계층 미확인 — 미확인 · 확정 전 임의 값 고정 금지 | EXP-28 · [../10_observability/06_experiment_catalog.md](../10_observability/06_experiment_catalog.md) |
 | 역할 분리 시 컨테이너별 메모리 · CPU 배분 | 미설계 — 원본은 all 기준으로만 산정했다 | [08_scaling_roadmap.md](./08_scaling_roadmap.md) 1단계 진입 시 |
-| 중간 프로파일의 정식 채택 | 조건부 대안 | [../09_tech_stack/04_local_environment.md](../09_tech_stack/04_local_environment.md)(W6) |
+| 중간 프로파일의 정식 채택 | **W6 판정** — 정식 프로파일로 올리지 않는다 · 조건부 대안 유지 | [../09_tech_stack/04_local_environment.md](../09_tech_stack/04_local_environment.md) |
 
 ## 관련 문서
 

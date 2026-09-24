@@ -2,6 +2,7 @@
 
 > **대상**: PostgreSQL 업무 테이블 14의 테이블 간 제약(FK · UNIQUE · 결합 CHECK · 가드 트리거 · DB 권한) · 인덱스 · alarm_event 월 파티션 · 커넥션(ADR-19) · **한계 등재 — 어느 계층도 강제하지 않는 것**의 정본
 > **작성일**: 2026-09-24
+> **개정일**: 2026-09-24 — W6 판정 반영 — pg_partman 미리 만들기 · 유지 작업 주기 미확인을 닫는다(도구 기본값 · 백그라운드 워커 1시간 — 정본 09_tech_stack/03)
 > **개정일**: 2026-09-24 — W5 판정 반영 — 한계 등재 신설 2행(#18 실적 이중 제출 · #19 실적 정정 수단 없음 — 강제 주체 없음) · 등재 17 → **19** · unit만 바꾸는 태그 수정 미확인 → W5 판정(허용)
 > **개정일**: 2026-09-24 — W4 판정 반영 — 한계 등재 #2 강제 주체 없음 → **조건부 쓰기** · 신설 3행(#15 소진 모드 전환 중 크래시 재전달 중복 · #16 BFF 비경유 쓰기의 무효화 누락 · #17 비활성 태그의 열린 알람 이벤트) · 등재 14 → **17** · 없음 6 · 부분 강제 8 → **11**
 > **원천**: 원본 architecture.md §6 설계 결정 · §10.1 · §12 · §17 · §18(커밋 ff66a37) · 원본 data_flow.md §4.2 · §7.1 · §8.2 · §13(커밋 ff66a37) · 원본 tech_stack.md §5.1(커밋 ff66a37) · docs_plan.md 이식 패턴 ① 한계 등재 · 웨이브 인계 W3 05_data_stores 행(audit_log 소유) · ADR-16 · ADR-19 · [../README.md](../README.md) 전역 불변식 순서 무관성
@@ -122,7 +123,7 @@ occurred_at 기준 월 RANGE 파티션이고 pg_partman이 미래 파티션을 �
 | 파티션 키 | occurred_at(측정 시각 ts) | 조회 범위 제한과 오래된 파티션 분리 |
 | PK | (event_id, occurred_at) | **파티션 테이블의 PK · UNIQUE는 파티션 키를 포함해야 한다.** event_id만으로는 선언할 수 없다 |
 | 경계 시간대 | **Asia/Seoul 월 1일 00:00** — DB 기본 timezone으로 고정 | pg_partman은 경계를 세션 시간대로 계산한다. 세션이 UTC면 월 경계가 KST 1일 09:00이 되어 "이번 달 알람"이 화면의 달과 9시간 어긋난다 |
-| 미리 만들기 | 현재 월 + 미래 월 몇 개(현행 값 pg_partman 기본 · 소유 [../09_tech_stack/03_data_infra.md](../09_tech_stack/03_data_infra.md)) | 파티션이 없는 달의 INSERT는 기본 파티션으로 간다 |
+| 미리 만들기 | 현재 월 + 미래 월 N개(현행 값 도구 기본값 · 유지 작업 백그라운드 워커 1시간 · 소유 [../09_tech_stack/03_data_infra.md](../09_tech_stack/03_data_infra.md) — W6 판정) | 파티션이 없는 달의 INSERT는 기본 파티션으로 간다 |
 | 기본 파티션 | 둔다 · **비어 있지 않으면 이상 신호** | 시간 압축 생성(모드 B · C)의 과거 ts 이벤트가 기본 파티션에 쌓이면 이후 그 달 파티션 생성이 충돌한다 |
 | 조회 조건 | 발생 시각 범위 필수 | 범위 없는 목록 조회는 모든 파티션을 훑어 파티션 분리의 이득이 사라진다(REQ-ALM-13) |
 
@@ -179,7 +180,7 @@ ADR-19의 저장소 쪽 계약이다. 풀 크기 · max_connections는 2계층 �
 
 | 항목 | 상태 | 확정 자리 |
 |------|------|------|
-| pg_partman 미리 만들기 개수 · 유지 작업 주기 | 원본 미기재 — 현행 도구 기본값 | [../09_tech_stack/03_data_infra.md](../09_tech_stack/03_data_infra.md)(W6) |
+| pg_partman 미리 만들기 개수 · 유지 작업 주기 | **W6 판정** — 미리 만들기 도구 기본값 · 유지 작업은 백그라운드 워커 1시간 주기 · 기본값 수치는 착수 시 공식 참조로 확인 | [../09_tech_stack/03_data_infra.md](../09_tech_stack/03_data_infra.md) |
 | unit만 바꾸는 태그 수정의 허용 여부 | **W5 판정** — 허용(변환식이 그대로면 표기 정정 · 물리 단위 변경은 변환식이 바뀌어 새 태그 발급으로 간다) · 가드 트리거 밖 잔여는 audit_log before · after가 흔적 | [../07_api/04_master.md](../07_api/04_master.md) |
 | rt:latest 덮어쓰기의 ts 비교 | **W4 판정** — 조건부 쓰기 · 한계 등재 #2 갱신 | [../06_pipeline/05_realtime_read.md](../06_pipeline/05_realtime_read.md) |
 | 대조군 전용 커넥션과 ADR-19 본문 | 이 문서의 신설 판정 | [../04_architecture/09_decision_records.md](../04_architecture/09_decision_records.md)(W3 w3-arch 정합) |

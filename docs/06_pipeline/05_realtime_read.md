@@ -2,6 +2,7 @@
 
 > **대상**: F-03 · F-07의 기전 정본 — 최신값 조회 판정 트리(SW-02) · 빈 키 복원 · Redis 불가 503 · **복원 창에 행 없는 신규 설비 응답** · **tagmeta 미스 + PostgreSQL 불가 응답** · STALE 판정 계약 · **rt:latest 덮어쓰기 순서 역전 판정(복구 중 포함)** · 기동 복원 창 · SW-11 두 구현의 조회 차이 · 실시간 푸시(SW-06 · SW-07) · 스로틀 병합 · Pub/Sub 한계 · 재연결 동기화
 > **작성일**: 2026-09-24
+> **개정일**: 2026-09-24 — W6 실험 채번 반영 — Pub/Sub 한도 소유 · 메트릭 · EXP 번호(정본 10_observability/01 · 06)
 > **개정일**: 2026-09-24 — W5 판정 반영 — 느린 구독자 절단을 둘로 가름 — 브라우저 단위 **소켓 송신 대기량 한도(4413)** · Redis Pub/Sub 출력 버퍼 한도는 **api 구독 연결 보호의 최후선** · 푸시 조정값 4 → **5** · STALE 판정 계약에 메타 없는 태그 판정 불가 행 5 → **6**
 > **원천**: 원본 data_flow.md §5 · §9 · §9.1 · §9.2 · §12.2 · §12.4 · §15(커밋 ff66a37) · 원본 architecture.md §5 · §10.1 · §17(커밋 ff66a37) · 원본 implementation_plan.md §7.2(커밋 ff66a37) · docs_plan.md 웨이브 인계 W4 06_pipeline/05 행 전부 · ADR-05 · ADR-07 · ADR-10 · ADR-13 · ADR-23 · REQ-RLT-01~18 · REQ-ING-11 · 12 · REQ-GLB-09 · 11 · [../05_data_stores/05_redis_keyspace.md](../05_data_stores/05_redis_keyspace.md) · [../05_data_stores/02_postgresql_constraints.md](../05_data_stores/02_postgresql_constraints.md) 한계 등재 #2 · [../11_glossary/05_units_and_time.md](../11_glossary/05_units_and_time.md) STALE 판정
 
@@ -171,7 +172,7 @@ F-03 관점의 차이만 적는다. ClickHouse 중단 재현 비교(갱신 공�
 | ping 주기 · pong 미수신 한도 | 30초 · 3회 | 이 문서 | 연결 수 × 주기 ÷ 30초가 이벤트 루프 부하다 | 짧게 잡으면 연결 500에서 ping만으로 초당 수십 프레임 |
 | 재연결 백오프 | 1 · 2 · 4초 … 최대 30초 | 이 문서 · 클라이언트 | 상한 있는 지수 백오프(REQ-RLT-13) | 상한이 없으면 api 재기동 뒤 전 클라이언트가 같은 순간 재연결한다 |
 | **소켓 송신 대기량 한도** | 미정 | [../07_api/11_websocket.md](../07_api/11_websocket.md) | **느린 브라우저 한 개**를 4413으로 절단 — 게이트웨이가 소켓마다 잰다 | 한도가 없으면 느린 탭 하나 몫의 프레임이 api 힙에 쌓인다 |
-| Pub/Sub 출력 버퍼 한도 | 미정 | [../10_observability/01_metrics_catalog.md](../10_observability/01_metrics_catalog.md)(W6) · Redis 설정 | **api 구독 연결 보호의 최후선** — 넘으면 Redis가 api 인스턴스의 구독 연결을 끊어 그 인스턴스 전체 푸시가 멈춘다(4503 · W5) | 한도가 없으면 api가 채널을 못 따라갈 때 Redis 메모리를 먹어 봉인 계열 쓰기가 OOM에 가까워진다 |
+| Pub/Sub 출력 버퍼 한도 | 값 소유 [../09_tech_stack/03_data_infra.md](../09_tech_stack/03_data_infra.md)(W6 · S4 확정) | 메트릭 [../10_observability/01_metrics_catalog.md](../10_observability/01_metrics_catalog.md) · Redis 설정 | **api 구독 연결 보호의 최후선** — 넘으면 Redis가 api 인스턴스의 구독 연결을 끊어 그 인스턴스 전체 푸시가 멈춘다(4503 · W5) | 한도가 없으면 api가 채널을 못 따라갈 때 Redis 메모리를 먹어 봉인 계열 쓰기가 OOM에 가까워진다 |
 
 - 검산: 조정값 = **5**
 - **두 한도는 다른 대상을 끊는다(W5 판정).** 브라우저 단위 절단은 소켓 송신 대기량 한도이고, 출력 버퍼 한도는 api 프로세스와 Redis 사이의 구독 연결 하나를 끊는다 — 출력 버퍼로 느린 브라우저를 다루려 하면 탭 하나의 지연이 인스턴스 전원의 푸시 중단이 된다. 그래서 송신 대기량 한도가 먼저 걸리게 둔다.
@@ -197,10 +198,10 @@ F-03 관점의 차이만 적는다. ClickHouse 중단 재현 비교(갱신 공�
 |------|------|------|
 | 최신값 조회 p95 · 복원 지연 · 푸시 도달 지연 | 3계층 미확인 — 원본 목표 10 ms · 복원 원본 예상치 50~150 ms · 푸시 150 ms | [../03_requirements/13_nonfunctional.md](../03_requirements/13_nonfunctional.md) REQ-NFR-07 · 12 |
 | lock:rebuild:rt 만료 값 = 빈 결과 재복원 억제 시간 | 계약만 — 복원 쿼리 타임아웃 이상 | [../05_data_stores/05_redis_keyspace.md](../05_data_stores/05_redis_keyspace.md) · S2 |
-| 락 실패 대기 시간 · 횟수 | 2계층 · 현행 미정 — 시계열 락의 50 ms × 3회와 같은 모양 | S2 · 이 문서 |
+| 락 실패 대기 시간 · 횟수 | 2계층 · 현행 미정 — 시계열 락의 50 ms × 3회와 같은 모양 · 대기 소진은 rlt_latest_lock_wait_exhausted_total | S2 · 이 문서 · EXP-07 |
 | rt:latest 조건부 쓰기 스크립트의 래퍼 노출 | 판정 — 래퍼 명령 목록 갱신 필요 | [../05_data_stores/05_redis_keyspace.md](../05_data_stores/05_redis_keyspace.md)(W4 반영) |
 | 빈 목록 표지 · 메타 비움 표지의 응답 모양 · 구독 방식 | 미정 | [../07_api/06_realtime.md](../07_api/06_realtime.md) · [../07_api/11_websocket.md](../07_api/11_websocket.md)(W5) |
-| Pub/Sub 출력 버퍼 한도 | 미정 | [../10_observability/01_metrics_catalog.md](../10_observability/01_metrics_catalog.md)(W6) |
+| Pub/Sub 출력 버퍼 한도 | 값 소유 이전(W6) — S4 확정 | [../09_tech_stack/03_data_infra.md](../09_tech_stack/03_data_infra.md) · 메트릭 [../10_observability/01_metrics_catalog.md](../10_observability/01_metrics_catalog.md) |
 
 ## 관련 문서
 

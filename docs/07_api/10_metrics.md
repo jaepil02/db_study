@@ -2,6 +2,8 @@
 
 > **대상**: OBS 도메인 표면 — GET /api/v1/health(저장소별 상태 · 스위치 11종의 실제 주입 구현 · 부분 실패 503) · GET /metrics(Prometheus 텍스트 · 스위치 상태 레이블) · 두 표면의 공개 판정 반영 · **health 본문 필드 이름 판정** · **저장소별 타임아웃 판정**
 > **작성일**: 2026-09-24
+> **개정일**: 2026-09-24 — W6 실험 채번 반영 — 레이블 이름 · 설비 레이블 · EXP 반영(정본 10_observability/01 · 06)
+> **개정일**: 2026-09-24 — W6 판정 반영 — Compose api healthcheck timeout **3초**(저장소 타임아웃 1,000 ms의 3배 · 정본 09_tech_stack/03) · run 환경변수 이름 MEMORY_PROFILE · CAPACITY_TIER · COMMIT_HASH(정본 09_tech_stack/04) — 필드 수 불변
 > **개정일**: 2026-09-24 — W5 판정 반영 — health 본문에 측정 조건 **run**(commitHash · memoryProfile · memoryLimitMb · capacityTier) 신설 — 최상위 필드 4 → **5** · 필드 행 8 → **10** · #1 호출 화면에 EXP-COMPARE · EXP-COMPARE 비교 값은 표면 없음(BFF의 docs/measurements 읽기)
 > **원천**: 원본 architecture.md §3 · §11 · §14 · §18(커밋 ff66a37) · 원본 implementation_plan.md §4.1(커밋 ff66a37) · REQ-OBS-01~12 · REQ-GLB-04 · 16 · D-06 · D-10 · ADR-08 · ADR-22 · docs_plan.md 실행 계획 보정 #12 · #14 · [../02_features/11_metrics.md](../02_features/11_metrics.md) OBS-01~06 · [../02_features/13_switch_matrix.md](../02_features/13_switch_matrix.md) · [../02_features/12_permission_matrix.md](../02_features/12_permission_matrix.md) §GEN · OBS 표면 인가 · [../04_architecture/03_execution_topology.md](../04_architecture/03_execution_topology.md) healthcheck · docs_plan.md 웨이브 인계 W5 07_api 행(health 본문 필드 이름 · 저장소별 타임아웃)
 
@@ -50,7 +52,7 @@ metrics 네임스페이스는 정의만 있고 코드가 0이다. health의 503�
 | Redis | PING | 앱 명령 연결(구독 연결이 아니다) | 상동 | 구독 연결은 명령을 받지 않아 PING 경로가 다르다 |
 
 - 검산: 저장소 = **3**
-- **타임아웃은 2계층 조정값이다 — 현행 참고 1,000 ms · 소유 이 문서.** 조회 계약은 둘이다 ① 캐시 계열 호출 타임아웃(현행 참고 50 ms)보다 길다 — health는 연결 수립을 포함한 왕복이다 ② Compose healthcheck timeout보다 짧다 — 길면 멈춘 저장소 하나가 healthcheck를 무기한 붙잡아 "응답 없음"과 "불가"를 가를 수 없다(REQ-OBS-08). Compose 쪽 값의 정본은 [../09_tech_stack/03_data_infra.md](../09_tech_stack/03_data_infra.md)(W6)이며 두 값을 같은 변경 단위에서 맞춘다.
+- **타임아웃은 2계층 조정값이다 — 현행 참고 1,000 ms · 소유 이 문서.** 조회 계약은 둘이다 ① 캐시 계열 호출 타임아웃(현행 참고 50 ms)보다 길다 — health는 연결 수립을 포함한 왕복이다 ② Compose healthcheck timeout보다 짧다 — 길면 멈춘 저장소 하나가 healthcheck를 무기한 붙잡아 "응답 없음"과 "불가"를 가를 수 없다(REQ-OBS-08). Compose 쪽 값의 정본은 [../09_tech_stack/03_data_infra.md](../09_tech_stack/03_data_infra.md)이며(W6 판정 — api healthcheck timeout 3초 = 이 값의 3배) 두 값을 같은 변경 단위에서 맞춘다.
 - **병렬인 이유** — 직렬이면 health 시간이 세 타임아웃의 합이 되어, 저장소 둘이 멈춘 순간 ②의 조건이 깨진다.
 
 ### 응답 — 본문 필드 이름 판정
@@ -72,7 +74,7 @@ metrics 네임스페이스는 정의만 있고 코드가 0이다. health의 503�
 
 - 검산: 필드 행 = **10** · 최상위 필드 = status · checkedAt · stores · switches · run = **5**
 - **run을 싣는 이유(W5 리드 판정)** — 측정 기록의 4요소(커밋 해시 · 메모리 프로파일 · 용량 티어 · 스위치 상태 — REQ-GLB-17)를 한 응답에서 읽게 한다. 실험 콘솔(EXP-CONSOLE)과 비교 화면(EXP-COMPARE)이 기록 조건을 손으로 옮겨 적지 않는다 — 옮겨 적다 틀리면 같은 조건이라 믿은 두 측정의 조건이 다르다. 셋 다 비밀이 아니다.
-- **값은 기동 시 주입값이며 모르면 null이다.** 커밋 해시는 이미지 빌드 인자, 메모리 프로파일 · 용량 티어는 기동 환경변수에서 읽는다(환경변수 이름 정본 [../09_tech_stack/04_local_environment.md](../09_tech_stack/04_local_environment.md) W6). 추정값으로 채우지 않는다 — null은 "그 측정 기록은 4요소가 빠져 인용할 수 없다"는 표지다. memoryLimitMb만은 프로파일 이름과 별도로 cgroup의 실제 상한을 읽는다 — 스위치와 같은 "실제 적용값" 원칙(REQ-OBS-11)이다.
+- **값은 기동 시 주입값이며 모르면 null이다.** 커밋 해시는 이미지 빌드 인자, 메모리 프로파일 · 용량 티어는 기동 환경변수에서 읽는다(환경변수 MEMORY_PROFILE · CAPACITY_TIER · 빌드 인자 COMMIT_HASH — 이름 정본 [../09_tech_stack/04_local_environment.md](../09_tech_stack/04_local_environment.md)). 추정값으로 채우지 않는다 — null은 "그 측정 기록은 4요소가 빠져 인용할 수 없다"는 표지다. memoryLimitMb만은 프로파일 이름과 별도로 cgroup의 실제 상한을 읽는다 — 스위치와 같은 "실제 적용값" 원칙(REQ-OBS-11)이다.
 - **error에 원문 메시지를 싣지 않는 이유** — 드라이버 오류 문자열에는 접속 문자열 · 호스트 · 사용자 이름이 섞인다. 공개 표면의 응답에 비밀이 실리면 공개 판정이 무효다(REQ-OBS-10).
 - **switches의 키 집합은 정본의 스위치 전부다.** 개수를 이 문서가 세지 않는다 — 스위치가 늘면 키가 늘 뿐이고 응답 필드 추가 규칙(v1 유지)을 따른다. 정본 [../02_features/13_switch_matrix.md](../02_features/13_switch_matrix.md).
 
@@ -142,8 +144,8 @@ metrics 네임스페이스는 정의만 있고 코드가 0이다. health의 503�
 | 내용 | 앱 기본 · HTTP · WebSocket · 파이프라인(OBS-01) + 저장소 메트릭(OBS-02) + 키 접두별 메모리(OBS-03) + E2E 지연 게이지(OBS-04) + 스위치 상태 레이블(OBS-06) |
 | 저장소 메트릭 | 스크레이프 때 저장소를 조회하지 않는다 — 주기 수집(현행 참고 15초)의 마지막 값을 낸다 |
 | 부분 실패 | 한 계열 수집 실패는 그 계열만 비우고 수집 오류 지표를 올린다 · **/metrics 자체는 200** |
-| 레이블 | 닫힌 집합(도메인 · 저장소 · 스위치 · 상태 코드 · 단계)만 · 태그 · 요청 단위 식별자 금지 |
-| 이름 · 레이블 이름 | 정본 [../10_observability/01_metrics_catalog.md](../10_observability/01_metrics_catalog.md)(W6) — 스위치 상태 레이블 이름 포함 |
+| 레이블 | 닫힌 집합(도메인 · 저장소 · 스위치 · 상태 코드 · 단계 · 설비 — 티어 구성으로 상한)만 · 태그 · 요청 단위 식별자 금지 |
+| 이름 · 레이블 이름 | 정본 [../10_observability/01_metrics_catalog.md](../10_observability/01_metrics_catalog.md) — 스위치 상태는 obs_switch_info(레이블 switch · env · value · impl) · 경고 obs_switch_warning |
 | 관련 REQ | REQ-OBS-01 · 02 · 03 · 04 · 05 · 06 · 07 · 10 · 11 |
 
 - **스크레이프가 저장소를 조회하지 않는 이유(B형)** — 결론: 스크레이프 빈도가 저장소 부하를 바꾸지 않는다. 반대 시나리오 — 스크레이프마다 system.parts · pg_stat_statements를 읽으면 observability 프로파일을 켠 측정과 끈 측정의 저장소 부하가 달라져 측정 조건이 관측 도구에 따라 갈린다(REQ-OBS-03). 파생 지침 — 정밀 측정 세션의 직접 덤프 주기를 바꿔도 저장소 쪽 통계 조회 횟수는 그대로다.
@@ -165,11 +167,11 @@ metrics 네임스페이스는 정의만 있고 코드가 0이다. health의 503�
 
 | 항목 | 상태 | 확정 자리 |
 |------|------|------|
-| 저장소 타임아웃과 Compose healthcheck timeout의 짝 | 2계층 — 이 문서 현행 참고 1,000 ms · Compose 쪽 값 미정 | [../09_tech_stack/03_data_infra.md](../09_tech_stack/03_data_infra.md)(W6) |
-| 스위치 상태 레이블 이름 · 메트릭 이름 | 미정 | [../10_observability/01_metrics_catalog.md](../10_observability/01_metrics_catalog.md)(W6) |
+| 저장소 타임아웃과 Compose healthcheck timeout의 짝 | 2계층 — 이 문서 현행 참고 1,000 ms · **Compose api timeout 3초(W6 판정)** · 한쪽을 바꾸면 다른 쪽을 같은 변경 단위에서 | [../09_tech_stack/03_data_infra.md](../09_tech_stack/03_data_infra.md) |
+| 스위치 상태 레이블 이름 · 메트릭 이름 | **닫힘(W6)** — obs_switch_info · 이름 전수 | [../10_observability/01_metrics_catalog.md](../10_observability/01_metrics_catalog.md) |
 | 역할 분리 뒤 health · metrics의 자리 | APP_ROLE별 컨테이너가 각자 두 표면을 내는지 없다 — 현행 범위 밖(확장 1단계) | [../04_architecture/02_module_boundaries.md](../04_architecture/02_module_boundaries.md) · [../04_architecture/08_scaling_roadmap.md](../04_architecture/08_scaling_roadmap.md) |
-| health에 부하 주입 게이트 상태를 실을지 | 싣지 않는다(스위치가 아니다 · REQ-OBS-10 내용 한정) — 측정 기록에 사람이 적는다 | [09_datagen.md](./09_datagen.md) · [../10_observability/04_experiment_protocol.md](../10_observability/04_experiment_protocol.md)(W6) |
-| /metrics 응답 크기 · 스크레이프 지연 | 3계층 미확인 | [../10_observability/07_measurement_limits.md](../10_observability/07_measurement_limits.md)(W6) |
+| health에 부하 주입 게이트 상태를 실을지 | 싣지 않는다(스위치가 아니다 · REQ-OBS-10 내용 한정) — 측정 기록에 사람이 적는다 | [09_datagen.md](./09_datagen.md) · [../10_observability/04_experiment_protocol.md](../10_observability/04_experiment_protocol.md) §조건 칸 |
+| /metrics 응답 크기 · 스크레이프 지연 | 3계층 미확인 — obs_metrics_response_bytes로 계측 · EXP-38이 잰다 | [../10_observability/07_measurement_limits.md](../10_observability/07_measurement_limits.md) |
 
 ## 관련 문서
 

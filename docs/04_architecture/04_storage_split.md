@@ -2,6 +2,7 @@
 
 > **대상**: ★★ 학습 목표 ②의 정책 정본 — 3계층 분기 표 · 성격 판정 기준 · 데이터 종류별 목적지와 근거 · 목적이 다른 세 쓰기(dual-write 아님 · CDC 제안 반박) · 업무 쓰기가 Stream을 타지 않는 이유 · 중복 저장의 유일한 예외 · 대조군은 계측물 · ②계층 생산 카운터 판정 · 새 데이터 종류 편입 절차
 > **작성일**: 2026-09-24
+> **개정일**: 2026-09-24 — W6 실험 채번 반영 — 기록 형식 W6 반영(정본 10_observability/01 · 06)
 > **원천**: 원본 architecture.md §1 · §5 · §7.3 · §8 · §12(커밋 ff66a37) · 원본 tech_stack.md §1 · §5.1 · §5.2 · §5.3(커밋 ff66a37) · 원본 data_flow.md §5 · §7 · §8 · §8.2 · §13(커밋 ff66a37) · 원본 implementation_plan.md §7.2(커밋 ff66a37) · D-01 · D-04 · D-05 · D-11 · ADR-03 · ADR-05 · ADR-10 · ADR-11 · ADR-16 · ADR-17 · [../README.md](../README.md) 고정 기준(분기 계층 · PostgreSQL 테이블 · ClickHouse 객체 · Redis 영역 접두) · 전역 불변식 · [../01_overview/01_purpose_learning_goals.md](../01_overview/01_purpose_learning_goals.md)
 
 이 문서는 **무엇이 어디로 왜 가는가**를 정한다. 어느 모듈이 어떤 순서로 가르는지(기전)는 [../06_pipeline/04_routing.md](../06_pipeline/04_routing.md)가 정한다. 정책과 기전을 가르는 이유는 기전이 바뀌어도 정책이 흔들리지 않게 하기 위해서다 — 최신값 갱신 주체가 Ingest에서 Collector로 옮겨 가도(ADR-10) "최신값은 Redis 휘발 사본이고 진실은 ClickHouse"라는 정책은 그대로다.
@@ -181,7 +182,7 @@
 | 항목 | 상태 | 확정 자리 |
 |------|------|------|
 | 생산 카운터 파생 사실의 목적지 · 판정 기전 | 미설계 — 정책(원시 표본 ① · production_log 대체 금지)만 판정 | [../06_pipeline/04_routing.md](../06_pipeline/04_routing.md)(W4) |
-| 대조군 COPY 경로의 기전 · 구간 count 대조 절차 | 의미론은 판정됨(05_data_stores/10) · 기전 미설계 | [../06_pipeline/04_routing.md](../06_pipeline/04_routing.md)(W4) · [../10_observability/04_experiment_protocol.md](../10_observability/04_experiment_protocol.md)(W6) |
+| 대조군 COPY 경로의 기전 · 구간 count 대조 절차 | 의미론은 판정됨(05_data_stores/10) · 기전 미설계 | [../06_pipeline/04_routing.md](../06_pipeline/04_routing.md)(W4) · [../10_observability/04_experiment_protocol.md](../10_observability/04_experiment_protocol.md) — 격자 단계 ② 구간 count 대조(W6) |
 | 최신값 갱신 주체의 최종안 | 잠정 — S6 실측으로 확정 | ADR-10 · [06_backpressure_failure.md](./06_backpressure_failure.md) |
 | 규모 열 전 행 | 원본 산정 — 확정 전 임의 값 고정 금지 | [07_capacity_planning.md](./07_capacity_planning.md) · 실측 기록 |
 
