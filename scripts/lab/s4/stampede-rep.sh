@@ -46,7 +46,8 @@ snap_metrics "$TMP/a1"
 FROM_MS=$(( (ANCHOR_START + 3 * 86400 + REP * 3600) * 1000 ))
 TO_MS=$(( FROM_MS + 86400000 ))
 flush_query_cache
-chq "SYSTEM FLUSH LOGS"
+# ①의 순차 쿼리와 같은 정규화 해시라 query_log 창이 겹치면 섞인다 — 초 경계를 두 번 넘긴 뒤 창을 연다(러너 결함 수정 · 기록 024)
+T=$(date +%s); until [ $(( $(date +%s) - T )) -ge 2 ]; do sleep 0.2; done
 T0=$(date -u +%Y-%m-%dT%H:%M:%S.000Z)
 k6run k6-query.js burst.json -e MODE=burst -e N="$N" -e FROM_MS="$FROM_MS" -e TO_MS="$TO_MS"
 T1=$(date -u +%Y-%m-%dT%H:%M:%S.000Z)
@@ -57,7 +58,7 @@ worker_stop
 chq "SYSTEM FLUSH LOGS"
 # 원천 쿼리(태그 결과 조회) — 사전 조회(dictGet)는 빼고 normalized_query_hash별 실행 수
 chq "SELECT toJSONString(groupArray(tuple(h, c))) FROM (SELECT normalized_query_hash AS h, count() AS c FROM system.query_log
-     WHERE type = 'QueryFinish' AND event_time >= parseDateTimeBestEffort('$T0') - 1 AND event_time <= parseDateTimeBestEffort('$T1') + 1
+     WHERE type = 'QueryFinish' AND event_time >= parseDateTimeBestEffort('$T0') AND event_time <= parseDateTimeBestEffort('$T1') + 1
        AND query LIKE '%FROM plc.tag_%' AND query NOT LIKE '%dictGet%' AND query NOT LIKE '%system.%' GROUP BY h)" > "$TMP/qlog"
 python3 scripts/lab/s2/hist-diff.py "$TMP/a0" "$TMP/a1" tsq_rebuild_duration_seconds > "$TMP/rb"
 printf '%s %s %s\n' "$(mdelta "$TMP/a1" "$TMP/a2" tsq_source_queries_total)" "$(mdelta "$TMP/a1" "$TMP/a2" tsq_rebuild_lock_wait_exhausted_total)" "$(mdelta "$TMP/a1" "$TMP/a2" 'tsq_cache_requests_total{result="hit"}')" > "$TMP/burst"
