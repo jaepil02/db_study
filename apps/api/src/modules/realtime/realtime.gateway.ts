@@ -1,22 +1,34 @@
 // F-07 실시간 푸시 — /ws/realtime 프로토콜 정본 docs/07_api/11_websocket.md · 기전 06_pipeline/05 §F-07 실시간 푸시 한 사이클
-// S2 범위: ① 핸드셰이크 Host 대조(업그레이드 전 400) · Origin 검증(업그레이드 뒤 4403) ③ subscribe · unsubscribe ④ ch:rt 수신
-// ⑤ 스로틀 병합(창 100 ms · 같은 태그는 ts 최대값 하나) ⑥ JSON ping 30초 · pong 3회 미수신 4408. 인증(②) · 알람 · 무효화 중계는 S4 · S7.
+// ① 핸드셰이크 Host 대조(업그레이드 전 400) · Origin 검증(업그레이드 뒤 4403) ③ subscribe · unsubscribe(연결당 설비 상한 · rejected limit)
+// ④ ch:rt 수신(SW-06 on) 또는 프로세스 안 버스(SW-06 off) · ch:cacheinv 즉시 중계(RLT-09 · 병합 없음 · 전 연결)
+// ⑤ 스로틀(SW-07 FrameThrottlePort) ⑥ JSON ping 30초 · pong 3회 미수신 4408 · 송신 대기량 한도 초과 4413. 인증(②) · 알람은 S7.
 // Nest 어댑터의 {event, data} 메시지 모양을 쓰지 않는다 — 계약은 type 봉투다(메시지를 연결 단위로 직접 받는다).
 import type { IncomingMessage } from 'node:http';
 import { WS_CLOSE, WsClientMessage, type WsServerMessageBody } from '@db-study/shared';
-import type { OnModuleDestroy } from '@nestjs/common';
+import { Inject, type OnModuleDestroy } from '@nestjs/common';
 import { type OnGatewayConnection, WebSocketGateway } from '@nestjs/websockets';
 import type Redis from 'ioredis';
-import { Counter, Gauge } from 'prom-client';
+import { Counter, Gauge, Histogram } from 'prom-client';
 import type { WebSocket } from 'ws';
 import { isAllowedHost, isAllowedOrigin } from '../../common/http/surface-defense';
 import { appRegistry } from '../../common/metrics/registry';
+import { directBus, takeStamp } from '../../common/ports/realtime-fanout.port';
 import { RedisConnections } from '../../common/redis/connections';
 import type { LatestTuple } from '../../common/redis/durable-key-client';
 import { MasterReadService } from '../master/master-read.service';
+import {
+  FRAME_THROTTLE_PORT,
+  type FrameThrottlePort,
+  type Pending,
+  type RtDevices,
+} from './frame-throttle.port';
 
-/** 스로틀 창 — SW-07 현행 참고 100 ms. S2는 WindowMergeThrottle 고정 구현(FrameThrottlePort · SW-07 스위치는 S4) */
-export const THROTTLE_WINDOW_MS = 100;
+/**
+ * 소켓 송신 대기량 한도 · 연결당 구독 설비 상한 — 07_api/11의 2계층 미정 값에 대한 S4 현행 참고(판정 5):
+ * 1 MiB — 느린 브라우저 한 개만 4413으로 끊는다(Redis 출력 버퍼 한도 32 MB보다 먼저 걸린다) · 100 — 티어 M 50 · L 100을 담는다
+ */
+export const WS_SEND_BUFFER_LIMIT_BYTES = 1024 * 1024;
+export const WS_SUBSCRIBE_LIMIT = 100;
 /** ping 주기 · pong 미수신 한도 — 현행 참고 30초 · 3회(소유 06_pipeline/05 §푸시 조정값) */
 export const PING_INTERVAL_MS = 30_000;
 export const PONG_MISS_LIMIT = 3;
@@ -35,12 +47,29 @@ const closes = new Counter({
   labelNames: ['close_code'],
   registers: reg,
 });
+const merged = new Counter({
+  name: 'rlt_throttle_merged_total',
+  help: '스로틀 창이 병합해 버린 갱신',
+  registers: reg,
+});
+const delivery = new Histogram({
+  name: 'rlt_fanout_delivery_seconds',
+  help: '발행 → 게이트웨이 도착(스로틀 창 대기 제외)',
+  labelNames: ['channel'],
+  buckets: [0.0001, 0.00025, 0.0005, 0.001, 0.0025, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25],
+  registers: reg,
+});
+const subscriberDisconnects = new Counter({
+  name: 'rlt_subscriber_disconnects_total',
+  help: 'api 구독 연결이 끊김(4503)',
+  registers: reg,
+});
 
 interface Conn {
   ws: WebSocket;
   devices: Set<number>;
-  /** 창 안 병합 — 설비 → 태그 → ts 최대 튜플 */
-  pending: Map<number, Map<number, LatestTuple>>;
+  /** 창 안 병합 — 설비 → 태그 → ts 최대 튜플(스로틀 포트가 다룬다) */
+  pending: Pending;
   missedPongs: number;
   /** 메시지 직렬 처리 — subscribe가 존재 확인을 기다리는 사이 온 unsubscribe가 먼저 끝나 구독이 되살아나지 않게 */
   chain: Promise<void>;
@@ -60,20 +89,27 @@ export class RealtimeGateway implements OnGatewayConnection, OnModuleDestroy {
   private readonly conns = new Set<Conn>();
   private readonly byDevice = new Map<number, Set<Conn>>();
   private readonly subscriber: Redis;
-  private readonly flushTimer: NodeJS.Timeout;
+  private readonly flushTimer: NodeJS.Timeout | null;
   private readonly pingTimer: NodeJS.Timeout;
+  private readonly onDirect = (deviceId: number, tuples: LatestTuple[]) =>
+    this.deliver(deviceId, tuples, 'direct');
 
   constructor(
     redis: RedisConnections,
     private readonly master: MasterReadService,
+    @Inject(FRAME_THROTTLE_PORT) private readonly throttle: FrameThrottlePort,
   ) {
     this.subscriber = redis.subscriberConnection();
     this.subscriber.on('message', (channel: string, message: string) => this.onChannel(channel, message));
     // 구독 연결이 끊기면 그 인스턴스 전체 푸시가 멈춘다 — 4503으로 알리고 재연결은 클라이언트가 한다(07_api/11 §미확인 등재)
     this.subscriber.on('close', () => {
+      if (this.conns.size > 0) subscriberDisconnects.inc();
       for (const c of this.conns) this.close(c, WS_CLOSE.upstream_unavailable, 'upstream_unavailable');
     });
-    this.flushTimer = setInterval(() => this.flushFrames(), THROTTLE_WINDOW_MS);
+    // 무효화 신호는 구독과 무관하게 연결 전원에게 간다(RLT-09) — SW-06 대상이 아니라 끄지 않는다
+    this.subscriber.subscribe('ch:cacheinv').catch(() => undefined);
+    directBus.on('rt', this.onDirect);
+    this.flushTimer = throttle.windowMs > 0 ? setInterval(() => this.flushFrames(), throttle.windowMs) : null;
     this.pingTimer = setInterval(() => this.ping(), PING_INTERVAL_MS);
   }
 
@@ -93,6 +129,11 @@ export class RealtimeGateway implements OnGatewayConnection, OnModuleDestroy {
     // URL 쿼리 구독은 받지 않는다 — 무시하면 원본 표를 따른 클라이언트가 원인을 찾지 못한다(§구독 방식 판정)
     if (new URL(req.url ?? '/', 'ws://x').searchParams.has('devices')) {
       this.close(conn, WS_CLOSE.invalid_message, 'invalid_message');
+      return;
+    }
+    // 구독 연결이 끊긴 동안 온 연결 — subscribe가 Redis 복구까지 멈춰 응답 없는 연결이 된다 · 즉시 4503(검수 L5)
+    if (this.subscriber.status !== 'ready') {
+      this.close(conn, WS_CLOSE.upstream_unavailable, 'upstream_unavailable');
       return;
     }
     this.conns.add(conn);
@@ -123,6 +164,10 @@ export class RealtimeGateway implements OnGatewayConnection, OnModuleDestroy {
         const accepted: number[] = [];
         const rejected: { deviceId: number; reason: 'not_found' | 'limit' }[] = [];
         for (const d of msg.devices) {
+          if (!conn.devices.has(d) && conn.devices.size >= WS_SUBSCRIBE_LIMIT) {
+            rejected.push({ deviceId: d, reason: 'limit' }); // 연결을 끊지 않는다
+            continue;
+          }
           const exists = await this.master.deviceExists(d).catch(() => true); // PostgreSQL 불가면 거절하지 않는다(값은 Redis가 준다)
           if (!exists) rejected.push({ deviceId: d, reason: 'not_found' });
           else {
@@ -173,39 +218,49 @@ export class RealtimeGateway implements OnGatewayConnection, OnModuleDestroy {
   }
 
   private onChannel(channel: string, message: string) {
+    if (channel === 'ch:cacheinv') {
+      let keys: string[];
+      try {
+        keys = JSON.parse(message) as string[];
+      } catch {
+        return;
+      }
+      for (const c of this.conns) this.send(c, { type: 'cacheinv', keys }, 'cacheinv');
+      return;
+    }
     if (!channel.startsWith('ch:rt:')) return;
-    const deviceId = Number(channel.slice('ch:rt:'.length));
-    const set = this.byDevice.get(deviceId);
-    if (!set || set.size === 0) return;
     let tuples: LatestTuple[];
     try {
       tuples = JSON.parse(message) as LatestTuple[];
     } catch {
       return;
     }
+    this.deliver(Number(channel.slice('ch:rt:'.length)), tuples, 'pubsub');
+  }
+
+  /** 도착(두 팬아웃 구현이 같은 자리로 온다) — 발행 → 도착 지연을 재고 스로틀 포트에 넘긴다 */
+  private deliver(deviceId: number, tuples: LatestTuple[], via: 'pubsub' | 'direct') {
+    const lag = takeStamp(deviceId, tuples);
+    if (lag !== null) delivery.observe({ channel: via }, lag);
+    const set = this.byDevice.get(deviceId);
+    if (!set || set.size === 0) return;
     for (const c of set) {
-      let tags = c.pending.get(deviceId);
-      if (!tags) {
-        tags = new Map();
-        c.pending.set(deviceId, tags);
-      }
-      for (const t of tuples) {
-        const prev = tags.get(t[0]);
-        // 창 안 병합 기준은 도착 순이 아니라 ts 최대값 — 조건부 쓰기와 같은 기준이라 화면이 뒤로 가지 않는다
-        if (!prev || t[1] >= prev[1]) tags.set(t[0], t);
-      }
+      const r = this.throttle.offer(c.pending, deviceId, tuples);
+      if (r.merged) merged.inc(r.merged);
+      if (r.frame) this.sendRt(c, r.frame);
     }
   }
 
   /** 창 끝에 연결마다 rt 프레임 1회 — 한 창에 변화가 없으면 보내지 않는다 */
   private flushFrames() {
-    const windowEnd = Date.now();
     for (const c of this.conns) {
-      if (c.pending.size === 0) continue;
-      const devices = [...c.pending].map(([deviceId, tags]) => ({ deviceId, tags: [...tags.values()] }));
-      c.pending.clear();
-      this.send(c, { type: 'rt', windowEnd, devices }, 'rt');
+      const devices = this.throttle.drain(c.pending);
+      if (devices) this.sendRt(c, devices);
     }
+  }
+
+  private sendRt(c: Conn, devices: RtDevices) {
+    this.send(c, { type: 'rt', windowEnd: Date.now(), devices }, 'rt');
   }
 
   private ping() {
@@ -219,10 +274,15 @@ export class RealtimeGateway implements OnGatewayConnection, OnModuleDestroy {
     }
   }
 
-  private send(c: Conn, msg: WsServerMessageBody, channel: 'rt' | 'control') {
+  private send(c: Conn, msg: WsServerMessageBody, channel: 'rt' | 'control' | 'cacheinv') {
     if (c.ws.readyState !== c.ws.OPEN) return;
+    // 느린 브라우저 — 송신 대기량이 한도를 넘으면 그 소켓만 4413(Redis 출력 버퍼 절단 4503과 다른 사건)
+    if (c.ws.bufferedAmount > WS_SEND_BUFFER_LIMIT_BYTES) {
+      this.close(c, WS_CLOSE.slow_consumer, 'slow_consumer');
+      return;
+    }
     c.ws.send(JSON.stringify(msg));
-    if (channel === 'rt') framesSent.inc({ channel: 'rt' });
+    if (channel !== 'control') framesSent.inc({ channel });
   }
 
   private close(c: Conn, code: number, reason: string) {
@@ -242,7 +302,8 @@ export class RealtimeGateway implements OnGatewayConnection, OnModuleDestroy {
   }
 
   onModuleDestroy() {
-    clearInterval(this.flushTimer);
+    directBus.off('rt', this.onDirect);
+    if (this.flushTimer) clearInterval(this.flushTimer);
     clearInterval(this.pingTimer);
     for (const c of this.conns) this.close(c, WS_CLOSE.going_away, 'going_away');
   }

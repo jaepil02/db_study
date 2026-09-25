@@ -1,11 +1,16 @@
-// 표면 계약(S2) — 떠 있는 api에 블랙박스로 붙는다. SURFACE_BASE_URL이 없으면 건너뛴다(pre-commit은 저장소 없이 돈다).
-// 실행: task test-surface(스택 기동 뒤). 정본 07_api/01 · 05 · 06 · 11 · 12_security/03.
+// 표면 계약(S2 · S4) — 떠 있는 api에 블랙박스로 붙는다. SURFACE_BASE_URL이 없으면 건너뛴다(pre-commit은 저장소 없이 돈다).
+// 실행: task test-surface(스택 기동 뒤 · 티어 S 시드). 정본 07_api/01 · 04 · 05 · 06 · 11 · 12_security/03.
+// 마스터 쓰기는 데이터를 바꾸지 않는 거절 갈래(409 · 400 · 404)만 부른다 — 성공 쓰기와 체인은 통합 확인(S4 W5)이 본다.
 // Redis 정지 503(realtime.latest_unavailable)은 저장소를 멈춰야 해서 통합 확인(W3)에서 수동으로 본다.
 import {
   ErrorEnvelope,
   HealthResponse,
   LatestDeviceResponse,
+  LatestTagResponse,
+  ModbusConfigObject,
+  SiteObject,
   SWITCHES,
+  TagObject,
   TimeseriesQueryResponse,
   WS_CLOSE,
 } from '@db-study/shared';
@@ -38,7 +43,7 @@ function isoAgo(ms: number) {
 describe.skipIf(!BASE)('api 표면 계약', () => {
   const api = () => request(BASE as string);
 
-  it('health 200 · 스위치 전부 · 주입 구현은 도입된 셋만', async () => {
+  it('health 200 · 스위치 전부 · S4까지 11개 모두 주입', async () => {
     const r = await api().get('/api/v1/health').expect(200);
     const sw = HealthResponse.parse(r.body).switches;
     expect(Object.keys(sw).sort()).toEqual(SWITCHES.map((s) => s.id).sort());
@@ -46,7 +51,7 @@ describe.skipIf(!BASE)('api 표면 계약', () => {
       .filter(([, s]) => s.impl !== null)
       .map(([id]) => id)
       .sort();
-    expect(injected).toEqual(['SW-01', 'SW-02', 'SW-03']);
+    expect(injected).toEqual(SWITCHES.map((s) => s.id).sort());
   });
 
   it('Host 밖 → 400 validation_failed header.host enum', async () => {
@@ -92,21 +97,70 @@ describe.skipIf(!BASE)('api 표면 계약', () => {
       .send({ ...body, tagIds: many })
       .expect(400);
     expect(t.body.error.code).toBe('timeseries.too_many_tags');
+    // S4 — 해상도 지정 · 긴 범위는 거절하지 않고 받는다(상향)
     const iv = await api()
       .post('/api/v1/timeseries/query')
-      .send({ ...body, interval: '1m' })
-      .expect(400);
-    expect(iv.body.error.details.fields).toEqual([{ path: 'body.interval', reason: 'enum' }]);
+      .send({ ...body, from: isoAgo(3 * 3_600_000), interval: '1m' })
+      .expect(200);
+    expect(TimeseriesQueryResponse.parse(iv.body).meta.interval).toBe('1m');
     const wide = await api()
       .post('/api/v1/timeseries/query')
-      .send({ ...body, from: isoAgo(3_600_000) })
-      .expect(400);
-    expect(wide.body.error.details.fields).toEqual([{ path: 'body.to', reason: 'range' }]);
+      .send({ ...body, from: isoAgo(365 * 86_400_000), interval: 'raw' })
+      .expect(200);
+    expect(TimeseriesQueryResponse.parse(wide.body).meta.interval).toBe('1d');
     const noOffset = await api()
       .post('/api/v1/timeseries/query')
       .send({ ...body, from: '2026-01-01T00:00:00' })
       .expect(400);
     expect(noOffset.body.error.code).toBe('common.validation_failed');
+  });
+
+  it('마스터 조회 — 목록 봉투 · 단건 · 접속 설정 · 필수 필터 · 404', async () => {
+    const sites = await api().get('/api/v1/sites').expect(200);
+    expect(sites.body.meta.count).toBe(sites.body.items.length);
+    SiteObject.parse(sites.body.items[0]);
+    await api().get('/api/v1/devices').expect(400); // siteId 필수
+    const tags = await api().get('/api/v1/tags?deviceId=1').expect(200);
+    TagObject.parse(tags.body.items[0]);
+    TagObject.parse((await api().get('/api/v1/tags/1').expect(200)).body);
+    ModbusConfigObject.parse((await api().get('/api/v1/devices/1/modbus-config').expect(200)).body);
+    const nf = await api().get('/api/v1/tags/999999').expect(404);
+    expect(nf.body.error.code).toBe('common.not_found');
+    expect((await api().get('/api/v1/tags/1')).headers['cache-control']).toBe('no-store');
+  });
+
+  it('마스터 쓰기 거절 갈래 — 스케일 409 · 불변 400 · 없는 태그 발급 404', async () => {
+    const cur = TagObject.parse((await api().get('/api/v1/tags/1').expect(200)).body);
+    const sc = await api()
+      .patch('/api/v1/tags/1')
+      .send({ scale: cur.scale + 1 })
+      .expect(409);
+    expect(sc.body.error.code).toBe('master.scale_change_forbidden');
+    const im = await api().patch('/api/v1/tags/1').send({ deviceId: 2 }).expect(400);
+    expect(im.body.error.details.fields).toEqual([{ path: 'body.deviceId', reason: 'immutable' }]);
+    const nf = await api()
+      .post('/api/v1/tags/999999/reissue')
+      .send({ newTagCode: 'X', scale: 2 })
+      .expect(404);
+    expect(nf.body.error.code).toBe('common.not_found');
+  });
+
+  it('단일 태그 최신값 200 모양 · 없는 태그 404', async () => {
+    const r = await api().get('/api/v1/realtime/tags/1').expect(200);
+    expect(LatestTagResponse.parse(r.body).meta.deviceId).toBe(1);
+    await api().get('/api/v1/realtime/tags/999999').expect(404);
+  });
+
+  it('내보내기 — CSV 머리 줄 · 범위 1일 초과 400', async () => {
+    const q = (from: string) =>
+      `/api/v1/timeseries/export?tagIds=1&from=${encodeURIComponent(from)}&to=${encodeURIComponent(isoAgo(0))}`;
+    const ok = await api()
+      .get(q(isoAgo(60_000)))
+      .expect(200);
+    expect(ok.text.split('\n')[0]).toBe('"ts","device_id","tag_id","value","quality"');
+    await api()
+      .get(q(isoAgo(2 * 86_400_000)))
+      .expect(400);
   });
 
   it('WS — Host 밖은 업그레이드 전 400 · 다른 Origin 4403 · URL devices 4400', async () => {

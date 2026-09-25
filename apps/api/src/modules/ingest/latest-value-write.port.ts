@@ -1,8 +1,9 @@
 // SW-11 LATEST_VALUE_WRITER — LatestValueWritePort(포트 · 구현 이름 정본 docs/04_architecture/02_module_boundaries.md)
 // ingest = IngestLatestValueWriter — ClickHouse 삽입 성공 · XACK 뒤 rt:latest 조건부 쓰기 → 받아들인 필드만 ch:rt 발행(ING-08).
 // collector = CollectorLatestValueWriter는 S6이다 — S3는 collector 값이 와도 ingest를 주입하고 경고한다(SW-01 off 방식과 같다).
+
+import type { RealtimeFanoutPort } from '../../common/ports/realtime-fanout.port';
 import { DurableKeyClient, type LatestTuple } from '../../common/redis/durable-key-client';
-import { FanoutPublisher } from '../../common/redis/fanout-publisher';
 import { ingestMetrics as m } from './ingest.metrics';
 import type { BatchEntry } from './window-buffer';
 
@@ -38,7 +39,7 @@ export class IngestLatestValueWriter implements LatestValueWritePort {
 
   constructor(
     private readonly durable: DurableKeyClient,
-    private readonly fanout: FanoutPublisher,
+    private readonly fanout: RealtimeFanoutPort,
     private readonly warn: (msg: string) => void,
   ) {}
 

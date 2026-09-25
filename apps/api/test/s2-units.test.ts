@@ -14,7 +14,7 @@ import {
   WindowBuffer,
 } from '../src/modules/ingest/window-buffer';
 import { hashToTagMeta, type TagMeta, tagMetaToHash } from '../src/modules/master/tag-meta';
-import { cacheKey, classify, RECENT_WINDOW_MS } from '../src/modules/timeseries/timeseries.service';
+import { cacheKey, classify, RECENT_WINDOW_MS } from '../src/modules/timeseries/resolution';
 
 function entry(id: string, s = 1): BatchEntry {
   const e: DecodedEntry = {
@@ -104,9 +104,16 @@ describe('시계열 TTL 구간 · 정규화 키', () => {
   });
 
   it('태그 순서 · 기본 maxPoints는 키를 바꾸지 않는다', () => {
-    const a = cacheKey({ tagIds: [3, 1, 2], fromMs: 1, toMs: 2, maxPoints: 2000 });
-    const b = cacheKey({ tagIds: [1, 2, 3], fromMs: 1, toMs: 2, maxPoints: 2000 });
-    const c = cacheKey({ tagIds: [1, 2, 3], fromMs: 1, toMs: 2, maxPoints: 500 });
+    const base = {
+      interval: 'raw' as const,
+      fromMs: 1,
+      toMs: 2,
+      aggregations: ['avg' as const],
+      downsample: 'lttb' as const,
+    };
+    const a = cacheKey({ ...base, tagIds: [3, 1, 2], maxPoints: 2000 });
+    const b = cacheKey({ ...base, tagIds: [1, 2, 3], maxPoints: 2000 });
+    const c = cacheKey({ ...base, tagIds: [1, 2, 3], maxPoints: 500 });
     expect(a).toBe(b);
     expect(a).not.toBe(c);
     expect(a).toMatch(/^[0-9a-f]{40}$/);

@@ -31,3 +31,15 @@ export const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL ?? 'http://loca
 export function wsUrl(base: string = API_BASE_URL): string {
   return `${base.replace(/^http/, 'ws').replace(/\/$/, '')}/ws/realtime`;
 }
+
+// S4 — staleTime 현행값(09_tech_stack/01 §TanStack Query 설정값 — 관계식의 파생 · 여기서 새 값을 정하지 않는다)
+/** 시계열 완전 과거 300초 × 0.8 · 현재 버킷 포함 30초 × 0.8 · 최근 구간 0 */
+export const TS_STALE_PAST_MS = 240_000;
+export const TS_STALE_CURRENT_MS = 24_000;
+/** 서버 최근 창 5분(06_pipeline/06 현행 참고) — 끝이 이 안이면 서버가 캐시하지 않는다 */
+export const TS_RECENT_WINDOW_MS = 5 * 60_000;
+/** 사이트 · 라인 · 설비 · 태그 목록 — BFF revalidate 창 30초와 같다 */
+export const MASTER_STALE_MS = 30_000;
+export const BFF_REVALIDATE_S = 30;
+/** 실험 비교 — 조건당 창 최대 3 */
+export const COMPARE_WINDOWS_PER_CONDITION = 3;

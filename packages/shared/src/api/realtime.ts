@@ -32,3 +32,15 @@ export type LatestDeviceBody = z.infer<typeof LatestDeviceResponse>;
 
 /** 경로 식별자 — 정수 ID(07_api/01 §표면 계층과 경로) */
 export const DeviceIdParam = z.coerce.number().int().min(1).max(4_294_967_295);
+
+/** #2 GET /api/v1/realtime/tags/{id} — 값 없음(필드 없음)은 item null · 복원하지 않는다(07_api/06 §#2) */
+export const LatestTagResponse = z.strictObject({
+  meta: z.strictObject({
+    tagId: z.number().int(),
+    deviceId: z.number().int(),
+    servedAt: z.iso.datetime(),
+    source: LatestSource,
+  }),
+  item: LatestItem.nullable(),
+});
+export type LatestTagBody = z.infer<typeof LatestTagResponse>;

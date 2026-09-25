@@ -5,6 +5,11 @@ import { z } from 'zod';
 
 export const TIMESERIES_TAG_LIMIT = 50;
 export const TIMESERIES_MAX_POINTS_DEFAULT = 2000;
+/**
+ * maxPoints 상한 — 해상도 강제(보호 장치)를 큰 maxPoints로 우회하지 못하게(검수 L1 · S4 판정 15).
+ * 화면은 플롯 픽셀 폭을 보낸다 — 10,000은 4K 폭의 두 배 여유 · 2계층 현행 참고 · 소유 07_api/05
+ */
+export const TIMESERIES_MAX_POINTS_LIMIT = 10_000;
 
 export const INTERVALS = ['raw', '1m', '1h', '1d'] as const;
 export const AGGREGATIONS = ['avg', 'min', 'max', 'last', 'p95'] as const;
@@ -20,7 +25,7 @@ export const TimeseriesQueryRequest = z
     to: offsetIso,
     interval: z.enum(INTERVALS).optional(),
     aggregations: z.array(z.enum(AGGREGATIONS)).min(1).optional(),
-    maxPoints: z.number().int().min(1).optional(),
+    maxPoints: z.number().int().min(1).max(TIMESERIES_MAX_POINTS_LIMIT).optional(),
     downsample: z.enum(DOWNSAMPLE_MODES).optional(),
   })
   .refine((r) => Date.parse(r.from) < Date.parse(r.to), { message: 'from < to', path: ['from'] });
@@ -52,3 +57,25 @@ export const TimeseriesQueryResponse = z.strictObject({
   series: z.array(TimeseriesSeries),
 });
 export type TimeseriesQueryBody = z.infer<typeof TimeseriesQueryResponse>;
+
+/** #2 GET /api/v1/timeseries/export — tagIds 쉼표 구분 · 범위 상한 1일(2계층 · 소유 12_security/03) · 형식 csv · parquet */
+export const TIMESERIES_EXPORT_MAX_RANGE_MS = 24 * 60 * 60 * 1000;
+export const EXPORT_FORMATS = ['csv', 'parquet'] as const;
+export const TimeseriesExportQuery = z
+  .strictObject({
+    tagIds: z
+      .string()
+      .regex(/^\d+(,\d+)*$/)
+      .transform((s) => s.split(',').map(Number))
+      // tag_id는 UInt32 — 범위 밖은 ClickHouse 파라미터 오류(503)가 아니라 400이다(검수 L2)
+      .refine((ids) => ids.every((n) => n >= 1 && n <= 4_294_967_295), { message: 'tag_id 범위' }),
+    from: offsetIso,
+    to: offsetIso,
+    format: z.enum(EXPORT_FORMATS).default('csv'),
+  })
+  .refine((r) => Date.parse(r.from) < Date.parse(r.to), { message: 'from < to', path: ['from'] })
+  .refine((r) => Date.parse(r.to) - Date.parse(r.from) <= TIMESERIES_EXPORT_MAX_RANGE_MS, {
+    message: '범위 상한 1일',
+    path: ['to'],
+  });
+export type TimeseriesExport = z.infer<typeof TimeseriesExportQuery>;

@@ -17,6 +17,7 @@ import { TrendChart } from './trend-chart';
 
 export function RealtimeDashboard({ deviceId }: { deviceId: number }) {
   const syncEpoch = useConnectionStore((s) => s.syncEpoch);
+  const metaEpoch = useConnectionStore((s) => s.metaEpoch);
   const lastCloseCode = useConnectionStore((s) => s.lastCloseCode);
   const wsStatus = useConnectionStore((s) => s.status);
   const order = useRealtimeStore((s) => s.order);
@@ -45,11 +46,11 @@ export function RealtimeDashboard({ deviceId }: { deviceId: number }) {
     refetchOnReconnect: false,
   });
   const refetchLatest = latestQ.refetch;
-  // biome-ignore lint/correctness/useExhaustiveDependencies: syncEpoch 증가(연결 · 구독 완료)가 호출 사건이다
+  // biome-ignore lint/correctness/useExhaustiveDependencies: syncEpoch 증가(연결 · 구독 완료) · metaEpoch 증가(태그 메타 신호)가 호출 사건이다
   useEffect(() => {
     if (useConnectionStore.getState().status !== 'open') return;
     void refetchLatest();
-  }, [deviceId, syncEpoch, refetchLatest]);
+  }, [deviceId, syncEpoch, metaEpoch, refetchLatest]);
 
   // 트렌드 태그 — 표에서 고른 태그 최대 8 · 기본은 앞 8개
   const [picked, setPicked] = useState<number[] | null>(null);

@@ -3,7 +3,7 @@
 // 기능 선택은 모듈 초기화가 한다 — 경로 안 분기를 두지 않는다(ADR-08과 같은 원리).
 import { type DynamicModule, Module } from '@nestjs/common';
 import { ClickHouseModule } from './common/clickhouse/clickhouse.module';
-import { PortsModule } from './common/ports/ports.module';
+import { PortsModule, RealtimeFanoutModule } from './common/ports/ports.module';
 import { PostgresModule } from './common/postgres/postgres.module';
 import { RedisModule } from './common/redis/redis.module';
 import { WorkerPoolModule } from './common/workers/worker-pool';
@@ -14,6 +14,7 @@ import { DatagenModule } from './modules/datagen/datagen.module';
 import { DatagenModeAModule } from './modules/datagen/mode-a/mode-a.module';
 import { IngestModule } from './modules/ingest/ingest.module';
 import { MasterModule } from './modules/master/master.module';
+import { MasterApiModule } from './modules/master/master-api.module';
 import { MetricsModule } from './modules/metrics/metrics.module';
 import { PlcSimModule } from './modules/plc-sim/plc-sim.module';
 import { RealtimeModule } from './modules/realtime/realtime.module';
@@ -25,6 +26,7 @@ type Imports = NonNullable<DynamicModule['imports']>;
 const ROLE_MODULES: Record<AppRole, Imports> = {
   all: [
     MasterModule,
+    MasterApiModule,
     PlcSimModule,
     DatagenModeAModule,
     CollectorModule,
@@ -33,7 +35,7 @@ const ROLE_MODULES: Record<AppRole, Imports> = {
     TimeseriesModule,
     MetricsModule,
   ],
-  api: [MasterModule, RealtimeModule, TimeseriesModule, MetricsModule],
+  api: [MasterModule, MasterApiModule, RealtimeModule, TimeseriesModule, MetricsModule],
   worker: [IngestModule, MetricsModule],
   collector: [MasterModule, PlcSimModule, DatagenModeAModule, CollectorModule, MetricsModule],
   // 생성기 단독 실행 경로 — S1 bench(저장소 없음) · S3 모드 B(dist/mode-b.js · Nest 밖 진입점 · PostgreSQL 태그 읽기 + Redis 발행) · 모드 D는 S5
@@ -46,7 +48,9 @@ const STORELESS: ReadonlySet<AppRole> = new Set(['datagen']);
 @Module({})
 export class AppModule {
   static forConfig(cfg: AppConfig): DynamicModule {
-    const stores: Imports = STORELESS.has(cfg.appRole) ? [] : [RedisModule, ClickHouseModule, PostgresModule];
+    const stores: Imports = STORELESS.has(cfg.appRole)
+      ? []
+      : [RedisModule, ClickHouseModule, PostgresModule, RealtimeFanoutModule];
     return {
       module: AppModule,
       imports: [

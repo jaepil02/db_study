@@ -7,11 +7,19 @@ export class ApiError extends Error {
   readonly status: number;
   /** 에러 코드 — 500 · 네트워크 실패 · 봉투 아님이면 null */
   readonly code: string | null;
+  /** 봉투 details — duplicate_key의 field · validation_failed의 fields 등 */
+  readonly details: Record<string, unknown> | null;
 
-  constructor(status: number, code: string | null, message: string) {
+  constructor(
+    status: number,
+    code: string | null,
+    message: string,
+    details: Record<string, unknown> | null = null,
+  ) {
     super(message);
     this.status = status;
     this.code = code;
+    this.details = details;
   }
 }
 
@@ -23,7 +31,13 @@ async function toApiError(res: Response): Promise<ApiError> {
     // 봉투가 아닌 본문 — code 없이 상태만 남긴다
   }
   const env = ErrorEnvelope.safeParse(body);
-  if (env.success) return new ApiError(res.status, env.data.error.code ?? null, env.data.error.message);
+  if (env.success)
+    return new ApiError(
+      res.status,
+      env.data.error.code ?? null,
+      env.data.error.message,
+      env.data.error.details ?? null,
+    );
   return new ApiError(res.status, null, `HTTP ${res.status}`);
 }
 

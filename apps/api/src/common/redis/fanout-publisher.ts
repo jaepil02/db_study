@@ -25,6 +25,21 @@ export class FanoutPublisher {
     this.redis = conns.command;
   }
 
+  /**
+   * 체인 ③ ch:cacheinv — 무효화된 키 이름 배열(접두 포함 · JSON). 한 쓰기의 키는 한 메시지로 낸다(발급은 두 tag_id).
+   * SW-06 대상이 아니다 — 끄면 정합성 계약에 스위치가 생긴다(05_redis_keyspace §채널). 실패는 계수 · 삼킴이고 false를 돌려준다.
+   */
+  async publishCacheInv(keys: string[]): Promise<boolean> {
+    if (keys.length === 0) return true;
+    try {
+      await this.redis.publish('ch:cacheinv', JSON.stringify(keys));
+      return true;
+    } catch {
+      publishFailures.inc({ channel: 'cacheinv' });
+      return false;
+    }
+  }
+
   async publishRt(deviceId: number, accepted: LatestTuple[]): Promise<void> {
     if (accepted.length === 0) return;
     try {

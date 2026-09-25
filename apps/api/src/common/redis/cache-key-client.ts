@@ -141,8 +141,9 @@ export class CacheKeyClient {
     );
   }
 
-  private async del(key: string): Promise<void> {
-    await this.degrade(key, 'del', () => this.redis.del(key));
+  /** 삭제 — 성공이면 true(키가 없었어도 성공) · degrade면 false(체인 ② 실패 계수의 근거) */
+  private async del(key: string): Promise<boolean> {
+    return (await this.degrade(key, 'del', () => this.redis.del(key))) !== null;
   }
 
   // ── 용도별 공개 메서드 — 키 모양의 정본 05_redis_keyspace §키 패턴
@@ -163,6 +164,42 @@ export class CacheKeyClient {
 
   setTagMeta(tagId: number, fields: Record<string, string>, ttlSeconds: number): Promise<void> {
     return this.hsetWithTtl(`cache:tagmeta:${tagId}`, fields, ttlSeconds);
+  }
+
+  /** 체인 ② — cache:tagmeta:{tag_id} 삭제(태그 쓰기 커밋 뒤) · 실패면 false */
+  delTagMeta(tagId: number): Promise<boolean> {
+    return this.del(`cache:tagmeta:${tagId}`);
+  }
+
+  /** cache:devlist:{site_id} — 사이트의 설비 목록 JSON 사본(MST-02 #2) */
+  async getDevList(siteId: number): Promise<string | null> {
+    const r = await this.getBuffer(`cache:devlist:${siteId}`);
+    return r.value ? r.value.toString('utf8') : null;
+  }
+
+  setDevList(siteId: number, json: string, ttlSeconds: number): Promise<void> {
+    return this.setWithTtl(`cache:devlist:${siteId}`, json, ttlSeconds);
+  }
+
+  /** 체인 ② — cache:devlist:{site_id} 삭제(설비 쓰기 커밋 뒤) · 실패면 false */
+  delDevList(siteId: number): Promise<boolean> {
+    return this.del(`cache:devlist:${siteId}`);
+  }
+
+  /** lock:rebuild:q:{sha1} — 시계열 캐시 재구성 락(TSQ-05 · SW-05) · 만료 PX · 값 = 소유자 토큰 */
+  acquireQueryRebuildLock(sha1: string, ttlMs: number): Promise<{ token: string | null; failed: boolean }> {
+    return this.acquireLock(`lock:rebuild:q:${sha1}`, ttlMs);
+  }
+
+  releaseQueryRebuildLock(sha1: string, token: string): Promise<void> {
+    return this.releaseLock(`lock:rebuild:q:${sha1}`, token);
+  }
+
+  /** 대기 소진 뒤 쓰기 — 선행 채움을 덮지 않는다(SET NX EX · 06_pipeline/06 §스탬피드 방지) */
+  async setQueryResultIfAbsent(sha1: string, gz: Buffer, ttlSeconds: number): Promise<void> {
+    const key = `cache:q:${sha1}`;
+    const ttl = jitteredTtlSeconds(key, ttlSeconds);
+    await this.degrade(key, 'set', () => this.redis.set(key, gz, 'EX', ttl, 'NX'));
   }
 
   /** lock:rebuild:rt:{device_id} — 빈 키 복원 락(RLT-04) */

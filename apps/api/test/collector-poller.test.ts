@@ -107,6 +107,38 @@ describe('DevicePoller', () => {
     expect(await metric('points_emitted', { device: '9' })).toBeGreaterThanOrEqual(9);
   });
 
+  it('사이클 경계 정지 뒤 새 폴러가 s를 이어 센다 — 재로드가 사이클을 버리지 않는다(검수 M3)', async () => {
+    const sim = new DeviceSimServer(12);
+    const port = await sim.listen(0);
+    writeTick(
+      tags.map((t) => makeTarget(sim.holding, t, 'SINE')),
+      Date.now(),
+    );
+    const published: Buffer[] = [];
+    const buffer: PointBufferPort = {
+      async publish(p) {
+        published.push(p);
+        return { backlog: { lag: 0, pending: 0 } };
+      },
+    };
+    const first = new DevicePoller(defFor(port), buffer);
+    first.start();
+    await waitFor(() => published.length >= 2);
+    await first.stopAtBoundary();
+    const n = published.length;
+    expect(first.lastSeq).toBe(n); // 시작한 사이클은 발행까지 끝났다 — 끊긴 사이클 없음
+    const second = new DevicePoller(defFor(port), buffer);
+    second.continueSeqFrom(first.lastSeq);
+    second.start();
+    cleanups.push(async () => {
+      await second.stop();
+      await sim.close();
+    });
+    await waitFor(() => published.length >= n + 2);
+    const seqs = published.map((p) => decodeEntry(p).s);
+    expect(seqs).toEqual(seqs.map((_, i) => i + 1)); // 1 · 2 · … 빈 번호 · 역행 없음
+  });
+
   it('응답이 없으면 타임아웃 — 발행 없음 · 계수 · 루프는 계속 돈다', async () => {
     // 접속은 받고 응답하지 않는 서버 — SIM 지연 주입(S3)과 같은 모양
     const silent: Server = createServer((s) => s.on('data', () => {}));

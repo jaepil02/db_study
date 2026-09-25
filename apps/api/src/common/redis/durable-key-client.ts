@@ -288,6 +288,11 @@ export class DurableKeyClient {
   async readLatest(deviceId: number): Promise<Record<string, string>> {
     return this.redis.hgetall(`rt:latest:${deviceId}`);
   }
+
+  /** 태그 하나 최신값 — HGET 1회(RLT-02). 접속 불가는 던진다 */
+  async readLatestField(deviceId: number, tagId: number): Promise<string | null> {
+    return this.redis.hget(`rt:latest:${deviceId}`, String(tagId));
+  }
 }
 
 /** "ts,value,quality" 해석 — 형식이 깨진 필드는 null */

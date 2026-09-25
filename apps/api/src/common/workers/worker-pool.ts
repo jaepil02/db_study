@@ -39,7 +39,10 @@ export class WorkerPool implements OnApplicationShutdown {
   }
 
   /** 작업 시간은 워커 안에서 잰 busyMs로 기록한다 — run 호출 구간은 대기열 대기를 포함한다 */
-  async run<T extends { busyMs?: number }>(task: unknown, name?: 'decode' | 'gzip' | 'gunzip'): Promise<T> {
+  async run<T extends { busyMs?: number }>(
+    task: unknown,
+    name?: 'decode' | 'gzip' | 'gunzip' | 'reduce',
+  ): Promise<T> {
     const r = (await this.pool.run(task, name ? { name } : {})) as T;
     if (typeof r.busyMs === 'number') taskDuration.observe({ pool: 'main' }, r.busyMs / 1000);
     return r;

@@ -9,6 +9,9 @@ const TEXT: Record<string, string> = {
   'common.postgres_unavailable': '업무 저장소 응답 불가',
   'common.validation_failed': '요청 형식이 계약과 다르다',
   'timeseries.too_many_tags': '태그를 상한 이하 묶음으로 나눈다',
+  'common.duplicate_key': '이미 있는 값',
+  'master.scale_change_forbidden': '스케일 변경은 새 태그 발급으로만 한다',
+  'master.reissue_source_inactive': '이미 비활성인 태그에서는 새 태그를 발급할 수 없다',
 };
 
 /** 띠 문구 — 코드가 있으면 코드와 함께 보인다. 코드 없는 실패(네트워크 · 500)는 상태로 가른다 */

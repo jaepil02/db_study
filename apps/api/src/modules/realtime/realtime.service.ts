@@ -1,13 +1,13 @@
 // F-03 최신값 조회 — 판정 트리 정본 docs/06_pipeline/05_realtime_read.md §최신값 조회 판정 트리 · 응답 모양 07_api/06 #1
 // 503은 Redis 접속 불가 하나뿐이다 — 키가 비는 것 · ClickHouse가 멈춘 것 · PostgreSQL이 멈춘 것은 설비 전체 조회에서 200이다.
-import type { LatestDeviceBody, LatestItemBody } from '@db-study/shared';
+import type { LatestDeviceBody, LatestItemBody, LatestTagBody } from '@db-study/shared';
 import { Inject, Injectable, Logger } from '@nestjs/common';
 import { Counter } from 'prom-client';
 import { ClickHouse } from '../../common/clickhouse/clickhouse.module';
 import { ApiError } from '../../common/http/api-error';
 import { appRegistry } from '../../common/metrics/registry';
 import { CacheKeyClient } from '../../common/redis/cache-key-client';
-import { DurableKeyClient, type LatestTuple } from '../../common/redis/durable-key-client';
+import { DurableKeyClient, type LatestTuple, parseLatestValue } from '../../common/redis/durable-key-client';
 import { MasterReadService } from '../master/master-read.service';
 import {
   argMaxLatest,
@@ -50,6 +50,12 @@ const served = new Counter({
   registers: reg,
 });
 
+const unresolved = new Counter({
+  name: 'rlt_tag_unresolved_total',
+  help: '단일 태그 해석 실패(503 common.postgres_unavailable)',
+  registers: reg,
+});
+
 type Source = LatestDeviceBody['meta']['source'];
 
 @Injectable()
@@ -66,6 +72,49 @@ export class RealtimeService {
   async deviceLatest(deviceId: number): Promise<LatestDeviceBody> {
     const { points, source, restored } = await this.resolve(deviceId);
     return this.present(deviceId, points, source, restored);
+  }
+
+  /**
+   * #2 단일 태그 — 태그 → 설비 해석(사본 · PostgreSQL) → 필드 하나 → STALE. 빈 키 복원을 부르지 않는다(복원은 설비 단위).
+   * 해석 불가(사본 미스 + PostgreSQL 불가)는 503 common.postgres_unavailable — resolveTag가 던진다
+   */
+  async tagLatest(tagId: number): Promise<LatestTagBody> {
+    let m: Awaited<ReturnType<MasterReadService['resolveTag']>>;
+    try {
+      m = await this.master.resolveTag(tagId);
+    } catch (e) {
+      if (e instanceof ApiError && e.code === 'common.postgres_unavailable') unresolved.inc();
+      throw e;
+    }
+    if (!m) throw new ApiError('common.not_found', '마스터에 없는 태그');
+    let raw: string | null;
+    try {
+      raw = await this.durable.readLatestField(m.deviceId, tagId);
+    } catch {
+      throw new ApiError('realtime.latest_unavailable', '최신값 원천에 접속할 수 없다');
+    }
+    const now = Date.now();
+    const p = raw === null ? null : parseLatestValue(raw);
+    let item: LatestItemBody | null = null;
+    if (p) {
+      const staleAfterMs = m.scanRateMs * STALE_MULTIPLIER;
+      const stale = now - p.ts > staleAfterMs;
+      served.inc({ freshness: stale ? 'stale' : 'fresh' });
+      item = {
+        tagId,
+        tagCode: m.tagCode,
+        tagName: m.tagName,
+        unit: m.unit,
+        ts: p.ts,
+        value: p.value,
+        quality: stale ? 5 : p.quality,
+        staleAfterMs,
+      };
+    }
+    return {
+      meta: { tagId, deviceId: m.deviceId, servedAt: new Date(now).toISOString(), source: 'redis' },
+      item,
+    };
   }
 
   private async resolve(

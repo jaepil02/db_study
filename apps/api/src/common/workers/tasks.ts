@@ -5,6 +5,7 @@ import { gunzipSync, gzipSync } from 'node:zlib';
 import { decodeEntry, StreamEntryV1Consumer, UnknownSchemaVersionError } from '@db-study/shared';
 import Piscina from 'piscina';
 import { generateWindow, type WindowResult, type WindowTask } from '../../modules/datagen/signal/window';
+import { type ReduceResult, type ReduceTask, reduceSeries } from '../../modules/timeseries/downsample';
 
 class MovedResult {
   constructor(private readonly r: WindowResult) {}
@@ -85,4 +86,9 @@ export function gunzip(input: Uint8Array): BytesResult {
   const t0 = performance.now();
   const data = gunzipSync(input);
   return { data, busyMs: performance.now() - t0 };
+}
+
+/** 시계열 2차 축소(TSQ-06 · LTTB · minmax) — 점 수에 비례하는 CPU라 이벤트 루프 밖에서 한다 */
+export function reduce(task: ReduceTask): ReduceResult {
+  return reduceSeries(task);
 }

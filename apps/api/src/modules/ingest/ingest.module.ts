@@ -2,9 +2,9 @@
 // 스위치 포트 구현은 모듈 초기화 때 한 번 고른다 — 경로 안 분기를 두지 않는다(ADR-08).
 // 포트 · 구현 이름 정본 docs/04_architecture/02_module_boundaries.md(SW-08 BatchTokenPort · SW-09 ControlTableSinkPort · SW-11 LatestValueWritePort)
 import { Logger, Module } from '@nestjs/common';
+import { REALTIME_FANOUT_PORT, type RealtimeFanoutPort } from '../../common/ports/realtime-fanout.port';
 import { SwitchRegistry } from '../../common/ports/switch-registry';
 import { DurableKeyClient } from '../../common/redis/durable-key-client';
-import { FanoutPublisher } from '../../common/redis/fanout-publisher';
 import { type AppConfig, INGEST_BATCH_PLANS, requireStoreUrls } from '../../config/app-config';
 import { APP_CONFIG } from '../../config/config.module';
 import {
@@ -66,7 +66,7 @@ export function latestWriterFactory(
   cfg: AppConfig,
   reg: SwitchRegistry,
   durable: DurableKeyClient,
-  fanout: FanoutPublisher,
+  fanout: RealtimeFanoutPort,
 ): LatestValueWritePort {
   const log = new Logger('LatestValueWriter');
   const requested = cfg.switches['SW-11'];
@@ -91,7 +91,7 @@ export function latestWriterFactory(
     {
       provide: LATEST_VALUE_WRITE_PORT,
       useFactory: latestWriterFactory,
-      inject: [APP_CONFIG, SwitchRegistry, DurableKeyClient, FanoutPublisher],
+      inject: [APP_CONFIG, SwitchRegistry, DurableKeyClient, REALTIME_FANOUT_PORT],
     },
     IngestService,
   ],

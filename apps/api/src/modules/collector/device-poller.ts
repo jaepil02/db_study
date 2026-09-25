@@ -105,6 +105,8 @@ export class DevicePoller {
   private client: ModbusRTU | null = null;
   private readonly sleepers = new Set<Sleeper>();
   private done: Promise<void> = Promise.resolve();
+  /** 사이클 안(요청 · 발행 중)인가 — 사이클 밖(연결 시도 · 재기동 대기)의 경계 정지는 연결을 닫아 곧바로 푼다 */
+  private inCycle = false;
   /** 설비별 사이클 일련번호 — 그룹과 무관하게 설비 하나에 하나(기동 때 1부터 · 06_pipeline/12 §3단계 s) */
   private seq = 0;
   /** 마지막 발행 뒤의 grp:ingest 적체 — 보관만 한다. 백프레셔 단계 반응(경고 · 위험 · 스풀)은 S6이다 */
@@ -141,6 +143,28 @@ export class DevicePoller {
     await this.done;
   }
 
+  /**
+   * 사이클 경계 정지 — 마스터 변경 재로드(06_pipeline/02 §실행 중 마스터 변경 반영: 반영 시점은 다음 스캔 사이클 경계).
+   * 진행 중 사이클(요청 · 발행)을 끝까지 돌리고 다음 사이클로 가지 않는다 — 연결은 감독 루프의 finally가 닫는다.
+   * 사이클 하나의 상한은 timeoutMs × 블록 수 × (retry + 1)이라 기다림도 유계다 · 연결 시도는 timeoutMs로 자른다.
+   */
+  async stopAtBoundary(): Promise<void> {
+    this.running = false;
+    this.wakeAll();
+    // 연결 시도 중이면 OS 연결 타임아웃까지 묶이지 않게 닫는다 — 진행 중 사이클만 끝까지 둔다(검수 N1)
+    if (!this.inCycle) this.closeClient();
+    await this.done;
+  }
+
+  /** 마지막 발행 일련번호 — 재로드한 새 폴러가 이어 센다(s는 설비 안 단조 증가 · 재시작은 재기동 때만 · 06_pipeline/12) */
+  get lastSeq(): number {
+    return this.seq;
+  }
+
+  continueSeqFrom(seq: number): void {
+    this.seq = seq;
+  }
+
   /** 재기동 감독 — 루프가 던지면 연결을 닫고 잠시 뒤 새 연결로 다시 돈다 */
   private async supervise(): Promise<void> {
     while (this.running) {
@@ -159,7 +183,7 @@ export class DevicePoller {
   private async session(): Promise<void> {
     const client = new ModbusRTU();
     this.client = client;
-    await client.connectTCP(this.def.host, { port: this.def.port });
+    await client.connectTCP(this.def.host, { port: this.def.port, timeout: this.def.timeoutMs });
     client.setID(this.def.unitId);
     client.setTimeout(this.def.timeoutMs);
     const lock = exclusive();
@@ -207,6 +231,20 @@ export class DevicePoller {
 
   private async cycle(g: ScanGroup, reader: RegisterReader, lock: Exclusive): Promise<void> {
     const started = this.clock.monoMs();
+    this.inCycle = true;
+    try {
+      await this.cycleBody(g, reader, lock, started);
+    } finally {
+      this.inCycle = false;
+    }
+  }
+
+  private async cycleBody(
+    g: ScanGroup,
+    reader: RegisterReader,
+    lock: Exclusive,
+    started: number,
+  ): Promise<void> {
     colPolls.inc({ device: this.device });
     // 요청 · 디코딩만 배타 구간 — 발행(XADD 왕복)은 다른 그룹의 요청을 막지 않는다
     const r = await lock(() => runCycle(reader, this.def, g, this.clock));

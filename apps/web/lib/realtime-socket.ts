@@ -18,6 +18,8 @@ export interface ConnectionState {
   framesPerSec: number;
   /** 연결 · 구독 완료 횟수 — 바뀔 때마다 화면이 REST 동기화 1회 */
   syncEpoch: number;
+  /** 보고 있는 설비의 태그 메타 신호(cache:tagmeta) 수 — 바뀔 때마다 대시보드가 최신값(메타 포함) 1회 재조회 */
+  metaEpoch: number;
 }
 
 export const useConnectionStore = create<ConnectionState>()(() => ({
@@ -26,7 +28,11 @@ export const useConnectionStore = create<ConnectionState>()(() => ({
   lastCloseCode: null,
   framesPerSec: 0,
   syncEpoch: 0,
+  metaEpoch: 0,
 }));
+
+/** 셸이 듣는 사건 — cacheinv 신호(받은 키 그대로) · 재연결(첫 연결이 아닌 open) */
+export type SocketEvent = { type: 'cacheinv'; keys: string[] } | { type: 'reconnected' };
 
 /** 클라이언트가 스스로 닫는 코드 — ping 미수신(애플리케이션 대역 · 서버 계약 코드와 겹치지 않는다) */
 const CLIENT_PING_TIMEOUT = 4000;
@@ -40,6 +46,18 @@ class RealtimeSocket {
   private retryTimer: ReturnType<typeof setTimeout> | null = null;
   private fpsTimer: ReturnType<typeof setInterval> | null = null;
   private frames = 0;
+  private opened = false;
+  private readonly listeners = new Set<(e: SocketEvent) => void>();
+
+  /** 사건 구독 — 해지 함수를 돌려준다 */
+  on(fn: (e: SocketEvent) => void): () => void {
+    this.listeners.add(fn);
+    return () => this.listeners.delete(fn);
+  }
+
+  private emit(e: SocketEvent): void {
+    for (const fn of this.listeners) fn(e);
+  }
 
   start(): void {
     if (this.started) return;
@@ -94,6 +112,8 @@ class RealtimeSocket {
         lastCloseCode: null,
         syncEpoch: s.syncEpoch + 1,
       }));
+      if (this.opened) this.emit({ type: 'reconnected' });
+      this.opened = true;
     };
     ws.onmessage = (ev) => {
       if (this.ws !== ws || typeof ev.data !== 'string') return;
@@ -112,8 +132,11 @@ class RealtimeSocket {
       } else if (msg.type === 'rt') {
         this.frames += 1;
         useRealtimeStore.getState().applyFrame(msg);
+      } else if (msg.type === 'cacheinv') {
+        // 무효화 신호 — 스로틀 · 병합 없이 받은 대로 셸에 넘긴다(08_screen/01 §무효화 신호 수신)
+        this.emit({ type: 'cacheinv', keys: msg.keys });
       }
-      // subscribed · alarm · cacheinv · auth_ok — S2 화면이 쓰지 않는다(알람 띠 S7 · 무효화 신호 S4)
+      // subscribed · alarm · auth_ok — 화면이 쓰지 않는다(알람 띠 S7)
     };
     ws.onclose = (ev) => {
       if (this.ws !== ws) return;
