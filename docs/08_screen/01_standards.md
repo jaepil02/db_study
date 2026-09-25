@@ -2,6 +2,7 @@
 
 > **대상**: 08_screen 화면 명세 전부가 따르는 공통 규격 — 명세 템플릿 · 상태 4행 · 단계별 화면 가용성 · 요청 경로와 공통 셸 · 차트 표준(uPlot 주력 · ECharts 보조) · 시각 표시(Asia/Seoul) · 에러 코드별 사용자 표시 · TanStack Query staleTime과 Redis TTL 정렬 · 무효화 체인 ⑥단 신호 수신
 > **작성일**: 2026-09-24
+> **개정일**: 2026-09-25 — S4 as-built(3e8a46d · 기록 021) — §무효화 신호 수신에 신호 뒤 신선 창 판정(⑥이 ⑤를 앞지르는 경합 — S4 검수 M5) 신설 · 신호 키 수 불변
 > **개정일**: 2026-09-24 — W6 실험 채번 반영 — EXP 번호 반영(정본 10_observability/01 · 06)
 > **개정일**: 2026-09-24 — W6 판정 반영 — staleTime · gcTime · 링 버퍼 창 현행값 확정(09_tech_stack/01 — 관계식 파생 staleTime · 시계열 gcTime 60초 · 링 버퍼 3,000슬롯) · 관계식 불변
 > **원천**: 원본 tech_stack.md §4.1 · §4.2 · §4.3(커밋 ff66a37) · 원본 data_flow.md §5 · §6.2 · §6.3 · §7.2 · §9 · §9.2(커밋 ff66a37) · 원본 architecture.md §11 · §11.2(커밋 ff66a37) · 원본 implementation_plan.md §5 S2 · §7.4(커밋 ff66a37) · REQ-GLB · REQ-AUT-04 · 05 · REQ-RLT-03 · 06 · 13 · 15 · REQ-TSQ-05 · 10 · REQ-WRK-03 · AC-04 · AC-06 · [README.md](./README.md) 화면 인벤토리 · [../06_pipeline/07_business_crud.md](../06_pipeline/07_business_crud.md) 무효화 체인 6단 · [../11_glossary/02_error_codes.md](../11_glossary/02_error_codes.md) · [../11_glossary/05_units_and_time.md](../11_glossary/05_units_and_time.md) 표시 시간대
@@ -254,6 +255,7 @@
 - **ch:cacheinv에 오지 않는 키는 이 표에 없다** — cache:alarmevents · cache:workorders는 체인 ③을 걸지 않고(키 하나 DEL로 조합 전부가 지워진다), cache:q는 체인 대상이 아니다. 두 무효화 모두 쓴 사람 화면의 자기 쓰기 성공과 staleTime이 맡는다.
 - **⑥은 쓴 사람의 탭을 위한 단이 아니다.** 쓴 탭은 쓰기 응답을 받는 순간 같은 쿼리 키를 로컬 무효화한다 — ⑥은 다른 사용자와 **같은 브라우저의 다른 탭**을 위한 단이다. 탭마다 WebSocket과 쿼리 캐시가 따로라 다른 탭은 신호로만 안다(AC-06 브라우저 층).
 - **신호는 스로틀 대상이 아니고 병합하지 않는다.** 받은 키를 받은 대로 처리한다 — 병합하면 키가 빠질 수 있다([../06_pipeline/05_realtime_read.md](../06_pipeline/05_realtime_read.md) F-07 사이클 ④).
+- **신호 뒤 2초는 신선 창이다(S4 판정 · 검수 M5).** ⑥ 신호는 ③ 시점에 발화해 BFF의 ⑤보다 먼저 닿을 수 있다 — 그대로 재조회하면 BFF 서버 사본의 옛 목록을 받아 staleTime 동안 새 값으로 믿는다. 셸은 master 계열 신호를 받으면 신선 창을 열고, 창 안의 master 조회는 표지(x-bff-fresh)를 달아 BFF가 서버 사본 없이 api를 읽게 한다(기전 [../06_pipeline/07_business_crud.md](../06_pipeline/07_business_crud.md)). 재연결 무효화는 신선 창 없이 BFF 사본을 거친다. AC-06 다른 탭 층은 이 창 아래에서 3/3 성립했다(기록 021).
 - **신호를 놓치면 staleTime이 상한이다.** Pub/Sub은 전달을 보장하지 않는다 — 재연결 직후 공통 셸은 master 계열 쿼리를 한 번 무효화해 끊긴 동안 놓친 신호를 메운다. 최신값의 재연결 1회 동기화(REQ-RLT-13)와 같은 모양이다.
 
 ## 미확인 · 확정 대기 등재

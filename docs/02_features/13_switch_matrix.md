@@ -2,6 +2,7 @@
 
 > **대상**: 역할 스위치 11종의 채번 · 환경변수 · 기본값 · off · on 동작 · 측정 대상 · 교체되는 포트 · 관련 기능 · 흐름 · 원본 예상치 · 실험 자리 · 조합 제약 — SW-NN 채번 정본
 > **작성일**: 2026-09-24
+> **개정일**: 2026-09-25 — S4 실측 반영(기록 022~026) — SW-03~07 원본 예상치 열에 실측 병기(4요소는 기록) · 조합 제약 #1의 구현 — SW-03 off면 SW-05를 NoopRebuildLock으로 주입(S4 검수 M1) — 스위치 수 불변
 > **개정일**: 2026-09-25 — S3 구현 반영 — SW-08 off 동작에 서버 중복 제거 해제(deduplicate_insert 'disable') 명시 — 토큰만 빼면 26.8에서 off가 재현되지 않는다(기록 016)
 > **개정일**: 2026-09-24 — W7 검수 반영 — SW-09 분류 서술 Redis 역할 9 → **10**(같은 문서 §검산) · 미확인 2행 닫힘(SW-09 실패 의미론 · SW-01 off 토큰 재료) — 스위치 수 불변
 > **개정일**: 2026-09-24 — W6 실험 채번 반영 — 스위치 상태 레이블 obs_switch_info · 스위치별 EXP 번호 채번 · 조합 제약 #8 · #9 신설(7 → 9)(정본 10_observability/01 · 06)
@@ -44,11 +45,11 @@ SW-01~SW-10의 순서는 [README.md](./README.md) 고정 기준의 목록 순서
 |------|------|------|------|------|------|------|
 | SW-01 | 백프레셔 흡수력 · 유실 | PointBufferPort — RedisStreamBuffer · InProcessQueueBuffer | COL-07 · ING-01 | F-01 · F-02 · F-10 | off — ClickHouse 중단 시 폴링 주기 붕괴 + 유실 · on — 무손실 | [../10_observability/06_experiment_catalog.md](../10_observability/06_experiment_catalog.md) — **EXP-06** |
 | SW-02 | 점조회 비용 | LatestValueReadPort — RedisLatestValueReader · ClickHouseLatestValueReader | RLT-01 · RLT-02 | F-03 | 30~150 ms → 0.3~1 ms | 상동 — **EXP-07** |
-| SW-03 | 반복 조회 흡수 | TimeseriesCachePort — RedisTimeseriesCache · NoopTimeseriesCache | TSQ-04 | F-04 | 히트 시 250 ms → 15 ms | 상동 — **EXP-08** |
-| SW-04 | 키 파편화 | CacheKeyNormalizerPort — TimeSnapKeyNormalizer · RawTimeKeyNormalizer | TSQ-03 | F-04 | 히트율 약 0% → 80% 이상 | 상동 — **EXP-09** |
-| SW-05 | 스탬피드 | RebuildLockPort — RedisRebuildLock · NoopRebuildLock | TSQ-05 | F-04 | 동시 100요청 시 ClickHouse 쿼리 100회 → 1회 | 상동 — **EXP-10** |
-| SW-06 | 팬아웃 경계 비용 | RealtimeFanoutPort — RedisPubSubFanout · DirectGatewayFanout | ING-08 · ALM-06 · RLT-05 · RLT-08 | F-06 · F-07 | 루프백 1홉(1 ms 미만) 대 확장 가능성 | 상동 — **EXP-11** |
-| SW-07 | 프레임 폭증 | FrameThrottlePort — WindowMergeThrottle · PassthroughThrottle | RLT-06 | F-07 | 초당 5,000 → 10 프레임(태그 500 · 10 Hz) | 상동 — **EXP-12** |
+| SW-03 | 반복 조회 흡수 | TimeseriesCachePort — RedisTimeseriesCache · NoopTimeseriesCache | TSQ-04 | F-04 | 히트 시 250 ms → 15 ms · **실측** 반복 조회 서버 p50 off 18.2 → on 8.3 ms · 원천 801 → 0회 · 미스 경로는 on이 약 6 ms 느리다(기록 022) | 상동 — **EXP-08** |
+| SW-04 | 키 파편화 | CacheKeyNormalizerPort — TimeSnapKeyNormalizer · RawTimeKeyNormalizer | TSQ-03 | F-04 | 히트율 약 0% → 80% 이상 · **실측** off 0 · on 0.999(상대 범위 반복 · 기록 023) | 상동 — **EXP-09** |
+| SW-05 | 스탬피드 | RebuildLockPort — RedisRebuildLock · NoopRebuildLock | TSQ-05 | F-04 | 동시 100요청 시 ClickHouse 쿼리 100회 → 1회 · **실측** 동시 50건 50 → 1회 · 소진 0(기록 024) | 상동 — **EXP-10** |
+| SW-06 | 팬아웃 경계 비용 | RealtimeFanoutPort — RedisPubSubFanout · DirectGatewayFanout | ING-08 · ALM-06 · RLT-05 · RLT-08 | F-06 · F-07 | 루프백 1홉(1 ms 미만) 대 확장 가능성 · **실측** 발행 → 게이트웨이 평균 off 2 µs · on 336 µs · 프레임 모양 동일(기록 025) | 상동 — **EXP-11** |
+| SW-07 | 프레임 폭증 | FrameThrottlePort — WindowMergeThrottle · PassthroughThrottle | RLT-06 | F-07 | 초당 5,000 → 10 프레임(태그 500 · 10 Hz) · **실측** 티어 M 1초 주기 · 연결당 설비 5에서 창 0 초당 5.0 → 창 100 약 1.05 · 이벤트 루프 차 없음(기록 026 — 폭증 조건 아님 · S5) | 상동 — **EXP-12** |
 | SW-08 | 재시도 중복 | BatchTokenPort — DeterministicBatchToken · NoBatchToken | ING-04 | F-02 | off — 재시도 시 중복 행 발생 · on — 미발생 | 상동 — **EXP-13** |
 | SW-09 | 목표 ①의 실행 — 쿼리별 역전 지점 · 비교 축 6 | ControlTableSinkPort — PostgresControlSink · NoopControlSink | ING-11 · GEN-10 | F-02 · F-09 | 원본 예상치 없음 — 역전 지점이 산출물이다 | 상동 — **EXP-01~EXP-05**(대조군 쿼리 5종)([../11_glossary/04_id_conventions.md](../11_glossary/04_id_conventions.md)) |
 | SW-10 | 전송량 · ClickHouse 행 수 · 압축률 | DeadbandFilterPort — TagDeadbandFilter · PassthroughFilter | COL-06 | F-01 | 프로파일별 전송률 3~100%(원본 data_flow.md §3.3) | 상동 — **EXP-14** |
@@ -90,7 +91,7 @@ SW-01~SW-10의 순서는 [README.md](./README.md) 고정 기준의 목록 순서
 
 | # | 조합 | 제약 | 이유 |
 |------|------|------|------|
-| 1 | SW-03 off + SW-04 · SW-05 on/off 비교 | 측정하지 않는다 | 캐시가 없으면 키도 락도 쓰이지 않아 차이가 0이다 |
+| 1 | SW-03 off + SW-04 · SW-05 on/off 비교 | 측정하지 않는다 · **SW-03 off면 SW-05 값과 무관하게 NoopRebuildLock을 주입하고 health에 combo_1 표지(S4)** | 캐시가 없으면 키도 락도 쓰이지 않아 차이가 0이다 — 락을 그대로 두면 대기 50 ms × 3이 SW-03 off 측정을 오염시킨다 |
 | 2 | SW-01 off + 주입 모드 B · C | **조합 금지 — SW-01 off 실험은 모드 A로만 한다** | 모드 B · C는 Stream이 있다는 전제의 주입이라 Stream 경계를 끈 구성에서 경로가 정의되지 않는다 |
 | 3 | SW-01 off + SW-08 멱등 측정 | 멱등 수치를 이 조합으로 재지 않는다 | 결정적 토큰의 재료가 Stream 엔트리 ID 범위인데 off에서는 엔트리 ID가 없다 |
 | 4 | SW-09 on + 목표 ② 처리량 측정 | 섞지 않는다 | 모든 삽입 처리량에 대조군 적재 비용이 섞인다 — SW-09가 기본 off인 이유다 |

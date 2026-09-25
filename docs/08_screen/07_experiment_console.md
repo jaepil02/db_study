@@ -2,6 +2,7 @@
 
 > **대상**: ★ EXP-CONSOLE(스위치 11종의 실제 주입 구현 표시 · 저장소 상태 · 조합 경고 · 메트릭 요약 · 전환 절차 안내 · 측정 기록 4요소 조건 블록) · EXP-COMPARE(on/off · 구현값 비교 · 측정 창 · 대조군 역전 지점 표시) — 인증 사용자 전원 · **표시 전용**
 > **작성일**: 2026-09-24
+> **개정일**: 2026-09-25 — S4 구현 반영(3e8a46d) — EXP-COMPARE 요소 6 중 5 구현 · 대조군 역전 지점 차트 **S5로 연기**(원천 기록 · ECharts 도입 — S4 판정 2) — 요소 수 불변
 > **개정일**: 2026-09-24 — W6 실험 채번 반영 — 기계 판독 형식 · 메트릭 이름 · EXP 번호 반영 · 조합 경고 7 → 9(정본 10_observability/01 · 06)
 > **개정일**: 2026-09-24 — W6 판정 반영 — 콘솔 폴링 주기 현행값 15초(스크레이프 주기와 같음 · 09_tech_stack/01)
 > **원천**: 원본 implementation_plan.md §3.1 · §4 · §4.1 · §4.2 · §4.3 · §5 S2 · §8(커밋 ff66a37) · 원본 architecture.md §3 · §11 · §14(커밋 ff66a37) · docs_plan.md 실행 계획 보정 #14 · D-06 · D-10 · REQ-OBS-01~12 · AC-18 · AC-20 · AC-24 · AC-25 · AC-29 · AC-33 · AC-34 · AC-39~AC-44 · 기능 OBS-01~06 · [../02_features/13_switch_matrix.md](../02_features/13_switch_matrix.md) · [../02_features/12_permission_matrix.md](../02_features/12_permission_matrix.md) §실험 수행자와 실험 콘솔 · [../04_architecture/02_module_boundaries.md](../04_architecture/02_module_boundaries.md) · [../07_api/09_datagen.md](../07_api/09_datagen.md) 실행 제어 표면 판정 · [../10_observability/README.md](../10_observability/README.md) · [01_standards.md](./01_standards.md)
@@ -237,6 +238,7 @@
 | 비교 축 | 쿼리 시간 외 저장 비용 축(디스크 · 압축률 등)은 별도 막대 — 6축 정본 [../05_data_stores/10_olap_vs_rdb_control.md](../05_data_stores/10_olap_vs_rdb_control.md) | 쿼리 시간만 있는 표가 학습 목표 ① 산출로 오인된다(AC-44) |
 
 - 검산: 계약 = **6**
+- **S4 구현은 빈 상태까지다(S4 판정 2).** 원천 기록 EXP-01~05가 아직 없고 ECharts 도입(09_tech_stack 버전 재확인 대기 행)도 S5에서 한다 — 패널은 빈 상태 문구("EXP-01~05 기록이 아직 없다")만 그리고 BFF 기록 읽기는 S5에 붙는다. 창 캡처 · 조건 묶음 · 비교 성립 6조건 · 비교 표 · 쌍 현황은 S4에서 구현했다(3e8a46d · /bff/metrics?view=window가 누적 계열을 내린다).
 - **BFF는 기록을 읽기만 한다.** 화면에서 기록을 만들거나 고치는 경로를 두지 않는다 — 콘솔은 표시 전용이고, 기록의 정본성은 파일이 커밋 해시와 함께 git에 남는 데서 온다. 판독 형식에 맞지 않는 기록 파일은 패널에서 빠지고 "판독 불가 기록 N건"으로 센다 — 조용히 빼면 역전 지점이 측정 누락 위에 그려진다.
 
 ### 상태 4행

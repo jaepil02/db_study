@@ -2,6 +2,7 @@
 
 > **대상**: 저장소 3종(PostgreSQL · ClickHouse · Redis)의 이미지 · 확장 · 설정 파일의 모양 · ClickHouse 서버 timezone 판정 · pg_partman 미리 만들기 · TTL 머지 주기 · Compose healthcheck와 health 타임아웃의 관계 · **observability 프로파일 구성원 판정(보정 #17)** · **버전 고정표(버전 문자열의 유일한 기재처)**
 > **작성일**: 2026-09-24
+> **개정일**: 2026-09-25 — S4 반영 — client-output-buffer-limit pubsub 값 미정 → **32mb 8mb 60**(명시 · 게이트웨이 소켓 한도 1 MiB와 같은 변경 단위 — 07_api/11)
 > **개정일**: 2026-09-25 — S3 착수 반영 — 2행 고정 — pg_partman **5.5**(파생 이미지 db_study-postgres:18.6-partman5.5.0 · 소스 빌드) · pg-copy-streams **7.0** — 버전 고정 24 → **26** · 미고정 4 → **2** · 미확인 닫힘 2(pg_partman 기본값 — 미리 만들기 4 확인 · 워커 주기 3600초 명시 · 설치 경로 — 파생 이미지) · 확장 생성 자리 마이그레이션 001 · 004 → **migrate 관리자 단계**(확장 생성에 superuser 필요) · 등록 004 · 007
 > **개정일**: 2026-09-25 — S2 실측 반영(EXP-30 기록 012 · d32b09a) — msgpackr-extract S1 판정 끔 → **끔 유지(S2 재판정 → S5)**
 > **개정일**: 2026-09-24 — S2 착수 반영 — 13행 고정 — Fastify 어댑터 **11.2** · @clickhouse/client **1.23** · ioredis **5.11** · pg **8.23** · modbus-serial **8.0** · jsmodbus **4.0** · Next.js **15.5** · uPlot **1.6** · TanStack Query **5.103** · Zustand · Tailwind CSS **5.0 · 4.3** · Supertest **7.3** · node-pg-migrate **9.0** · k6 **1.8** — 버전 고정 11 → **24** · 재확인 대기 15 → **5** · 미고정 7 → **4** · zstd 요청 압축 미확인 닫힘
@@ -129,7 +130,7 @@ infra/clickhouse/
 | maxmemory | 프로파일별 값 · 기동 인자로 주입 | 05_data_stores/06 | 컨테이너 상한에 먼저 닿아 OOM Killer가 Redis를 죽인다 — Stream 미소비분이 AOF 마지막 fsync 이후만큼 사라진다 |
 | maxmemory-policy | volatile-lru 고정 | ADR-05 | 기본 정책(noeviction)이면 캐시 팽창만으로 XADD가 실패해 백프레셔가 캐시 때문에 발동한다 |
 | appendonly · appendfsync | yes · everysec | ADR-05 · 05_data_stores/06 | 재기동 시 미소비 Stream 엔트리 · PEL이 사라진다 |
-| client-output-buffer-limit pubsub | 명시 값 필수 · 값 미정 | 이 문서(값) · [../03_requirements/09_realtime.md](../03_requirements/09_realtime.md)(계약) | 기본값을 쓰면 느린 구독 연결이 끊기는 기준이 설계 밖에서 정해진다 — **기본값 사용 금지** |
+| client-output-buffer-limit pubsub | 명시 값 필수 · **32mb 8mb 60(S4 판정 5 · infra/redis/redis.conf 명시)** — Redis 기본값과 같은 값을 설정 파일에 적었다 · 게이트웨이 소켓 송신 대기량 한도(1 MiB · 4413)가 먼저 걸리는 관계가 값의 근거다 | 이 문서(값) · [../03_requirements/09_realtime.md](../03_requirements/09_realtime.md)(계약) | 기본값을 쓰면 느린 구독 연결이 끊기는 기준이 설계 밖에서 정해진다 — **기본값 사용 금지** |
 | 바인드 · 보호 · 인증 | 컨테이너 네트워크 안 접속 · 호스트 publish는 127.0.0.1 · **requirepass 필수**(값 REDIS_PASSWORD — 설정 파일에 값을 쓰지 않고 기동 인자로 주입) | ADR-18 · [../12_security/02_secrets_config.md](../12_security/02_secrets_config.md) | 127.0.0.1 바인드는 LAN만 막는다 — 비밀번호가 없으면 같은 머신의 어느 프로세스든 6379에 붙어 봉인 계열을 FLUSH한다(12_security/05) |
 
 - 검산: 설정 = **5**
@@ -255,7 +256,7 @@ docs_plan 실행 계획 보정 #17을 닫는다. 원본 넷이 서로 다른 구
 | alpine 이미지의 시간대 데이터 포함 여부 | **닫힘(S0 확인 2026-09-24)** — PostgreSQL alpine · ClickHouse 이미지 모두 Asia/Seoul 해석 | 이 문서 |
 | msgpackr-extract(msgpackr 네이티브 해제 가속) | **끔 유지(S2 재판정)** — S1 판정(pnpm-workspace.yaml 허용 목록에서 끔)을 S2에서 다시 봤다. 슬라이스 · 티어 S의 해제는 워커 한 번에 1 ms 미만이라 병목이 아니고(ing_decode_seconds p50 약 0.73 ms · 기록 012 · d32b09a · 부하 실험 · S · 스위치 기본값), 켜면 호스트와 컨테이너의 해제 경로가 갈린다 — 해제가 병목 후보가 되는 S5 M 티어에서 다시 판정 | S5 · 이 문서 · [02_backend.md](./02_backend.md) |
 | @clickhouse/client의 zstd 요청 압축 지원 | **닫힘(S2 착수 확인 2026-09-24)** — 1.23이 zstd 요청 압축을 지원한다 · 적재 경로 zstd · gzip은 쓰지 않는다 | [02_backend.md](./02_backend.md) |
-| client-output-buffer-limit pubsub 값 | 값 미정 — 계약만(게이트웨이 소켓 한도보다 늦게) | S4 · 이 문서 · [../07_api/11_websocket.md](../07_api/11_websocket.md) 소켓 송신 대기량 한도와 같은 변경 단위 |
+| client-output-buffer-limit pubsub 값 | **닫힘(S4)** — 32mb 8mb 60 · 게이트웨이 소켓 한도 1 MiB보다 늦게 걸린다 · 두 값의 적정성은 S5 연결 계단 | 이 문서 · [../07_api/11_websocket.md](../07_api/11_websocket.md) |
 | TTL 파티션 삭제 지연 | 3계층 미확인 — 확정 전 임의 값 고정 금지 | EXP-29 · [../10_observability/06_experiment_catalog.md](../10_observability/06_experiment_catalog.md) |
 | pg_partman 미리 만들기 · 워커 주기의 기본값 | **닫힘(S3 착수 확인 2026-09-25)** — 5.5.0 part_config.premake 기본 4 · 워커 주기는 설정 파일에 3600초로 명시해 기본값에 기대지 않는다 | 이 문서 §pg_partman 미리 만들기와 유지 작업 |
 | pg_partman 설치 경로 | **닫힘(S3 · 2026-09-25)** — 공식 이미지에 없어(S0 확인) 파생 이미지를 도입했다 · infra/postgres/Dockerfile 다단 빌드(빌드 단계만 컴파일 도구 · 실행 단계는 공식 이미지 위에 확장 파일만 더한다) · 5.5.0 고정 · Compose postgres 서비스가 이 이미지를 빌드한다 | 이 문서 §버전 고정표 · [../04_architecture/03_execution_topology.md](../04_architecture/03_execution_topology.md) |

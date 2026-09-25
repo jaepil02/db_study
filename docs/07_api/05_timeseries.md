@@ -2,6 +2,7 @@
 
 > **대상**: TSQ 도메인 표면 — 시계열 조회(POST /api/v1/timeseries/query) 요청 스키마 · 해상도 규칙의 표면 모양 · meta · points 열 구성 · 다운샘플 모드 · 진행 구간 분할의 호출 모양 · 원시 내보내기 스트림 · **내보내기 스트림 중단 종료 표지 판정** · 태그 상한 · 최대 포인트 수(2계층 소유)
 > **작성일**: 2026-09-24
+> **개정일**: 2026-09-25 — S4 as-built(3e8a46d) — §S2 단계 표면 절 **삭제**(S4에서 해상도 선택 · 상향 · LTTB로 복귀 — 절이 예고한 대로) → §S4 표면(as-built) 신설 · maxPoints 상한 없음 → **현행 참고 10,000**(S4 판정 15 · 검수 L1) · 내보내기 tagIds 범위 밖 400(검수 L2) · 캐시 히트 series 순서 = 요청 순서(검수 L3)
 > **개정일**: 2026-09-25 — S3 구현 반영 — §S2 단계 표면 tagName · unit 행 null → **S3에서 계약으로 복귀**(dictGet(plc.dict_tag) · 사전 조회 실패 시 null · 응답은 성공)
 > **개정일**: 2026-09-24 — S2 구현 반영 — §S2 단계 표면(as-built) 신설 — raw 고정 · 예상 포인트 초과 400(S4에서 상향으로) · tagName · unit null(S3 dict_tag) · 현재 버킷 TTL 구간 미도달
 > **개정일**: 2026-09-24 — W7 보안 판정 반영 — 내보내기 범위 상한 미정 → **현행 참고 1일**(2계층 · 초과 400 reason range) · 등급 class export — 표면 수 불변(정본 12_security/03)
@@ -23,7 +24,7 @@ TSQ 표면은 **요청한 것이 아니라 서버가 고른 것을 돌려주는 
 | ClickHouse 불가 | 캐시 히트 200 · 캐시 미스 · 내보내기 시작 전 timeseries.clickhouse_unavailable/503 · 대조군 · 최신값으로 대신 답하지 않는다 | REQ-TSQ-16 |
 | Redis 불가 | 에러가 아니다 — ClickHouse 직행 200 · meta.cached false | REQ-TSQ-11 |
 | PostgreSQL 불가 | 영향 없음 — Dictionary가 마지막 적재 값으로 태그명 · 단위를 붙인다 | REQ-TSQ-08 |
-| 단계 | 조회 S2(raw 고정) · 해상도 · 캐시 · 내보내기 S4 · 인가 S7 | [../02_features/07_timeseries.md](../02_features/07_timeseries.md) |
+| 단계 | 조회 S2(raw 고정) · 해상도 · 캐시 · 내보내기 S4(**구현** 3e8a46d) · 인가 S7 | [../02_features/07_timeseries.md](../02_features/07_timeseries.md) |
 
 - 검산: 항목 = **8**
 
@@ -47,7 +48,7 @@ TSQ 표면은 **요청한 것이 아니라 서버가 고른 것을 돌려주는 
 | from · to | 문자열 | 예 | 오프셋 포함 ISO 8601 · from < to | common.validation_failed/400 |
 | interval | 문자열 | 아니오 | raw · 1m · 1h · 1d — 없으면 서버가 범위 길이로 고른다 | 400 |
 | aggregations | 문자열 배열 | 아니오 | avg · min · max · last · p95 중 복수 · 기본 avg · 순서가 points 열 순서다 | 400 |
-| maxPoints | 정수 | 아니오 | 기본 **현행 참고 2000**(2계층 · 소유 이 문서) · 1 이상 · 태그당 상한이다 | 400 |
+| maxPoints | 정수 | 아니오 | 기본 **현행 참고 2000**(2계층 · 소유 이 문서) · 1 이상 · 상한 **현행 참고 10,000**(S4 판정 15) · 태그당 상한이다 | 400 |
 | downsample | 문자열 | 아니오 | lttb(기본) · minmax — minmax는 극값 보존 | 400 |
 
 - 검산: 필드 = **6** · 원본 5(원본 architecture.md §11.1) + 신설 1(downsample)
@@ -67,19 +68,18 @@ TSQ 표면은 **요청한 것이 아니라 서버가 고른 것을 돌려주는 
 - **A형 — "raw로 요청했는데 1m이 왔다"는 버그가 아니다.** 통념은 요청한 해상도가 그대로 온다는 것이다. 부정 — 서버는 범위와 maxPoints로 해상도를 강제한다. 진짜 축은 ClickHouse 보호다. 대체 경로 — 원시가 꼭 필요하면 #2 내보내기로 받는다.
 - **스냅한 범위가 곧 조회 범위다.** 응답의 meta.from · meta.to가 요청과 다를 수 있다 — 캐시 히트와 미스가 다른 범위의 결과를 내면 같은 화면이 새로고침마다 달라진다(기전 정본 인용).
 
-### S2 단계 표면(as-built)
+### S4 표면(as-built)
 
-롤업 · Dictionary · 다운샘플이 없는 S2의 표면은 위 계약의 부분 집합이다. 바뀌는 자리는 셋이고, 각각 도입 단계에서 위 계약으로 돌아간다.
+S2의 부분 집합 표면(raw 고정 · 예상 포인트 초과 거절 · 메타 null)은 S4에서 위 계약으로 돌아갔다 — 해상도 4 · 상향 · LTTB · minmax가 구현됐다(3e8a46d). 위 계약에 없던 모양을 정한 자리는 넷이다.
 
-| 자리 | S2 동작 | 위 계약으로 돌아가는 단계 | 이유 |
-|------|------|------|------|
-| interval | raw만 받는다 — 다른 값은 400 common.validation_failed(body.interval · enum) | S4(해상도 선택) | 롤업이 없어 1m · 1h · 1d를 낼 원천이 없다 |
-| 예상 포인트 > maxPoints | **거절한다** — 400 common.validation_failed(body.to · range) · 예상 포인트 = 범위 ÷ scan_rate_ms(시드 1,000 ms) | S4(상향 · LTTB) | 상향할 해상도도 축소 수단도 없다 — 조용히 자르면 부분 결과가 전체로 읽힌다 |
-| series[].tagName · unit | null | **S3에서 복귀(as-built)** — 한 번의 dictGet(plc.dict_tag) 조회로 요청 태그 전부의 이름 · 단위를 붙인다 · 사전 조회가 실패하면 그 요청만 null로 두고 points는 그대로 낸다 | 메타를 붙이는 Dictionary가 S3에 생긴다 · 메타 실패로 시계열 전체를 5xx로 만들면 사전 재적재 중에 트렌드가 끊긴다 |
+| 자리 | S4 동작 | 이유 |
+|------|------|------|
+| maxPoints 상한 | 10,000 초과는 400 common.validation_failed(body.maxPoints · range) · 화면은 플롯 픽셀 폭을 보내고 상한으로 자른다 | 큰 maxPoints가 상향 규칙을 우회하면 1년 · 태그 50 조회가 1m으로 수천만 점을 메인 스레드에서 직렬화한다(S4 검수 L1) — 10,000은 4K 폭의 두 배 여유 |
+| raw 예상 포인트의 주기 | 1,000 ms 고정(S4 판정 12) | 태그별 주기를 읽으려면 PostgreSQL이 필요하다 — 주기 100 ms 구성의 과소 추정분은 LTTB가 받는다 |
+| series 순서 | 요청 tagIds(중복 제거) 순서 | 캐시 키는 tagIds를 정렬해 만들므로 히트 본문의 순서는 첫 요청자의 순서다 — 응답 때 요청 순서로 다시 편다(검수 L3) |
+| 내보내기 tagIds 값 | 1 ~ 4,294,967,295 밖은 400 reason range | tag_id는 UInt32 — 범위 밖 값이 ClickHouse 파라미터 오류로 503 clickhouse_unavailable이 되면 저장소 장애로 읽힌다(검수 L2) |
 
-- 검산: 자리 = **3**
-- **S2의 거절은 상향 계약의 임시 대체다.** 대시보드 채움(5분 × 1 Hz = 태그당 300포인트)은 걸리지 않는다. S4에서 거절 분기를 지우고 상향으로 바꾼다 — 그때 이 절을 지운다.
-- raw 버킷(1분)은 최근 창(5분) 안에 들어 TTL 구간 "현재 버킷 포함"이 S2에서 나오지 않는다([../06_pipeline/06_timeseries_read.md](../06_pipeline/06_timeseries_read.md) §TTL 구간 분류와 지터) — 캐시는 완전 과거 TTL만 쓴다.
+- 검산: 자리 = **4**
 
 ### 응답
 
@@ -183,7 +183,7 @@ TSQ 표면은 **요청한 것이 아니라 서버가 고른 것을 돌려주는 
 
 | 항목 | 상태 | 확정 자리 |
 |------|------|------|
-| 태그 배열 상한 · 최대 포인트 수 | 2계층 · 현행 참고 50 · 2000 — 소유 이 문서 · 실측 조정은 S4 | 이 문서 |
+| 태그 배열 상한 · 최대 포인트 수 | 2계층 · 현행 참고 50 · 2000 · 상한 10,000 — 소유 이 문서 · S4 실측(기록 022~024)은 태그 4 · 1일 범위라 상한 값의 적정성은 S5 부하 계단에서 본다 | 이 문서 |
 | 내보내기 범위 상한 · 등급별 한도 | **W7 닫힘** — 범위 상한 현행 참고 1일 · class export(≤ bulk_read 한도) · 한도 값 2계층 미정 | [../12_security/03_api_surface_defense.md](../12_security/03_api_surface_defense.md) |
 | 조회 p95 · 히트율 | 3계층 미확인 — 원본 목표 히트 20 ms · 미스 300 ms · 80% | [../03_requirements/13_nonfunctional.md](../03_requirements/13_nonfunctional.md) REQ-NFR-08 · 10 |
 | COUNTER 랩어라운드 구간 증가량 | 조회 시점 몫 — 이 표면은 max − min을 계산하지 않는다 · 증가량 집계 요청 필드 없음 | [../06_pipeline/04_routing.md](../06_pipeline/04_routing.md) §생산 카운터 기전 판정 |

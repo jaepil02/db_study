@@ -2,6 +2,7 @@
 
 > **대상**: /metrics로 노출하는 메트릭 전수 — 이름 규약 · 닫힌 레이블 집합 · **스위치 상태 레이블 이름** · **컨슈머 랙 산출식 판정(가장 중요한 단일 지표)** · 계열별 전수(앱 기본 · HTTP·WS · 수집 · 적재 · 알람 · 실시간 · 조회 · 업무 · 인증 · Redis · PostgreSQL · ClickHouse · E2E · 관측 자체) · 파생 지표 식 · 선행 문서 인계 메트릭 대응 · 수집 주기 · E2E 창 · 메모리 표본 수 조회 계약 · Pub/Sub 출력 버퍼 관련 메트릭
 > **작성일**: 2026-09-24
+> **개정일**: 2026-09-25 — S4 as-built(3e8a46d · 기록 025) — rlt_fanout_delivery_seconds 정의 행 보정(발행 → 게이트웨이 도착 · channel 값 둘 · 첫 칸 해상도 한계와 평균 판정) · rlt_tag_unresolved_total 구현(검수 M4) — 계열 수 불변
 > **개정일**: 2026-09-25 — S3 실측 반영(기록 015 · 020) — AC-19 "0 유지" 표본 해석 불릿 신설(순간값 · 누적 판정 · pending 2배치 = 창 2개분 엔트리)
 > **개정일**: 2026-09-25 — S3 구현 반영 — ing_dedup_ignored_batches_total **S3 미구현 · 미등록**(@clickhouse/client 삽입 응답 요약에 ProfileEvents가 없고 written_rows는 중복 제거된 재시도에도 같다 — 0으로 내면 "중복 없음"으로 오독)
 > **개정일**: 2026-09-25 — S2 판정 반영(EXP-29 기록 010) — col_modbus_rtt_seconds 타임아웃 관측값 20초(유한) · 버킷으로 읽기 · 무손실 차의 모드 A 분모 → **points_emitted**(Collector 발행 포인트 · Stream 디코딩 합 교차 확인)
@@ -177,7 +178,7 @@
 | rlt_latest_points_served_total | counter | 포인트 | freshness(fresh · stale) | 응답한 태그 값 — STALE 비율의 분모 · 분자 | AC-34 · RLT-03 |
 | rlt_latest_updates_total | counter | 건 | writer(ingest · collector) | rt:latest 갱신 — 갱신 공백 판정 | SW-11 · AC-34 |
 | rlt_tag_unresolved_total | counter | 건 | 없음 | 단일 태그 해석 실패(503) | [../06_pipeline/05_realtime_read.md](../06_pipeline/05_realtime_read.md) |
-| rlt_fanout_delivery_seconds | histogram | 초 | channel | 발행 → 게이트웨이 송신 | SW-06 · AC-40 |
+| rlt_fanout_delivery_seconds | histogram | 초 | channel(pubsub · direct) | 발행 → 게이트웨이 도착(스로틀 창 대기 · 소켓 송신 제외 · 한 프로세스 안에서만 잰다) — **첫 칸 100 µs가 direct 경로를 가르지 못해 판정은 합 ÷ 수(평균)로 한다(기록 025)** | SW-06 · AC-40 |
 | rlt_publish_failures_total | counter | 건 | channel | FanoutPublisher 발행 실패(계수 · 삼킴) | [../06_pipeline/07_business_crud.md](../06_pipeline/07_business_crud.md) · 08_alarm |
 | rlt_throttle_merged_total | counter | 갱신 | 없음 | 스로틀 창이 병합해 버린 갱신 | SW-07 |
 | rlt_subscriber_disconnects_total | counter | 건 | 없음 | api 구독 연결이 출력 버퍼 한도로 끊김(4503) | 한도 값 [../09_tech_stack/03_data_infra.md](../09_tech_stack/03_data_infra.md) |
