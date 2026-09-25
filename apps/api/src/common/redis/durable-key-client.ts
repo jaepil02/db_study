@@ -2,6 +2,7 @@
 // ① TTL 인자를 받지 않는다 ② TTL 명령(EXPIRE · PEXPIRE · EXPIREAT · SETEX · SET EX/PX · HEXPIRE 계열) · KEYS · FLUSH를 노출하지 않는다
 // ③ 실패를 삼키지 않고 그대로 던진다 — stream 쓰기 실패는 스풀 전환(S6)의, rt 읽기 실패는 503의 원천이다.
 // rt:latest 쓰기는 필드 조건부 쓰기 스크립트 하나로만 한다 — 새 ts ≥ 저장 ts일 때만 바꾼다(06_pipeline/05 §덮어쓰기 순서 역전).
+import { DLQ_FIELDS, DlqEntryMeta, type DlqEntryMetaBody } from '@db-study/shared';
 import { Injectable } from '@nestjs/common';
 import type Redis from 'ioredis';
 import { RedisConnections } from './connections';
@@ -26,6 +27,33 @@ export const STREAM_PAYLOAD_FIELD = 'p';
 export interface StreamRecord {
   id: string;
   payload: Buffer;
+}
+
+/** XAUTOCLAIM 한 번 — 다음 시작 ID('0-0'이면 PEL을 끝까지 훑었다) · 인수한 엔트리 · Stream에서 이미 지워져 PEL에서 뺀 ID */
+export interface AutoClaimResult {
+  next: string;
+  records: StreamRecord[];
+  deleted: string[];
+}
+
+/** DLQ 엔트리 하나 = 실패한 원 엔트리 하나(06_pipeline/12 §DLQ 엔트리) */
+export interface DlqItem extends DlqEntryMetaBody {
+  payload: Buffer;
+}
+
+function recordsOf(entries: [Buffer, Buffer[] | null][]): StreamRecord[] {
+  const out: StreamRecord[] = [];
+  for (const [id, fields] of entries) {
+    if (!fields) continue; // Redis 7 전에는 지워진 엔트리가 필드 없이 온다
+    let payload: Buffer | null = null;
+    for (let i = 0; i + 1 < fields.length; i += 2) {
+      if (fields[i]?.toString() === STREAM_PAYLOAD_FIELD) payload = fields[i + 1] as Buffer;
+    }
+    // p가 없는 엔트리는 빈 페이로드로 넘긴다 — 디코딩이 해독 불가로 격리 · XACK한다(06_pipeline/12 · 검수 I3).
+    // 건너뛰면 DLQ · XACK 없이 PEL에 남아 회수마다 다시 버려지고 pending이 0으로 돌아오지 않는다.
+    out.push({ id: id.toString(), payload: payload ?? Buffer.alloc(0) });
+  }
+  return out;
 }
 
 /** [tagId, ts(epoch ms), value, quality] */
@@ -106,6 +134,28 @@ export class DurableKeyClient {
     return { id: String(xadd?.[1]), backlog };
   }
 
+  /**
+   * 묶음 XADD — 파이프라인 1회 = XADD × n + XINFO GROUPS 1(모드 B 발행 · 엔트리마다 XINFO를 붙이면 명령 수가 두 배).
+   * 결과는 엔트리별 ID 또는 오류 — 한 엔트리 실패(OOM 등)가 나머지의 성공을 지우지 않는다.
+   */
+  async xaddBatchWithBacklog(
+    stream: string,
+    payloads: readonly Buffer[],
+    maxlen: number,
+    group: string,
+  ): Promise<{ results: (string | Error)[]; backlog: GroupBacklog | null }> {
+    assertSealed(stream);
+    const pipe = this.redis.pipeline();
+    for (const p of payloads) pipe.xadd(stream, 'MAXLEN', '~', maxlen, '*', STREAM_PAYLOAD_FIELD, p);
+    pipe.xinfo('GROUPS', stream);
+    const res = await pipe.exec();
+    if (!res) throw new Error('파이프라인 응답 없음');
+    const results = res.slice(0, payloads.length).map(([err, id]) => (err ? err : String(id)));
+    const xinfo = res[payloads.length];
+    const backlog = xinfo && !xinfo[0] ? parseXinfoGroups(xinfo[1], group) : null;
+    return { results, backlog };
+  }
+
   /** 컨슈머 그룹 보장 — 이미 있으면 그대로(ING-01 기동 · MKSTREAM) */
   async ensureGroup(stream: string, group: string): Promise<void> {
     assertSealed(stream);
@@ -148,17 +198,69 @@ export class DurableKeyClient {
       fromId,
     )) as [Buffer, [Buffer, Buffer[]][]][] | null;
     if (!reply) return [];
-    const out: StreamRecord[] = [];
-    for (const [, entries] of reply) {
-      for (const [id, fields] of entries) {
-        for (let i = 0; i + 1 < fields.length; i += 2) {
-          if (fields[i]?.toString() === STREAM_PAYLOAD_FIELD) {
-            out.push({ id: id.toString(), payload: fields[i + 1] as Buffer });
-          }
-        }
-      }
+    return reply.flatMap(([, entries]) => recordsOf(entries));
+  }
+
+  /**
+   * XAUTOCLAIM — idle 기준을 넘긴 PEL을 consumer 앞으로 인수한다(ING-06 · 06_pipeline/03 §회수).
+   * 명령 연결로 부른다(블로킹이 아니다). 페이로드가 이진이라 Buffer 응답으로 받는다.
+   */
+  async autoClaim(
+    stream: string,
+    group: string,
+    consumer: string,
+    minIdleMs: number,
+    start: string,
+    count: number,
+  ): Promise<AutoClaimResult> {
+    assertSealed(stream);
+    const reply = (await this.redis.callBuffer(
+      'XAUTOCLAIM',
+      stream,
+      group,
+      consumer,
+      String(minIdleMs),
+      start,
+      'COUNT',
+      String(count),
+    )) as [Buffer, [Buffer, Buffer[] | null][], Buffer[]?];
+    const [next, entries, deleted] = reply;
+    return {
+      next: next.toString(),
+      records: recordsOf(entries ?? []),
+      deleted: (deleted ?? []).map((d) => d.toString()),
+    };
+  }
+
+  /**
+   * DLQ 격리 — 원 엔트리마다 XADD MAXLEN ~ 한 번(파이프라인 1회). 필드는 DLQ_FIELDS(원 본문 p · 원 ID · 사유 · 원 배치 토큰).
+   * 토큰은 재시도 소진 사유만 싣는다 — 해독 불가는 필드를 두지 않는다. 계약(DlqEntryMeta)과 어긋나면 쓰지 않고 던진다.
+   * 하나라도 실패하면 던진다 — 호출자는 XACK하지 않는다(PEL에 남아 회수가 다시 시도한다).
+   */
+  async appendDlq(stream: string, items: readonly DlqItem[], maxlen: number): Promise<void> {
+    assertSealed(stream);
+    if (items.length === 0) return;
+    const p = this.redis.pipeline();
+    for (const it of items) {
+      const meta = DlqEntryMeta.parse({
+        originId: it.originId,
+        reason: it.reason,
+        batchToken: it.batchToken,
+      });
+      const fields: (string | Buffer)[] = [
+        DLQ_FIELDS.payload,
+        it.payload,
+        DLQ_FIELDS.originId,
+        meta.originId,
+        DLQ_FIELDS.reason,
+        meta.reason,
+      ];
+      if (meta.batchToken) fields.push(DLQ_FIELDS.batchToken, meta.batchToken);
+      p.xadd(stream, 'MAXLEN', '~', maxlen, '*', ...fields);
     }
-    return out;
+    const res = await p.exec();
+    if (!res) throw new Error('파이프라인 응답 없음');
+    for (const [err] of res) if (err) throw err;
   }
 
   async ack(stream: string, group: string, ids: string[]): Promise<number> {

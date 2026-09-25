@@ -1,4 +1,4 @@
-// COL 기동 — 기동 로드가 끝나면 설비마다 폴링 루프 하나를 띄운다(S2 폴링 1루프)
+// COL 기동 — 기동 로드가 끝나면 설비마다 폴러 하나(연결 1 · 스캔 그룹마다 루프 1)를 띄운다
 import {
   Inject,
   Injectable,
@@ -9,6 +9,7 @@ import {
 import type { GroupBacklog } from '../../common/redis/durable-key-client';
 import { CollectDefinitionService } from './collect-definition.service';
 import { pointsEmitted } from './collector-metrics';
+import { DEADBAND_FILTER_PORT, type DeadbandFilterPort } from './deadband-filter';
 import { DevicePoller } from './device-poller';
 import { POINT_BUFFER_PORT, type PointBufferPort } from './point-buffer.port';
 
@@ -21,21 +22,23 @@ export class CollectorService implements OnApplicationBootstrap, OnModuleDestroy
   constructor(
     private readonly definitions: CollectDefinitionService,
     @Inject(POINT_BUFFER_PORT) private readonly buffer: PointBufferPort,
+    @Inject(DEADBAND_FILTER_PORT) private readonly filter: DeadbandFilterPort,
   ) {}
 
   onApplicationBootstrap() {
     void this.definitions.whenLoaded().then((defs) => {
       if (this.stopped) return;
       const polled = defs.filter((def) => {
-        if (def.blocks.length > 0) return true;
+        if (def.groups.length > 0) return true;
         this.log.warn(`설비 ${def.deviceId}(${def.deviceCode}) — 폴링할 태그 없음 · 루프를 띄우지 않는다`);
         return false;
       });
       polled.forEach((def, i) => {
         // 시작 위상 = 벽시계 주기 격자 + 설비별 균등 오프셋((i + 0.5) × 주기 ÷ N) — 설비들의 발행이 창 안에 고르게 퍼지고
         // 기동마다 같은 위상이 된다. 0.5칸은 모드 A 생성기의 격자(k = floor(now ÷ 주기)) 갱신 순간과 겹치지 않게 비킨다.
-        const offset = ((i + 0.5) * def.scanRateMs) / polled.length;
-        const p = new DevicePoller(def, this.buffer, undefined, offset);
+        // 스캔 그룹이 여럿이면 설비 몫 (i + 0.5) ÷ N을 그룹마다 자기 주기에 곱한다(DevicePoller phaseFraction).
+        const fraction = (i + 0.5) / polled.length;
+        const p = new DevicePoller(def, this.buffer, undefined, fraction, this.filter);
         this.pollers.set(def.deviceId, p);
         p.start();
       });

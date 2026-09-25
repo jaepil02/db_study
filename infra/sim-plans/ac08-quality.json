@@ -1,0 +1,22 @@
+{
+  "v": 1,
+  "note": "AC-08 품질 전파 — 티어 S 시드(5020~5024 · 태그 50 = 레지스터 0~99 · timeout_ms 3000). 예외 1건: 5021 전 블록에 예외 2 → 그 설비 행 품질 2(BAD_COMM). 지연 1건: 5022 응답 4000 ms 지연 → timeout 3000 초과 · 행 없음(col_poll_timeouts_total). 범위 밖 값(4)은 SIM이 아니라 GEN 모드 A가 만든다 — seed --range와 GEN_PROFILE(SPIKE 등)로 건다. 오프셋은 SIM 포트 기동 완료 기준.",
+  "faults": [
+    {
+      "ports": { "from": 5021, "to": 5021 },
+      "registers": { "start": 0, "count": 100 },
+      "kind": "exception",
+      "exceptionCode": 2,
+      "startOffsetMs": 60000,
+      "durationMs": 60000
+    },
+    {
+      "ports": { "from": 5022, "to": 5022 },
+      "registers": { "start": 0, "count": 100 },
+      "kind": "delay",
+      "delayMs": 4000,
+      "startOffsetMs": 150000,
+      "durationMs": 60000
+    }
+  ]
+}

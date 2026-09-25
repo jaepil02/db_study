@@ -5,6 +5,12 @@ import { type AppConfig, requireStreamMaxlen } from '../../config/app-config';
 import { APP_CONFIG } from '../../config/config.module';
 import { CollectDefinitionModule } from './collect-definition.module';
 import { CollectorService } from './collector.service';
+import {
+  DEADBAND_FILTER_PORT,
+  type DeadbandFilterPort,
+  PassthroughFilter,
+  TagDeadbandFilter,
+} from './deadband-filter';
 import { POINT_BUFFER_PORT, type PointBufferPort } from './point-buffer.port';
 import { RedisStreamBuffer } from './redis-stream-buffer';
 
@@ -27,7 +33,14 @@ function pointBufferFactory(
   return buffer;
 }
 
-/** COL — 수집 정의 로드 · 폴링 · 디코딩 · 품질 · 발행(COL-01 · 02 · 04 · 05 · 07) */
+/** SW-10 포트 선택 — on = TagDeadbandFilter · off(기본) = PassthroughFilter(02_features/13 · 04_architecture/02) */
+export function deadbandFilterFactory(cfg: AppConfig, switches: SwitchRegistry): DeadbandFilterPort {
+  const on = cfg.switches['SW-10'] === 'on';
+  switches.register('SW-10', on ? 'on' : 'off', on ? 'TagDeadbandFilter' : 'PassthroughFilter');
+  return on ? new TagDeadbandFilter() : new PassthroughFilter();
+}
+
+/** COL — 수집 정의 로드 · 폴링 · 블록 병합 · 디코딩 · 품질 · 데드밴드 · 발행(COL-01~07) */
 @Module({
   imports: [CollectDefinitionModule],
   providers: [
@@ -35,6 +48,11 @@ function pointBufferFactory(
       provide: POINT_BUFFER_PORT,
       useFactory: pointBufferFactory,
       inject: [APP_CONFIG, SwitchRegistry, DurableKeyClient],
+    },
+    {
+      provide: DEADBAND_FILTER_PORT,
+      useFactory: deadbandFilterFactory,
+      inject: [APP_CONFIG, SwitchRegistry],
     },
     CollectorService,
   ],

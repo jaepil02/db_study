@@ -98,8 +98,7 @@ export class RealtimeService {
   private async restore(
     deviceId: number,
   ): Promise<{ points: LatestPoint[]; source: Source; restored: boolean }> {
-    const lockKey = `lock:rebuild:rt:${deviceId}`;
-    const lock = await this.cache.acquireLock(lockKey, RESTORE_LOCK_TTL_MS);
+    const lock = await this.cache.acquireRtRebuildLock(deviceId, RESTORE_LOCK_TTL_MS);
     if (lock.token || lock.failed) {
       let rows: LatestPoint[];
       try {
@@ -109,7 +108,7 @@ export class RealtimeService {
         ]);
       } catch {
         // ClickHouse 불가는 일시적이라 락을 즉시 푼다 — 복구 직후 첫 요청이 복원해야 한다
-        if (lock.token) await this.cache.releaseLock(lockKey, lock.token);
+        if (lock.token) await this.cache.releaseRtRebuildLock(deviceId, lock.token);
         restores.inc({ result: 'failed' });
         return { points: [], source: 'restored', restored: true };
       }
@@ -124,7 +123,7 @@ export class RealtimeService {
       } catch {
         // 워밍 실패는 응답을 막지 않는다 — 복원 값은 이미 손에 있다
       }
-      if (lock.token) await this.cache.releaseLock(lockKey, lock.token);
+      if (lock.token) await this.cache.releaseRtRebuildLock(deviceId, lock.token);
       restores.inc({ result: 'success' });
       return { points: rows, source: 'restored', restored: true };
     }

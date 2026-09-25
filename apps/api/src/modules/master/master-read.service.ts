@@ -13,8 +13,6 @@ import {
   tagMetaToHash,
 } from './tag-meta';
 
-export const tagMetaKey = (tagId: number) => `cache:tagmeta:${tagId}`;
-
 @Injectable()
 export class MasterReadService {
   constructor(
@@ -46,7 +44,7 @@ export class MasterReadService {
    */
   async tagMeta(tagIds: number[]): Promise<Map<number, TagMeta | null>> {
     const out = new Map<number, TagMeta | null>();
-    const cached = await this.cache.hgetallMany(tagIds.map(tagMetaKey));
+    const cached = await this.cache.getTagMetaMany(tagIds);
     const missing: number[] = [];
     tagIds.forEach((id, i) => {
       const h = cached[i];
@@ -70,6 +68,6 @@ export class MasterReadService {
 
   /** 사본 워밍 — COL-01 기동 로드 · 미스 보충이 부른다. 실패는 래퍼가 삼킨다(캐시 계열 degrade) */
   async warm(m: TagMeta): Promise<void> {
-    await this.cache.hsetWithTtl(tagMetaKey(m.tagId), tagMetaToHash(m), TAGMETA_TTL_SECONDS);
+    await this.cache.setTagMeta(m.tagId, tagMetaToHash(m), TAGMETA_TTL_SECONDS);
   }
 }

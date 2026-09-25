@@ -99,23 +99,45 @@ async function runClickHouse() {
       .filter((f) => /^\d{3}_.+\.sql$/.test(f))
       .sort();
     for (const f of files) {
-      const sql = readFileSync(join(CH_DIR, f), 'utf8')
+      // 파일 하나에 문장이 여럿일 수 있다(006 — MV 둘) · 줄 끝 세미콜론으로 가른다
+      const statements = readFileSync(join(CH_DIR, f), 'utf8')
         .split('\n')
         .filter((l) => !l.trimStart().startsWith('--'))
         .join('\n')
-        .trim()
-        .replace(/;\s*$/, '');
-      await ch.command({ query: sql });
-      process.stdout.write(`ch: ${f} 적용(멱등)\n`);
+        .split(/;\s*(?:\n|$)/)
+        .map((q) => q.trim())
+        .filter(Boolean);
+      for (const query of statements) await ch.command({ query });
+      process.stdout.write(`ch: ${f} 적용(멱등 · 문장 ${statements.length})\n`);
     }
   } finally {
     await ch.close();
   }
 }
 
+/**
+ * pg_partman 준비 — 확장 생성은 관리자만 할 수 있다(신뢰 확장이 아니다). 004 · 007이 app_owner로 create_parent를 부르므로
+ * 여기서 schema partman · 확장 · app_owner 권한을 멱등하게 맞춘다(09_tech_stack/03 §PostgreSQL 확장 · 파생 이미지 infra/postgres/Dockerfile).
+ */
+async function ensurePartman(adminUrl: string) {
+  const client = new Client({ connectionString: adminUrl });
+  await client.connect();
+  try {
+    await client.query('CREATE SCHEMA IF NOT EXISTS partman');
+    await client.query('CREATE EXTENSION IF NOT EXISTS pg_partman SCHEMA partman');
+    await client.query('GRANT ALL ON SCHEMA partman TO app_owner');
+    await client.query('GRANT ALL ON ALL TABLES IN SCHEMA partman TO app_owner');
+    await client.query('GRANT EXECUTE ON ALL FUNCTIONS IN SCHEMA partman TO app_owner');
+    await client.query('GRANT EXECUTE ON ALL PROCEDURES IN SCHEMA partman TO app_owner');
+  } finally {
+    await client.end();
+  }
+}
+
 async function main() {
   const adminUrl = pgUrl('postgres', secret('POSTGRES_ADMIN_PASSWORD'));
   await runPg(adminUrl, { file: BOOTSTRAP });
+  await ensurePartman(adminUrl);
   await setRolePasswords(adminUrl);
   await runPg(pgUrl('app_owner', secret('APP_OWNER_PASSWORD')), {});
   await runClickHouse();

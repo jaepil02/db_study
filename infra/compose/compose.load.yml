@@ -27,3 +27,9 @@ services:
       # V8 힙 상한은 컨테이너 상한보다 낮게 — OOM Killer보다 GC 압박이 먼저 신호를 낸다(04_architecture/03)
       NODE_OPTIONS: --max-old-space-size=1536
       UV_THREADPOOL_SIZE: "8"
+
+  # 생성기 전용 프로세스(profile datagen) — MAXLEN(적체 임계의 분모)이 프로파일에서 나온다 · 메모리 상한은 프로파일 표 밖(04_architecture/03 잠정 배치)
+  datagen:
+    environment:
+      MEMORY_PROFILE: load
+      WORKER_POOL_SIZE: "2"

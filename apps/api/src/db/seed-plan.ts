@@ -46,3 +46,49 @@ export function seedDevices(p: SeedPlan): SeedDevice[] {
     })),
   }));
 }
+
+/** 모든 태그에 같은 값으로 거는 시드 옵션 — 데드밴드(SW-10 실험) · 범위(BAD_RANGE 실험 · AC-08) */
+export interface SeedOptions {
+  /** tag_master.deadband — 공학 단위 절대값 · 기본 0(= 데드밴드 없음) */
+  deadband: number;
+  /** tag_master.range_min · range_max — 기본 NULL(범위 판정 없음) */
+  range: { min: number; max: number } | null;
+}
+
+function optValue(argv: readonly string[], name: string): string | null {
+  const i = argv.indexOf(name);
+  if (i < 0) return null;
+  const v = argv[i + 1];
+  if (v === undefined || v.startsWith('--')) throw new Error(`${name} 값이 없다`);
+  return v;
+}
+
+/**
+ * --deadband <값> · --range <min>,<max> — 제약은 tag_master CHECK와 같다(deadband ≥ 0 · range_min < range_max).
+ * 어기면 트랜잭션 전에 거부한다 — CHECK 위반을 롤백으로 알게 되면 어느 옵션이 틀렸는지 문장이 흐려진다.
+ */
+export function parseSeedOptions(argv: readonly string[]): SeedOptions {
+  const db = optValue(argv, '--deadband');
+  const deadband = db === null ? 0 : Number(db);
+  if (!Number.isFinite(deadband) || deadband < 0) throw new Error(`--deadband ${db} — 0 이상 유한 수`);
+  const rg = optValue(argv, '--range');
+  let range: SeedOptions['range'] = null;
+  if (rg !== null) {
+    const parts = rg.split(',');
+    const [min, max] = parts.map((x) => (x.trim() === '' ? Number.NaN : Number(x)));
+    if (
+      parts.length !== 2 ||
+      !Number.isFinite(min) ||
+      !Number.isFinite(max) ||
+      !((min as number) < (max as number))
+    )
+      throw new Error(`--range ${rg} — <min>,<max> 유한 수 · min < max`);
+    range = { min: min as number, max: max as number };
+  }
+  return { deadband, range };
+}
+
+/** seed 완료 줄에 싣는 옵션 문장 — 측정 기록이 시드 조건을 로그에서 읽는다 */
+export function describeSeedOptions(o: SeedOptions): string {
+  return `deadband ${o.deadband} · range ${o.range ? `${o.range.min},${o.range.max}` : 'NULL'}`;
+}

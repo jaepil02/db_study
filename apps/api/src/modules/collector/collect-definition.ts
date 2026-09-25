@@ -1,7 +1,7 @@
 // COL-01 수집 정의 — 기동 로드 결과의 모양(정본 docs/06_pipeline/02_collect.md §기동 로드)
-// 설비 · 접속 설정 · 활성 태그를 한 번 읽어 SIM(포트) · GEN 모드 A(주소) · COL(폴링)이 같은 사본을 쓴다.
+// 설비 · 접속 설정 · 활성 태그를 한 번 읽어 SIM(포트 · 영역 크기) · GEN 모드 A(주소 · 타입) · COL(폴링)이 같은 사본을 쓴다.
 import type { TagMeta } from '../master/tag-meta';
-import { isLoopbackHost } from './decode';
+import { DATA_TYPE_WORDS, isLoopbackHost, isRegisterDataType, isWordOrder } from './decode';
 import { planBlocks, type RequestBlock } from './request-blocks';
 
 export interface DeviceRow {
@@ -15,28 +15,40 @@ export interface DeviceRow {
   maxRegsPerRequest: number;
 }
 
-/** 설비 하나의 수집 정의 — S2는 스캔 그룹 1(폴링 1루프) */
-export interface DeviceDef extends DeviceRow {
-  /** 루프백 host = 시뮬레이션 설비 — SIM이 포트를 띄우고 정상 값은 SIMULATED(9) */
-  simulated: boolean;
+/** 스캔 그룹 = 설비 × scan_rate_ms — 그룹마다 폴링 루프 하나(COL-02 · S3) */
+export interface ScanGroup {
   scanRateMs: number;
   tags: TagMeta[];
   blocks: RequestBlock<TagMeta>[];
 }
 
-/** FLOAT32 = 2워드 — S2 디코딩이 다루는 유일한 타입 */
-export const FLOAT32_WORDS = 2;
+export interface DeviceDef extends DeviceRow {
+  /** 루프백 host = 시뮬레이션 설비 — SIM이 포트를 띄우고 정상 값은 SIMULATED(9) */
+  simulated: boolean;
+  /** 폴링하는 태그 전부(그룹 합) — SIM 영역 크기 · 모드 A 쓰기 대상 */
+  tags: TagMeta[];
+  /** scan_rate_ms 오름차순 */
+  groups: ScanGroup[];
+}
 
-/** S2가 읽을 수 있는 태그인가 — 아니면 제외 사유 */
+/** 태그의 레지스터 폭 — 지원 타입만 부른다(unsupported가 먼저 거른다) */
+export function wordsOf(t: TagMeta): number {
+  return isRegisterDataType(t.dataType) ? DATA_TYPE_WORDS[t.dataType] : 0;
+}
+
+/** 읽을 수 있는 태그인가 — 아니면 제외 사유(BOOL · FC01 · FC02는 지원하지 않는다 — §BOOL 판정) */
 function unsupported(t: TagMeta): string | null {
-  if (t.functionCode !== 3) return `function_code ${t.functionCode} — S2는 FC03만`;
-  if (t.dataType !== 'FLOAT32' || t.wordOrder !== 'ABCD')
-    return `${t.dataType} · ${String(t.wordOrder)} — S2는 FLOAT32 · ABCD만(S3 범위)`;
+  if (t.functionCode !== 3 && t.functionCode !== 4)
+    return `function_code ${t.functionCode} — FC03 · FC04만(FC01 · FC02 시드 금지 유지)`;
+  if (!isRegisterDataType(t.dataType))
+    return `data_type ${t.dataType} — 레지스터 비트 BOOL은 지원하지 않는다`;
+  if (DATA_TYPE_WORDS[t.dataType] > 1 && !isWordOrder(t.wordOrder))
+    return `${t.dataType} · word_order ${String(t.wordOrder)} — 다중 워드 타입은 ABCD · CDAB · BADC · DCBA 중 하나`;
   return null;
 }
 
 /**
- * 설비 행 × 활성 태그 → 수집 정의. 지원하지 않는 태그 · 두 번째 이후 스캔 그룹은 경고와 함께 뺀다(S3 범위).
+ * 설비 행 × 활성 태그 → 수집 정의. 지원하지 않는 태그 · 요청 상한보다 넓은 태그는 경고와 함께 뺀다.
  * 태그가 하나도 남지 않은 설비도 정의에 남긴다 — SIM 포트는 설비 단위다.
  */
 export function buildDeviceDefs(
@@ -56,30 +68,19 @@ export function buildDeviceDefs(
     byDevice.set(t.deviceId, list);
   }
   return devices.map((d) => {
-    let own = byDevice.get(d.deviceId) ?? [];
     const limit = Math.min(d.maxRegsPerRequest, 125);
-    if (limit < FLOAT32_WORDS) {
+    const own = (byDevice.get(d.deviceId) ?? []).filter((t) => {
+      if (wordsOf(t) <= limit) return true;
       warn(
-        `설비 ${d.deviceId} — max_regs_per_request ${d.maxRegsPerRequest} < FLOAT32 폭 2 · 태그 전부 제외`,
+        `태그 ${t.tagId}(${t.tagCode}) 제외 — 폭 ${wordsOf(t)}워드 > 설비 ${d.deviceId} 요청 상한 ${limit}`,
       );
-      own = [];
-    }
-    // S2는 폴링 1루프 — 가장 짧은 scan_rate_ms 그룹만 돈다. 여러 스캔 그룹은 S3(설비 연결 1 위의 루프 여럿)
+      return false;
+    });
     const rates = [...new Set(own.map((t) => t.scanRateMs))].sort((a, b) => a - b);
-    const scanRateMs = rates[0] ?? 0;
-    if (rates.length > 1) {
-      const dropped = own.filter((t) => t.scanRateMs !== scanRateMs).map((t) => t.tagId);
-      warn(
-        `설비 ${d.deviceId} — 스캔 그룹 ${rates.length}개 · S2는 ${scanRateMs} ms만 폴링 · 제외 태그 ${dropped.join(',')}`,
-      );
-      own = own.filter((t) => t.scanRateMs === scanRateMs);
-    }
-    return {
-      ...d,
-      simulated: isLoopbackHost(d.host),
-      scanRateMs,
-      tags: own,
-      blocks: planBlocks(own, () => FLOAT32_WORDS, limit),
-    };
+    const groups = rates.map((scanRateMs) => {
+      const gt = own.filter((t) => t.scanRateMs === scanRateMs);
+      return { scanRateMs, tags: gt, blocks: planBlocks(gt, wordsOf, limit) };
+    });
+    return { ...d, simulated: isLoopbackHost(d.host), tags: own, groups };
   });
 }

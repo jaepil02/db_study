@@ -1,0 +1,13 @@
+<!-- dict_tag 소스 접속 — 정본 docs/05_data_stores/03_clickhouse_schema.md §dict_tag · docs/12_security/02_secrets_config.md
+     비밀번호는 파일에 쓰지 않고 컨테이너 환경변수 CH_READER_PASSWORD에서 읽는다(Compose가 .env에서 넘긴다). -->
+<clickhouse>
+    <named_collections>
+        <pg_dict>
+            <host>postgres</host>
+            <port>5432</port>
+            <user>ch_reader</user>
+            <password from_env="CH_READER_PASSWORD"/>
+            <database>plc</database>
+        </pg_dict>
+    </named_collections>
+</clickhouse>

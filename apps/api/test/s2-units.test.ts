@@ -109,7 +109,7 @@ describe('시계열 TTL 구간 · 정규화 키', () => {
     const c = cacheKey({ tagIds: [1, 2, 3], fromMs: 1, toMs: 2, maxPoints: 500 });
     expect(a).toBe(b);
     expect(a).not.toBe(c);
-    expect(a).toMatch(/^cache:q:[0-9a-f]{40}$/);
+    expect(a).toMatch(/^[0-9a-f]{40}$/);
   });
 });
 

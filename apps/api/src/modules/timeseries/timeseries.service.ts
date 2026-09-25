@@ -1,6 +1,6 @@
 // F-04 시계열 조회 — 판정 트리 정본 docs/06_pipeline/06_timeseries_read.md · 표면 07_api/05 #1
 // S2 범위(TSQ-01 · 04): raw 고정 · 조회 캐시(SW-03). 해상도 자동 선택 · 상향 · 키 시간 스냅(SW-04) · 스탬피드 락(SW-05) · LTTB는 S4.
-// 태그명 · 단위는 Dictionary(dict_tag · TSQ-07)가 붙이는데 dict_tag는 S3에 생긴다 — S2 응답은 null이다.
+// 태그명 · 단위는 Dictionary(dict_tag · TSQ-07)가 조회 시점에 붙인다(S3) — PostgreSQL이 멈춰도 마지막 적재 값이 붙는다.
 import { createHash } from 'node:crypto';
 import {
   distinctTagIds,
@@ -53,7 +53,7 @@ export function classify(toMs: number, nowMs: number): Freshness {
   return toMs >= currentBucketStart ? 'current' : 'past';
 }
 
-/** 정규화 키 — 태그 정렬 · 기본값 제거 · SHA-1(스냅 없음 — SW-04는 S4) */
+/** 정규화 키의 SHA-1 — 태그 정렬 · 기본값 제거(스냅 없음 — SW-04는 S4) · 접두 cache:q:는 래퍼가 붙인다 */
 export function cacheKey(q: { tagIds: number[]; fromMs: number; toMs: number; maxPoints: number }): string {
   const norm = JSON.stringify({
     i: 'raw',
@@ -62,7 +62,7 @@ export function cacheKey(q: { tagIds: number[]; fromMs: number; toMs: number; ma
     to: q.toMs,
     ...(q.maxPoints !== TIMESERIES_MAX_POINTS_DEFAULT ? { m: q.maxPoints } : {}),
   });
-  return `cache:q:${createHash('sha1').update(norm).digest('hex')}`;
+  return createHash('sha1').update(norm).digest('hex');
 }
 
 @Injectable()
@@ -113,6 +113,28 @@ export class TimeseriesService {
     return body;
   }
 
+  /**
+   * 메타 부착(TSQ-07 · 06_pipeline/06 §다운샘플 · 메타 부착) — 요청 태그 배열을 dictGet 한 번으로.
+   * 사전에 없는 태그는 기본값 빈 문자열로 온다 — 이름 없는 태그가 조회에서 드러나는 자리다(07_cross_store_consistency).
+   * 사전 조회 실패(생성 전 · 소스 불가로 한 번도 적재되지 않음)는 결과를 막지 않는다 — null로 낸다.
+   */
+  private async tagMeta(tagIds: number[]): Promise<Map<number, { name: string; unit: string }>> {
+    try {
+      const rs = await this.ch.client.query({
+        query: `SELECT tag_id,
+                       dictGet('plc.dict_tag', 'tag_name', toUInt64(tag_id)) AS name,
+                       dictGet('plc.dict_tag', 'unit', toUInt64(tag_id))     AS unit
+                  FROM (SELECT arrayJoin({tags:Array(UInt32)}) AS tag_id)`,
+        query_params: { tags: tagIds },
+        format: 'JSONEachRow',
+      });
+      const rows = await rs.json<{ tag_id: number; name: string; unit: string }>();
+      return new Map(rows.map((r) => [Number(r.tag_id), { name: r.name, unit: r.unit }]));
+    } catch {
+      return new Map();
+    }
+  }
+
   private async fromSource(tagIds: number[], fromMs: number, toMs: number): Promise<TimeseriesQueryBody> {
     sourceQueries.inc();
     let rows: { tag_id: number; ts_ms: string; value: number; quality: number }[];
@@ -131,6 +153,7 @@ export class TimeseriesService {
     } catch {
       throw new ApiError('timeseries.clickhouse_unavailable', 'ClickHouse에 접속할 수 없다');
     }
+    const meta = await this.tagMeta(tagIds);
     const byTag = new Map<number, number[][]>(tagIds.map((t) => [t, []]));
     for (const r of rows)
       byTag.get(Number(r.tag_id))?.push([Number(r.ts_ms), Number(r.value), Number(r.quality)]);
@@ -144,7 +167,12 @@ export class TimeseriesService {
         downsampled: false,
         cached: false,
       },
-      series: tagIds.map((tagId) => ({ tagId, tagName: null, unit: null, points: byTag.get(tagId) ?? [] })),
+      series: tagIds.map((tagId) => ({
+        tagId,
+        tagName: meta.get(tagId)?.name ?? null,
+        unit: meta.get(tagId)?.unit ?? null,
+        points: byTag.get(tagId) ?? [],
+      })),
     };
   }
 }

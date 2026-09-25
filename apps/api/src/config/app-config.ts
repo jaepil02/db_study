@@ -4,8 +4,9 @@
 // 스위치의 실제 주입값은 runInfo · health가 보인다(09_tech_stack/04 §환경변수 역할 스위치 행 · 07_api/10 A형).
 // S1 범위: APP_ROLE · 스위치 11 · MEMORY_PROFILE · CAPACITY_TIER · COMMIT_HASH · WORKER_POOL_SIZE.
 // S2 추가: 저장소 접속 3(POSTGRES_URL · CLICKHOUSE_URL · REDIS_URL) — 비밀번호 자리는 Compose 변수 치환이 채운다(09_tech_stack/04).
+// S3 추가: SIM_FAULT_PLAN(정본 목록에 이미 있다) · INGEST_BATCH_PLAN · INGEST_LAB_FAULT · GEN_PROFILE(S3 신설 — 09_tech_stack/04 갱신).
 import { readFileSync } from 'node:fs';
-import { CAPACITY_TIER_NAMES, type CapacityTier } from '@db-study/shared';
+import { CAPACITY_TIER_NAMES, type CapacityTier, SIGNAL_PROFILES } from '@db-study/shared';
 import { z } from 'zod';
 
 export const APP_ROLES = ['all', 'api', 'worker', 'collector', 'datagen'] as const;
@@ -44,6 +45,14 @@ const EnvSchema = z.object({
   POSTGRES_URL: optional(z.url({ protocol: /^postgres(ql)?$/ })),
   CLICKHOUSE_URL: optional(z.url({ protocol: /^https?$/ })),
   REDIS_URL: optional(z.url({ protocol: /^rediss?$/ })),
+  // SIM 주입 계획 파일 경로 — 없으면 주입 없음 · 형식 검증 실패는 SIM 초기화가 기동을 거부한다(09_tech_stack/05)
+  SIM_FAULT_PLAN: optional(z.string().min(1)),
+  // 배치 안(ADR-09 · EXP-34) — A 컨슈머 N · 창 1초 · 동기 삽입(기본) · B 컨슈머 1 · 창 확대 · C async_insert 대기형
+  INGEST_BATCH_PLAN: z.enum(['A', 'B', 'C']).default('A'),
+  // 실험 전용 결함 주입(EXP-13) — crash-after-insert:n = n번째 배치 삽입 성공 뒤 XACK 전에 프로세스를 끝낸다 · 없으면 비활성
+  INGEST_LAB_FAULT: optional(z.string().regex(/^crash-after-insert:[1-9]\d*$/)),
+  // 모드 A 신호 프로파일 구성 — mixed · all · 8종 단독(06_pipeline/10 · EXP-14)
+  GEN_PROFILE: z.enum(['mixed', 'all', ...SIGNAL_PROFILES] as [string, ...string[]]).default('SINE'),
 });
 
 export interface AppConfig {
@@ -56,6 +65,11 @@ export interface AppConfig {
   /** 허용값 밖이라 기본 구현으로 대체한 스위치 — 기동 로그 경고로 낸다 */
   switchWarnings: string[];
   stores: { postgresUrl: string | null; clickhouseUrl: string | null; redisUrl: string | null };
+  simFaultPlan: string | null;
+  ingestBatchPlan: 'A' | 'B' | 'C';
+  /** 실험 전용 결함 주입 — 켜져 있으면 health 경고로 드러낸다 */
+  ingestLabFault: { kind: 'crash-after-insert'; afterBatches: number } | null;
+  genProfile: string;
 }
 
 export class ConfigRejectedError extends Error {}
@@ -91,8 +105,51 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
       clickhouseUrl: base.data.CLICKHOUSE_URL,
       redisUrl: base.data.REDIS_URL,
     },
+    simFaultPlan: base.data.SIM_FAULT_PLAN,
+    ingestBatchPlan: base.data.INGEST_BATCH_PLAN,
+    ingestLabFault: base.data.INGEST_LAB_FAULT
+      ? { kind: 'crash-after-insert', afterBatches: Number(base.data.INGEST_LAB_FAULT.split(':')[1]) }
+      : null,
+    genProfile: base.data.GEN_PROFILE,
   };
 }
+
+/** 배치 안별 적재 조정값 — 값 정본 docs/06_pipeline/03_ingest_batch.md(W · R · P · 컨슈머 수) · B · C 정의는 ADR-09 · EXP-34 */
+export interface IngestBatchParams {
+  plan: 'A' | 'B' | 'C';
+  consumers: number;
+  windowMs: number;
+  maxRows: number;
+  maxPayloadBytes: number;
+  asyncInsert: boolean;
+}
+
+export const INGEST_BATCH_PLANS: Record<'A' | 'B' | 'C', IngestBatchParams> = {
+  A: {
+    plan: 'A',
+    consumers: 3,
+    windowMs: 1000,
+    maxRows: 50_000,
+    maxPayloadBytes: 32 * 1024 * 1024,
+    asyncInsert: false,
+  },
+  B: {
+    plan: 'B',
+    consumers: 1,
+    windowMs: 5000,
+    maxRows: 50_000,
+    maxPayloadBytes: 32 * 1024 * 1024,
+    asyncInsert: false,
+  },
+  C: {
+    plan: 'C',
+    consumers: 3,
+    windowMs: 1000,
+    maxRows: 50_000,
+    maxPayloadBytes: 32 * 1024 * 1024,
+    asyncInsert: true,
+  },
+};
 
 export type StoreUrls = { postgresUrl: string; clickhouseUrl: string; redisUrl: string };
 
@@ -108,6 +165,16 @@ export function requireStoreUrls(cfg: AppConfig): StoreUrls {
     throw new ConfigRejectedError(`기동 거부 — 저장소 접속 환경변수 없음: ${missing.join(' · ')}`);
   }
   return { postgresUrl, clickhouseUrl, redisUrl };
+}
+
+/** 저장소 하나만 쓰는 실행(모드 B 단독 진입점 — PostgreSQL 태그 읽기 · Redis 발행)의 기동 조건 — 쓰지 않는 저장소 URL을 요구하지 않는다 */
+export function requireStoreUrl<K extends keyof StoreUrls>(cfg: AppConfig, key: K): string {
+  const v = cfg.stores[key];
+  if (!v) {
+    const env = { postgresUrl: 'POSTGRES_URL', clickhouseUrl: 'CLICKHOUSE_URL', redisUrl: 'REDIS_URL' }[key];
+    throw new ConfigRejectedError(`기동 거부 — 저장소 접속 환경변수 없음: ${env}`);
+  }
+  return v;
 }
 
 /**

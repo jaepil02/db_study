@@ -5,7 +5,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { buildDeviceDefs } from '../src/modules/collector/collect-definition';
 import { decodeFloat32Abcd, toEng } from '../src/modules/collector/decode';
 import { runCycle } from '../src/modules/collector/poll-cycle';
-import { type ModeATarget, writeTick } from '../src/modules/datagen/mode-a/register-writer';
+import { makeTarget, writeTick } from '../src/modules/datagen/mode-a/register-writer';
 import type { TagMeta } from '../src/modules/master/tag-meta';
 import { DeviceSimServer } from '../src/modules/plc-sim/device-sim-server';
 
@@ -46,10 +46,10 @@ describe('PlcSim ↔ Collector 루프백 왕복(FC03)', () => {
   });
 
   it('모드 A가 쓴 값 = FC03으로 읽어 디코딩한 값', async () => {
-    const targets: ModeATarget[] = tags.map((t) => ({ holding: sim.holding, tag: t, lastK: -1 }));
+    const targets = tags.map((t) => makeTarget(sim.holding, t, 'SINE'));
     const now = 1_757_400_000_000;
-    expect(writeTick(targets, now)).toBe(8);
-    expect(writeTick(targets, now + 10)).toBe(0); // 같은 k면 다시 쓰지 않는다
+    expect(writeTick(targets, now).written[0]).toBe(8);
+    expect(writeTick(targets, now + 10).written[0]).toBe(0); // 같은 k면 다시 쓰지 않는다
 
     const { data } = await client.readHoldingRegisters(0, 16);
     for (const [i, t] of tags.entries()) {
@@ -76,9 +76,11 @@ describe('PlcSim ↔ Collector 루프백 왕복(FC03)', () => {
       () => {},
     );
     if (!def) throw new Error('정의 없음');
-    const targets: ModeATarget[] = tags.map((t) => ({ holding: sim.holding, tag: t, lastK: -1 }));
+    const targets = tags.map((t) => makeTarget(sim.holding, t, 'SINE'));
     writeTick(targets, Date.now());
-    const r = await runCycle(client, def);
+    const g = def.groups[0];
+    if (!g) throw new Error('그룹 없음');
+    const r = await runCycle(client, def, g);
     expect(r.kind).toBe('entry');
     if (r.kind !== 'entry') return;
     expect(r.entry.tg).toEqual(tags.map((t) => t.tagId));

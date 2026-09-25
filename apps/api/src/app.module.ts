@@ -36,7 +36,7 @@ const ROLE_MODULES: Record<AppRole, Imports> = {
   api: [MasterModule, RealtimeModule, TimeseriesModule, MetricsModule],
   worker: [IngestModule, MetricsModule],
   collector: [MasterModule, PlcSimModule, DatagenModeAModule, CollectorModule, MetricsModule],
-  // 생성기 단독 실행 경로(S1 bench)는 저장소를 쓰지 않는다 — 모드 B · D는 S5에서 이 역할에 더한다
+  // 생성기 단독 실행 경로 — S1 bench(저장소 없음) · S3 모드 B(dist/mode-b.js · Nest 밖 진입점 · PostgreSQL 태그 읽기 + Redis 발행) · 모드 D는 S5
   datagen: [DatagenModule],
 };
 

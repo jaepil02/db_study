@@ -10,8 +10,9 @@ export const TIMESERIES_CACHE_PORT = Symbol('TimeseriesCachePort');
 export interface TimeseriesCachePort {
   readonly implName: 'RedisTimeseriesCache' | 'NoopTimeseriesCache';
   /** failed — 캐시 호출 실패로 미스가 된 경우(degrade) */
-  get(key: string): Promise<{ value: Buffer | null; failed: boolean }>;
-  set(key: string, json: Buffer, ttlSeconds: number): Promise<void>;
+  /** sha1 — 정규화 키의 해시(접두는 래퍼가 붙인다) */
+  get(sha1: string): Promise<{ value: Buffer | null; failed: boolean }>;
+  set(sha1: string, json: Buffer, ttlSeconds: number): Promise<void>;
 }
 
 export class RedisTimeseriesCache implements TimeseriesCachePort {
@@ -21,16 +22,16 @@ export class RedisTimeseriesCache implements TimeseriesCachePort {
     private readonly workers: WorkerPool,
   ) {}
 
-  async get(key: string): Promise<{ value: Buffer | null; failed: boolean }> {
-    const z = await this.cache.getBuffer(key);
+  async get(sha1: string): Promise<{ value: Buffer | null; failed: boolean }> {
+    const z = await this.cache.getQueryResult(sha1);
     if (!z.value) return z;
     const r = await this.workers.run<BytesResult>(z.value, 'gunzip');
     return { value: Buffer.from(r.data), failed: false };
   }
 
-  async set(key: string, json: Buffer, ttlSeconds: number): Promise<void> {
+  async set(sha1: string, json: Buffer, ttlSeconds: number): Promise<void> {
     const r = await this.workers.run<BytesResult>(json, 'gzip');
-    await this.cache.setWithTtl(key, Buffer.from(r.data), ttlSeconds);
+    await this.cache.setQueryResult(sha1, Buffer.from(r.data), ttlSeconds);
   }
 }
 

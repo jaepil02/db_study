@@ -49,7 +49,7 @@ describe('COL-04 디코딩 — FLOAT32 ABCD', () => {
   });
 });
 
-describe('COL-05 품질 — S2는 GOOD · SIMULATED만', () => {
+describe('COL-05 품질 — 정상 값의 출처 표지(9 · 0)', () => {
   it('루프백(127.0.0.0/8 · ::1)이면 SIMULATED(9)', () => {
     for (const h of ['127.0.0.1', '127.1.2.3', '::1', '::ffff:127.0.0.1']) {
       expect(isLoopbackHost(h)).toBe(true);
@@ -80,11 +80,11 @@ describe('요청 블록 분할', () => {
     expect(b[0]?.tags.map((t) => t.tag.tagId)).toEqual([1, 2, 3]);
   });
 
-  it('갭이 있으면 가른다(허용 갭 병합은 S3)', () => {
-    const b = planBlocks([tag(1, 0), tag(2, 2), tag(3, 10)], two, 125);
+  it('허용 갭(20)을 넘으면 가른다', () => {
+    const b = planBlocks([tag(1, 0), tag(2, 2), tag(3, 30)], two, 125);
     expect(b.map((x) => [x.start, x.count])).toEqual([
       [0, 4],
-      [10, 2],
+      [30, 2],
     ]);
   });
 
@@ -104,8 +104,8 @@ describe('요청 블록 분할', () => {
   });
 });
 
-describe('COL-01 수집 정의 — S2 범위 밖 태그 제외', () => {
-  it('FLOAT32 ABCD FC03이 아니면 경고 후 제외', () => {
+describe('COL-01 수집 정의 — 지원 밖 태그 제외', () => {
+  it('BOOL · FC01 · FC02 · 다중 워드의 word_order 없음은 경고 후 제외 · 16비트는 word_order 없이 받는다', () => {
     const warns: string[] = [];
     const [d] = buildDeviceDefs(
       [DEVICE],
@@ -114,39 +114,59 @@ describe('COL-01 수집 정의 — S2 범위 밖 태그 제외', () => {
         tag(2, 2, { wordOrder: 'CDAB' }),
         tag(3, 4, { dataType: 'INT16', wordOrder: null }),
         tag(4, 6, { functionCode: 4 }),
+        tag(5, 8, { dataType: 'BOOL', wordOrder: null }),
+        tag(6, 10, { functionCode: 1 }),
+        tag(7, 12, { functionCode: 2 }),
+        tag(8, 14, { wordOrder: null }),
       ],
       (m) => warns.push(m),
     );
-    expect(d?.tags.map((t) => t.tagId)).toEqual([1]);
-    expect(warns).toHaveLength(3);
+    expect(d?.tags.map((t) => t.tagId)).toEqual([1, 2, 3, 4]);
+    expect(warns).toHaveLength(4);
     expect(d?.simulated).toBe(true);
   });
 });
 
-/** 요청마다 시계를 1 ms씩 전진시키는 가짜 리더 — 레지스터 값은 주소 기반 */
+/** 요청마다 시계를 1 ms씩 전진시키는 가짜 리더 — 레지스터 값은 주소 기반(holding · input 같은 배열) */
 function fakeReader(words: number[], clock: { t: number }): RegisterReader {
-  return {
-    async readHoldingRegisters(address, length) {
-      clock.t += 1;
-      return { data: words.slice(address, address + length) };
-    },
+  const read = async (address: number, length: number) => {
+    clock.t += 1;
+    return { data: words.slice(address, address + length) };
   };
+  return { readHoldingRegisters: read, readInputRegisters: read };
 }
+
+function onlyGroup(def: ReturnType<typeof buildDeviceDefs>[number] | undefined) {
+  const g = def?.groups[0];
+  if (!def || !g) throw new Error('정의 없음');
+  return { def, g };
+}
+
+const failing = (e: unknown): RegisterReader => ({
+  readHoldingRegisters: async () => {
+    throw e;
+  },
+  readInputRegisters: async () => {
+    throw e;
+  },
+});
 
 describe('COL-07 엔트리 — StreamEntryV1 발행자 스키마', () => {
   const clockState = { t: 1_757_400_000_123 };
   const clock: Clock = { wallMs: () => clockState.t, monoMs: () => clockState.t };
 
-  it('블록 둘 — t0 = 첫 요청 송신 직전 · dt ≥ 0 · 스키마 통과', async () => {
-    const words = new Array(20).fill(0);
+  it('블록 둘(갭 38 > 20) — t0 = 첫 요청 송신 직전 · dt ≥ 0 · 스키마 통과', async () => {
+    const words = new Array(50).fill(0);
     words[0] = 0x4291;
     words[1] = 0x999a; // 72.8
-    words[10] = 0x3f80;
-    words[11] = 0x0000; // 1.0
-    const [def] = buildDeviceDefs([DEVICE], [tag(1, 0), tag(2, 10, { scale: 2, offsetValue: 1 })], () => {});
-    if (!def) throw new Error('정의 없음');
+    words[40] = 0x3f80;
+    words[41] = 0x0000; // 1.0
+    const { def, g } = onlyGroup(
+      buildDeviceDefs([DEVICE], [tag(1, 0), tag(2, 40, { scale: 2, offsetValue: 1 })], () => {})[0],
+    );
+    expect(g.blocks).toHaveLength(2);
     const start = clockState.t;
-    const r = await runCycle(fakeReader(words, clockState), def, clock);
+    const r = await runCycle(fakeReader(words, clockState), def, g, clock);
     expect(r.kind).toBe('entry');
     if (r.kind !== 'entry') return;
     expect(r.entry.t0).toBe(start);
@@ -160,34 +180,28 @@ describe('COL-07 엔트리 — StreamEntryV1 발행자 스키마', () => {
   });
 
   it('타임아웃이면 엔트리 없음 · 왕복은 +Inf', async () => {
-    const [def] = buildDeviceDefs([DEVICE], [tag(1, 0)], () => {});
-    if (!def) throw new Error('정의 없음');
-    const reader: RegisterReader = {
-      async readHoldingRegisters() {
-        // modbus-serial의 타임아웃은 Error가 아닌 평범한 객체다
-        throw { name: 'TransactionTimedOutError', message: 'Timed out', errno: 'ETIMEDOUT' };
-      },
-    };
-    const r = await runCycle(reader, def, clock);
+    const { def, g } = onlyGroup(buildDeviceDefs([DEVICE], [tag(1, 0)], () => {})[0]);
+    // modbus-serial의 타임아웃은 Error가 아닌 평범한 객체다
+    const reader = failing({ name: 'TransactionTimedOutError', message: 'Timed out', errno: 'ETIMEDOUT' });
+    const r = await runCycle(reader, def, g, clock);
     expect(r.kind).toBe('timeout');
     expect(r.rtts).toEqual([Number.POSITIVE_INFINITY]);
   });
 
-  it('비유한 값이면 사이클을 발행하지 않는다', async () => {
-    const [def] = buildDeviceDefs([DEVICE], [tag(1, 0)], () => {});
-    if (!def) throw new Error('정의 없음');
-    const r = await runCycle(fakeReader([0x7fc0, 0x0000], clockState), def, clock); // NaN
-    expect(r.kind).toBe('nonfinite');
+  it('비유한 값은 BAD_RANGE(4) · 싣는 값은 유한 자리 채움(0)', async () => {
+    const { def, g } = onlyGroup(buildDeviceDefs([DEVICE], [tag(1, 0)], () => {})[0]);
+    const r = await runCycle(fakeReader([0x7fc0, 0x0000], clockState), def, g, clock); // NaN
+    expect(r.kind).toBe('entry');
+    if (r.kind !== 'entry') return;
+    expect(r.entry.q).toEqual([QUALITY.BAD_RANGE]);
+    expect(r.entry.va).toEqual([0]);
+    expect(StreamEntryV1.safeParse(decodeEntry(encodeEntry({ ...r.entry, s: 1 }))).success).toBe(true);
   });
 
-  it('타임아웃이 아닌 오류는 던진다(루프 재기동)', async () => {
-    const [def] = buildDeviceDefs([DEVICE], [tag(1, 0)], () => {});
-    if (!def) throw new Error('정의 없음');
-    const reader: RegisterReader = {
-      async readHoldingRegisters() {
-        throw new Error('Port Not Open');
-      },
-    };
-    await expect(runCycle(reader, def, clock)).rejects.toThrow('Port Not Open');
+  it('타임아웃 · 예외 응답이 아닌 오류는 던진다(루프 재기동)', async () => {
+    const { def, g } = onlyGroup(buildDeviceDefs([DEVICE], [tag(1, 0)], () => {})[0]);
+    await expect(runCycle(failing(new Error('Port Not Open')), def, g, clock)).rejects.toThrow(
+      'Port Not Open',
+    );
   });
 });

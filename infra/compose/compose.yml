@@ -7,7 +7,12 @@ name: db_study
 
 services:
   postgres:
-    image: postgres:18.6-alpine
+    # 파생 이미지 — 공식 18.6-alpine + pg_partman(S3 · 버전 고정표) · infra/postgres/Dockerfile
+    build:
+      context: ../postgres
+      args:
+        PG_PARTMAN_VERSION: "5.5.0"
+    image: db_study-postgres:18.6-partman5.5.0
     restart: unless-stopped
     command: ["postgres", "-c", "config_file=/etc/postgresql/postgresql.conf"]
     environment:
@@ -36,12 +41,15 @@ services:
       CLICKHOUSE_USER: app
       CLICKHOUSE_PASSWORD: ${CLICKHOUSE_PASSWORD:?CLICKHOUSE_PASSWORD 필요}
       CLICKHOUSE_DEFAULT_ACCESS_MANAGEMENT: "1"
+      # dict_tag 소스 계정 비밀번호 — 설정 파일(named collection pg_dict)이 from_env로 읽는다 · DDL에 쓰지 않는다(12_security/02)
+      CH_READER_PASSWORD: ${CH_READER_PASSWORD:?CH_READER_PASSWORD 필요}
     volumes:
       - chdata:/var/lib/clickhouse
       - ../clickhouse/config.d/memory.xml:/etc/clickhouse-server/config.d/memory.xml:ro
       - ../clickhouse/config.d/server.xml:/etc/clickhouse-server/config.d/server.xml:ro
       - ../clickhouse/config.d/timezone.xml:/etc/clickhouse-server/config.d/timezone.xml:ro
       - ../clickhouse/config.d/prometheus.xml:/etc/clickhouse-server/config.d/prometheus.xml:ro
+      - ../clickhouse/config.d/named_collections.xml:/etc/clickhouse-server/config.d/named_collections.xml:ro
       - ../clickhouse/users.d/profiles.xml:/etc/clickhouse-server/users.d/profiles.xml:ro
     ports:
       - "127.0.0.1:8123:8123"
@@ -112,10 +120,16 @@ services:
       COLLECTOR_DEADBAND: ${COLLECTOR_DEADBAND:-off}
       LATEST_VALUE_WRITER: ${LATEST_VALUE_WRITER:-ingest}
       CAPACITY_TIER: ${CAPACITY_TIER:-}
+      # S3 — 배치 안(ADR-09 · EXP-34) · 모드 A 신호 프로파일 · SIM 주입 계획 경로(컨테이너 안) · 실험 전용 결함 주입(비우면 비활성)
+      INGEST_BATCH_PLAN: ${INGEST_BATCH_PLAN:-A}
+      GEN_PROFILE: ${GEN_PROFILE:-SINE}
+      SIM_FAULT_PLAN: ${SIM_FAULT_PLAN:-}
+      INGEST_LAB_FAULT: ${INGEST_LAB_FAULT:-}
       TZ: Asia/Seoul
       # MEMORY_PROFILE · WORKER_POOL_SIZE · NODE_OPTIONS · UV_THREADPOOL_SIZE는 프로파일 덮어쓰기 파일이 준다 — 상한과 이름이 한 파일에서 나온다
     volumes:
       - spooldata:/app/spool
+      - ../sim-plans:/app/sim-plans:ro
     ports:
       - "127.0.0.1:3000:3000"
     depends_on:
@@ -134,6 +148,39 @@ services:
       start_period: 30s
     cpu_shares: 1536
     cpuset: "0-4"
+
+  # 생성기 전용 프로세스(APP_ROLE=datagen · 모드 B — S3 당김) — 측정 대상과 CPU를 나누지 않게 11-12(k6 공유 · 04_architecture/03 잠정 행)
+  # up에 포함되지 않는다(profile datagen) — 실험 러너가 run으로만 부른다: docker compose --profile datagen run --rm datagen node dist/mode-b.js …
+  datagen:
+    profiles: ["datagen"]
+    image: db_study-api:${COMMIT_HASH:-dev}
+    environment:
+      APP_ROLE: datagen
+      POSTGRES_URL: ${POSTGRES_URL:?POSTGRES_URL 필요}
+      REDIS_URL: ${REDIS_URL:?REDIS_URL 필요}
+      # 스위치 11 — api와 같은 값을 받는다: 모드 B 출력의 switches가 측정 기록 4요소이고 조합 제약 #2 · #8 · #9 검사가 이 값을 본다(검수 D3)
+      REDIS_STREAM_BUFFER: ${REDIS_STREAM_BUFFER:-on}
+      REDIS_LATEST_CACHE: ${REDIS_LATEST_CACHE:-on}
+      REDIS_QUERY_CACHE: ${REDIS_QUERY_CACHE:-on}
+      CACHE_KEY_TIME_SNAP: ${CACHE_KEY_TIME_SNAP:-on}
+      CACHE_STAMPEDE_LOCK: ${CACHE_STAMPEDE_LOCK:-on}
+      REDIS_PUBSUB_FANOUT: ${REDIS_PUBSUB_FANOUT:-on}
+      WS_THROTTLE_MS: ${WS_THROTTLE_MS:-100}
+      INGEST_IDEMPOTENCY: ${INGEST_IDEMPOTENCY:-on}
+      CONTROL_TABLE_ENABLED: ${CONTROL_TABLE_ENABLED:-off}
+      COLLECTOR_DEADBAND: ${COLLECTOR_DEADBAND:-off}
+      LATEST_VALUE_WRITER: ${LATEST_VALUE_WRITER:-ingest}
+      INGEST_BATCH_PLAN: ${INGEST_BATCH_PLAN:-A}
+      CAPACITY_TIER: ${CAPACITY_TIER:-}
+      GEN_PROFILE: ${GEN_PROFILE:-SINE}
+      TZ: Asia/Seoul
+    depends_on:
+      redis:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+    cpu_shares: 512
+    cpuset: "11-12"
 
 volumes:
   pgdata:

@@ -3,7 +3,7 @@
 // 모듈은 이 연결을 직접 쓰지 않는다 — 키 계열별 래퍼 3종만 쓴다(ADR-13 · 05_data_stores/05 §키 계열별 래퍼 강제).
 import { Inject, Injectable, Logger, type OnApplicationShutdown } from '@nestjs/common';
 import Redis, { type RedisOptions } from 'ioredis';
-import { type AppConfig, requireStoreUrls } from '../../config/app-config';
+import { type AppConfig, requireStoreUrl } from '../../config/app-config';
 import { APP_CONFIG } from '../../config/config.module';
 
 /**
@@ -25,7 +25,7 @@ export class RedisConnections implements OnApplicationShutdown {
   private readonly extra: Redis[] = [];
 
   constructor(@Inject(APP_CONFIG) cfg: AppConfig) {
-    this.url = requireStoreUrls(cfg).redisUrl;
+    this.url = requireStoreUrl(cfg, 'redisUrl');
     this.command = new Redis(this.url, { ...COMMAND_OPTIONS, connectionName: 'api-command' });
     this.command.on('error', (e) => this.log.warn(`명령 연결 오류 — ${e.message}`));
   }

@@ -3,7 +3,7 @@
 import { Counter, Gauge, Histogram } from 'prom-client';
 import { appRegistry, LATENCY_BUCKETS_SECONDS } from '../../common/metrics/registry';
 
-/** 발행을 시도한 포인트 — XADD 실패로 버린 엔트리도 센다(S2는 스풀이 없다 · tag_raw와의 차가 버린 양이다) */
+/** 발행을 시도한 포인트 — XADD 실패로 버린 엔트리도 센다(스풀은 S6 · tag_raw와의 차가 버린 양이다) · 데드밴드 생략분은 넣지 않는다 */
 export const pointsEmitted = new Counter({
   name: 'points_emitted',
   help: 'Collector가 발행한 포인트',
@@ -46,6 +46,14 @@ export const colModbusRtt = new Histogram({
   name: 'col_modbus_rtt_seconds',
   help: 'Modbus 요청 왕복(초)',
   buckets: LATENCY_BUCKETS_SECONDS,
+  registers: [appRegistry],
+});
+
+/** 데드밴드(SW-10 on) 생략분 — 태그 레이블 없이 설비 단위 · 무손실 판정의 생성 측 차감(ADR-24) */
+export const colDeadbandSkipped = new Counter({
+  name: 'col_deadband_skipped_total',
+  help: '데드밴드 생략 포인트',
+  labelNames: ['device'],
   registers: [appRegistry],
 });
 

@@ -6,7 +6,7 @@ import { appRegistry } from '../src/common/metrics/registry';
 import { buildDeviceDefs } from '../src/modules/collector/collect-definition';
 import { DevicePoller } from '../src/modules/collector/device-poller';
 import type { PointBufferPort } from '../src/modules/collector/point-buffer.port';
-import { type ModeATarget, writeTick } from '../src/modules/datagen/mode-a/register-writer';
+import { makeTarget, writeTick } from '../src/modules/datagen/mode-a/register-writer';
 import type { TagMeta } from '../src/modules/master/tag-meta';
 import { DeviceSimServer } from '../src/modules/plc-sim/device-sim-server';
 
@@ -75,10 +75,10 @@ describe('DevicePoller', () => {
     for (const c of cleanups.splice(0)) await c();
   });
 
-  it('사이클마다 엔트리 1 — s는 1부터 · 블록 둘(갭) · 스키마 통과 · 적체 보관', async () => {
+  it('사이클마다 엔트리 1 — s는 1부터 · 갭 6은 한 블록(허용 갭 20) · 스키마 통과 · 적체 보관', async () => {
     const sim = new DeviceSimServer(12);
     const port = await sim.listen(0);
-    const targets: ModeATarget[] = tags.map((t) => ({ holding: sim.holding, tag: t, lastK: -1 }));
+    const targets = tags.map((t) => makeTarget(sim.holding, t, 'SINE'));
     writeTick(targets, Date.now());
     const published: Buffer[] = [];
     const buffer: PointBufferPort = {
@@ -88,10 +88,7 @@ describe('DevicePoller', () => {
       },
     };
     const def = defFor(port);
-    expect(def.blocks.map((b) => [b.start, b.count])).toEqual([
-      [0, 4],
-      [10, 2],
-    ]);
+    expect(def.groups[0]?.blocks.map((b) => [b.start, b.count])).toEqual([[0, 12]]);
     const poller = new DevicePoller(def, buffer);
     poller.start();
     cleanups.push(async () => {
