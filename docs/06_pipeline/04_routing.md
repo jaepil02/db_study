@@ -2,6 +2,7 @@
 
 > **대상**: ★★ 학습 목표 ②의 기전 정본 — 어느 모듈이 어떤 판정으로 어느 저장소에 쓰는가 · 분기 판정 트리 · ① 원시값 · ② 알람 판정(PostgreSQL 확정 · ClickHouse 전수 · Redis 핫 상태) · **생산 카운터 기전 판정** · ③ 업무 쓰기가 Stream을 타지 않는 경로 · 사본 쓰기(최신값 SW-11 · 캐시) · **대조군 동시 적재 기전(SW-09 · COPY 1회 · 재시도 없음)** · 모듈 × 저장소 쓰기 행렬 · 분기 계측 · 스위치별 경로 변화 · 정책 문서와의 1:1 대응 검산
 > **작성일**: 2026-09-24
+> **개정일**: 2026-09-25 — S3 구현 반영 — 대조군 COPY 타임아웃 현행 미정 → **창 폭 W ÷ 2**(배치 안 A 500 ms · 관계 COPY 타임아웃 + 삽입 p95 < W)
 > **개정일**: 2026-09-24 — 최종 정밀 검수 — COUNTER 랩어라운드 행에 W5 판정(표면이 증가량을 계산하지 않음) 반영
 > **개정일**: 2026-09-24 — W6 실험 채번 반영 — 메트릭 이름 · 기록 형식 · COPY 타임아웃 관계(정본 10_observability/01 · 06)
 > **원천**: 원본 data_flow.md §2 · §4 · §7 · §8 · §8.2 · §13(커밋 ff66a37) · 원본 architecture.md §5 · §9(커밋 ff66a37) · 원본 implementation_plan.md §7.2 · §7.3(커밋 ff66a37) · docs_plan.md 실행 계획 보정 #4 · 웨이브 인계 W4 06_pipeline/04 행 전부 · W3 05/10 · W4 06/04 행 · D-01 · D-04 · D-05 · ADR-03 · ADR-06 · ADR-10 · ADR-11 · ADR-17 · REQ-GLB-11 · 12 · 13 · REQ-ING-10 · 14 · 15 · REQ-WRK-01 · 05 · [../04_architecture/04_storage_split.md](../04_architecture/04_storage_split.md) 정책 정본 · [../05_data_stores/10_olap_vs_rdb_control.md](../05_data_stores/10_olap_vs_rdb_control.md) 대조군 저장소 계약
@@ -135,7 +136,7 @@
 ```
 
 - **③은 ②의 재시도 루프 밖이고 ② 성공 뒤 한 번이다.** 루프 안이면 ClickHouse 재시도마다 대조군에 같은 행이 쌓인다.
-- **③이 느리면 XACK가 늦는다 — 이것이 SW-09가 기본 off인 이유다.** 대조군 비용이 수집 경로의 지연으로 섞이므로 SW-09 on과 목표 ② 처리량 측정을 섞지 않는다(조합 제약 #4). COPY 타임아웃은 이 섞임의 상한이며 넘으면 실패로 센다 — 값은 2계층 · 현행 미정.
+- **③이 느리면 XACK가 늦는다 — 이것이 SW-09가 기본 off인 이유다.** 대조군 비용이 수집 경로의 지연으로 섞이므로 SW-09 on과 목표 ② 처리량 측정을 섞지 않는다(조합 제약 #4). COPY 타임아웃은 이 섞임의 상한이며 넘으면 실패로 센다 — 값은 2계층 · 현행 참고 창 폭 W의 절반(S3 판정 · 배치 안 A 500 ms · 나머지 절반이 삽입 p95의 몫). COPY가 타임아웃 뒤 서버에서 커밋됐다면 대조군에 행이 남아도 실패로 세어진다 — 실패 로그의 ts 범위와 구간 count 대조가 이 경우를 드러낸다.
 - **③과 ④ 사이의 크래시만 대조군 중복을 만든다.** 재전달된 배치는 ClickHouse에서 토큰으로 무시되고 대조군에는 한 번 더 들어간다 — 막지 않고 구간 count로 검출한다(한계 등재 #5).
 
 | 계약 | 규칙 | 어기면 |
@@ -251,7 +252,7 @@
 | 항목 | 상태 | 확정 자리 |
 |------|------|------|
 | 생산 카운터 파생 사실의 목적지 · 판정기 | 판정 — 현 범위에 두지 않는다 · 도입 조건 4 | 정책 문서 #12 · 이 문서 |
-| 대조군 COPY 타임아웃 값 | 2계층 · 현행 미정 — 관계 COPY 타임아웃 + ClickHouse 삽입 p95 < 창 폭 W(W6 · [../10_observability/06_experiment_catalog.md](../10_observability/06_experiment_catalog.md) §대조 실험 조정값) | S3 · 이 문서 · AC-21 동시 적재 기록 |
+| 대조군 COPY 타임아웃 값 | **S3 판정** — W ÷ 2(배치 안 A · C 500 ms · B 2,500 ms) · 관계 COPY 타임아웃 + ClickHouse 삽입 p95 < 창 폭 W(W6 · [../10_observability/06_experiment_catalog.md](../10_observability/06_experiment_catalog.md) §대조 실험 조정값) — 관계 성립은 AC-21 기록의 삽입 p95로 확인한다 | S3 · 이 문서 · AC-21 동시 적재 기록 |
 | 분기 대조 · 대조군 실패 계수 메트릭 이름 | **W6 판정** — ing_routed_rows_total{layer} · ing_control_copy_failures_total | [../10_observability/01_metrics_catalog.md](../10_observability/01_metrics_catalog.md) |
 | 구간 count 대조의 기록 형식 | **W6 판정** — 격자 단계 기록(절차 ②) · 기계 판독 블록 | [../10_observability/04_experiment_protocol.md](../10_observability/04_experiment_protocol.md) |
 | COUNTER 랩어라운드 조회 보정 | 잔여 — W5 판정: 조회 표면은 구간 증가량(max − min)을 계산하지 않는다 · 증가량 집계 요청 필드 없음 · 랩어라운드 보정은 표면이 생길 때의 몫 | [06_timeseries_read.md](./06_timeseries_read.md) · [../07_api/05_timeseries.md](../07_api/05_timeseries.md) |

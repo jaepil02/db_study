@@ -2,6 +2,7 @@
 
 > **대상**: db_study 문서군이 쓰는 산업 프로토콜 · 수집 · 시계열 저장 · Redis 스트림 · 조회 캐시 · 흐름 제어 · 실행 환경 · 실험 용어 — 용어 정의 정본
 > **작성일**: 2026-09-24
+> **개정일**: 2026-09-25 — S3 구현 반영 — 컨슈머 이름 ingest-{pid}-{n} → **ingest-{n}**(정본 04_id_conventions)
 > **개정일**: 2026-09-24 — W7 검수 반영 — MAXLEN 트리밍 · 백프레셔 행의 길이 기준 → **적체 기준**(ADR-21) · 캐시 스탬피드 락 키 lock:rebuild:{key} → **lock:rebuild:q:{sha1}**(정본 05_data_stores/05) — 용어 수 불변
 > **개정일**: 2026-09-24 — W6 실험 채번 반영 — 컨슈머 랙 정의를 lag + pending으로(정본 10_observability/01 · 06)
 > **원천**: 원본 tech_stack.md §5.3 · §6 · §7 · §10.1 · §10.3(커밋 ff66a37) · 원본 data_flow.md §3 · §3.1 · §3.3 · §4 · §4.2 · §4.3 · §6 · §7.2 · §9 · §10 · §12(커밋 ff66a37) · 원본 architecture.md §7 · §8 · §9 · §10 · §12(커밋 ff66a37)
@@ -68,7 +69,7 @@
 | Stream | 추가 전용 로그 자료구조. 엔트리마다 ID가 붙는다 | stream:plc:raw가 수집과 적재 사이의 **비동기 경계**다. 같은 프로세스여도 이 경계를 둔다 | 큐 — 소비하면 사라짐 · Stream은 XACK 뒤에도 트리밍 전까지 남는다 | [../06_pipeline/03_ingest_batch.md](../06_pipeline/03_ingest_batch.md) |
 | 엔트리 · 엔트리 ID | Stream의 항목 하나와 그 단조 증가 ID | 엔트리 하나 = 스캔 사이클 하나. 엔트리 ID 범위가 중복 제거 토큰의 재료다 | scan_seq — 수집 쪽 번호 | [../06_pipeline/12_data_contract.md](../06_pipeline/12_data_contract.md) |
 | 컨슈머 그룹 | 한 Stream을 여러 컨슈머가 나눠 읽게 하는 이름 붙은 소비 상태 | grp:ingest. 엔트리는 그룹 안 한 컨슈머에게만 간다. **컨슈머 간 순서는 보장하지 않는다** | Pub/Sub 구독 — 전원에게 복제 · 그룹은 분배 | [../06_pipeline/03_ingest_batch.md](../06_pipeline/03_ingest_batch.md) |
-| 컨슈머 | 그룹 안의 개별 소비자 이름 | 같은 프로세스 안의 독립 루프 ingest-{pid}-{n}. 다중화는 프로세스가 아니라 이름으로 한다 | 워커 스레드 — 디코딩 CPU 작업을 받는 piscina 워커 | [04_id_conventions.md](./04_id_conventions.md) |
+| 컨슈머 | 그룹 안의 개별 소비자 이름 | 같은 프로세스 안의 독립 루프 ingest-{n}(n = 1..N 고정). 다중화는 프로세스가 아니라 이름으로 한다 | 워커 스레드 — 디코딩 CPU 작업을 받는 piscina 워커 | [04_id_conventions.md](./04_id_conventions.md) |
 | PEL | Pending Entries List — 전달됐으나 XACK되지 않은 엔트리 목록 | 삽입 성공 전까지 엔트리가 여기 머문다. at-least-once의 근거이자 컨슈머 랙의 원천 | DLQ — 포기한 배치의 격리처 | [03_enums_state_machines.md](./03_enums_state_machines.md) |
 | XACK | 엔트리 처리 완료를 알려 PEL에서 빼는 명령 | **ClickHouse 삽입 성공 뒤에만** 한다. DLQ로 옮긴 배치도 반드시 한다 | 삭제 — XACK는 엔트리를 지우지 않는다 | [03_enums_state_machines.md](./03_enums_state_machines.md) |
 | XAUTOCLAIM | 일정 시간 idle인 PEL 엔트리를 다른 컨슈머로 넘기는 명령 | 주기 타이머로 돌려 죽은 컨슈머 이름에 남은 PEL을 회수한다. idle 기준은 2계층 | XCLAIM — 엔트리를 하나씩 지정 | [03_enums_state_machines.md](./03_enums_state_machines.md) |

@@ -2,6 +2,7 @@
 
 > **대상**: 저장소 3종(PostgreSQL · ClickHouse · Redis)의 이미지 · 확장 · 설정 파일의 모양 · ClickHouse 서버 timezone 판정 · pg_partman 미리 만들기 · TTL 머지 주기 · Compose healthcheck와 health 타임아웃의 관계 · **observability 프로파일 구성원 판정(보정 #17)** · **버전 고정표(버전 문자열의 유일한 기재처)**
 > **작성일**: 2026-09-24
+> **개정일**: 2026-09-25 — S3 착수 반영 — 2행 고정 — pg_partman **5.5**(파생 이미지 db_study-postgres:18.6-partman5.5.0 · 소스 빌드) · pg-copy-streams **7.0** — 버전 고정 24 → **26** · 미고정 4 → **2** · 미확인 닫힘 2(pg_partman 기본값 — 미리 만들기 4 확인 · 워커 주기 3600초 명시 · 설치 경로 — 파생 이미지) · 확장 생성 자리 마이그레이션 001 · 004 → **migrate 관리자 단계**(확장 생성에 superuser 필요) · 등록 004 · 007
 > **개정일**: 2026-09-25 — S2 실측 반영(EXP-30 기록 012 · d32b09a) — msgpackr-extract S1 판정 끔 → **끔 유지(S2 재판정 → S5)**
 > **개정일**: 2026-09-24 — S2 착수 반영 — 13행 고정 — Fastify 어댑터 **11.2** · @clickhouse/client **1.23** · ioredis **5.11** · pg **8.23** · modbus-serial **8.0** · jsmodbus **4.0** · Next.js **15.5** · uPlot **1.6** · TanStack Query **5.103** · Zustand · Tailwind CSS **5.0 · 4.3** · Supertest **7.3** · node-pg-migrate **9.0** · k6 **1.8** — 버전 고정 11 → **24** · 재확인 대기 15 → **5** · 미고정 7 → **4** · zstd 요청 압축 미확인 닫힘
 > **개정일**: 2026-09-24 — S1 실측 반영(EXP-21 기록 006 · 410a146 · EXP-39 기록 007~009 · 019e54d) — S1 착수 9행 고정 — Node **22.23** · api 기반 이미지 **node:22.23.3-alpine** · TypeScript **5.9** · NestJS **11.2** · msgpackr **1.12** · piscina **5.3** · prom-client **15.1** · zod **4.6** · pnpm **12.6** — 태그 고정 3 → **4** · 버전 고정 2 → **11** · 재확인 대기 21 → **15** · 미고정 10 → **7** · Biome · Vitest 행을 Supertest · Testcontainers와 갈라 행 37 → **38**(도구 6 → **7**) · TypeScript 7 · NestJS 12 · msgpackr 2 · ioredis 6 미채택 판정 · msgpackr-extract 끔 등재
@@ -38,7 +39,7 @@
 | 확장 | 용도 | 로드 방식 | 생성 자리 | 없으면 |
 |------|------|------|------|------|
 | pg_stat_statements | 쿼리 통계 — OBS가 느린 쿼리 Top-N을 읽는다 | 서버 시작 시 선적재 라이브러리 | 마이그레이션 001 | 업무 CRUD p95의 원인 쿼리를 가를 수 없다 |
-| pg_partman | alarm_event 월 파티션 미리 만들기 · 유지 작업 | 확장 + 백그라운드 워커(선적재) | 마이그레이션 001 · 004에서 등록 | 파티션 없는 달의 INSERT가 기본 파티션으로 간다 |
+| pg_partman | alarm_event 월 파티션 · 대조군 일 파티션 미리 만들기 · 보존 · 유지 작업 | 확장 + 백그라운드 워커(선적재) | migrate 관리자 단계에서 생성(partman 스키마 · 확장 생성은 superuser만 된다) · 마이그레이션 004 · 007에서 등록 | 파티션 없는 달의 INSERT가 기본 파티션으로 간다 |
 | auto_explain | 느린 쿼리 계획 로깅 | 서버 시작 시 선적재 라이브러리 | 설정 파일 | 대조군 쿼리가 느려진 순간의 계획이 남지 않는다 |
 
 - 검산: 확장 = **3**(원본 tech_stack.md §5.1) · 선적재 라이브러리 = pg_stat_statements · auto_explain · pg_partman 백그라운드 워커 = **3**
@@ -66,8 +67,8 @@ infra/postgres/postgresql.conf
 
 | 조정값 | 조회 계약 | 기준 시점 | 금지된 대체 동작 | 부재 시 | 현행 참고 |
 |------|------|------|------|------|------|
-| 미리 만들기 개수 | 현재 월 이후 N개월의 파티션이 항상 있다 | 유지 작업 실행 시각(Asia/Seoul 달력) | 월초에 사람이 손으로 파티션 생성 | 기본 파티션에 적재되고 그 달 파티션 생성이 충돌한다 | 도구 기본값 4 — 착수 시 재확인 |
-| 유지 작업 주기 | 백그라운드 워커가 주기마다 미리 만들기 · 분리 대상 판정을 돈다 | 워커 기동 시각부터 | 애플리케이션 타이머 · 호스트 cron | 미리 만든 개수가 소진될 때까지 알 수 없다 | 1시간(워커 기본값 — 착수 시 재확인) |
+| 미리 만들기 개수 | 현재 월 이후 N개월의 파티션이 항상 있다 | 유지 작업 실행 시각(Asia/Seoul 달력) | 월초에 사람이 손으로 파티션 생성 | 기본 파티션에 적재되고 그 달 파티션 생성이 충돌한다 | 도구 기본값 4(5.5.0 part_config.premake 확인 · 2026-09-25) |
+| 유지 작업 주기 | 백그라운드 워커가 주기마다 미리 만들기 · 분리 대상 판정을 돈다 | 워커 기동 시각부터 | 애플리케이션 타이머 · 호스트 cron | 미리 만든 개수가 소진될 때까지 알 수 없다 | 3600초(postgresql.conf pg_partman_bgw.interval에 명시 — 도구 기본값에 기대지 않는다 · 대상 DB plc · 실행 역할 app_owner) |
 
 - 검산: 조정값 = **2**
 - **개수 하한의 산술** — 미리 만든 달 수 × 1개월이 유지 작업 주기보다 길기만 하면 미래 파티션이 비지 않는다. 4개월 대 1시간이라 여유가 크고, 개수를 늘려도 빈 파티션 메타만 는다. **값을 줄이는 방향만 위험하다** — 0이면 매월 1일 00:00 KST 직후 워커가 돌기 전까지의 알람이 기본 파티션으로 간다.
@@ -190,14 +191,14 @@ docs_plan 실행 계획 보정 #17을 닫는다. 원본 넷이 서로 다른 구
 | 저장소 | PostgreSQL | 18 alpine | 부 버전 태그 | postgres 서비스 | **태그 고정** 18.6-alpine(18 계열 최신 — 릴리스 노트 · 레지스트리 대조 2026-09-24) |
 | 저장소 | ClickHouse | 25.8 LTS 이상 | LTS 패치 태그 | clickhouse 서비스 | **태그 고정** 26.8.10.6(LTS 트랙 전환 — 사용자 결정 2026-09-24 · 25.x 보안 지원 종료 · 26.8 계열 최신 패치 — 레지스트리 대조) |
 | 저장소 | Redis | 8 alpine | 부 버전 태그 | redis 서비스 | **태그 고정** 8.10.2-alpine(8 계열 최신 — 릴리스 · 레지스트리 대조 2026-09-24) |
-| 저장소 확장 | pg_partman | 원본 미기재 | 부 버전까지 | alarm_event 월 파티션 | 미고정 |
+| 저장소 확장 | pg_partman | 원본 미기재 | 부 버전까지 | alarm_event 월 파티션 · 대조군 일 파티션 | **버전 고정** 5.5(5.5.0 — infra/postgres/Dockerfile이 공식 18.6-alpine 위에 소스 빌드 · 이미지 db_study-postgres:18.6-partman5.5.0 · 2026-09-25) |
 | 저장소 확장 | pg_stat_statements · auto_explain | PostgreSQL 동봉 | 엔진 버전을 따른다 | 쿼리 통계 · 계획 로깅 | 재확인 대기 |
 | 백엔드 | NestJS | 11.x | 부 버전까지 | api 전체 | **버전 고정** 11.2(reflect-metadata 0.2 · rxjs 7.8는 NestJS를 따른다) — 12.x는 원본 기준 11.x 밖이라 쓰지 않는다 |
 | 백엔드 | Fastify 어댑터 | NestJS와 같은 메이저 | NestJS를 따른다 | HTTP 서버 | **버전 고정** 11.2(@nestjs/platform-fastify · websockets · platform-ws — fastify 5.11 · @fastify/cors 11.3 · ws 8.21) |
 | 백엔드 | @clickhouse/client | 1.x | 부 버전까지 | Ingest · TSQ · OBS | **버전 고정** 1.23 — zstd 요청 압축 지원(§미확인 · 미설계 등재 닫힘) |
 | 백엔드 | ioredis | 5.x | 부 버전까지 | Streams · Pub/Sub · Lua | **버전 고정** 5.11 — 6.x는 원본 기준 5.x 밖 |
 | 백엔드 | pg | 8.x | 부 버전까지 | in-process 풀(ADR-19) | **버전 고정** 8.23 |
-| 백엔드 | pg-copy-streams | 원본 미기재 | 부 버전까지 | 대조군 COPY(SW-09 · ADR-17) | 미고정 |
+| 백엔드 | pg-copy-streams | 원본 미기재 | 부 버전까지 | 대조군 COPY(SW-09 · ADR-17) | **버전 고정** 7.0(타입 정의 @types/pg-copy-streams 1.2) |
 | 백엔드 | modbus-serial | 8.x | 부 버전까지 | Collector | **버전 고정** 8.0 — TCP만 쓴다 · 직렬 포트 네이티브 빌드(@serialport/bindings-cpp) 끔 |
 | 백엔드 | jsmodbus | 4.x | 부 버전까지 | PlcSim | **버전 고정** 4.0 — 5.x는 원본 기준 4.x 밖 |
 | 백엔드 | msgpackr | 1.x | 부 버전까지 | Stream 페이로드 | **버전 고정** 1.12 — 2.x는 원본 기준 밖 · 네이티브 해제 가속(msgpackr-extract) 끔(§미확인 · 미설계 등재) |
@@ -223,9 +224,9 @@ docs_plan 실행 계획 보정 #17을 닫는다. 원본 넷이 서로 다른 구
 | 관측 | Prometheus | 3.x | 부 버전 태그 | observability 프로파일 | 재확인 대기 |
 | 관측 | Grafana | 12.x | 부 버전 태그 | observability 프로파일 | 재확인 대기 |
 
-- 검산: 행 = 런타임 3 + 저장소 3 + 저장소 확장 2 + 백엔드 13 + 프론트엔드 6 + 공유 1 + 도구 7 + 부하 1 + 관측 2 = **38** · 상태 태그 고정 4 + 버전 고정 24 + 재확인 대기 5 + 미고정 4 + 해당 없음 1 = **38**
+- 검산: 행 = 런타임 3 + 저장소 3 + 저장소 확장 2 + 백엔드 13 + 프론트엔드 6 + 공유 1 + 도구 7 + 부하 1 + 관측 2 = **38** · 상태 태그 고정 4 + 버전 고정 26 + 재확인 대기 5 + 미고정 2 + 해당 없음 1 = **38**
 - **원본 고정표에서 뺀 행 1** — Prisma(원본 "pg + Prisma")는 마이그레이션 도구 판정에서 채택하지 않았다([05_tooling_devops.md](./05_tooling_devops.md) §마이그레이션 도구 판정 · [06_decisions_rationale.md](./06_decisions_rationale.md)). 원본의 pg 행은 남았다.
-- **원본에 없던 행 3** — pg-copy-streams(대조군 COPY가 스트림 복사를 요구) · 보안 헤더 플러그인(원본 tech_stack.md §10.4가 이름만 적음) · Python(S0의 docs:lint · 실습 스크립트 — 사용자 지정 3.14). 앞의 둘은 미고정이다.
+- **원본에 없던 행 3** — pg-copy-streams(대조군 COPY가 스트림 복사를 요구) · 보안 헤더 플러그인(원본 tech_stack.md §10.4가 이름만 적음) · Python(S0의 docs:lint · 실습 스크립트 — 사용자 지정 3.14). 보안 헤더 플러그인만 미고정이다.
 - **고정 단위가 "부 버전까지"인 이유** — 메이저만 고정하면 부 버전 갱신이 설치 시점마다 달라 같은 커밋의 두 설치가 다른 코드를 받는다. 잠금 파일이 패치까지 고정하고, 이 표는 잠금 파일을 갱신할 때 넘지 않을 경계를 준다.
 - **Node 22.15 이상의 근거는 zstd 요청 압축이다**(원본 tech_stack.md §3.3 · §12). @clickhouse/client 1.23은 zstd 요청 압축을 지원한다 — S2 적재 경로가 zstd로 보낸다(§미확인 · 미설계 등재 닫힘).
 
@@ -256,8 +257,8 @@ docs_plan 실행 계획 보정 #17을 닫는다. 원본 넷이 서로 다른 구
 | @clickhouse/client의 zstd 요청 압축 지원 | **닫힘(S2 착수 확인 2026-09-24)** — 1.23이 zstd 요청 압축을 지원한다 · 적재 경로 zstd · gzip은 쓰지 않는다 | [02_backend.md](./02_backend.md) |
 | client-output-buffer-limit pubsub 값 | 값 미정 — 계약만(게이트웨이 소켓 한도보다 늦게) | S4 · 이 문서 · [../07_api/11_websocket.md](../07_api/11_websocket.md) 소켓 송신 대기량 한도와 같은 변경 단위 |
 | TTL 파티션 삭제 지연 | 3계층 미확인 — 확정 전 임의 값 고정 금지 | EXP-29 · [../10_observability/06_experiment_catalog.md](../10_observability/06_experiment_catalog.md) |
-| pg_partman 미리 만들기 · 워커 주기의 기본값 | 원본 미기재 · 도구 기본값(4개월 · 1시간으로 알려짐) — 착수 시 공식 참조로 확인 | 이 문서 |
-| pg_partman 설치 경로 | **신규 불일치** — Compose 표는 PostgreSQL 공식 alpine 이미지인데 공식 이미지에 pg_partman이 없다(2026-09-24 이미지 확인). S0은 공식 이미지 그대로 두고 선적재에서 뺐다(사용자 결정) — alarm_event 월 파티션(마이그레이션 004) 전에 파생 이미지로 도입하고 그때 버전을 고정한다 | 마이그레이션 004 착수 시 · 이 문서 · [../04_architecture/03_execution_topology.md](../04_architecture/03_execution_topology.md) |
+| pg_partman 미리 만들기 · 워커 주기의 기본값 | **닫힘(S3 착수 확인 2026-09-25)** — 5.5.0 part_config.premake 기본 4 · 워커 주기는 설정 파일에 3600초로 명시해 기본값에 기대지 않는다 | 이 문서 §pg_partman 미리 만들기와 유지 작업 |
+| pg_partman 설치 경로 | **닫힘(S3 · 2026-09-25)** — 공식 이미지에 없어(S0 확인) 파생 이미지를 도입했다 · infra/postgres/Dockerfile 다단 빌드(빌드 단계만 컴파일 도구 · 실행 단계는 공식 이미지 위에 확장 파일만 더한다) · 5.5.0 고정 · Compose postgres 서비스가 이 이미지를 빌드한다 | 이 문서 §버전 고정표 · [../04_architecture/03_execution_topology.md](../04_architecture/03_execution_topology.md) |
 | tempo 진입 | 조건부 — SQL · 메트릭 구간 분해 불가가 실측될 때 | [../04_architecture/08_scaling_roadmap.md](../04_architecture/08_scaling_roadmap.md) 진입 조건 추가 제안 |
 
 ## 관련 문서

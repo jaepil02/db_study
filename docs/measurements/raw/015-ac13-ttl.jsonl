@@ -1,0 +1,3 @@
+{"rep":1,"snapshot":"s3-empty-s","partition":"20260915","inserted":10000,"rowsZeroAfterS":0,"partitionGoneAfterS":26,"mergeReasons":["TTLDropMerge"],"mutationsBefore":0,"mutationsAfter":0}
+{"rep":2,"snapshot":"s3-empty-s","partition":"20260915","inserted":10000,"rowsZeroAfterS":0,"partitionGoneAfterS":36,"mergeReasons":["TTLDropMerge"],"mutationsBefore":0,"mutationsAfter":0}
+{"rep":3,"snapshot":"s3-empty-s","partition":"20260915","inserted":10000,"rowsZeroAfterS":1,"partitionGoneAfterS":31,"mergeReasons":["TTLDropMerge"],"mutationsBefore":0,"mutationsAfter":0}

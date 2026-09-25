@@ -2,6 +2,7 @@
 
 > **대상**: ClickHouse 객체 9(테이블 5 · MV 3 · Dictionary 1)의 목록과 원시 · 판정 테이블 tag_raw · alarm_eval DDL · 코덱 · 파티션 · 정렬 키(ADR-15) · 중복 제거(ADR-14) · 시각 컬럼 시간대 표기 통일 · dict_tag DDL · 품질 코드 컬럼 판정 · 서버 설정 계약
 > **작성일**: 2026-09-24
+> **개정일**: 2026-09-25 — S3 구현 · 검수 반영 — dict_tag SOURCE를 as-built 명명 수집 NAME pg_dict로(접속 · ch_reader 비밀번호는 서버 설정 파일 config.d/named_collections.xml이 환경변수에서 읽는다 · 옛 표기 db 'plcdb'는 실제 DB plc와 달랐다) · 재계산 삽입 설정에 deduplicate_insert_select 'disable' 병기(26.8에서 insert_deduplicate를 대체)
 > **개정일**: 2026-09-24 — ClickHouse 26.8 LTS 전환(사용자 결정 · 25.x 보안 지원 종료) — 서버 설정 계약에 input_format_read_datetime_number_as_raw_value 1 신설(설정 9 → **10** — 26.8은 정수 ts를 초로 읽어 9999-12-31로 포화 · 기록 004) · 종속 MV 판별 근거에 26.8 · async_insert 동시 사용은 25.8 거부 · 26.8 허용 · 병합 풀 파생 설정 26.8 재확인 · 토큰 없는 같은 내용의 중복 제거(26.8) 불릿 신설
 > **개정일**: 2026-09-24 — S0 실측 반영(EXP-32 · 기록 001) — 미확인 "MV 재실행" 닫힘(ⓑ — 종속 MV가 다시 돈다) · ADR-14 보강(사용자 결정) — 중복 제거 계약 항목 6 → **7**(종속 MV) · 서버 설정 계약 8 → **9**(deduplicate_blocks_in_dependent_materialized_views 1) · B형 계측 수단 written_rows → **DuplicatedInsertedBlocks**(재시도 응답의 written_rows는 0이 되지 않는다)
 > **개정일**: 2026-09-24 — 측정 머신 전환 · S0 구현 반영 — background_pool_size 8의 파생 병합 설정 3(10 · 12 · 4) 등재 — 없으면 25.8이 기동을 거부한다(S0 확인)
@@ -103,7 +104,7 @@ ADR-14의 저장소 쪽 계약이다. 토큰 재료 · 백오프 합계의 기�
 | 토큰 | 배치 내용에 결정적 — 엔트리 ID 집합 + 행 수의 해시(REQ-ING-06) | 무작위 UUID면 재시작 후 같은 배치가 다른 토큰을 받아 중복 행이 생긴다 |
 | 윈도우 | non_replicated_deduplication_window — 최근 N개 삽입 블록의 토큰을 기억 | 0이면 비복제 MergeTree에서 토큰이 무시된다 — **설정 없이 토큰만 보내면 조용히 중복된다** |
 | 단위 | 테이블마다 따로 기억한다 | 같은 배치 토큰을 tag_raw와 alarm_eval에 함께 써도 서로 간섭하지 않는다 |
-| **종속 MV** | 롤업 3테이블도 윈도우를 갖고([04_clickhouse_rollup.md](./04_clickhouse_rollup.md) DDL) 삽입 설정 deduplicate_blocks_in_dependent_materialized_views 1로 MV가 쓰는 블록도 원 토큰에서 파생된 토큰으로 가른다 — 둘은 한 쌍이다(ADR-14 보강) | 25.8 · 26.8 모두 원시가 중복 제거돼도 종속 MV를 다시 돌린다 — 쌍 중 하나라도 없으면 응답 유실 뒤 같은 토큰 재시도가 세 롤업을 두 배로 센다(설정만 · 윈도우만 · 둘 다 없음 모두 3/3 — S0 실측 · 기록 001 · 004). 비운 롤업에 같은 내용을 다시 넣는 재계산은 윈도우에 걸려 버려지므로 insert_deduplicate 0으로 한다 |
+| **종속 MV** | 롤업 3테이블도 윈도우를 갖고([04_clickhouse_rollup.md](./04_clickhouse_rollup.md) DDL) 삽입 설정 deduplicate_blocks_in_dependent_materialized_views 1로 MV가 쓰는 블록도 원 토큰에서 파생된 토큰으로 가른다 — 둘은 한 쌍이다(ADR-14 보강) | 25.8 · 26.8 모두 원시가 중복 제거돼도 종속 MV를 다시 돌린다 — 쌍 중 하나라도 없으면 응답 유실 뒤 같은 토큰 재시도가 세 롤업을 두 배로 센다(설정만 · 윈도우만 · 둘 다 없음 모두 3/3 — S0 실측 · 기록 001 · 004). 비운 롤업에 같은 내용을 다시 넣는 재계산은 윈도우에 걸려 버려지므로 insert_deduplicate 0 · deduplicate_insert_select 'disable'을 함께 준다 — 26.8은 뒤 설정이 앞 설정을 대체해 insert_deduplicate만 주면 무시된다(S3 통합 확인) |
 | 재시도 | 같은 토큰 · 백오프 합계가 윈도우 안 | 윈도우를 벗어난 재시도는 새 삽입으로 취급된다 |
 | 조회 비용 | 없음 — FINAL 불필요 | ReplacingMergeTree를 버린 이유(ADR-14): 머지 전까지 중복이 보여 모든 조회에 FINAL 비용이 붙는다 |
 | 검증 | tag_id + ts 중복 행 0(REQ-NFR-02) | 해당 없음 |
@@ -173,7 +174,7 @@ CREATE DICTIONARY IF NOT EXISTS plc.dict_tag
 )
 PRIMARY KEY tag_id
 SOURCE(POSTGRESQL(
-    host 'postgres' port 5432 user 'ch_reader' password '{설정 파일 주입}' db 'plcdb'
+    NAME pg_dict
     query 'SELECT tag_id, device_id, tag_code, tag_name, unit, range_min, range_max, is_active::int FROM tag_master'
 ))
 LAYOUT(HASHED())

@@ -1,0 +1,7 @@
+# S2 이미지 동등성 확인 (2026-09-25)
+# 정식 빌드 db_study-api:d32b09a-formal (sha256:a23675d1fd12d3e2c034984621b226ec63cef0b927c386eac632158db17821f2) 대 덮어쓰기 이미지 db_study-api:d32b09a (sha256:d61fe9c2afef38348435a017b379b4097bec93d6edbed1686e89f847f6ce4c40)
+# 대상: /app/dist · /app/node_modules 의 .js .json .node .cjs .mjs sha256 — 정식 4106개 · 덮어쓰기 4107개
+# 차이:
+46a47
+> 086a141035f2cfaa8857b946dbb17ea54eeb7a188c3c62799977bc0f7598e1e7  dist/modules/datagen/worker.js
+# 판정: 차이는 덮어쓰기 이미지에만 남은 dist/modules/datagen/worker.js 1개(S2에서 소스 삭제 · 어떤 모듈도 불러오지 않는다) — 실행 코드 동일 · node v22.23.3 · COMMIT_HASH d32b09a 동일

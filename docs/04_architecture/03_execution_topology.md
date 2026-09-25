@@ -2,6 +2,7 @@
 
 > **대상**: 로컬 실행 구성 — Compose 서비스 4 · healthcheck · 기동 순서 · 네트워크 · 호스트 포트 · named volume 4 · 메모리 프로파일 2 + 조건부 중간 · CPU 가중 · **cpuset 배치(정본)** · 스냅샷과 복원 · 재빌드 · 재시작 영향 · 조정값 소유처
 > **작성일**: 2026-09-24
+> **개정일**: 2026-09-25 — S3 구현 반영 — postgres 이미지 공식 alpine → **공식 18.6-alpine 위 pg_partman 파생 이미지**(로컬 빌드 · 정본 09_tech_stack/03) · **datagen 프로파일 서비스 신설**(APP_ROLE=datagen · 모드 B · cpuset 11-12 — 기본 기동 밖이라 서비스 4는 그대로) · 미확인 postgres healthcheck 계정 닫힘(pg_isready -U app_rw — 인증하지 않아 migrate 전에도 성립)
 > **개정일**: 2026-09-24 — S2 구현 반영 — 기동 순서 교정 — 스키마 · 시드 ⑥ → **③(api 기동 앞 · api 이미지 일회성 컨테이너)** · api 기동 ③ → ④ · 기동 복원 ④ → ⑤ · api healthy ⑤ → ⑥
 > **개정일**: 2026-09-24 — S1 실측 반영(EXP-21 기록 006 · 410a146) — piscina 워커 수 규칙 신설: 워커 수는 그 프로세스의 CPU 집합 크기를 넘기지 않는다(datagen 11-12 워커 4는 워커 2와 같은 처리량 · 사용률 0.72)
 > **개정일**: 2026-09-24 — ClickHouse 26.8 LTS 전환(사용자 결정 · 25.x 보안 지원 종료) — Compose 서비스 표 clickhouse 이미지 ClickHouse 25.8 → **26.8**
@@ -19,11 +20,12 @@
 | 서비스 | 이미지 | 재시작 정책 | healthcheck | depends_on | 역할 |
 |------|------|------|------|------|------|
 | api | 로컬 빌드(Node LTS 멀티스테이지 · 정확 버전 [../09_tech_stack/03_data_infra.md](../09_tech_stack/03_data_infra.md) §버전 고정표) | unless-stopped | /api/v1/health 왕복(무인증) | postgres · clickhouse · redis 전부 service_healthy | NestJS 단일 프로세스 — 모듈 11 · APP_ROLE 기본 all |
-| postgres | PostgreSQL 18 공식 alpine 이미지 | unless-stopped | pg_isready(애플리케이션 계정 · DB) | 없음 | OLTP — 업무 14 · 대조군 1 |
+| postgres | PostgreSQL 18 공식 alpine 이미지 위 pg_partman 파생 이미지(로컬 빌드 infra/postgres/Dockerfile · 정확 버전 [../09_tech_stack/03_data_infra.md](../09_tech_stack/03_data_infra.md) §버전 고정표) | unless-stopped | pg_isready(애플리케이션 계정 · DB) | 없음 | OLTP — 업무 14 · 대조군 1 |
 | clickhouse | ClickHouse 26.8 공식 서버 이미지 | unless-stopped | HTTP ping(8123) | 없음 | OLAP — 원시 · 롤업 · 판정 전수 |
 | redis | Redis 8 공식 alpine 이미지 | unless-stopped | redis-cli ping | 없음 | Stream · 최신값 · 알람 상태 · 캐시 · 세션 · Pub/Sub |
 
 - 검산: 서비스 = **4** — healthcheck 4 · depends_on을 갖는 서비스 1(api)
+- **datagen은 프로파일 서비스다 — 기본 기동에 없어 위 4에 세지 않는다.** api와 같은 이미지를 APP_ROLE=datagen으로 띄워 모드 B(시간 압축 발행)만 돈다 · CPU 집합 11-12(§cpuset 배치 datagen 행) · 실험 러너가 docker compose --profile datagen run으로 한 번 띄우고 끝낸다. api 안(0-4)에서 돌리면 생성기와 측정 대상이 같은 CPU를 두고 다퉈 적재 처리량이 생성기 비용만큼 깎인 값으로 기록된다.
 - **모든 이미지는 태그를 명시하고 latest를 쓰지 않는다**(REQ-TEC-04). 버전이 흔들리면 같은 커밋 해시의 두 측정이 다른 엔진 버전에서 돈다.
 - **api의 healthcheck가 무인증인 이유 — 인증을 걸면 기동이 순환한다.** health는 토큰 발급 경로가 뜨기 전에 불린다. 공개 표면 판정의 정본은 [../02_features/12_permission_matrix.md](../02_features/12_permission_matrix.md)다.
 
@@ -225,7 +227,7 @@ CPU 가중은 절대량이 아니라 **상대 배분**이라 두 프로파일이
 | observability 프로파일 구성원(prometheus · grafana · alertmanager · tempo) | **W6 판정** — 구성원 prometheus · grafana 2 · alertmanager 채택하지 않음(수신처 없음 · D-02) · tempo 현 범위 밖 · 조건부 | [../09_tech_stack/03_data_infra.md](../09_tech_stack/03_data_infra.md) |
 | 재기동 시간 · 결측 구간 길이 | 3계층 미확인 — 미확인 · 확정 전 임의 값 고정 금지 | EXP-28 · [../10_observability/06_experiment_catalog.md](../10_observability/06_experiment_catalog.md) |
 | 역할 분리 시 컨테이너별 메모리 · CPU 배분 | 미설계 — 원본은 all 기준으로만 산정했다 | [08_scaling_roadmap.md](./08_scaling_roadmap.md) 1단계 진입 시 |
-| postgres healthcheck의 계정 | S0 구현(2026-09-24) — 애플리케이션 계정 app_rw는 migrate가 만들므로 그 전에는 관리자 계정으로 확인한다 · migrate 도입 때 애플리케이션 계정으로 바꾼다 | [../05_data_stores/09_migrations_seed.md](../05_data_stores/09_migrations_seed.md) |
+| postgres healthcheck의 계정 | S0 구현(2026-09-24) — 애플리케이션 계정 app_rw는 migrate가 만들므로 그 전에는 관리자 계정으로 확인한다 · migrate 도입 때 애플리케이션 계정으로 바꾼다 · **닫힘(S2 확인)** — pg_isready -U app_rw -d plc · pg_isready는 인증하지 않아 migrate 전에도 성립한다 | [../05_data_stores/09_migrations_seed.md](../05_data_stores/09_migrations_seed.md) |
 | 중간 프로파일의 정식 채택 | **W6 판정** — 정식 프로파일로 올리지 않는다 · 조건부 대안 유지 | [../09_tech_stack/04_local_environment.md](../09_tech_stack/04_local_environment.md) |
 
 ## 관련 문서

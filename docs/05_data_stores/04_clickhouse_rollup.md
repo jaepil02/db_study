@@ -2,6 +2,7 @@
 
 > **대상**: 롤업 테이블 tag_1m · tag_1h · tag_1d와 MV 3(mv_tag_1m · mv_tag_1h · mv_tag_1d)의 DDL · -State/-Merge 조합자 · bad_cnt 조건식 · 일 경계 시간대 판정 · MV 제약 · 백필 절차 · 정합 검증 · 롤업 객체 도메인 귀속 판정
 > **작성일**: 2026-09-24
+> **개정일**: 2026-09-25 — S3 통합 확인 반영 — 백필 ④ 설정에 deduplicate_insert_select 'disable' 병기(26.8에서 insert_deduplicate를 대체 · 앞 설정만 주면 무시)
 > **개정일**: 2026-09-24 — ClickHouse 26.8 LTS 전환(사용자 결정 · 25.x 보안 지원 종료) — 롤업 윈도우 근거에 26.8(기록 004) · 백필 ④의 insert_deduplicate 0 근거를 버전 종속으로 교정(25.8 버림 · 26.8 버리지 않음)
 > **개정일**: 2026-09-24 — S0 실측 반영(EXP-32 · 기록 001) — ADR-14 보강(사용자 결정) — 롤업 3테이블 DDL에 non_replicated_deduplication_window 1000 신설 · MV 제약 #8 대응 미확인 → 한 쌍 설정 · 미확인 표 1행 닫힘 · 백필 ④에 insert_deduplicate 0(롤업 윈도우가 같은 내용 재삽입을 버림 — 실측)
 > **개정일**: 2026-09-24 — 최종 정밀 검수 — 빈 표 칸을 닫힌 어휘 해당 없음으로 채움(표 열 규약) · 롤업 귀속 README 반영 대기 표기 → 반영 완료
@@ -218,12 +219,12 @@ GROUP BY bucket, device_id, tag_id;
 ① 주입 정지 확인        다른 주입 모드 · 수집이 멈췄는가     분리 중 들어온 행은 롤업되지 않는다
 ② DETACH mv_tag_1m      mv_tag_1h · mv_tag_1d는 붙여 둔다     상위 연쇄는 ④가 발동한다
 ③ 원시 대량 삽입        날짜 단위 INSERT · ts는 보존 창 안     보존 창 밖 ts는 TTL 머지에서 곧 사라진다
-④ tag_1m 직접 채우기    INSERT SELECT -State FROM tag_raw     백필 구간만 · tag_1h · tag_1d가 연쇄로 채워진다 · insert_deduplicate 0
+④ tag_1m 직접 채우기    INSERT SELECT -State FROM tag_raw     백필 구간만 · tag_1h · tag_1d가 연쇄로 채워진다 · insert_deduplicate 0 · deduplicate_insert_select 'disable'
 ⑤ ATTACH mv_tag_1m      정상 연쇄 복귀
 ⑥ 정합 검증             count(tag_raw) = countMerge(tag_1m)   = countMerge(tag_1h) = countMerge(tag_1d)
 ```
 
-- **④는 insert_deduplicate 0으로 넣는다(S0 실측 · 기록 001).** 롤업 3테이블의 윈도우(ADR-14 보강)는 토큰 없는 삽입을 내용 해시로 가르는데 롤업에는 매번 다른 컬럼(원시의 ingested_at 같은)이 없다 — 25.8에서는 같은 구간을 비운 뒤 다시 채우는 두 번째 삽입이 오류 없이 0행이 됐다(기록 001). 26.8은 버리지 않았지만(기록 004) 동작이 버전마다 달라 절차로 고정한다.
+- **④는 insert_deduplicate 0 · deduplicate_insert_select 'disable'로 넣는다(S0 실측 · 기록 001 · S3 통합 확인).** 26.8은 deduplicate_insert_select(기본 enable_when_possible)가 insert_deduplicate를 대체해 앞 설정만 주면 무시된다 — 26.8의 INSERT SELECT는 기본값에서도 같은 내용을 버리지 않았지만(S3 확인) 동작이 버전 · 설정 기본값마다 달라 둘 다 명시한다. 롤업 3테이블의 윈도우(ADR-14 보강)는 토큰 없는 삽입을 내용 해시로 가르는데 롤업에는 매번 다른 컬럼(원시의 ingested_at 같은)이 없다 — 25.8에서는 같은 구간을 비운 뒤 다시 채우는 두 번째 삽입이 오류 없이 0행이 됐다(기록 001). 26.8은 버리지 않았지만(기록 004) 동작이 버전마다 달라 절차로 고정한다.
 
 - **분리하는 MV는 mv_tag_1m 하나다.** 원본 절차는 분리 대상을 mv_tag_1m으로만 적었고 이유는 적지 않았다 — ④가 tag_1m에 넣는 삽입이 상위 두 MV를 발동하므로 상위를 분리하면 상위 롤업을 따로 두 번 더 채워야 한다.
 - **③의 ts는 원시 보존 창 안이어야 한다(A형).** 통념은 "백필은 먼 과거를 채운다"이다. 그러나 tag_raw TTL은 ts 기준 7일이라 창 밖 ts의 파트는 다음 TTL 머지에서 통째로 떨어지고, 롤업만 남는다. 진짜 축은 ts 기준 보존이다. 대체 경로 — 용량 단계를 채우는 백필은 창 안에서 태그 · 설비 수로 행 수를 늘린다([10_olap_vs_rdb_control.md](./10_olap_vs_rdb_control.md) §역전 지점 탐색 설계).

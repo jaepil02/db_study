@@ -2,6 +2,7 @@
 
 > **대상**: 역할 스위치 11종의 채번 · 환경변수 · 기본값 · off · on 동작 · 측정 대상 · 교체되는 포트 · 관련 기능 · 흐름 · 원본 예상치 · 실험 자리 · 조합 제약 — SW-NN 채번 정본
 > **작성일**: 2026-09-24
+> **개정일**: 2026-09-25 — S3 구현 반영 — SW-08 off 동작에 서버 중복 제거 해제(deduplicate_insert 'disable') 명시 — 토큰만 빼면 26.8에서 off가 재현되지 않는다(기록 016)
 > **개정일**: 2026-09-24 — W7 검수 반영 — SW-09 분류 서술 Redis 역할 9 → **10**(같은 문서 §검산) · 미확인 2행 닫힘(SW-09 실패 의미론 · SW-01 off 토큰 재료) — 스위치 수 불변
 > **개정일**: 2026-09-24 — W6 실험 채번 반영 — 스위치 상태 레이블 obs_switch_info · 스위치별 EXP 번호 채번 · 조합 제약 #8 · #9 신설(7 → 9)(정본 10_observability/01 · 06)
 > **개정일**: 2026-09-24 — W4 판정 반영 — SW-11 관련 흐름에 F-01 추가(collector 구현이 발행 파이프라인에서 실행) · 흐름 참여 합 17 → **18** · 세는 기준 명시 — 스위치 수 불변
@@ -27,7 +28,7 @@ SW-01~SW-10의 순서는 [README.md](./README.md) 고정 기준의 목록 순서
 | **SW-05** | CACHE_STAMPEDE_LOCK | Redis 역할 — 캐시 | on | 미스 시 동시 요청 전원이 원천을 부른다 | SET NX 락 + 대기 · 재조회 | S4 |
 | **SW-06** | REDIS_PUBSUB_FANOUT | Redis 역할 — 팬아웃 | on | 발행자가 WebSocket 게이트웨이를 직접 부른다 | PUBLISH · SUBSCRIBE | S4 |
 | **SW-07** | WS_THROTTLE_MS | Redis 역할 — 팬아웃 | on(100 ms) | 0 — 병합 없이 매 갱신 전송 | 창 안 같은 태그의 최종값만 전송 | S4 |
-| **SW-08** | INGEST_IDEMPOTENCY | Redis 역할 — 멱등 | on | 중복 제거 토큰을 싣지 않는다 | insert_deduplication_token 전달 | S3 |
+| **SW-08** | INGEST_IDEMPOTENCY | Redis 역할 — 멱등 | on | 중복 제거 토큰을 싣지 않고 서버 중복 제거를 끈다(삽입 설정 deduplicate_insert 'disable' — 26.8은 토큰 없는 같은 내용도 중복 제거하고 이 설정이 insert_deduplicate를 대체한다 · S3 판정) | insert_deduplication_token 전달 | S3 |
 | **SW-09** | CONTROL_TABLE_ENABLED | Redis 역할 — 대조군 | **off** | PostgreSQL 대조군에 싣지 않는다 | 같은 배치를 plc_tag_raw_control에도 삽입 | S3(적재) · S5(측정) |
 | **SW-10** | COLLECTOR_DEADBAND | 수집 | **off** | 데드밴드 비활성 — 변화량과 무관하게 전부 발행 | 태그별 tag_master.deadband 적용 | S3 |
 | **SW-11** | LATEST_VALUE_WRITER | Redis 역할 — 최신값 결합 | **ingest** | ingest — Ingest가 ClickHouse 삽입 성공 · XACK 뒤에 rt:latest를 덮어쓴다(ING-08) | collector — Collector가 XADD와 같은 파이프라인으로 rt:latest를 덮어쓴다 | S3(ingest 잠정) · S6(비교) |

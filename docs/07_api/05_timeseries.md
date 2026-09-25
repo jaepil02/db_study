@@ -2,6 +2,7 @@
 
 > **대상**: TSQ 도메인 표면 — 시계열 조회(POST /api/v1/timeseries/query) 요청 스키마 · 해상도 규칙의 표면 모양 · meta · points 열 구성 · 다운샘플 모드 · 진행 구간 분할의 호출 모양 · 원시 내보내기 스트림 · **내보내기 스트림 중단 종료 표지 판정** · 태그 상한 · 최대 포인트 수(2계층 소유)
 > **작성일**: 2026-09-24
+> **개정일**: 2026-09-25 — S3 구현 반영 — §S2 단계 표면 tagName · unit 행 null → **S3에서 계약으로 복귀**(dictGet(plc.dict_tag) · 사전 조회 실패 시 null · 응답은 성공)
 > **개정일**: 2026-09-24 — S2 구현 반영 — §S2 단계 표면(as-built) 신설 — raw 고정 · 예상 포인트 초과 400(S4에서 상향으로) · tagName · unit null(S3 dict_tag) · 현재 버킷 TTL 구간 미도달
 > **개정일**: 2026-09-24 — W7 보안 판정 반영 — 내보내기 범위 상한 미정 → **현행 참고 1일**(2계층 · 초과 400 reason range) · 등급 class export — 표면 수 불변(정본 12_security/03)
 > **개정일**: 2026-09-24 — W6 실험 채번 반영 — 메트릭 이름 반영(정본 10_observability/01 · 06)
@@ -74,7 +75,7 @@ TSQ 표면은 **요청한 것이 아니라 서버가 고른 것을 돌려주는 
 |------|------|------|------|
 | interval | raw만 받는다 — 다른 값은 400 common.validation_failed(body.interval · enum) | S4(해상도 선택) | 롤업이 없어 1m · 1h · 1d를 낼 원천이 없다 |
 | 예상 포인트 > maxPoints | **거절한다** — 400 common.validation_failed(body.to · range) · 예상 포인트 = 범위 ÷ scan_rate_ms(시드 1,000 ms) | S4(상향 · LTTB) | 상향할 해상도도 축소 수단도 없다 — 조용히 자르면 부분 결과가 전체로 읽힌다 |
-| series[].tagName · unit | null | S3(dict_tag) | 메타를 붙이는 Dictionary가 S3에 생긴다 |
+| series[].tagName · unit | null | **S3에서 복귀(as-built)** — 한 번의 dictGet(plc.dict_tag) 조회로 요청 태그 전부의 이름 · 단위를 붙인다 · 사전 조회가 실패하면 그 요청만 null로 두고 points는 그대로 낸다 | 메타를 붙이는 Dictionary가 S3에 생긴다 · 메타 실패로 시계열 전체를 5xx로 만들면 사전 재적재 중에 트렌드가 끊긴다 |
 
 - 검산: 자리 = **3**
 - **S2의 거절은 상향 계약의 임시 대체다.** 대시보드 채움(5분 × 1 Hz = 태그당 300포인트)은 걸리지 않는다. S4에서 거절 분기를 지우고 상향으로 바꾼다 — 그때 이 절을 지운다.

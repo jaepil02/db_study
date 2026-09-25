@@ -2,6 +2,7 @@
 
 > **대상**: db_study가 "동작한다" · "그 단계를 마쳤다" · "학습 목표를 산출했다"고 말할 수 있는 조건 — 흐름 검증 체크리스트 · 학습 단계 S0~S7 합격 판정 · 학습 목표 산출물(대조군 역전 지점 · 축출 연쇄 · 스위치 on/off 비교) · 롤업 부동소수 허용 오차 판정 · 캐시 정합성 판정 — **AC-NN 채번 정본**
 > **작성일**: 2026-09-24
+> **개정일**: 2026-09-25 — S3 검수 반영 — AC-12 문구 "불량 엔트리는 재시도 소진 뒤 DLQ" → **해독 불가는 즉시 · 삽입 실패는 재시도 소진 뒤**(정본 06_pipeline/03 §재시도 · 격리 · DLQ와 일치)
 > **개정일**: 2026-09-25 — S2 판정 반영(EXP-29 기록 010) — AC-01 모드 A 생성 카운트 = **points_emitted**(Collector 발행 포인트)
 > **개정일**: 2026-09-24 — 최종 정밀 검수 — 축출 연쇄 미확인 행에 EXP-18 연결
 > **개정일**: 2026-09-24 — W7 검수 반영 — 미확인 1행 닫힘(시뮬레이터 주입 제어 수단) — AC 수 불변
@@ -49,7 +50,7 @@
 | **AC-09** | 알람 디바운스 | 디바운스 미만 · 이상 길이의 스파이크를 각각 주입 | 미만 — alarm_event **0행** · alarm_eval 위반 행 존재 · alarm:state NORMAL 복귀 / 이상 — alarm_event **1행** | F-06 | ALM-03 · ALM-04 · ALM-05 | [10_alarms.md](./10_alarms.md) | S7 |
 | **AC-10** | WebSocket 재연결 | 연결을 강제로 끊고(서버 소켓 종료 또는 브라우저 오프라인 전환) 복구 | 재연결 간격이 지수로 늘고 상한에서 멈춘다 · 재연결 직후 REST 최신값 요청 **1건** · 화면 값 = rt:latest | F-07 · F-03 | RLT-07 | [09_realtime.md](./09_realtime.md) | S4 |
 | **AC-11** | 백프레셔 — ClickHouse 5분 중단 | 부하 중 clickhouse 컨테이너 5분 정지 → 재기동 → 소진 | AC-01 식 **차 0** · AC-02 식 **0건** · 생성 구간 ts 공백 없음 · 소진 시간 **기록**(원본 목표 중단 시간의 30% 이하 — 미확인) · 중단 중 최신값 STALE 표시 | F-10 · F-02 · F-03 | ING-13 · ING-05 · RLT-03 | [07_ingest.md](./07_ingest.md) · [04_collector.md](./04_collector.md) · [09_realtime.md](./09_realtime.md) | S6 |
-| **AC-12** | DLQ | 모드 B로 디코딩 불가 페이로드를 섞어 주입 | 불량 엔트리는 재시도 소진 뒤 DLQ로 이동하고 **XACK되어 PEL 잔류 0** · dlq_count 증가 · 정상 엔트리 AC-01 식 차 0. 알림 발동은 observability 프로파일 기동 시에만 판정한다 | F-02 · F-09 | ING-05 · GEN-06 · OBS-01 | [07_ingest.md](./07_ingest.md) · [12_metrics.md](./12_metrics.md) | S3 |
+| **AC-12** | DLQ | 모드 B로 디코딩 불가 페이로드를 섞어 주입 | 해독 불가 엔트리는 재시도 없이 즉시, 삽입이 계속 실패한 배치의 엔트리는 재시도 소진 뒤 DLQ로 이동하고 **XACK되어 PEL 잔류 0** · dlq_count 증가 · 정상 엔트리 AC-01 식 차 0. 알림 발동은 observability 프로파일 기동 시에만 판정한다 | F-02 · F-09 | ING-05 · GEN-06 · OBS-01 | [07_ingest.md](./07_ingest.md) · [12_metrics.md](./12_metrics.md) | S3 |
 | **AC-13** | TTL 삭제 | 모드 D로 보존 기간을 넘긴 ts의 행을 적재 → 보존 적용 뒤 파티션 · mutation 조회 | 보존 기간 밖 일자 파티션이 system.parts에서 **사라진다** · 행 단위 DELETE mutation **0건**. 적용 시점(머지 주기)은 2계층 · 소유 [../05_data_stores/08_retention_lifecycle.md](../05_data_stores/08_retention_lifecycle.md) | F-08 · F-09 | GEN-08 · ING-12 | [07_ingest.md](./07_ingest.md) · [13_nonfunctional.md](./13_nonfunctional.md) | S3 |
 
 - 검산: 흐름 검증 AC = AC-01~13 = **13**

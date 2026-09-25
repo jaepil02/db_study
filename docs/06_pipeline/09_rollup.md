@@ -2,6 +2,7 @@
 
 > **대상**: F-08 롤업 흐름의 기전 정본 — 삽입 한 번이 발동하는 MV 연쇄 · 계층별 담당 조회 · MV 실패의 감지 · **원시 성공 · MV 실패 뒤 같은 토큰 재시도의 MV 재실행 판별(ⓑ — S0 실측)과 이중 계수 대응** · **롤업 공백 구간 재계산 절차** · 늦게 도착한 데이터 · 백필(모드 D)과의 관계 · 보존 경계와 정합 대조
 > **작성일**: 2026-09-24
+> **개정일**: 2026-09-25 — S3 통합 발견 — 재계산 삽입 설정에 deduplicate_insert_select 'disable' 병기(26.8에서 insert_deduplicate 0만 주면 무시됨 — 발견 즉시 닫음)
 > **개정일**: 2026-09-24 — ClickHouse 26.8 LTS 전환(사용자 결정 · 25.x 보안 지원 종료) — 판별 근거에 26.8(기록 004) — 적재 측 거절은 26.8에서 원시를 커밋하고 MV만 거절(ⓑ로 메움) · 부분 실패 이중 계수 26.8 3/3 · 보강 아래 부분 실패 정확(미측정 닫힘) · 재계산 insert_deduplicate 0 근거를 버전 종속으로
 > **개정일**: 2026-09-24 — S0 실측 반영(EXP-32 · 기록 001) — ⓐ · ⓑ 판별 → **ⓑ**(종속 MV가 다시 돈다) · 이중 계수 발견과 ADR-14 보강 반영 · 의심 구간 판정을 계측 전용으로 · 재계산 삽입(경로 A · B ⑤)에 insert_deduplicate 0(롤업 윈도우가 같은 내용을 버림 — 실측) · ingested_at은 INSERT 문 하나에 한 값(블록 7개 · 2개 모두 고유값 1) — 경로 A의 단위를 배치로 · 미확인 표 2행 닫힘
 > **개정일**: 2026-09-24 — 최종 정밀 검수 — p95 롤업 대조 미확인 행에 확정 수단 EXP-31 연결 · §재계산 → §롤업 공백 재계산(절 이름 교정)
@@ -94,7 +95,7 @@ flusher INSERT plc.tag_raw(배치 · 토큰 T)
 └─ countMerge > count — 롤업이 더 많다(중복 · 원시 TTL 뒤) ────── 원시 보존 안이면 경로 B · 밖이면 대조 제외
 ```
 
-- **경로 A가 기본이다.** 실패한 삽입의 원시 행은 같은 ingested_at 값을 갖는다(서버 DEFAULT now64가 **INSERT 문마다 1회** 평가 — S0 실측) — 의심 구간 기록의 ts 범위 안에서 롤업에 기여하지 않은 ingested_at 값을 찾아 그 행만 mv_tag_1m이 붙은 채로 tag_1m에 INSERT SELECT(insert_deduplicate 0 — 25.8은 롤업 윈도우가 같은 내용 재삽입을 오류 없이 버렸다 · 버전 종속이라 절차로 고정)하면 연쇄가 tag_1h · tag_1d의 빠진 기여분까지 정확히 더한다. 큰 INSERT가 여러 블록으로 쪼개져도 ingested_at은 **한 값**이다(S0 실측 — 블록 7개 · 2개 모두 고유값 1 · 기록 001). 그래서 ingested_at은 블록이 아니라 배치(INSERT 하나)를 가른다 — 한 배치 안의 일부 블록만 롤업에서 빠진 경우는 ingested_at으로 가르지 못해 경로 B로 간다.
+- **경로 A가 기본이다.** 실패한 삽입의 원시 행은 같은 ingested_at 값을 갖는다(서버 DEFAULT now64가 **INSERT 문마다 1회** 평가 — S0 실측) — 의심 구간 기록의 ts 범위 안에서 롤업에 기여하지 않은 ingested_at 값을 찾아 그 행만 mv_tag_1m이 붙은 채로 tag_1m에 INSERT SELECT(insert_deduplicate 0 · deduplicate_insert_select 'disable' — 26.8은 뒤 설정이 앞 설정을 대체한다 · 25.8은 롤업 윈도우가 같은 내용 재삽입을 오류 없이 버렸다 · 버전 종속이라 절차로 고정)하면 연쇄가 tag_1h · tag_1d의 빠진 기여분까지 정확히 더한다. 큰 INSERT가 여러 블록으로 쪼개져도 ingested_at은 **한 값**이다(S0 실측 — 블록 7개 · 2개 모두 고유값 1 · 기록 001). 그래서 ingested_at은 블록이 아니라 배치(INSERT 하나)를 가른다 — 한 배치 안의 일부 블록만 롤업에서 빠진 경우는 ingested_at으로 가르지 못해 경로 B로 간다.
 - **경로 B의 단위가 KST 일인 이유** — 분 버킷의 기여는 시간 · 일 버킷에도 들어가 있으므로 분만 비우면 상위 롤업은 옛 부분 상태를 그대로 갖는다. 일 버킷은 시간 · 분 버킷을 전부 품으므로 **일 단위로 세 롤업을 함께 비우고** 그 일의 원시를 tag_1m에 넣으면 연쇄가 세 롤업을 일관되게 다시 만든다.
 - **countMerge > count는 두 원인이다** — 원시가 TTL로 이미 떨어진 버킷(정상 — 롤업이 원시보다 오래 산다)이거나 백필 이중 실행이다. 원시 보존 밖이면 판정할 원천이 없어 대조에서 뺀다.
 
@@ -104,7 +105,7 @@ flusher INSERT plc.tag_raw(배치 · 토큰 T)
 | ② 원시 확인 | 그 일이 원시 보존 안인가 | 원천 없는 비우기 | 보존 밖 일을 비우기 |
 | ③ 적재 정지 확인 | 그 일에 새 행이 들어오지 않는가(과거 일은 적체 소진 · 재발행이 끝났는가) | 비우는 도중 새 기여가 섞임 | 적재 중 실행 |
 | ④ 비우기 | tag_1m · tag_1h · tag_1d에서 그 일 · 설비의 버킷 삭제(mutation) | 이중 계산 | 한 롤업만 비우기 |
-| ⑤ 다시 만들기 | 그 일 · 설비의 원시를 -State로 tag_1m에 INSERT SELECT — 상위 MV가 연쇄 · **insert_deduplicate 0** | 상위 롤업 불일치 · 재실행이 윈도우에 걸려 0행이 되는 것 | 상위 롤업을 따로 채우기 · 중복 제거를 켠 채 재실행 |
+| ⑤ 다시 만들기 | 그 일 · 설비의 원시를 -State로 tag_1m에 INSERT SELECT — 상위 MV가 연쇄 · **insert_deduplicate 0 · deduplicate_insert_select 'disable'** | 상위 롤업 불일치 · 재실행이 윈도우에 걸려 0행이 되는 것 | 상위 롤업을 따로 채우기 · 중복 제거를 켠 채 재실행 |
 | ⑥ 대조 | §정합 대조 세 count | 재계산 누락 | 대조 없이 종료 |
 
 - 검산: 단계 = **6**
@@ -154,6 +155,7 @@ flusher INSERT plc.tag_raw(배치 · 토큰 T)
 | 원시 성공 · MV 실패 뒤 같은 토큰 재시도가 MV를 다시 실행하는가(ⓐ · ⓑ) | **닫힘(S0 실측)** — ⓑ · 이중 계수는 ADR-14 보강으로 막는다 | EXP-32 · [../05_data_stores/03_clickhouse_schema.md](../05_data_stores/03_clickhouse_schema.md) |
 | 여러 블록으로 쪼개진 INSERT의 ingested_at 동일성 | **닫힘(S0 실측)** — INSERT 문 하나에 한 값 · 경로 A는 배치 단위로 가른다 | EXP-32 · 이 문서 §롤업 공백 재계산 |
 | MV 캐스케이드 지연 · MV가 삽입 처리량에 더하는 비용 | 3계층 미확인 — 원본 예상치 100 ms | REQ-NFR-04 |
+| **재계산 삽입의 중복 제거 해제 설정 이름** | **닫힘(S3 통합 확인)** — 26.8은 deduplicate_insert(INSERT) · deduplicate_insert_select(INSERT SELECT)가 insert_deduplicate를 대체해 앞 설정만 주면 무시된다(적재 SW-08 off에서 확인 · 06_pipeline/03). 26.8의 INSERT SELECT는 기본값(enable_when_possible)에서 같은 내용 두 번째 삽입을 버리지 않았다(S3 확인 — 기록 004와 같다) — 절차는 두 설정을 모두 명시해 버전 · 기본값에 기대지 않는다 | 이 문서 §롤업 공백 재계산 · [../05_data_stores/04_clickhouse_rollup.md](../05_data_stores/04_clickhouse_rollup.md) |
 | p95 원시 대 롤업 허용 범위 | 3계층 미확인 — 확정 수단 EXP-31(원시 내 순위 오차) | [../03_requirements/14_acceptance_criteria.md](../03_requirements/14_acceptance_criteria.md) §미확인 등재 |
 | 롤업 의심 구간 · MV 오류 계수 메트릭 이름 | **W6 판정** — ing_rollup_suspect_batches_total · ing_mv_errors_total{result} | [../10_observability/01_metrics_catalog.md](../10_observability/01_metrics_catalog.md) |
 

@@ -2,6 +2,7 @@
 
 > **대상**: 스키마 적용의 저장소 간 순서 · PostgreSQL 순번 마이그레이션 · ClickHouse DDL 순번 · 도구 관리 테이블 · 시드(사이트 · 라인 · 설비 · 접속 설정 · 태그 · 계정 · 역할) · 스키마 변경 절차 · 스냅샷과의 관계
 > **작성일**: 2026-09-24
+> **개정일**: 2026-09-25 — S3 구현 반영 — §S3 적용 범위(as-built) 신설(PostgreSQL 003~007 · ClickHouse 003~008 · pg_partman 확장은 migrate 관리자 단계 · ⑨ RELOAD는 seed 끝 · ClickHouse 러너 다문장 분할)
 > **개정일**: 2026-09-24 — S2 구현 반영 — §S2 적용 범위(as-built) 신설(PostgreSQL 001 · 002 · ClickHouse 001 · 002 · 시드 --tier · --slice · changed_by 외래 키 003) · tag_master 시드 data_type 혼합(16 · 32비트) → **06_pipeline/10 §티어 시드 구성 인용(S = FLOAT32 · ABCD)** — 두 정본 불일치 해소
 > **개정일**: 2026-09-24 — 최종 정밀 검수 — 빈 표 칸을 닫힌 어휘 해당 없음으로 채움(표 열 규약) · BOOL · FC01 · FC02 시드 금지 근거를 W4 판정으로 갱신 · 도구 관리 테이블 제외 기준의 루트 README 반영 완료 표기
 > **개정일**: 2026-09-24 — W7 검수 반영 — 미확인 2행 닫힘(티어 시드 구성 · 알람 규칙 시드)
@@ -116,6 +117,22 @@ S2는 초기 대역의 앞 둘만 적용한다 — 뒤 순번은 그 테이블�
 
 - 검산: 대상 = **4**
 - **seed는 빈 볼륨 전용 · 한 트랜잭션이다.** 마스터에 행이 있으면 거부한다 — 두 번 시드한 볼륨은 tag_id 공간이 달라 같은 시드의 두 실험이 다른 태그를 본다. 빈 상태로 되돌리는 수단은 스냅샷 복원이다(s2-empty-slice · s2-empty-s).
+
+### S3 적용 범위(as-built)
+
+S3는 초기 대역의 나머지를 전부 적용한다 — node-pg-migrate의 순서 검사가 앞 순번이 빠진 채 뒤 순번만 적용하는 것을 막으므로 대조군(007)만 먼저 넣으면 003~006을 그 뒤에 끼울 수 없다.
+
+| 대상 | S3 적용 | 도구 표현 · 권한 | 이유 |
+|------|------|------|------|
+| PostgreSQL 003~006 | AUT 3 · tag_master_history.changed_by 외래 키 · ALM 2(alarm_event 월 파티션 등록 · 보존 2년 · 분리 보존) · WRK 3 · 가드 트리거 · REVOKE · 인덱스 | 원시 SQL · app_owner 소유 | 스키마만 — 표면은 S4 · S7이 만든다 · 순서 검사 |
+| PostgreSQL 007 | plc_tag_raw_control · 일 파티션 등록 · 보존 7일 · BRIN | 상동 | SW-09 동시 적재(AC-21) |
+| pg_partman 확장 | partman 스키마 · 확장 생성 · app_owner 권한 부여 | **migrate 관리자 단계**(마이그레이션 파일 밖) — 확장 생성은 superuser만 되고 마이그레이션은 app_owner로 돈다 | 004 · 007의 등록 호출이 확장을 요구한다 |
+| ClickHouse 003~008 | alarm_eval · tag_1m · tag_1h · tag_1d · mv_tag_1d → mv_tag_1h → mv_tag_1m · dict_tag(명명 수집 pg_dict — ch_reader 비밀번호는 서버 설정 파일이 환경변수에서 읽는다) | 파일 하나에 여러 문장 — 러너가 문장 끝 세미콜론으로 나눠 한 문장씩 보낸다 | 적재 경로가 롤업 · 사전을 채운다 |
+| ⑨ SYSTEM RELOAD DICTIONARY | seed 트랜잭션 커밋 뒤 한 번 | seed가 ClickHouse에 보낸다 | 시드 직후 첫 dictGet이 빈 사전을 보지 않는다 |
+
+- 검산: 대상 = **5**
+- **확장 생성을 마이그레이션 파일에 두지 않은 이유** — 파일에 두면 마이그레이션 실행 역할이 superuser여야 하고, 그러면 마이그레이션이 만든 객체의 소유가 app_owner가 아니게 되어 app_rw 권한 부여 규칙(01_postgresql_schema)이 객체마다 갈린다. 관리자 단계는 멱등(IF NOT EXISTS)이라 migrate를 다시 돌려도 같다.
+- 빈 상태 스냅샷은 s3-base(migrate만) · s3-empty-slice · s3-empty-s다 — S2 스냅샷에는 003~008이 없어 그 위에 S3 이미지를 띄우면 롤업 · 사전 · 대조군 없이 돈다 — S3 측정은 S3 스냅샷에서만 시작한다.
 
 - **시드는 감사하지 않는다.** 감사 대상은 사람이 인증된 쓰기 표면으로 일으킨 변경이다(REQ-WRK-07). 시드 행에 감사 행을 만들면 "변경 이력 조회"에 존재하지 않은 변경이 나타난다.
 

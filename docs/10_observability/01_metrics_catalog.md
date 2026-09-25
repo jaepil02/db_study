@@ -2,6 +2,8 @@
 
 > **대상**: /metrics로 노출하는 메트릭 전수 — 이름 규약 · 닫힌 레이블 집합 · **스위치 상태 레이블 이름** · **컨슈머 랙 산출식 판정(가장 중요한 단일 지표)** · 계열별 전수(앱 기본 · HTTP·WS · 수집 · 적재 · 알람 · 실시간 · 조회 · 업무 · 인증 · Redis · PostgreSQL · ClickHouse · E2E · 관측 자체) · 파생 지표 식 · 선행 문서 인계 메트릭 대응 · 수집 주기 · E2E 창 · 메모리 표본 수 조회 계약 · Pub/Sub 출력 버퍼 관련 메트릭
 > **작성일**: 2026-09-24
+> **개정일**: 2026-09-25 — S3 실측 반영(기록 015 · 020) — AC-19 "0 유지" 표본 해석 불릿 신설(순간값 · 누적 판정 · pending 2배치 = 창 2개분 엔트리)
+> **개정일**: 2026-09-25 — S3 구현 반영 — ing_dedup_ignored_batches_total **S3 미구현 · 미등록**(@clickhouse/client 삽입 응답 요약에 ProfileEvents가 없고 written_rows는 중복 제거된 재시도에도 같다 — 0으로 내면 "중복 없음"으로 오독)
 > **개정일**: 2026-09-25 — S2 판정 반영(EXP-29 기록 010) — col_modbus_rtt_seconds 타임아웃 관측값 20초(유한) · 버킷으로 읽기 · 무손실 차의 모드 A 분모 → **points_emitted**(Collector 발행 포인트 · Stream 디코딩 합 교차 확인)
 > **개정일**: 2026-09-24 — S1 구현 반영 — gen_worker_utilization 산출 방식 명시(작업 실행 시간 ÷ (경과 × 워커 수)) · gen_points_generated_total의 mode에 단독 실행 경로 standalone
 > **개정일**: 2026-09-24 — W7 보안 판정 반영 — aut_ratelimit_rejected_total class 값 **4 확정**(general · bulk_read · export · bulk_ingest) · 로그인 실패 계수는 신설하지 않고 http_requests_total로 대체 — 메트릭 수 불변(정본 12_security/03)
@@ -66,6 +68,7 @@
 - **lag를 산출할 수 없는 응답이면**(스트림 중간 삭제 등으로 lag가 비는 경우) consumer_lag는 직전 값을 유지하고 ing_consumer_lag_unknown을 1로 둔다 — 백프레셔의 "직전 단계 유지"(ADR-21)와 같은 규칙이다.
 - **샘플 주기 — ING flusher가 플러시마다 한 번 XINFO GROUPS로 갱신하고 스크레이프는 마지막 값을 읽는다.** 저장소 통계 수집 주기(15초)에 맡기지 않는 이유는 랙이 가장 빠르게 변하는 지표라서다 — 15초 표본은 스파이크 흡수의 정점을 놓친다.
 - **AC-19 "랙 0 유지"의 해석(판정).** 부하 중 pending은 in-flight 배치(창 버퍼 1 + 삽입 중 1 — XACK는 삽입 성공 뒤라 판정 인계 슬롯은 이미 확인된 배치다)만큼 늘 존재하므로 consumer_lag는 부하 중 0이 아니다. 합격선은 **그룹 lag 0 유지 · pending이 in-flight 2배치 분량 안에서 유계 · 부하 정지 뒤 consumer_lag 0 복귀**다 — [../03_requirements/14_acceptance_criteria.md](../03_requirements/14_acceptance_criteria.md) AC-19 문구가 이 해석으로 보정됐다(W6 반영).
+- **"0 유지"는 누적이 없다는 뜻이다(S3 판정 · 기록 015 · 020).** 1초 표본이 발행 묶음이 XADD된 직후와 겹치면 그 묶음(≤ 설비 수 엔트리)이 아직 배달되지 않은 순간값으로 잡힌다 — 모드 B 티어 S 1회에서 lag 1~2가 표본 3개에 잡히고 다음 표본에 0으로 돌아왔다(모드 A 9회 표본 1,725개는 전부 0). 그 반복은 lag가 연속 2표본(2초) 동안 2였다가 0으로 돌아왔고 한 발행 묶음(엔트리 5)을 넘지 않았다. 순간값과 누적을 가르는 문턱(몇 표본 · 몇 엔트리)은 **3계층 미확인**으로 두고 이 한 사례로 정하지 않는다 — S3 합격은 누적 없음(정지 뒤 0 · 반복 안 최대 2 · 발행 묶음 이하)으로 읽었다(리드 판정). pending 상한 "in-flight 2배치 분량"은 창 2개분 엔트리(티어 S 창 1초 · 설비 5 → 10)로 센다(리드 판정).
 
 ## 앱 기본 · HTTP · WebSocket
 
@@ -134,7 +137,7 @@
 | ing_decode_seconds | histogram | 초 | 없음 | 수신 → 행 배열 완료(6b) | 지연 예산 6b |
 | ing_fanin_wait_seconds | histogram | 초 | 없음 | 행 배열 완료 → 플러시 시작(6c) | 지연 예산 6c |
 | ing_consumer_paused_seconds_total | counter | 초 | 없음 | flusher 보유 상한으로 컨슈머가 읽기를 멈춘 시간 | [../06_pipeline/03_ingest_batch.md](../06_pipeline/03_ingest_batch.md) |
-| ing_dedup_ignored_batches_total | counter | 배치 | 없음 | 중복 제거로 쓰인 행 수 0인 성공 | 상동 |
+| ing_dedup_ignored_batches_total | counter | 배치 | 없음 | 중복 제거로 쓰인 행 수 0인 성공 — **S3 미구현**(삽입 응답 요약에 판별 수단이 없다 · 06_pipeline/03 §미확인 · 미설계 등재) · 등록하지 않는다 | 상동 |
 | ing_xautoclaim_claimed_total | counter | 엔트리 | 없음 | 주기 회수로 인수한 PEL | EXP-28 |
 | ing_routed_rows_total | counter | 행 | layer(raw · alarm) | 분기 계층별 쓰기 결과 — ① 원시 적재 · ② 판정기 인계 | REQ-ING-14 · 분기 대조 |
 | ing_negative_dt_total | counter | 행 | 없음 | 음수 dt 행 — 거절하지 않고 센다 | [../06_pipeline/12_data_contract.md](../06_pipeline/12_data_contract.md) |

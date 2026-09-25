@@ -2,6 +2,7 @@
 
 > **대상**: 적재·분기(ING · NestJS ingest 모듈)의 동작 계약 — Stream 소비 · 배치 플러시 · ClickHouse 삽입 · 멱등 · XACK · 재시도 · DLQ · PEL 회수 · 다중 컨슈머 · 최신값 · 알람 전달 · 3계층 분기 실행 · 대조군 동시 적재 · 롤업 발동 · 백프레셔 대응 · 관측 — REQ-ING-NN 채번 정본
 > **작성일**: 2026-09-24
+> **개정일**: 2026-09-25 — S3 구현 반영 — REQ-ING-10 컨슈머 이름 ingest-{pid}-{n} → **ingest-{n}**(정본 11_glossary/04)
 > **개정일**: 2026-09-24 — W7 검수 반영 — REQ-ING-17 에러 코드 칸 · 장애 표 메트릭 stream_length → **redis_stream_length**(정본 10_observability/01) · 미확인 6행 닫힘(대조군 멱등 · 생산 카운터 · alarm_eval 재시도 · DLQ 재처리 · 토큰 재료 · rt:latest 순서 역전) — REQ 수 불변
 > **개정일**: 2026-09-24 — W6 실험 채번 반영 — 메트릭 이름 반영 · 이벤트 루프 p95 메트릭 이름 통일(정본 10_observability/01 · 06)
 > **개정일**: 2026-09-24 — W4 판정 반영 — REQ-ING-18 Stream 대기 시작점 t0 → **엔트리 ID 시각**(04_architecture/05 판정과 통일) — REQ 수 불변
@@ -32,7 +33,7 @@
 | **REQ-ING-07** | XACK은 삽입 성공 뒤에만 한다. 확인 뒤에만 최신값 갱신 · 팬아웃 · 알람 전달이 뒤따른다(REQ-ING-11 · 13) | REQ-GLB-05 · 원본 architecture.md §9.2 | 삽입 전에 XACK하면 삽입 실패가 **조용한 유실**이 된다. 확인 전에 최신값을 갱신하면 ClickHouse에 없는 값이 화면에 보여 최신값 = argMax 대조가 깨진다 | ClickHouse 5분 중단 → 중단 중 XPENDING 증가 · 복구 후 생성 수 = 행 수 | ING-05 | F-02 · F-10 | 해당 없음 — consumer_lag |
 | **REQ-ING-08** | 삽입 실패는 지수 백오프로 **같은 토큰**을 써 재시도하고 백오프 합계는 중복 제거 윈도우 안에 머문다. 소진하면 배치와 오류 사유를 stream:plc:dlq에 넣고 **반드시 XACK**하며 dlq_count를 올리고 알린다. 백오프 · 횟수는 2계층 조정값(현행 참고 1 · 2 · 4 · 8 · 16초 · 5회 · 소유 [../06_pipeline/03_ingest_batch.md](../06_pipeline/03_ingest_batch.md)) | REQ-GLB-05 · 06 · 원본 architecture.md §9.2 | 격리에서 XACK을 생략하면 PEL에 영구 잔류해 **컨슈머 랙이 영원히 0으로 돌아오지 않고** 이후 모든 랙 알림이 거짓이 된다. 재시도가 새 토큰을 쓰면 부분 성공 후 재시도가 중복을 만든다 | 재시도 소진 유도 → DLQ 증가 · XPENDING 0 · dlq_count 알림 · 재시도 전후 토큰 동일 로그 | ING-05 | F-02 · F-10 | 해당 없음 — dlq_count |
 | **REQ-ING-09** | 주기 타이머로 XAUTOCLAIM을 돌려 idle 기준을 넘긴 PEL 엔트리를 인수한다. 주기 · idle 기준은 2계층 조정값(현행 참고 30초 · 60초 · 소유 상동). 재시작은 흔한 원인일 뿐 감지 신호가 아니다 | 원본 data_flow.md §4 · §4.2 · W1 판정 [../11_glossary/03_enums_state_machines.md](../11_glossary/03_enums_state_machines.md) | 재시작 감지로만 회수하면 같은 프로세스 안 **컨슈머 하나의 예외**는 회수되지 않아 그 컨슈머의 PEL이 영구 잔류한다 | 컨슈머 1개에 예외 주입 → 다른 컨슈머가 PEL 인수 · consumer_lag 급증 후 회복 · 회수 시간 측정 | ING-06 | F-02 · F-10 | 해당 없음 — consumer_lag |
-| **REQ-ING-10** | 다중화는 프로세스가 아니라 컨슈머 이름(ingest-{pid}-{n})으로 하며 같은 프로세스 안 독립 XREADGROUP 루프다. 컨슈머 간 순서를 보장하지 않으며 **ING 안에 적재 순서에 의존하는 처리를 두지 않는다** | REQ-GLB-07 · 원본 data_flow.md §4.2 | 순서 의존 처리(예: 마지막으로 삽입된 행을 최신값으로)를 넣으면 라운드로빈 배분의 배치 간 역전이 오류 없이 틀린 값을 낸다 | 컨슈머 3개에서 rt:latest 값과 argMax(value, ts) 대조 | ING-07 | F-02 · F-03 | 해당 없음 |
+| **REQ-ING-10** | 다중화는 프로세스가 아니라 컨슈머 이름(ingest-{n} · n = 1..N 고정)으로 하며 같은 프로세스 안 독립 XREADGROUP 루프다. 컨슈머 간 순서를 보장하지 않으며 **ING 안에 적재 순서에 의존하는 처리를 두지 않는다** | REQ-GLB-07 · 원본 data_flow.md §4.2 | 순서 의존 처리(예: 마지막으로 삽입된 행을 최신값으로)를 넣으면 라운드로빈 배분의 배치 간 역전이 오류 없이 틀린 값을 낸다 | 컨슈머 3개에서 rt:latest 값과 argMax(value, ts) 대조 | ING-07 | F-02 · F-03 | 해당 없음 |
 
 ## 요구사항 — 최신값 · 알람 전달 · 분기 · 대조군 · 롤업
 

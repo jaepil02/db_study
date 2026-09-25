@@ -15,8 +15,7 @@ T0=$(date +%s)
 chq "INSERT INTO plc.tag_raw (ts, device_id, tag_id, value, quality, scan_seq)
      SELECT now64(3) - INTERVAL 10 DAY + number / 100, 1, 1 + number % 8, number, 0, number FROM numbers($ROWS)"
 PART=$(chq "SELECT toYYYYMMDD(now() - INTERVAL 10 DAY)")
-INSERTED=$(chq "SELECT sum(rows) FROM system.parts WHERE database = 'plc' AND table = 'tag_raw' AND partition = '$PART' AND active")
-echo "── 파티션 $PART · 삽입 $INSERTED 행 · 관찰"
+echo "── 파티션 $PART · 관찰"
 ROWS_ZERO_AT=""; GONE_AT=""
 for _ in $(seq 1 120); do
   R=$(chq "SELECT count(), sum(rows) FROM system.parts WHERE database = 'plc' AND table = 'tag_raw' AND partition = '$PART' AND active")
@@ -25,6 +24,9 @@ for _ in $(seq 1 120); do
   if [ "$N" = 0 ]; then GONE_AT=$(( $(date +%s) - T0 )); break; fi
   sleep 5
 done
+chq "SYSTEM FLUSH LOGS"
+# 삽입 행 수는 part_log NewPart에서 읽는다 — 보존 밖 행은 삽입 직후 TTL 병합으로 곧 0이 되어 system.parts로는 못 잰다
+INSERTED=$(chq "SELECT sum(rows) FROM system.part_log WHERE database = 'plc' AND table = 'tag_raw' AND partition_id = '$PART' AND event_type = 'NewPart' AND merge_reason = 'NotAMerge'")
 REASONS=$(chq "SELECT groupUniqArray(toString(merge_reason)) FROM system.part_log WHERE database = 'plc' AND table = 'tag_raw' AND partition_id = '$PART' AND event_type = 'MergeParts'")
 MUT1=$(chq "SELECT count() FROM system.mutations WHERE database = 'plc'")
 printf '{"rep":%s,"snapshot":"%s","partition":"%s","inserted":%s,"rowsZeroAfterS":%s,"partitionGoneAfterS":%s,"mergeReasons":%s,"mutationsBefore":%s,"mutationsAfter":%s}\n' \
