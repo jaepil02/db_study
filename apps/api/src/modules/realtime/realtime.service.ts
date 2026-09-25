@@ -49,6 +49,8 @@ const served = new Counter({
   labelNames: ['freshness'],
   registers: reg,
 });
+// 닫힌 레이블 값 0 초기화 — 기록 규칙 STALE 비율이 첫 사건을 놓치지 않게 한다(S5)
+for (const freshness of ['fresh', 'stale']) served.inc({ freshness }, 0);
 
 const unresolved = new Counter({
   name: 'rlt_tag_unresolved_total',

@@ -1,5 +1,6 @@
 // seed — 마스터 시드(S2 범위: 사이트 · 라인 · 설비 · 접속 설정 · 태그). 계정 · 역할 시드는 AUT 테이블이 생기는 단계(S7)다.
-// 실행: docker compose run --rm api node dist/db/seed.js --tier S | --slice s2 [--deadband <값>] [--range <min>,<max>] (task seed)
+// 실행: docker compose run --rm api node dist/db/seed.js --tier S | --slice s2 [--deadband <값>] [--range <min>,<max>] [--scan-rate <ms>] (task seed)
+// S5 옵션: --scan-rate는 모든 태그의 scan_rate_ms다(모드 A 계단 · S5 판정 6 — 계단마다 빈 볼륨에 다시 시드하고 재기동).
 // S3 옵션: --deadband · --range는 모든 태그에 같은 값이다 — 티어 시드의 data_type 구성(FLOAT32 ABCD)은 바꾸지 않는다.
 // 빈 볼륨 전용 · 한 트랜잭션 — 두 번 시드한 볼륨은 tag_id 공간이 달라 같은 시드의 두 실험이 다른 태그를 본다(09_tooling §Taskfile 작업).
 // 시드는 감사하지 않는다 — 사람이 쓰기 표면으로 일으킨 변경이 아니다(REQ-WRK-07).
@@ -7,7 +8,15 @@
 import { createClient } from '@clickhouse/client';
 import { CAPACITY_TIER_NAMES, type CapacityTier } from '@db-study/shared';
 import { Client } from 'pg';
-import { describeSeedOptions, parseSeedOptions, type SeedTarget, seedDevices, seedPlan } from './seed-plan';
+import {
+  describeSeedOptions,
+  effectiveScanRateMs,
+  parseScanRate,
+  parseSeedOptions,
+  type SeedTarget,
+  seedDevices,
+  seedPlan,
+} from './seed-plan';
 
 function target(argv: string[]): SeedTarget {
   const t = argv.indexOf('--tier');
@@ -45,6 +54,7 @@ async function main() {
   const plan = seedPlan(target(process.argv));
   const opts = parseSeedOptions(process.argv);
   const devices = seedDevices(plan);
+  const scanRateMs = effectiveScanRateMs(plan, parseScanRate(process.argv));
   const pg = new Client({ connectionString: process.env.POSTGRES_URL });
   await pg.connect();
   try {
@@ -83,7 +93,7 @@ async function main() {
             t.tagName,
             t.address,
             opts.deadband,
-            plan.scanRateMs,
+            scanRateMs,
             opts.range?.min ?? null,
             opts.range?.max ?? null,
           ],
@@ -93,7 +103,7 @@ async function main() {
     }
     await pg.query('COMMIT');
     process.stdout.write(
-      `seed 완료 — ${plan.label} · 설비 ${devices.length} · 태그 ${tagCount} · ${describeSeedOptions(opts)}\n`,
+      `seed 완료 — ${plan.label} · 설비 ${devices.length} · 태그 ${tagCount} · ${describeSeedOptions(opts)} · scan_rate_ms ${scanRateMs}\n`,
     );
   } catch (e) {
     await pg.query('ROLLBACK').catch(() => undefined);

@@ -42,6 +42,8 @@ const cacheRequests = new Counter({
   labelNames: ['result'],
   registers: reg,
 });
+// 닫힌 레이블 값 0 초기화 — 첫 사건이 시계열에 처음 나타나며 increase()가 0을 내는 것을 막는다(기록 규칙 히트율 · S5)
+for (const result of ['hit', 'miss', 'error']) cacheRequests.inc({ result }, 0);
 const sourceQueries = new Counter({
   name: 'tsq_source_queries_total',
   help: '시계열 조회가 ClickHouse를 부른 수',

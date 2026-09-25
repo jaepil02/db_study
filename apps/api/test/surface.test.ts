@@ -1,4 +1,4 @@
-// 표면 계약(S2 · S4) — 떠 있는 api에 블랙박스로 붙는다. SURFACE_BASE_URL이 없으면 건너뛴다(pre-commit은 저장소 없이 돈다).
+// 표면 계약(S2 · S4 · S5) — 떠 있는 api에 블랙박스로 붙는다. SURFACE_BASE_URL이 없으면 건너뛴다(pre-commit은 저장소 없이 돈다).
 // 실행: task test-surface(스택 기동 뒤 · 티어 S 시드). 정본 07_api/01 · 04 · 05 · 06 · 11 · 12_security/03.
 // 마스터 쓰기는 데이터를 바꾸지 않는 거절 갈래(409 · 400 · 404)만 부른다 — 성공 쓰기와 체인은 통합 확인(S4 W5)이 본다.
 // Redis 정지 503(realtime.latest_unavailable)은 저장소를 멈춰야 해서 통합 확인(W3)에서 수동으로 본다.
@@ -161,6 +161,17 @@ describe.skipIf(!BASE)('api 표면 계약', () => {
     await api()
       .get(q(isoAgo(2 * 86_400_000)))
       .expect(400);
+  });
+
+  it('모드 C bulk — 게이트 꺼짐 404 datagen.bulk_disabled(기본 · 07_api/09 ①) · 켜짐이면 검증 400', async () => {
+    const r = await api().post('/api/v1/ingest/bulk').send({ v: 1, entries: [] });
+    if (process.env.SURFACE_BULK_ENABLED === 'true') {
+      expect(r.status).toBe(400);
+      expect(ErrorEnvelope.parse(r.body).error.code).toBe('common.validation_failed');
+    } else {
+      expect(r.status).toBe(404);
+      expect(ErrorEnvelope.parse(r.body).error.code).toBe('datagen.bulk_disabled');
+    }
   });
 
   it('WS — Host 밖은 업그레이드 전 400 · 다른 Origin 4403 · URL devices 4400', async () => {

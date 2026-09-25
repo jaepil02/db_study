@@ -34,3 +34,9 @@ services:
     environment:
       MEMORY_PROFILE: mid
       WORKER_POOL_SIZE: "2"
+
+  # 모드 D 전용(datagen-d) — extends는 이 덮어쓰기 파일의 datagen 값을 물려받지 않아 같은 값을 따로 준다
+  datagen-d:
+    environment:
+      MEMORY_PROFILE: mid
+      WORKER_POOL_SIZE: "2"

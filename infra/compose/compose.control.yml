@@ -1,0 +1,14 @@
+# 대조 실험 자원 조건(EXP-01~05 · S5) — 부하 실험 프로파일 위에 덧씌운다: -f compose.yml -f compose.load.yml -f compose.control.yml
+# 정본: docs/04_architecture/03_execution_topology.md §대조 실험 자원 조건 · §대조 실험 배치(CPU 5-7 · 8-10)
+#       docs/09_tech_stack/04_local_environment.md §대조 실험 메모리 조건(3.5 GB · 3.5 GB — 합계 불변)
+# 프로파일 수에 세지 않는다 — 부하 실험 프로파일의 변형이며 측정 기록 조건 칸에 적는다.
+services:
+  postgres:
+    mem_limit: 3584m
+    cpuset: "8-10"
+    volumes:
+      - ../postgres/profile-control.conf:/etc/postgresql/profile.conf:ro
+
+  clickhouse:
+    mem_limit: 3584m
+    cpuset: "5-7"

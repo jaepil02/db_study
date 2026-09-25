@@ -5,3 +5,4 @@ node_modules/
 dist/
 *.tsbuildinfo
 .next/
+__pycache__/

@@ -12,6 +12,7 @@ import { ConfigModule } from './config/config.module';
 import { CollectorModule } from './modules/collector/collector.module';
 import { DatagenModule } from './modules/datagen/datagen.module';
 import { DatagenModeAModule } from './modules/datagen/mode-a/mode-a.module';
+import { DatagenModeCModule } from './modules/datagen/mode-c/mode-c.module';
 import { IngestModule } from './modules/ingest/ingest.module';
 import { MasterModule } from './modules/master/master.module';
 import { MasterApiModule } from './modules/master/master-api.module';
@@ -34,8 +35,9 @@ const ROLE_MODULES: Record<AppRole, Imports> = {
     RealtimeModule,
     TimeseriesModule,
     MetricsModule,
+    DatagenModeCModule,
   ],
-  api: [MasterModule, MasterApiModule, RealtimeModule, TimeseriesModule, MetricsModule],
+  api: [MasterModule, MasterApiModule, RealtimeModule, TimeseriesModule, MetricsModule, DatagenModeCModule],
   worker: [IngestModule, MetricsModule],
   collector: [MasterModule, PlcSimModule, DatagenModeAModule, CollectorModule, MetricsModule],
   // 생성기 단독 실행 경로 — S1 bench(저장소 없음) · S3 모드 B(dist/mode-b.js · Nest 밖 진입점 · PostgreSQL 태그 읽기 + Redis 발행) · 모드 D는 S5

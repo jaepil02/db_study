@@ -1,0 +1,1561 @@
+{
+  "uid": "db-study-redis",
+  "title": "db_study · Redis",
+  "description": "한 인스턴스 안에서 누가 메모리를 먹는가 — EXP-17 · 18 · 39 · 수치는 상대 비교용(ADR-20) — 측정 기록 수치는 프로파일을 끈 직접 덤프에서 · 정본 docs/10_observability/03_dashboards_alerts.md",
+  "tags": [
+    "db_study",
+    "s5",
+    "redis"
+  ],
+  "schemaVersion": 41,
+  "version": 1,
+  "editable": false,
+  "graphTooltip": 1,
+  "timezone": "browser",
+  "fiscalYearStartMonth": 0,
+  "liveNow": false,
+  "refresh": "15s",
+  "time": {
+    "from": "now-1h",
+    "to": "now"
+  },
+  "timepicker": {
+    "refresh_intervals": [
+      "15s",
+      "30s",
+      "1m",
+      "5m",
+      "15m",
+      "30m",
+      "1h"
+    ]
+  },
+  "templating": {
+    "list": []
+  },
+  "annotations": {
+    "list": [
+      {
+        "builtIn": 1,
+        "datasource": {
+          "type": "grafana",
+          "uid": "-- Grafana --"
+        },
+        "enable": true,
+        "hide": true,
+        "iconColor": "rgba(0, 211, 255, 1)",
+        "name": "Annotations & Alerts",
+        "type": "dashboard"
+      }
+    ]
+  },
+  "links": [
+    {
+      "title": "db_study 대시보드",
+      "type": "dashboards",
+      "tags": [
+        "db_study"
+      ],
+      "asDropdown": true,
+      "includeVars": false,
+      "keepTime": true
+    }
+  ],
+  "panels": [
+    {
+      "type": "row",
+      "title": "실행 조건 — 4요소(캡처한 순간의 조건이 같은 화면에 남는다 · 조건 없는 캡처는 기록에 인용 불가)",
+      "collapsed": false,
+      "panels": [],
+      "gridPos": {
+        "x": 0,
+        "y": 0,
+        "w": 24,
+        "h": 1
+      },
+      "id": 1
+    },
+    {
+      "type": "table",
+      "title": "실행 정보 obs_run_info",
+      "description": "측정 기록 4요소 중 스위치 밖 셋(commit_hash · memory_profile · capacity_tier) — 10_observability/03 §대시보드 6 스위치 상태 행",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "db-study-prometheus"
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "db-study-prometheus"
+          },
+          "refId": "A",
+          "expr": "obs_run_info",
+          "legendFormat": "__auto",
+          "range": false,
+          "instant": true,
+          "format": "table",
+          "editorMode": "code"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "custom": {
+            "align": "auto"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "showHeader": true,
+        "cellHeight": "sm",
+        "footer": {
+          "show": false
+        }
+      },
+      "transformations": [
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": {
+              "Time": true,
+              "__name__": true,
+              "instance": true,
+              "job": true,
+              "Value": true
+            },
+            "renameByName": {}
+          }
+        }
+      ],
+      "gridPos": {
+        "x": 0,
+        "y": 1,
+        "w": 8,
+        "h": 10
+      },
+      "id": 2
+    },
+    {
+      "type": "table",
+      "title": "스위치 상태 obs_switch_info",
+      "description": "스위치별 실제 주입 구현(switch · env · value · impl) — value는 health switches.*.value와 같은 문자열이다(01_metrics_catalog)",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "db-study-prometheus"
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "db-study-prometheus"
+          },
+          "refId": "A",
+          "expr": "obs_switch_info",
+          "legendFormat": "__auto",
+          "range": false,
+          "instant": true,
+          "format": "table",
+          "editorMode": "code"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "custom": {
+            "align": "auto"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "showHeader": true,
+        "cellHeight": "sm",
+        "footer": {
+          "show": false
+        }
+      },
+      "transformations": [
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": {
+              "Time": true,
+              "__name__": true,
+              "instance": true,
+              "job": true,
+              "Value": true
+            },
+            "renameByName": {}
+          }
+        },
+        {
+          "id": "sortBy",
+          "options": {
+            "sort": [
+              {
+                "displayName": "switch",
+                "desc": false
+              }
+            ]
+          }
+        }
+      ],
+      "gridPos": {
+        "x": 8,
+        "y": 1,
+        "w": 16,
+        "h": 10
+      },
+      "id": 3
+    },
+    {
+      "type": "row",
+      "title": "메모리 · 명령 · 스트림",
+      "collapsed": false,
+      "panels": [],
+      "gridPos": {
+        "x": 0,
+        "y": 11,
+        "w": 24,
+        "h": 1
+      },
+      "id": 4
+    },
+    {
+      "type": "timeseries",
+      "title": "메모리 — 사용 · 상한 · 단편화",
+      "description": "redis_used_memory_bytes · redis_maxmemory_bytes · 단편화 비(redis_mem_fragmentation_ratio · 오른쪽 축) — 컨테이너 상한 여유(05_data_stores/06).",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "db-study-prometheus"
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "db-study-prometheus"
+          },
+          "refId": "A",
+          "expr": "redis_used_memory_bytes",
+          "legendFormat": "사용",
+          "range": true,
+          "instant": false,
+          "format": "time_series",
+          "editorMode": "code"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "db-study-prometheus"
+          },
+          "refId": "B",
+          "expr": "redis_maxmemory_bytes",
+          "legendFormat": "maxmemory",
+          "range": true,
+          "instant": false,
+          "format": "time_series",
+          "editorMode": "code"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "db-study-prometheus"
+          },
+          "refId": "C",
+          "expr": "redis_mem_fragmentation_ratio",
+          "legendFormat": "단편화 비",
+          "range": true,
+          "instant": false,
+          "format": "time_series",
+          "editorMode": "code"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "drawStyle": "line",
+            "lineInterpolation": "linear",
+            "lineWidth": 1,
+            "fillOpacity": 0,
+            "showPoints": "never",
+            "spanNulls": false,
+            "axisPlacement": "auto",
+            "stacking": {
+              "mode": "none",
+              "group": "A"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "unit": "bytes",
+          "color": {
+            "mode": "palette-classic"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byRegexp",
+              "options": "단편화 비"
+            },
+            "properties": [
+              {
+                "id": "custom.axisPlacement",
+                "value": "right"
+              },
+              {
+                "id": "unit",
+                "value": "none"
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "none"
+        }
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 12,
+        "w": 12,
+        "h": 8
+      },
+      "id": 5
+    },
+    {
+      "type": "timeseries",
+      "title": "접두별 점유 — 봉인(파랑) · 캐시(주황)",
+      "description": "키 접두별 점유 추정(redis_prefix_memory_bytes · 표본) — 봉인 stream · rt · alarm(파랑 계열) · 캐시 cache · lock · rl · sess · auth(주황 계열). 표본 수는 redis_prefix_sampled_keys. OBS-03(S6) 계열이라 S5 구현에서는 비어 있을 수 있다.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "db-study-prometheus"
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "db-study-prometheus"
+          },
+          "refId": "A",
+          "expr": "redis_prefix_memory_bytes",
+          "legendFormat": "{{prefix}}",
+          "range": true,
+          "instant": false,
+          "format": "time_series",
+          "editorMode": "code"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "drawStyle": "line",
+            "lineInterpolation": "linear",
+            "lineWidth": 1,
+            "fillOpacity": 40,
+            "showPoints": "never",
+            "spanNulls": false,
+            "axisPlacement": "auto",
+            "stacking": {
+              "mode": "normal",
+              "group": "A"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "unit": "bytes",
+          "color": {
+            "mode": "palette-classic"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byRegexp",
+              "options": "^stream$"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "dark-blue"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byRegexp",
+              "options": "^rt$"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "blue"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byRegexp",
+              "options": "^alarm$"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "light-blue"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byRegexp",
+              "options": "^cache$"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "dark-orange"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byRegexp",
+              "options": "^lock$"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "orange"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byRegexp",
+              "options": "^rl$"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "light-orange"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byRegexp",
+              "options": "^sess$"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "yellow"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byRegexp",
+              "options": "^auth$"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "semi-dark-orange"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "none"
+        }
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 12,
+        "w": 12,
+        "h": 8
+      },
+      "id": 6
+    },
+    {
+      "type": "timeseries",
+      "title": "ops/s",
+      "description": "명령 처리율(redis_ops_per_sec) — 병목 #5.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "db-study-prometheus"
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "db-study-prometheus"
+          },
+          "refId": "A",
+          "expr": "redis_ops_per_sec",
+          "legendFormat": "명령/초",
+          "range": true,
+          "instant": false,
+          "format": "time_series",
+          "editorMode": "code"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "drawStyle": "line",
+            "lineInterpolation": "linear",
+            "lineWidth": 1,
+            "fillOpacity": 10,
+            "showPoints": "never",
+            "spanNulls": false,
+            "axisPlacement": "auto",
+            "stacking": {
+              "mode": "none",
+              "group": "A"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "unit": "short",
+          "color": {
+            "mode": "palette-classic"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "none"
+        }
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 20,
+        "w": 8,
+        "h": 7
+      },
+      "id": 7
+    },
+    {
+      "type": "timeseries",
+      "title": "스트림 길이 — 메모리 · 트리밍 감시 전용",
+      "description": "판독 규칙 — 스트림 길이(XLEN)는 메모리 양 · 트리밍 감시로만 읽는다. MAXLEN 근처가 정상이다(XACK은 엔트리를 지우지 않는다 · ADR-21). 적체로 읽으면 정상 운전을 위험으로 판정한다 — 적체는 파이프라인 전경의 lag · pending. stream_trimmed_unacked는 0이어야 한다.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "db-study-prometheus"
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "db-study-prometheus"
+          },
+          "refId": "A",
+          "expr": "redis_stream_length",
+          "legendFormat": "XLEN {{stream}}",
+          "range": true,
+          "instant": false,
+          "format": "time_series",
+          "editorMode": "code"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "db-study-prometheus"
+          },
+          "refId": "B",
+          "expr": "stream_trimmed_unacked",
+          "legendFormat": "트리밍된 미확인(누적 · 0이어야)",
+          "range": true,
+          "instant": false,
+          "format": "time_series",
+          "editorMode": "code"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "drawStyle": "line",
+            "lineInterpolation": "linear",
+            "lineWidth": 1,
+            "fillOpacity": 0,
+            "showPoints": "never",
+            "spanNulls": false,
+            "axisPlacement": "auto",
+            "stacking": {
+              "mode": "none",
+              "group": "A"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "unit": "short",
+          "color": {
+            "mode": "palette-classic"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byRegexp",
+              "options": "트리밍.*"
+            },
+            "properties": [
+              {
+                "id": "custom.axisPlacement",
+                "value": "right"
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "none"
+        }
+      },
+      "gridPos": {
+        "x": 8,
+        "y": 20,
+        "w": 8,
+        "h": 7
+      },
+      "id": 8
+    },
+    {
+      "type": "timeseries",
+      "title": "출력 버퍼",
+      "description": "일반 · Pub/Sub 클라이언트 출력 버퍼 합(redis_client_output_buffer_bytes) · 5분 구독 연결 절단(rlt_subscriber_disconnects_total · 4503).",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "db-study-prometheus"
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "db-study-prometheus"
+          },
+          "refId": "A",
+          "expr": "redis_client_output_buffer_bytes",
+          "legendFormat": "출력 버퍼",
+          "range": true,
+          "instant": false,
+          "format": "time_series",
+          "editorMode": "code"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "db-study-prometheus"
+          },
+          "refId": "B",
+          "expr": "sum(increase(rlt_subscriber_disconnects_total[5m]))",
+          "legendFormat": "구독 절단 5분",
+          "range": true,
+          "instant": false,
+          "format": "time_series",
+          "editorMode": "code"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "drawStyle": "line",
+            "lineInterpolation": "linear",
+            "lineWidth": 1,
+            "fillOpacity": 0,
+            "showPoints": "never",
+            "spanNulls": false,
+            "axisPlacement": "auto",
+            "stacking": {
+              "mode": "none",
+              "group": "A"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "unit": "bytes",
+          "color": {
+            "mode": "palette-classic"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byRegexp",
+              "options": "구독 절단.*"
+            },
+            "properties": [
+              {
+                "id": "custom.axisPlacement",
+                "value": "right"
+              },
+              {
+                "id": "unit",
+                "value": "short"
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "none"
+        }
+      },
+      "gridPos": {
+        "x": 16,
+        "y": 20,
+        "w": 8,
+        "h": 7
+      },
+      "id": 9
+    },
+    {
+      "type": "timeseries",
+      "title": "축출",
+      "description": "축출 수 증가율(redis_evicted_keys_total) — volatile-lru는 TTL 키(캐시 계열)만 민다.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "db-study-prometheus"
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "db-study-prometheus"
+          },
+          "refId": "A",
+          "expr": "sum(rate(redis_evicted_keys_total[$__rate_interval]))",
+          "legendFormat": "축출 키/초",
+          "range": true,
+          "instant": false,
+          "format": "time_series",
+          "editorMode": "code"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "drawStyle": "line",
+            "lineInterpolation": "linear",
+            "lineWidth": 1,
+            "fillOpacity": 10,
+            "showPoints": "never",
+            "spanNulls": false,
+            "axisPlacement": "auto",
+            "stacking": {
+              "mode": "none",
+              "group": "A"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "unit": "short",
+          "color": {
+            "mode": "palette-classic"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "none"
+        }
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 27,
+        "w": 12,
+        "h": 7
+      },
+      "id": 10
+    },
+    {
+      "type": "timeseries",
+      "title": "keyspace 적중(참고) · cache:q 히트율(판정)",
+      "description": "판독 규칙 — keyspace 적중은 참고용이다. 판정은 cache:q 히트율(tsq_cache_requests_total만 · 파생 지표)이다. keyspace 적중률로 캐시 효과를 판정하면 rl · auth 조회가 섞인다(REQ-NFR-10).",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "db-study-prometheus"
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "db-study-prometheus"
+          },
+          "refId": "A",
+          "expr": "sum(rate(redis_keyspace_hits_total[$__rate_interval])) / (sum(rate(redis_keyspace_hits_total[$__rate_interval])) + sum(rate(redis_keyspace_misses_total[$__rate_interval])))",
+          "legendFormat": "keyspace 적중(참고)",
+          "range": true,
+          "instant": false,
+          "format": "time_series",
+          "editorMode": "code"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "db-study-prometheus"
+          },
+          "refId": "B",
+          "expr": "tsq:cache_hit_ratio:increase5m",
+          "legendFormat": "cache:q 히트율(판정 · 5m)",
+          "range": true,
+          "instant": false,
+          "format": "time_series",
+          "editorMode": "code"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "drawStyle": "line",
+            "lineInterpolation": "linear",
+            "lineWidth": 1,
+            "fillOpacity": 0,
+            "showPoints": "never",
+            "spanNulls": false,
+            "axisPlacement": "auto",
+            "stacking": {
+              "mode": "none",
+              "group": "A"
+            },
+            "thresholdsStyle": {
+              "mode": "line"
+            }
+          },
+          "unit": "percentunit",
+          "color": {
+            "mode": "palette-classic"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 0.5
+              }
+            ]
+          },
+          "min": 0,
+          "max": 1
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byRegexp",
+              "options": "keyspace.*"
+            },
+            "properties": [
+              {
+                "id": "custom.lineStyle",
+                "value": {
+                  "fill": "dash",
+                  "dash": [
+                    10,
+                    10
+                  ]
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "none"
+        }
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 27,
+        "w": 12,
+        "h": 7
+      },
+      "id": 11
+    },
+    {
+      "type": "row",
+      "title": "축출 연쇄 패널 — 5행 · 같은 가로축 · 같은 수집 주기(원인 → 전달 → 결과 1 → 결과 2 → 끝)",
+      "collapsed": false,
+      "panels": [],
+      "gridPos": {
+        "x": 0,
+        "y": 34,
+        "w": 24,
+        "h": 1
+      },
+      "id": 12
+    },
+    {
+      "type": "timeseries",
+      "title": "① 원인 — Stream 점유 메모리 · 캐시 계열 점유 · maxmemory",
+      "description": "축출 연쇄 패널(10_observability/03 §축출 연쇄 패널) — 다섯 행은 같은 가로축 · 같은 수집 주기(15s)다. 공유 십자선으로 선후를 읽는다. 정상 구성(M 티어)에서 이 패널은 평평하다 — 재현 조건은 maxmemory 하향 · 태그 500 설비(EXP-18 · 스냅샷 복원 직후부터 충전 곡선). 상관 대상은 스트림 길이(XLEN)가 아니라 Stream 점유 메모리다 — XLEN은 엔트리 크기를 모른다(태그 200과 500의 같은 XLEN이 2.5배 다른 메모리). 충전이 캐시 몫을 밀어낸다.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "db-study-prometheus"
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "db-study-prometheus"
+          },
+          "refId": "A",
+          "expr": "sum(redis_prefix_memory_bytes{prefix=\"stream\"})",
+          "legendFormat": "Stream 점유",
+          "range": true,
+          "instant": false,
+          "format": "time_series",
+          "editorMode": "code"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "db-study-prometheus"
+          },
+          "refId": "B",
+          "expr": "sum(redis_prefix_memory_bytes{prefix=~\"cache|lock|rl|sess|auth\"})",
+          "legendFormat": "캐시 계열 점유(접두 합)",
+          "range": true,
+          "instant": false,
+          "format": "time_series",
+          "editorMode": "code"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "db-study-prometheus"
+          },
+          "refId": "C",
+          "expr": "redis_maxmemory_bytes",
+          "legendFormat": "maxmemory",
+          "range": true,
+          "instant": false,
+          "format": "time_series",
+          "editorMode": "code"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "drawStyle": "line",
+            "lineInterpolation": "linear",
+            "lineWidth": 1,
+            "fillOpacity": 0,
+            "showPoints": "never",
+            "spanNulls": false,
+            "axisPlacement": "auto",
+            "stacking": {
+              "mode": "none",
+              "group": "A"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "unit": "bytes",
+          "color": {
+            "mode": "palette-classic"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byRegexp",
+              "options": "maxmemory"
+            },
+            "properties": [
+              {
+                "id": "custom.lineStyle",
+                "value": {
+                  "fill": "dash",
+                  "dash": [
+                    10,
+                    10
+                  ]
+                }
+              },
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "red"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "none"
+        }
+      },
+      "interval": "15s",
+      "gridPos": {
+        "x": 0,
+        "y": 35,
+        "w": 24,
+        "h": 6
+      },
+      "id": 13
+    },
+    {
+      "type": "timeseries",
+      "title": "② 전달 — 축출 수 증가율",
+      "description": "축출 연쇄 패널(10_observability/03 §축출 연쇄 패널) — 다섯 행은 같은 가로축 · 같은 수집 주기(15s)다. 공유 십자선으로 선후를 읽는다. 정상 구성(M 티어)에서 이 패널은 평평하다 — 재현 조건은 maxmemory 하향 · 태그 500 설비(EXP-18 · 스냅샷 복원 직후부터 충전 곡선). volatile-lru가 TTL 키만 민다. 봉인 계열 축출 수(0이어야 한다)는 카탈로그에 메트릭 이름이 없어 이 행에 싣지 않았다 — 문서 반영 제안 대상.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "db-study-prometheus"
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "db-study-prometheus"
+          },
+          "refId": "A",
+          "expr": "sum(rate(redis_evicted_keys_total[$__rate_interval]))",
+          "legendFormat": "축출 키/초",
+          "range": true,
+          "instant": false,
+          "format": "time_series",
+          "editorMode": "code"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "drawStyle": "line",
+            "lineInterpolation": "linear",
+            "lineWidth": 1,
+            "fillOpacity": 0,
+            "showPoints": "never",
+            "spanNulls": false,
+            "axisPlacement": "auto",
+            "stacking": {
+              "mode": "none",
+              "group": "A"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "unit": "short",
+          "color": {
+            "mode": "palette-classic"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "none"
+        }
+      },
+      "interval": "15s",
+      "gridPos": {
+        "x": 0,
+        "y": 41,
+        "w": 24,
+        "h": 6
+      },
+      "id": 14
+    },
+    {
+      "type": "timeseries",
+      "title": "③ 결과 1 — cache:q 히트율",
+      "description": "축출 연쇄 패널(10_observability/03 §축출 연쇄 패널) — 다섯 행은 같은 가로축 · 같은 수집 주기(15s)다. 공유 십자선으로 선후를 읽는다. 정상 구성(M 티어)에서 이 패널은 평평하다 — 재현 조건은 maxmemory 하향 · 태그 500 설비(EXP-18 · 스냅샷 복원 직후부터 충전 곡선). 히트율 = hit ÷ (hit + miss)(tsq_cache_requests_total만). 이 행은 다른 행과 같은 창($__rate_interval)으로 계산한다 — 5분 창 기록 규칙(tsq:cache_hit_ratio:increase5m · 알림 cache_hit_low)은 창이 길어 선후 판독을 늦춘다.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "db-study-prometheus"
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "db-study-prometheus"
+          },
+          "refId": "A",
+          "expr": "sum(rate(tsq_cache_requests_total{result=\"hit\"}[$__rate_interval])) / sum(rate(tsq_cache_requests_total{result=~\"hit|miss\"}[$__rate_interval]))",
+          "legendFormat": "cache:q 히트율",
+          "range": true,
+          "instant": false,
+          "format": "time_series",
+          "editorMode": "code"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "drawStyle": "line",
+            "lineInterpolation": "linear",
+            "lineWidth": 1,
+            "fillOpacity": 0,
+            "showPoints": "never",
+            "spanNulls": false,
+            "axisPlacement": "auto",
+            "stacking": {
+              "mode": "none",
+              "group": "A"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "unit": "percentunit",
+          "color": {
+            "mode": "palette-classic"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "min": 0,
+          "max": 1
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "none"
+        }
+      },
+      "interval": "15s",
+      "gridPos": {
+        "x": 0,
+        "y": 47,
+        "w": 24,
+        "h": 6
+      },
+      "id": 15
+    },
+    {
+      "type": "timeseries",
+      "title": "④ 결과 2 — 시계열 조회 p95 · ClickHouse 쿼리 수",
+      "description": "축출 연쇄 패널(10_observability/03 §축출 연쇄 패널) — 다섯 행은 같은 가로축 · 같은 수집 주기(15s)다. 공유 십자선으로 선후를 읽는다. 정상 구성(M 티어)에서 이 패널은 평평하다 — 재현 조건은 maxmemory 하향 · 태그 500 설비(EXP-18 · 스냅샷 복원 직후부터 충전 곡선). 시계열 조회 p95(http_request_duration_seconds · route /api/v1/timeseries/query) · 시계열 조회가 ClickHouse를 부른 수(tsq_source_queries_total · 오른쪽 축) — 원천 부하 증가.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "db-study-prometheus"
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "db-study-prometheus"
+          },
+          "refId": "A",
+          "expr": "histogram_quantile(0.95, sum by (le) (rate(http_request_duration_seconds_bucket{route=\"/api/v1/timeseries/query\"}[$__rate_interval])))",
+          "legendFormat": "시계열 조회 p95",
+          "range": true,
+          "instant": false,
+          "format": "time_series",
+          "editorMode": "code"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "db-study-prometheus"
+          },
+          "refId": "B",
+          "expr": "sum(rate(tsq_source_queries_total[$__rate_interval]))",
+          "legendFormat": "ClickHouse 쿼리/초",
+          "range": true,
+          "instant": false,
+          "format": "time_series",
+          "editorMode": "code"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "drawStyle": "line",
+            "lineInterpolation": "linear",
+            "lineWidth": 1,
+            "fillOpacity": 0,
+            "showPoints": "never",
+            "spanNulls": false,
+            "axisPlacement": "auto",
+            "stacking": {
+              "mode": "none",
+              "group": "A"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "unit": "s",
+          "color": {
+            "mode": "palette-classic"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byRegexp",
+              "options": "ClickHouse.*"
+            },
+            "properties": [
+              {
+                "id": "custom.axisPlacement",
+                "value": "right"
+              },
+              {
+                "id": "unit",
+                "value": "short"
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "none"
+        }
+      },
+      "interval": "15s",
+      "gridPos": {
+        "x": 0,
+        "y": 53,
+        "w": 24,
+        "h": 6
+      },
+      "id": 16
+    },
+    {
+      "type": "timeseries",
+      "title": "⑤ 끝 — 백프레셔 단계 · XADD 실패(내구 래퍼)",
+      "description": "축출 연쇄 패널(10_observability/03 §축출 연쇄 패널) — 다섯 행은 같은 가로축 · 같은 수집 주기(15s)다. 공유 십자선으로 선후를 읽는다. 정상 구성(M 티어)에서 이 패널은 평평하다 — 재현 조건은 maxmemory 하향 · 태그 500 설비(EXP-18 · 스냅샷 복원 직후부터 충전 곡선). 백프레셔 단계(발행자별) · XADD 실패 = DurableKeyClient가 던진 stream 계열 실패(durable_wrapper_failures_total{prefix=\"stream\"} · 오른쪽 축). OOM이면 스풀.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "db-study-prometheus"
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "db-study-prometheus"
+          },
+          "refId": "A",
+          "expr": "max by (publisher) (backpressure_stage)",
+          "legendFormat": "단계 {{publisher}}",
+          "range": true,
+          "instant": false,
+          "format": "time_series",
+          "editorMode": "code"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "db-study-prometheus"
+          },
+          "refId": "B",
+          "expr": "sum(increase(durable_wrapper_failures_total{prefix=\"stream\"}[$__rate_interval]))",
+          "legendFormat": "XADD 실패",
+          "range": true,
+          "instant": false,
+          "format": "time_series",
+          "editorMode": "code"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "drawStyle": "line",
+            "lineInterpolation": "stepAfter",
+            "lineWidth": 1,
+            "fillOpacity": 0,
+            "showPoints": "never",
+            "spanNulls": false,
+            "axisPlacement": "auto",
+            "stacking": {
+              "mode": "none",
+              "group": "A"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "unit": "none",
+          "color": {
+            "mode": "palette-classic"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "min": 0,
+          "mappings": [
+            {
+              "type": "value",
+              "options": {
+                "0": {
+                  "text": "0 정상",
+                  "index": 0
+                },
+                "1": {
+                  "text": "1 주의",
+                  "index": 1
+                },
+                "2": {
+                  "text": "2 경고",
+                  "index": 2
+                },
+                "3": {
+                  "text": "3 위험",
+                  "index": 3
+                },
+                "4": {
+                  "text": "4 복구",
+                  "index": 4
+                }
+              }
+            }
+          ]
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byRegexp",
+              "options": "XADD 실패"
+            },
+            "properties": [
+              {
+                "id": "custom.axisPlacement",
+                "value": "right"
+              },
+              {
+                "id": "unit",
+                "value": "short"
+              },
+              {
+                "id": "custom.lineInterpolation",
+                "value": "linear"
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "none"
+        }
+      },
+      "interval": "15s",
+      "gridPos": {
+        "x": 0,
+        "y": 59,
+        "w": 24,
+        "h": 6
+      },
+      "id": 17
+    }
+  ]
+}

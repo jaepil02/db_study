@@ -34,6 +34,8 @@ export class E2eGaugeService implements OnApplicationBootstrap, OnModuleDestroy 
                 FROM plc.tag_raw
                 WHERE ts > now() - INTERVAL 5 MINUTE`,
         format: 'JSONEachRow',
+        // 관측 쿼리 표지 — ch_query_duration_p95_seconds 모집단에서 뺀다(store-stats.service와 같은 값)
+        clickhouse_settings: { log_comment: 'obs' },
       });
       const [r] = await rs.json<{ p50_ms: number; p95_ms: number; p99_ms: number; rows: string }>();
       const rows = Number(r?.rows ?? 0);

@@ -2,8 +2,9 @@
 // 500은 code를 싣지 않는다(결함은 설계된 실패가 아니다) · 스택 · SQL · 접속 문자열을 응답에 싣지 않는다(REQ-OBS-10).
 import type { ErrorEnvelopeBody } from '@db-study/shared';
 import { type ArgumentsHost, Catch, type ExceptionFilter, HttpException, Logger } from '@nestjs/common';
-import type { FastifyReply } from 'fastify';
+import type { FastifyReply, FastifyRequest } from 'fastify';
 import { ApiError } from './api-error';
+import { countDesignedRejection } from './http-metrics';
 
 @Catch()
 export class ApiExceptionFilter implements ExceptionFilter {
@@ -16,6 +17,8 @@ export class ApiExceptionFilter implements ExceptionFilter {
     let body: ErrorEnvelopeBody;
     if (err instanceof ApiError) {
       status = err.status;
+      // 설계된 거절(datagen.stream_full · common.rate_limited)은 HTTP 계층 한 자리에서 센다 — 던진 모듈은 세지 않는다
+      countDesignedRejection(host.switchToHttp().getRequest<FastifyRequest>().routeOptions?.url, err.code);
       body = {
         error: { code: err.code, message: err.message, ...(err.details ? { details: err.details } : {}) },
       };

@@ -16,7 +16,8 @@ vars:
   COMPOSE: docker compose --env-file .env -f infra/compose/compose.yml
   # 메모리 프로파일 — load(기본) · dev · mid. 덮어쓰기 파일 하나가 상한 · MEMORY_PROFILE · 워커 수를 함께 준다(09_tech_stack/04)
   PROFILE: '{{.PROFILE | default "load"}}'
-  COMPOSE_P: '{{.COMPOSE}} -f infra/compose/compose.{{.PROFILE}}.yml'
+  # 대조 실험 자원 조건(S5 · EXP-01~05) — CONTROL=1이면 부하 실험 프로파일 위에 compose.control.yml을 덧씌운다(04_architecture/03)
+  COMPOSE_P: '{{.COMPOSE}} -f infra/compose/compose.{{.PROFILE}}.yml{{if .CONTROL}} -f infra/compose/compose.control.yml{{end}}'
   HEALTH_TIMEOUT: 120
   # 이미지에 들어가는 것 전부가 커밋돼 있을 때만 커밋 해시를 빌드 인자로 준다 — 아니면 null(그 기동의 측정은 인용 불가)
   CLEAN_HASH:

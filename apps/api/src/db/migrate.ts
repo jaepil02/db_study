@@ -134,10 +134,26 @@ async function ensurePartman(adminUrl: string) {
   }
 }
 
+/**
+ * 저장소 통계 읽기 권한(S5 · OBS-02) — api 런타임(app_rw)이 다른 역할(app_owner 모드 D · ch_reader)의 pg_stat_statements
+ * queryid · pg_stat_activity state를 읽게 한다. 내장 역할 부여는 관리자만 할 수 있어 여기서 멱등하게 맞춘다.
+ * 읽기 전용 통계 역할이며 데이터 권한을 늘리지 않는다(05_data_stores/02 §가드 트리거와 DB 권한).
+ */
+async function ensureStatsRead(adminUrl: string) {
+  const client = new Client({ connectionString: adminUrl });
+  await client.connect();
+  try {
+    await client.query('GRANT pg_read_all_stats TO app_rw');
+  } finally {
+    await client.end();
+  }
+}
+
 async function main() {
   const adminUrl = pgUrl('postgres', secret('POSTGRES_ADMIN_PASSWORD'));
   await runPg(adminUrl, { file: BOOTSTRAP });
   await ensurePartman(adminUrl);
+  await ensureStatsRead(adminUrl);
   await setRolePasswords(adminUrl);
   await runPg(pgUrl('app_owner', secret('APP_OWNER_PASSWORD')), {});
   await runClickHouse();

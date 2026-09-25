@@ -125,6 +125,8 @@ services:
       GEN_PROFILE: ${GEN_PROFILE:-SINE}
       SIM_FAULT_PLAN: ${SIM_FAULT_PLAN:-}
       INGEST_LAB_FAULT: ${INGEST_LAB_FAULT:-}
+      # S5 — 모드 C 부하 주입 표면 게이트(스위치가 아님 · 07_api/09 · 기본 false · true면 기동 경고 1줄)
+      DATAGEN_BULK_ENABLED: ${DATAGEN_BULK_ENABLED:-false}
       TZ: Asia/Seoul
       # MEMORY_PROFILE · WORKER_POOL_SIZE · NODE_OPTIONS · UV_THREADPOOL_SIZE는 프로파일 덮어쓰기 파일이 준다 — 상한과 이름이 한 파일에서 나온다
     volumes:
@@ -182,8 +184,68 @@ services:
     cpu_shares: 512
     cpuset: "11-12"
 
+  # 모드 D(GEN-08 · GEN-10 · S5) 전용 — datagen과 같은 이미지 · 환경에 ClickHouse 접속과 app_owner 비밀번호만 더한다.
+  # app_owner(DDL 소유자) 비밀은 과거 일 파티션 생성 · ⑧ 비우기 · 대조군 정리에만 쓴다 — 모드 B가 도는 datagen에는 싣지 않는다(최소 권한 · 12_security/02).
+  # 격자 러너가 run으로만 부른다: docker compose --profile datagen-d run --rm --no-deps datagen-d node dist/mode-d.js …
+  datagen-d:
+    extends:
+      service: datagen
+    # extends는 profiles를 합친다 — !override로 datagen 프로파일에서 빼 owner 비밀이 --profile datagen up에 딸려 뜨지 않게 한다(검수 N1)
+    profiles: !override ["datagen-d"]
+    environment:
+      CLICKHOUSE_URL: ${CLICKHOUSE_URL:?CLICKHOUSE_URL 필요}
+      APP_OWNER_PASSWORD: ${APP_OWNER_PASSWORD:?APP_OWNER_PASSWORD 필요}
+
+  # 관측 스택(observability 프로파일 · S5) — 구성원 prometheus · grafana 2(09_tech_stack/03 · ADR-20) · 기본 기동에 포함되지 않는다
+  # 정밀 측정 세션은 이 프로파일을 끈다(10_observability/03 §관측 부하 규칙) · CPU 13(측정 대상 · 부하 도구 밖 — 04_architecture/03)
+  prometheus:
+    profiles: ["observability"]
+    image: prom/prometheus:v3.15.0
+    restart: unless-stopped
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.path=/prometheus
+      - --storage.tsdb.retention.time=7d
+      # k6 원격 쓰기 수신(10_observability/03 §관측 부하 규칙 — 탐색 세션만)
+      - --web.enable-remote-write-receiver
+    volumes:
+      - ../observability/prometheus:/etc/prometheus:ro
+      - promdata:/prometheus
+    ports:
+      - "127.0.0.1:9090:9090"
+    mem_limit: 512m
+    cpuset: "13"
+
+  grafana:
+    profiles: ["observability"]
+    image: grafana/grafana:12.4.11
+    restart: "no"
+    # 비밀번호가 비면 기동을 거부한다 — 검사를 compose 치환(:?)에 두면 프로파일 밖 명령까지 전부 막힌다
+    entrypoint: ["sh", "-c", "[ -n \"$$GF_SECURITY_ADMIN_PASSWORD\" ] || { echo 'GRAFANA_ADMIN_PASSWORD 필요(.env)' >&2; exit 1; }; exec /run.sh"]
+    environment:
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:-}
+      GF_USERS_ALLOW_SIGN_UP: "false"
+      GF_ANALYTICS_REPORTING_ENABLED: "false"
+      GF_ANALYTICS_CHECK_FOR_UPDATES: "false"
+      # 대시보드 새로고침 하한을 서버에서 강제 — 스크레이프 주기보다 짧게 두지 않는다(10_observability/03 §관측 부하 규칙)
+      GF_DASHBOARDS_MIN_REFRESH_INTERVAL: 15s
+      TZ: Asia/Seoul
+    volumes:
+      - ../observability/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ../observability/grafana/dashboards:/var/lib/grafana/dashboards:ro
+      - grafanadata:/var/lib/grafana
+    ports:
+      - "127.0.0.1:3002:3000"
+    depends_on:
+      - prometheus
+    mem_limit: 512m
+    cpuset: "13"
+
 volumes:
   pgdata:
   chdata:
   redisdata:
   spooldata:
+  promdata:
+  grafanadata:

@@ -1,0 +1,16 @@
+# observability 프로파일 — Grafana 데이터 소스 프로비저닝(정본 docs/09_tech_stack/03_data_infra.md §구성원 설정)
+# 데이터 소스는 prometheus 하나 · uid 고정 — 대시보드 JSON이 이 uid로 참조한다(db-study-prometheus)
+apiVersion: 1
+
+datasources:
+  - name: Prometheus
+    uid: db-study-prometheus
+    type: prometheus
+    access: proxy
+    url: http://prometheus:9090
+    isDefault: true
+    editable: false
+    jsonData:
+      # 스크레이프 주기와 같게 — 최소 쿼리 간격 · $__rate_interval 산출의 기준(10_observability/03 §관측 부하 규칙)
+      timeInterval: 15s
+      httpMethod: POST

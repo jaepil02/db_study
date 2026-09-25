@@ -121,3 +121,7 @@ export const ingestMetrics = {
     registers: reg,
   }),
 };
+
+// 닫힌 레이블 값마다 0으로 시작한다 — 첫 사건이 시계열을 처음 만들면 increase()가 0을 내 알림(DLQ 발생 · MV 오류)이 그 사건을 놓친다
+for (const reason of ['retry_exhausted', 'undecodable']) ingestMetrics.dlqCount.inc({ reason }, 0);
+for (const result of ['error', 'retry_ok']) ingestMetrics.mvErrors.inc({ result }, 0);

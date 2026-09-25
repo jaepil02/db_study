@@ -88,7 +88,25 @@ export function parseSeedOptions(argv: readonly string[]): SeedOptions {
   return { deadband, range };
 }
 
-/** seed 완료 줄에 싣는 옵션 문장 — 측정 기록이 시드 조건을 로그에서 읽는다 */
+/**
+ * --scan-rate <ms>(S5 판정 6 · 모드 A 계단) — 티어 시드의 모든 태그 tag_master.scan_rate_ms · 없으면 null(티어 기본).
+ * 제약은 CHECK(scan_rate_ms > 0)와 같고 정수 ms다 — 모드 A 틱 · Collector 폴링 격자가 정수 ms다.
+ */
+export function parseScanRate(argv: readonly string[]): number | null {
+  const sr = optValue(argv, '--scan-rate');
+  if (sr === null) return null;
+  const v = Number(sr);
+  if (!(Number.isInteger(v) && v > 0 && v <= 3_600_000))
+    throw new Error(`--scan-rate ${sr} — 1~3,600,000 정수(ms)`);
+  return v;
+}
+
+/** 티어 시드의 모든 태그에 거는 scan_rate_ms — --scan-rate가 있으면 그 값 */
+export function effectiveScanRateMs(p: SeedPlan, scanRateMs: number | null): number {
+  return scanRateMs ?? p.scanRateMs;
+}
+
+/** seed 완료 줄에 싣는 옵션 문장 — 측정 기록이 시드 조건을 로그에서 읽는다(scan_rate_ms는 완료 줄이 따로 싣는다) */
 export function describeSeedOptions(o: SeedOptions): string {
   return `deadband ${o.deadband} · range ${o.range ? `${o.range.min},${o.range.max}` : 'NULL'}`;
 }

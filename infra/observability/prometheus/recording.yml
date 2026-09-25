@@ -1,0 +1,79 @@
+# 파생 지표 — PromQL 기록 규칙(정본 docs/10_observability/01_metrics_catalog.md §파생 지표 · 7)
+# 창 w = 5m(식은 "창 w의 증가분 기준") — 비율은 increase의 비로 둔다(창 길이가 약분되어 rate의 비와 같다)
+# 이름 규약: <계열 접두>:<지표>:<연산><창> — 대시보드 · 알림이 이 이름을 부른다
+# 관측 프로파일이 없을 때는 직접 덤프 두 점의 차로 같은 식을 계산한다(10_observability/04)
+#
+# 7행 대응
+#   1 API 오류율          → api:error_ratio:increase5m
+#   2 조회 캐시 히트율     → tsq:cache_hit_ratio:increase5m
+#   3 타임아웃율          → col:poll_timeout_ratio:increase5m
+#   4 STALE 비율          → rlt:stale_ratio:increase5m
+#   5 연결당 초당 프레임   → ws:frames_per_connection:rate5m
+#   6 무손실 차           → 메트릭 쪽 항만 gen:lossless_expected_points:increase5m — 아래 주석
+#   7 파트 생성률          → ch:new_parts:rate5m
+#
+# 무손실 차의 제외분: tag_raw count는 메트릭이 아니라 SQL이다(적재를 멈추고 랙 0 뒤 같은 구간으로 센다 · AC-01).
+# 그래서 차 자체는 기록 규칙으로 둘 수 없고, 식의 메트릭 항(생성 − 설계된 생략 셋)만 기록한다.
+# 모드 A의 분모는 이 값이 아니라 points_emitted다(S2 판정 · 기록 010) — 모드 A는 points_emitted 증가분을 따로 읽는다.
+
+groups:
+  - name: db_study_derived
+    interval: 15s
+    rules:
+      # 1 API 오류율 = (5xx 증가 − 설계 거절 중 503 증가) ÷ (요청 증가 − 설계 거절 증가) — REQ-NFR-11
+      # 설계 거절 중 503은 datagen.stream_full(503) 하나다 — common.rate_limited는 429(11_glossary/02)
+      # 설계 거절 · 5xx 계열이 아직 한 건도 없으면 시계열이 비므로 0으로 메운다(5xx 없음 = 오류율 0 · 검수 #4)
+      - record: api:error_ratio:increase5m
+        expr: |
+          (
+            (sum(increase(http_requests_total{code=~"5.."}[5m])) or vector(0))
+            - (sum(increase(http_designed_rejections_total{error_code="datagen.stream_full"}[5m])) or vector(0))
+          )
+          /
+          (
+            sum(increase(http_requests_total[5m]))
+            - (sum(increase(http_designed_rejections_total[5m])) or vector(0))
+          )
+
+      # 2 조회 캐시 히트율 = hit 증가 ÷ (hit + miss 증가) — tsq_cache_requests_total만(keyspace 적중 금지 · REQ-NFR-10)
+      - record: tsq:cache_hit_ratio:increase5m
+        expr: |
+          sum(increase(tsq_cache_requests_total{result="hit"}[5m]))
+          /
+          sum(increase(tsq_cache_requests_total{result=~"hit|miss"}[5m]))
+
+      # 3 타임아웃율 = col_poll_timeouts_total 증가 ÷ col_polls_total 증가 — 폴링 수로 나눈다(REQ-COL-15)
+      - record: col:poll_timeout_ratio:increase5m
+        expr: |
+          sum(increase(col_poll_timeouts_total[5m]))
+          /
+          sum(increase(col_polls_total[5m]))
+
+      # 4 STALE 비율 = stale 증가 ÷ 전체 증가(rlt_latest_points_served_total) — 키 수로 나누지 않는다(AC-34)
+      - record: rlt:stale_ratio:increase5m
+        expr: |
+          sum(increase(rlt_latest_points_served_total{freshness="stale"}[5m]))
+          /
+          sum(increase(rlt_latest_points_served_total[5m]))
+
+      # 5 연결당 초당 프레임 = ws_frames_sent_total 증가율 ÷ ws_connections(AC-41)
+      - record: ws:frames_per_connection:rate5m
+        expr: |
+          sum(rate(ws_frames_sent_total[5m]))
+          /
+          sum(ws_connections)
+
+      # 6 무손실 차의 메트릭 항 = gen_points_generated_total − dropout − col_deadband_skipped_total − gen_publish_halted_points_total
+      # (− tag_raw count는 SQL 몫 — 이 값과 같은 구간의 tag_raw count를 비교한다 · 모드 B · C 식)
+      # 차감 계열이 아직 없으면(해당 생략이 한 번도 없음) 0으로 메운다
+      - record: gen:lossless_expected_points:increase5m
+        expr: |
+          sum(increase(gen_points_generated_total[5m]))
+          - (sum(increase(gen_points_dropout_total[5m])) or vector(0))
+          - (sum(increase(col_deadband_skipped_total[5m])) or vector(0))
+          - (sum(increase(gen_publish_halted_points_total[5m])) or vector(0))
+
+      # 7 파트 생성률 = ch_new_parts_total{table="tag_raw"} 증가율(AC-22 · REQ-NFR-13)
+      - record: ch:new_parts:rate5m
+        expr: |
+          sum by (table) (rate(ch_new_parts_total{table="tag_raw"}[5m]))

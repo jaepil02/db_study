@@ -53,6 +53,8 @@ const EnvSchema = z.object({
   INGEST_LAB_FAULT: optional(z.string().regex(/^crash-after-insert:[1-9]\d*$/)),
   // 모드 A 신호 프로파일 구성 — mixed · all · 8종 단독(06_pipeline/10 · EXP-14)
   GEN_PROFILE: z.enum(['mixed', 'all', ...SIGNAL_PROFILES] as [string, ...string[]]).default('SINE'),
+  // S5 — 모드 C 부하 주입 표면 게이트(스위치가 아니다 · 07_api/09) — 'true'일 때만 켜진다 · 그 밖은 전부 꺼짐(기본 비활성)
+  DATAGEN_BULK_ENABLED: z.string().optional(),
 });
 
 export interface AppConfig {
@@ -70,6 +72,8 @@ export interface AppConfig {
   /** 실험 전용 결함 주입 — 켜져 있으면 health 경고로 드러낸다 */
   ingestLabFault: { kind: 'crash-after-insert'; afterBatches: number } | null;
   genProfile: string;
+  /** 모드 C 부하 주입 표면 게이트 — DATAGEN_BULK_ENABLED === 'true' */
+  datagenBulkEnabled: boolean;
 }
 
 export class ConfigRejectedError extends Error {}
@@ -111,6 +115,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
       ? { kind: 'crash-after-insert', afterBatches: Number(base.data.INGEST_LAB_FAULT.split(':')[1]) }
       : null,
     genProfile: base.data.GEN_PROFILE,
+    datagenBulkEnabled: base.data.DATAGEN_BULK_ENABLED === 'true',
   };
 }
 

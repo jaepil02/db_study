@@ -1,0 +1,166 @@
+# 기록 규칙 단위 테스트(promtool test rules) — 대상 ../recording.yml
+# 실행: docker run --rm -v "$PWD/infra/observability/prometheus":/p --entrypoint promtool prom/prometheus:v3.15.0 test rules /p/tests/recording.test.yml
+# 표본 1분 간격 · 평가 시각 10m — increase(…[5m])는 (5m, 10m]의 표본 5개로 외삽하므로 모든 계열이 같은 배수(×5/4)를 받아 비에서 약분된다.
+rule_files:
+  - ../recording.yml
+
+evaluation_interval: 15s
+
+tests:
+  # 1 API 오류율 — 5xx가 한 번도 없으면 0이다(시계열이 비지 않는다 · 검수 #4)
+  - name: error_ratio_no_5xx_is_zero
+    interval: 1m
+    input_series:
+      - series: 'http_requests_total{route="/api/v1/tags",method="GET",code="200"}'
+        values: '0+10x10'
+      - series: 'http_requests_total{route="/api/v1/tags",method="GET",code="404"}'
+        values: '0+1x10'
+    promql_expr_test:
+      - expr: api:error_ratio:increase5m
+        eval_time: 10m
+        exp_samples:
+          - labels: 'api:error_ratio:increase5m'
+            value: 0
+
+  # 설계 거절 계열이 있어도 5xx가 없으면 0 — 분모에서 설계 거절(429)만 빠진다
+  - name: error_ratio_no_5xx_with_designed_429
+    interval: 1m
+    input_series:
+      - series: 'http_requests_total{route="/api/v1/tags",method="GET",code="200"}'
+        values: '0+6x10'
+      - series: 'http_requests_total{route="/api/v1/tags",method="GET",code="429"}'
+        values: '0+2x10'
+      - series: 'http_designed_rejections_total{route="/api/v1/tags",error_code="common.rate_limited"}'
+        values: '0+2x10'
+    promql_expr_test:
+      - expr: api:error_ratio:increase5m
+        eval_time: 10m
+        exp_samples:
+          - labels: 'api:error_ratio:increase5m'
+            value: 0
+
+  # 5xx가 전부 설계 거절 503(datagen.stream_full)이면 0 — 분자에서 빠진다
+  - name: error_ratio_only_designed_503_is_zero
+    interval: 1m
+    input_series:
+      - series: 'http_requests_total{route="/api/v1/ingest/bulk",method="POST",code="202"}'
+        values: '0+8x10'
+      - series: 'http_requests_total{route="/api/v1/ingest/bulk",method="POST",code="503"}'
+        values: '0+2x10'
+      - series: 'http_designed_rejections_total{route="/api/v1/ingest/bulk",error_code="datagen.stream_full"}'
+        values: '0+2x10'
+    promql_expr_test:
+      - expr: api:error_ratio:increase5m
+        eval_time: 10m
+        exp_samples:
+          - labels: 'api:error_ratio:increase5m'
+            value: 0
+
+  # 섞인 경우 — 분모 = 요청 12 − 설계 거절 4(503 2 + 429 2) = 8 · 분자 = 5xx 3(503 2 + 500 1) − 설계 503 2 = 1 → 1/8
+  # 설계 거절이 아닌 503(다른 원인)은 분자에 남는다는 것을 두 번째 평가 시각에서 본다
+  - name: error_ratio_mixed_designed_rejections_excluded
+    interval: 1m
+    input_series:
+      - series: 'http_requests_total{route="/api/v1/tags",method="GET",code="200"}'
+        values: '0+7x20'
+      - series: 'http_requests_total{route="/api/v1/ingest/bulk",method="POST",code="503"}'
+        values: '0+2x10 20+3x10'
+      - series: 'http_requests_total{route="/api/v1/tags",method="GET",code="500"}'
+        values: '0+1x20'
+      - series: 'http_requests_total{route="/api/v1/tags",method="GET",code="429"}'
+        values: '0+2x20'
+      - series: 'http_designed_rejections_total{route="/api/v1/ingest/bulk",error_code="datagen.stream_full"}'
+        values: '0+2x20'
+      - series: 'http_designed_rejections_total{route="/api/v1/tags",error_code="common.rate_limited"}'
+        values: '0+2x20'
+    promql_expr_test:
+      - expr: api:error_ratio:increase5m
+        eval_time: 10m
+        exp_samples:
+          - labels: 'api:error_ratio:increase5m'
+            value: 0.125
+      # 16m~20m — 503이 분당 3(설계 2 + 설계 밖 1) · 요청 13(200 7 + 503 3 + 500 1 + 429 2) − 설계 4 = 9 · 분자 (3 + 1) − 2 = 2 → 2/9
+      - expr: api:error_ratio:increase5m
+        eval_time: 20m
+        exp_samples:
+          - labels: 'api:error_ratio:increase5m'
+            value: 0.2222222222222222
+
+  # 2 조회 캐시 히트율 — hit ÷ (hit + miss) · error는 분모에서 빠진다
+  - name: cache_hit_ratio_basic
+    interval: 1m
+    input_series:
+      - series: 'tsq_cache_requests_total{result="hit"}'
+        values: '0+3x10'
+      - series: 'tsq_cache_requests_total{result="miss"}'
+        values: '0+1x10'
+      - series: 'tsq_cache_requests_total{result="error"}'
+        values: '0+4x10'
+    promql_expr_test:
+      - expr: tsq:cache_hit_ratio:increase5m
+        eval_time: 10m
+        exp_samples:
+          - labels: 'tsq:cache_hit_ratio:increase5m'
+            value: 0.75
+
+  # 0 초기화된 hit 계열(아직 적중 없음)이면 0 — 비지 않는다
+  - name: cache_hit_ratio_zero_hits
+    interval: 1m
+    input_series:
+      - series: 'tsq_cache_requests_total{result="hit"}'
+        values: '0x10'
+      - series: 'tsq_cache_requests_total{result="miss"}'
+        values: '0+5x10'
+      - series: 'tsq_cache_requests_total{result="error"}'
+        values: '0x10'
+    promql_expr_test:
+      - expr: tsq:cache_hit_ratio:increase5m
+        eval_time: 10m
+        exp_samples:
+          - labels: 'tsq:cache_hit_ratio:increase5m'
+            value: 0
+
+  # 6 무손실 항 — 차감 계열(dropout · 데드밴드 생략 · 발행 중단)이 하나도 없으면 생성 증가 그대로(or vector(0) 메우기 · 검수 재검 #2)
+  - name: lossless_expected_no_deductions
+    interval: 1m
+    input_series:
+      - series: 'gen_points_generated_total{mode="B",profile="SINE"}'
+        values: '0+100x10'
+    promql_expr_test:
+      - expr: gen:lossless_expected_points:increase5m
+        eval_time: 10m
+        exp_samples:
+          - labels: 'gen:lossless_expected_points:increase5m'
+            value: 500
+
+  # 차감 두 계열이 있을 때 — 생성 500 − dropout 50 − 발행 중단 100 = 350(데드밴드 계열은 없어 0으로 메운다)
+  - name: lossless_expected_with_deductions
+    interval: 1m
+    input_series:
+      - series: 'gen_points_generated_total{mode="B",profile="SINE"}'
+        values: '0+100x10'
+      - series: 'gen_points_dropout_total{mode="B"}'
+        values: '0+10x10'
+      - series: 'gen_publish_halted_points_total{mode="B"}'
+        values: '0+20x10'
+    promql_expr_test:
+      - expr: gen:lossless_expected_points:increase5m
+        eval_time: 10m
+        exp_samples:
+          - labels: 'gen:lossless_expected_points:increase5m'
+            value: 350
+
+  # 7 파트 생성률 — 분당 60 파트 = 초당 1(tag_raw만 · table 레이블 유지)
+  - name: new_parts_rate_tag_raw_only
+    interval: 1m
+    input_series:
+      - series: 'ch_new_parts_total{table="tag_raw"}'
+        values: '0+60x10'
+      - series: 'ch_new_parts_total{table="tag_1m"}'
+        values: '0+600x10'
+    promql_expr_test:
+      - expr: ch:new_parts:rate5m
+        eval_time: 10m
+        exp_samples:
+          - labels: 'ch:new_parts:rate5m{table="tag_raw"}'
+            value: 1

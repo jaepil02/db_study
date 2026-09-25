@@ -7,6 +7,8 @@ import {
   type OnApplicationBootstrap,
   type OnModuleDestroy,
 } from '@nestjs/common';
+import { Histogram } from 'prom-client';
+import { appRegistry } from '../../../common/metrics/registry';
 import type { AppConfig } from '../../../config/app-config';
 import { APP_CONFIG } from '../../../config/config.module';
 import { CollectDefinitionService } from '../../collector/collect-definition.service';
@@ -20,6 +22,18 @@ import { type ModeATarget, makeTarget, PROFILE_NAMES, writeTick } from './regist
  * 반 주기 안에 레지스터에 반영되어, 폴링이 같은 k를 두 번 읽거나 k 하나를 건너뛰는 일이 타이머 지터로는 생기지 않는다.
  */
 export const MODE_A_TICK_DIVISOR = 2;
+
+/**
+ * gen_register_update_seconds — 구간 #1 신호 → 레지스터(10_observability/02 · 지연 예산 #1 · S5).
+ * 이 구현은 태그마다 값을 계산하고 곧바로 쓴다 — "벡터 완료" 시점이 따로 없어 틱 한 번의 계산 + 쓰기 시간을 관측한다(쓴 태그가 있는 틱만).
+ * 버킷은 원본 예산 2 ms를 경계로 포함한다(01_metrics §이름 규약 분위수 행).
+ */
+const registerUpdate = new Histogram({
+  name: 'gen_register_update_seconds',
+  help: '모드 A 틱 한 번의 신호 계산 → 레지스터 쓰기 완료(구간 #1)',
+  buckets: [0.0001, 0.0005, 0.001, 0.002, 0.005, 0.01, 0.025, 0.05, 0.1],
+  registers: [appRegistry],
+});
 
 @Injectable()
 export class ModeAService implements OnApplicationBootstrap, OnModuleDestroy {
@@ -53,7 +67,9 @@ export class ModeAService implements OnApplicationBootstrap, OnModuleDestroy {
       const minRate = Math.min(...targets.map((t) => t.tag.scanRateMs));
       const tickMs = Math.max(1, Math.floor(minRate / MODE_A_TICK_DIVISOR));
       const tick = () => {
+        const t0 = performance.now();
         const r = writeTick(targets, Date.now());
+        if (r.written.some((n) => n > 0)) registerUpdate.observe((performance.now() - t0) / 1000);
         r.written.forEach((n, code) => {
           if (n > 0) genPointsGenerated.inc({ mode: 'A', profile: PROFILE_NAMES[code] as SignalProfile }, n);
         });

@@ -4,6 +4,7 @@ import { Controller, Get, Header, Res } from '@nestjs/common';
 import type { FastifyReply } from 'fastify';
 import { appRegistry } from '../../common/metrics/registry';
 import { HealthService } from './health.service';
+import { obsMetricsResponseBytes } from './store.metrics';
 
 @Controller()
 export class MetricsController {
@@ -23,6 +24,9 @@ export class MetricsController {
   @Header('Cache-Control', 'no-store')
   async getMetrics(@Res({ passthrough: true }) reply: FastifyReply): Promise<string> {
     reply.header('content-type', appRegistry.contentType);
-    return appRegistry.metrics();
+    const text = await appRegistry.metrics();
+    // 이 응답의 크기는 다음 응답에 실린다 — "직전 /metrics 응답 크기"(카디널리티 감시 · REQ-OBS-06)
+    obsMetricsResponseBytes.set(Buffer.byteLength(text, 'utf8'));
+    return text;
   }
 }

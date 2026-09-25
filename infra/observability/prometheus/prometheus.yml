@@ -1,0 +1,25 @@
+# observability 프로파일 — Prometheus 설정(정본 docs/09_tech_stack/03_data_infra.md §구성원 설정)
+# 필수 설정 4: 스크레이프 대상 api:3000/metrics 하나 · 주기 15초 · 알림 규칙 파일 · remote write 수신 켬
+# remote write 수신은 설정 파일이 아니라 기동 인자(--web.enable-remote-write-receiver)다 — infra/compose/compose.yml prometheus.command
+# 전달 경로(alertmanager)는 두지 않는다 — 발동 상태는 ALERTS 시계열 · Prometheus 알림 화면 · Grafana 패널로 본다(10_observability/03 §알림 경로 판정)
+
+global:
+  # 스크레이프 주기 ≥ 저장소 통계 수집 주기(15초) — 10_observability/03 §관측 부하 규칙
+  scrape_interval: 15s
+  scrape_timeout: 10s
+  # 규칙 평가 주기 = 스크레이프 주기 — 평가 시점이 스크레이프 시점과 한 곳에 머문다
+  evaluation_interval: 15s
+
+# 경로는 이 파일 기준 상대 경로 — 컨테이너 안 /etc/prometheus에 같은 디렉터리로 마운트된다
+# 기록 규칙(파생 지표 7)을 먼저 둔다 — cache_hit_low가 기록 규칙의 결과를 읽는다
+rule_files:
+  - recording.yml
+  - alerts.yml
+
+scrape_configs:
+  # 창구는 api의 /metrics 하나다(ADR-20) — exporter 컨테이너를 대상에 더하지 않는다(REQ-OBS-01)
+  - job_name: db_study_api
+    metrics_path: /metrics
+    scheme: http
+    static_configs:
+      - targets: ["api:3000"]

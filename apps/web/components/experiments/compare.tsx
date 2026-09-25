@@ -1,7 +1,7 @@
 'use client';
 // EXP-COMPARE — 정본 docs/08_screen/07_experiment_console.md §EXP-COMPARE (요소 6 · 비교 성립 조건 6 · 상태 4행)
 // 측정 창은 브라우저 저장소에만 둔다 — 어디에도 쓰지 않는다. 폴링하지 않는다(캡처는 사람이 누를 때 두 번).
-// 대조군 역전 지점 차트는 S5(S4 판정 2 — 원천 EXP-01~05 기록이 아직 없다 · ECharts 도입도 S5)라 빈 상태만 둔다.
+// 대조군 역전 지점 차트(S5)는 crossover.tsx — BFF 기록 읽기(/bff/measurements) · ECharts · 기록이 없으면 빈 상태 문구.
 import { useEffect, useMemo, useState } from 'react';
 import {
   type Capture,
@@ -23,6 +23,7 @@ import { Badge } from '../ui/badge';
 import { Band } from '../ui/band';
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from '../ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../ui/table';
+import { CrossoverPanel } from './crossover';
 
 const STORE_KEY = 'db_study.compare.windows';
 
@@ -216,12 +217,7 @@ export function ExperimentCompare() {
         </CardContent>
       </Card>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>대조군 역전 지점(EXP-01~05)</CardTitle>
-        </CardHeader>
-        <CardContent className="text-sm text-slate-500">EXP-01~05 기록이 아직 없다</CardContent>
-      </Card>
+      <CrossoverPanel />
 
       <Card>
         <CardContent className="text-sm">

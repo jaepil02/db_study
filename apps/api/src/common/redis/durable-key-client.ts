@@ -5,6 +5,8 @@
 import { DLQ_FIELDS, DlqEntryMeta, type DlqEntryMetaBody } from '@db-study/shared';
 import { Injectable } from '@nestjs/common';
 import type Redis from 'ioredis';
+import { Counter } from 'prom-client';
+import { appRegistry } from '../metrics/registry';
 import { RedisConnections } from './connections';
 
 const SEALED_PREFIXES = ['stream:', 'rt:', 'alarm:'] as const;
@@ -293,6 +295,48 @@ export class DurableKeyClient {
   async readLatestField(deviceId: number, tagId: number): Promise<string | null> {
     return this.redis.hget(`rt:latest:${deviceId}`, String(tagId));
   }
+}
+
+/**
+ * durable_wrapper_failures_total{prefix} — DurableKeyClient가 던진 실패(10_observability/01 · REQ-GLB-09 · S5).
+ * 던지는 규칙은 그대로다 — 세고 다시 던진다. 접두는 메서드가 다루는 키 계열로 고정한다(닫힌 집합 stream · rt).
+ */
+const durableFailures = new Counter({
+  name: 'durable_wrapper_failures_total',
+  help: 'DurableKeyClient가 던진 실패(봉인 계열 — 삼키지 않는다)',
+  labelNames: ['prefix'],
+  registers: [appRegistry],
+});
+for (const prefix of ['stream', 'rt', 'alarm']) durableFailures.inc({ prefix }, 0);
+
+const METHOD_PREFIX: Record<string, 'stream' | 'rt'> = {
+  xaddWithBacklog: 'stream',
+  xaddBatchWithBacklog: 'stream',
+  ensureGroup: 'stream',
+  groupBacklog: 'stream',
+  readGroup: 'stream',
+  autoClaim: 'stream',
+  appendDlq: 'stream',
+  ack: 'stream',
+  writeLatestIfNewer: 'rt',
+  readLatest: 'rt',
+  readLatestField: 'rt',
+};
+for (const [method, prefix] of Object.entries(METHOD_PREFIX)) {
+  const proto = DurableKeyClient.prototype as unknown as Record<
+    string,
+    (...a: unknown[]) => Promise<unknown>
+  >;
+  const original = proto[method];
+  if (!original) throw new Error(`DurableKeyClient.${method} 없음 — 계수 표를 고친다`);
+  proto[method] = async function (this: DurableKeyClient, ...args: unknown[]) {
+    try {
+      return await original.apply(this, args);
+    } catch (e) {
+      durableFailures.inc({ prefix });
+      throw e;
+    }
+  };
 }
 
 /** "ts,value,quality" 해석 — 형식이 깨진 필드는 null */

@@ -1,0 +1,153 @@
+# 알림 규칙 14(정본 docs/10_observability/03_dashboards_alerts.md §알림 규칙)
+# 검산: 원본 유지 5 + 적체 대체 2 + 신설 7 = 14
+# 심각도 레이블 severity — 문서의 경고 = warning · 위험 = critical · 정보 = info
+# 전달 경로 없음 — 발동 상태는 ALERTS 시계열로 본다. 실험 기록에는 판정 창 안에 발동한 알림 이름을 적는다
+#
+# 임계 값(2계층 · 소유 03 §알림 임계 조회 계약 · 기준 시점 = 규칙 로드) — 현행 참고값을 식에 박는다
+#   파트 임계 200(원본) · 잔여 임계 20%(원본) · 히트율 임계 50% · 지속 10분(원본) · 랙 증가 창 5분(원본)
+#   적체 단계 임계는 이 파일에 없다 — backpressure_stage 게이지가 곧 그 판정이다(04_architecture/06 · 알림 쪽 별도 비율 금지)
+# 알림 임계는 목표가 아니다 — 목표(파트 100 · 히트율 80%)가 실측으로 확정돼도 이 값을 자동으로 따라 바꾸지 않는다
+
+groups:
+  - name: db_study_alerts
+    interval: 15s
+    rules:
+      # 1 원본 유지 — 랙 증가는 기울기로 본다(정상 상태 랙 상한 REQ-NFR-05 미확인 · 절대값 금지) · 산출식은 lag + pending
+      - alert: consumer_lag_rising
+        expr: deriv(consumer_lag[5m]) > 0
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: 컨슈머 랙(lag + pending)이 5분 창 기울기로 증가 중
+          description: 적재가 수집을 따라가지 못한다 — 파이프라인 전경의 lag · pending 겹친 패널로 소비 병목(lag)인지 삽입 병목(pending)인지 가른다(REQ-NFR-05)
+
+      # 2 적체 대체(원본 "스트림 길이 MAXLEN 80%") — 경고 단계 이상 · 복구(4) 제외(ADR-23)
+      - alert: backlog_warning
+        expr: max(backpressure_stage) >= 2 and max(backpressure_stage) != 4
+        for: 1m
+        labels:
+          severity: warning
+        annotations:
+          summary: 백프레셔 경고 단계 이상(복구 단계 제외)
+          description: 미확인 적체(그룹 lag + pending)가 경고 임계를 넘었다 — 임계 정본 04_architecture/06 §프로파일별 임계
+
+      # 3 적체 대체 — 위험 단계 또는 스풀 전환
+      - alert: backlog_critical
+        expr: max(backpressure_stage) == 3 or max(spool_active) == 1
+        for: 0m
+        labels:
+          severity: critical
+        annotations:
+          summary: 백프레셔 위험 단계 또는 스풀 전환
+          description: 발행이 멈추거나 스풀로 옮겨 갔다 — 모드 C는 datagen.stream_full(503)로 거절한다
+
+      # 4 신설 — 조용한 유실의 유일 경로(MAXLEN 트리밍)
+      - alert: stream_trim_defect
+        expr: increase(stream_trimmed_unacked[5m]) > 0
+        for: 0m
+        labels:
+          severity: critical
+        annotations:
+          summary: 미확인 엔트리가 MAXLEN 트리밍으로 잘렸다
+          description: stream_trimmed_unacked는 0이어야 한다 — 적재 경로가 책임지지 않은 엔트리가 유실됐다
+
+      # 5 원본 유지 — AC-12 알림 판정
+      - alert: dlq_occurred
+        expr: increase(dlq_count[5m]) >= 1
+        for: 0m
+        labels:
+          severity: critical
+        annotations:
+          summary: DLQ 격리 발생(reason {{ $labels.reason }})
+          description: 원 엔트리가 DLQ로 옮겨졌다(AC-12)
+
+      # 6 원본 유지 — 파트 폭주 · 임계 200(2계층 · 현행 참고)
+      - alert: clickhouse_parts_high
+        expr: max(ch_active_parts{table="tag_raw"}) > 200
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: tag_raw 활성 파트 200 초과
+          description: 새 파트율(ch:new_parts:rate5m)과 함께 본다 — 머지가 생성을 따라잡지 못하는지 확인
+
+      # 7 원본 유지 — 디스크 포화(장애 #10) · 잔여 임계 20%(2계층 · 절대 바이트 금지)
+      - alert: disk_low
+        expr: ch_disk_free_bytes / ch_disk_total_bytes < 0.20
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: ClickHouse 데이터 디스크 잔여 20% 미만
+          description: 대조 실험 디스크 예산 식이 같은 잔여 임계를 인용한다
+
+      # 8 원본 유지 — 확장 3단계 진입 신호 · 히트율은 파생 지표(tsq_cache_requests_total만 · keyspace 적중 금지)
+      - alert: cache_hit_low
+        expr: tsq:cache_hit_ratio:increase5m < 0.5
+        for: 10m
+        labels:
+          severity: info
+        annotations:
+          summary: cache:q 히트율 50% 미만 10분 지속
+          description: Redis 대시보드 축출 연쇄 패널에서 Stream 점유 메모리와의 역상관을 본다(확장 3단계 진입 판정 화면)
+
+      # 9 신설 — 판정량이 비는 동안 단계가 직전값에 머문다(ADR-21)
+      - alert: lag_unknown
+        expr: max(ing_consumer_lag_unknown) == 1
+        for: 1m
+        labels:
+          severity: warning
+        annotations:
+          summary: 컨슈머 랙 산출 불가 — 직전 값 유지 중
+          description: consumer_lag와 백프레셔 단계가 직전 값에 머물러 있다
+
+      # 10 신설 — 한 계열만 빈 /metrics(REQ-OBS-03)
+      - alert: collect_failing
+        expr: increase(obs_collect_errors_total[5m]) > 0
+        for: 0m
+        labels:
+          severity: info
+        annotations:
+          summary: 저장소 통계 수집 실패(store {{ $labels.store }})
+          description: 그 저장소 계열만 비었다 — obs_collect_last_success_timestamp_seconds로 표시값의 나이를 확인
+
+      # 11 신설 — SW-01 off가 정상 경로로 오인되는 것을 막는다(REQ-GLB-04)
+      - alert: stream_boundary_bypassed
+        expr: max(obs_switch_warning) == 1
+        for: 0m
+        labels:
+          severity: info
+        annotations:
+          summary: 스위치 경고 — Stream 경계 우회(SW-01 off)
+          description: 이 구간의 수치는 정상 경로(Stream 경유) 수치가 아니다
+
+      # 12 신설 — 대조군 COPY 실패(SW-09) · 무효 구간은 로그 이벤트(02_instrumentation §구간 기록)
+      - alert: control_copy_failed
+        expr: increase(ing_control_copy_failures_total[5m]) > 0
+        for: 0m
+        labels:
+          severity: warning
+        annotations:
+          summary: 대조군 COPY 실패 배치 발생
+          description: 대조군 행 수가 원시 적재와 어긋나는 구간이 생겼다 — 구간은 구조화 로그에서 찾는다
+
+      # 13 신설 — 롤업 의심 구간
+      - alert: rollup_suspect
+        expr: increase(ing_mv_errors_total{result="error"}[5m]) > 0
+        for: 0m
+        labels:
+          severity: warning
+        annotations:
+          summary: MV 삽입 실패 — 롤업 의심 구간
+          description: 1분 롤업이 원시와 어긋날 수 있는 구간이 생겼다(06_pipeline/09)
+
+      # 14 신설 — 판정 무효 구간(재시도 소진으로 판정 전수가 빔)
+      - alert: alarm_eval_gap
+        expr: increase(alm_eval_gap_batches_total[5m]) > 0
+        for: 0m
+        labels:
+          severity: info
+        annotations:
+          summary: 알람 판정 무효 구간 발생
+          description: 재시도 소진으로 판정 전수가 빈 배치가 있다(06_pipeline/08)
