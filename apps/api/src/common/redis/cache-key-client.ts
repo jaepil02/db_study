@@ -210,4 +210,39 @@ export class CacheKeyClient {
   releaseRtRebuildLock(deviceId: number, token: string): Promise<void> {
     return this.releaseLock(`lock:rebuild:rt:${deviceId}`, token);
   }
+
+  /** cache:alarmrules — 활성 규칙 전체 JSON(쓰기 주체는 판정기 하나 · 05_redis_keyspace) · failed는 degrade(부르는 쪽이 PostgreSQL 직행 · 채우지 않는다) */
+  async getAlarmRules(): Promise<{ value: string | null; failed: boolean }> {
+    const r = await this.getBuffer('cache:alarmrules');
+    return { value: r.value ? r.value.toString('utf8') : null, failed: r.failed };
+  }
+
+  /** 현행 TTL 300초 · 쓰기 시 ±20% 지터(05_redis_keyspace §TTL 조회 계약) */
+  setAlarmRules(json: string, ttlSeconds = 300): Promise<void> {
+    return this.setWithTtl('cache:alarmrules', json, ttlSeconds);
+  }
+
+  /** 체인 ② — 규칙 쓰기 커밋 뒤 DEL(내용은 판정기가 다시 채운다) */
+  delAlarmRules(): Promise<boolean> {
+    return this.del('cache:alarmrules');
+  }
+
+  /** cache:alarmevents — 목록 Hash 필드(정규화 쿼리 SHA-1) · 값 gzip JSON */
+  getAlarmEventsPage(sha1: string): Promise<Buffer | null> {
+    const key = 'cache:alarmevents';
+    return this.degrade(key, 'hget', () => this.redis.hgetBuffer(key, sha1));
+  }
+
+  /** 필드 채움 + 첫 채움 기준 만료(EXPIRE NX) · 지터 없음 — 필드마다 만료를 갱신하면 인기 조합이 영원히 낡지 않는다 */
+  async setAlarmEventsPage(sha1: string, gz: Buffer, ttlSeconds: number): Promise<void> {
+    const key = 'cache:alarmevents';
+    await this.degrade(key, 'hset', () =>
+      this.redis.multi().hset(key, sha1, gz).expire(key, ttlSeconds, 'NX').exec(),
+    );
+  }
+
+  /** 체인 ② — 확인 커밋 뒤 키 하나 DEL */
+  delAlarmEvents(): Promise<boolean> {
+    return this.del('cache:alarmevents');
+  }
 }

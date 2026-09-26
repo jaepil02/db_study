@@ -1,6 +1,7 @@
 // /ws/realtime 메시지 · 종료 코드 — 정본 docs/07_api/11_websocket.md §메시지 봉투와 스키마 · §종료 코드
 // 모든 메시지는 JSON 텍스트 프레임 · type 하나로 종류를 가른다. 측정 시각은 epoch ms.
 import { z } from 'zod';
+import { AlarmFrame } from './alarms';
 
 const deviceList = z.array(z.number().int().min(1).max(4_294_967_295)).min(1);
 
@@ -27,15 +28,7 @@ export const WsServerMessage = z.discriminatedUnion('type', [
     windowEnd: z.number().int(),
     devices: z.array(z.strictObject({ deviceId: z.number().int(), tags: z.array(RtTagTuple) })),
   }),
-  z.strictObject({
-    type: z.literal('alarm'),
-    eventId: z.number().int(),
-    ruleId: z.number().int(),
-    tagId: z.number().int(),
-    transition: z.enum(['OPENED', 'CLEARED']),
-    ts: z.number().int(),
-    severity: z.number().int(),
-  }),
+  AlarmFrame, // 정의는 ./alarms(알람 표면과 한 정의)
   z.strictObject({ type: z.literal('cacheinv'), keys: z.array(z.string()) }),
   z.strictObject({ type: z.literal('ping'), t: z.number().int() }),
 ]);

@@ -136,7 +136,7 @@ tasks:
   seed:
     desc: '마스터 시드 — 빈 볼륨 전용 · 사용: task seed -- --slice s2 | task seed -- --tier S'
     cmds:
-      - 'COMMIT_HASH={{.CLEAN_HASH}} {{.COMPOSE_P}} run --rm --no-deps api node dist/db/seed.js {{.CLI_ARGS}}'
+      - 'COMMIT_HASH={{.CLEAN_HASH}} {{.COMPOSE_P}} run --rm --no-deps -e SEED_USER_PASSWORD api node dist/db/seed.js {{.CLI_ARGS}}'
 
   up:
     desc: '전 구성 기동 — 저장소 → migrate → (SEED가 있으면 seed) → api healthy · 사용: task up [PROFILE=load] [SEED="--slice s2"]'
@@ -145,7 +145,7 @@ tasks:
       - task: wait-healthy
       - task: migrate
       - |
-        {{if .SEED}}COMMIT_HASH={{.CLEAN_HASH}} {{.COMPOSE_P}} run --rm --no-deps api node dist/db/seed.js {{.SEED}}{{else}}echo "seed 생략 — SEED 없음"{{end}}
+        {{if .SEED}}COMMIT_HASH={{.CLEAN_HASH}} {{.COMPOSE_P}} run --rm --no-deps -e SEED_USER_PASSWORD api node dist/db/seed.js {{.SEED}}{{else}}echo "seed 생략 — SEED 없음"{{end}}
       - 'COMMIT_HASH={{.CLEAN_HASH}} {{.COMPOSE_P}} up -d --no-deps api'
       - task: wait-api
 

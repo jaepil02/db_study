@@ -5,6 +5,7 @@
 // S1 범위: APP_ROLE · 스위치 11 · MEMORY_PROFILE · CAPACITY_TIER · COMMIT_HASH · WORKER_POOL_SIZE.
 // S2 추가: 저장소 접속 3(POSTGRES_URL · CLICKHOUSE_URL · REDIS_URL) — 비밀번호 자리는 Compose 변수 치환이 채운다(09_tech_stack/04).
 // S3 추가: SIM_FAULT_PLAN(정본 목록에 이미 있다) · INGEST_BATCH_PLAN · INGEST_LAB_FAULT · GEN_PROFILE(S3 신설 — 09_tech_stack/04 갱신).
+// S7 ① 추가: ALARM_ACK_ACTOR_EMAIL(인증 전 확인 행위자 — 판정 정본 07_api/07 §인증 전 확인 행위자 판정 · 인증 도입 S7 ②에서 폐기).
 import { readFileSync } from 'node:fs';
 import { CAPACITY_TIER_NAMES, type CapacityTier, SIGNAL_PROFILES } from '@db-study/shared';
 import { z } from 'zod';
@@ -55,6 +56,9 @@ const EnvSchema = z.object({
   GEN_PROFILE: z.enum(['mixed', 'all', ...SIGNAL_PROFILES] as [string, ...string[]]).default('SINE'),
   // S5 — 모드 C 부하 주입 표면 게이트(스위치가 아니다 · 07_api/09) — 'true'일 때만 켜진다 · 그 밖은 전부 꺼짐(기본 비활성)
   DATAGEN_BULK_ENABLED: z.string().optional(),
+  // S7 ① — 인증 전 확인(ACK) 행위자 email · 기본값 없음 · 없어도 기동한다(확인만 401 — 09_tech_stack/04 §환경변수)
+  // 형식 검사를 걸지 않는다 — 시드 값 learner@localhost는 최상위 도메인이 없어 일반 email 정규식을 통과하지 못한다
+  ALARM_ACK_ACTOR_EMAIL: optional(z.string().trim().min(1)),
 });
 
 export interface AppConfig {
@@ -74,6 +78,8 @@ export interface AppConfig {
   genProfile: string;
   /** 모드 C 부하 주입 표면 게이트 — DATAGEN_BULK_ENABLED === 'true' */
   datagenBulkEnabled: boolean;
+  /** 인증 전 확인 행위자 email — null이면 확인만 401(계정 조회는 확인 트랜잭션마다 · 07_api/07) */
+  alarmAckActorEmail: string | null;
 }
 
 export class ConfigRejectedError extends Error {}
@@ -116,6 +122,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
       : null,
     genProfile: base.data.GEN_PROFILE,
     datagenBulkEnabled: base.data.DATAGEN_BULK_ENABLED === 'true',
+    alarmAckActorEmail: base.data.ALARM_ACK_ACTOR_EMAIL,
   };
 }
 

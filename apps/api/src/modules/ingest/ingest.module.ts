@@ -1,12 +1,14 @@
 // ING — Stream 소비 · 창 정렬 배치 · tag_raw 삽입 · 재시도 · DLQ · 회수 · 대조군 · XACK · 최신값(ING-01~08 · 11 · 12 — S2 · S3)
 // 스위치 포트 구현은 모듈 초기화 때 한 번 고른다 — 경로 안 분기를 두지 않는다(ADR-08).
 // 포트 · 구현 이름 정본 docs/04_architecture/02_module_boundaries.md(SW-08 BatchTokenPort · SW-09 ControlTableSinkPort · SW-11 LatestValueWritePort)
+// 판정기(ALM · S7 ①)는 여기서 import한다 — IngestModule이 도는 역할(all · worker)에만 판정기가 산다(flusher ⑥ 인계 · 06_pipeline/08).
 import { Logger, Module } from '@nestjs/common';
 import { REALTIME_FANOUT_PORT, type RealtimeFanoutPort } from '../../common/ports/realtime-fanout.port';
 import { SwitchRegistry } from '../../common/ports/switch-registry';
 import { DurableKeyClient } from '../../common/redis/durable-key-client';
 import { type AppConfig, INGEST_BATCH_PLANS, requireStoreUrls } from '../../config/app-config';
 import { APP_CONFIG } from '../../config/config.module';
+import { AlarmEvalModule } from '../alarm/eval/alarm-eval.module';
 import {
   BATCH_TOKEN_PORT,
   type BatchTokenPort,
@@ -81,6 +83,7 @@ export function latestWriterFactory(
 }
 
 @Module({
+  imports: [AlarmEvalModule],
   providers: [
     { provide: BATCH_TOKEN_PORT, useFactory: batchTokenFactory, inject: [APP_CONFIG, SwitchRegistry] },
     {

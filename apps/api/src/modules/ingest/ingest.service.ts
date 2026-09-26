@@ -3,7 +3,7 @@
 // ④ fan-in: 창 버퍼 ⑤ 배치 확정: 창 정렬 · R · P 분할 · 결정적 토큰 ⑥ 삽입 ⑦ 실패: 같은 토큰 백오프 → DLQ → XACK
 // ⑧ 성공 후속: 대조군 COPY(SW-09) → XACK → 최신값(SW-11) ⑨ 회수: XAUTOCLAIM 주기 타이머 → ④
 // S3 범위(ING-02 · 04 · 05 · 06 · 07 · 11 · 12): 배치 안 A · B · C · SW-08 · SW-09 · SW-11(ingest) · 결함 주입.
-// 범위 밖: 소진 모드 · 백프레셔 단계 반응(ING-13 · S6) · 판정 인계(ING-09 · S7).
+// 범위 밖: 소진 모드 · 백프레셔 단계 반응(ING-13 · S6). 판정 인계(ING-09)는 S7 ① — flusher ⑥ → 판정기(인계 깊이 1 · 06_pipeline/08).
 // 중복 제거로 무시된 성공(ing_dedup_ignored_batches_total)은 세지 않는다 — 판별 수단은 쿼리 로그 ProfileEvents DuplicatedInsertedBlocks이고
 // (05_data_stores/03 §중복 제거 B형) insert 응답 요약 헤더(X-ClickHouse-Summary)는 read · written 행 · 바이트 · 경과 시간만 싣는다.
 // written_rows는 중복 제거된 재시도에서도 첫 시도와 같아(S0 기록 001) 판별에 못 쓴다 — 삽입 경로에서 쿼리 로그를 읽지 않는다(S3 판정).
@@ -14,6 +14,7 @@ import {
   Injectable,
   Logger,
   type OnApplicationBootstrap,
+  Optional,
 } from '@nestjs/common';
 import type Redis from 'ioredis';
 import { ClickHouse } from '../../common/clickhouse/clickhouse.module';
@@ -23,6 +24,7 @@ import type { DecodeResult } from '../../common/workers/tasks';
 import { WorkerPool } from '../../common/workers/worker-pool';
 import { type AppConfig, INGEST_BATCH_PLANS, type IngestBatchParams } from '../../config/app-config';
 import { APP_CONFIG } from '../../config/config.module';
+import { ALARM_HANDOFF_PORT, type AlarmHandoffPort } from '../alarm/eval/evaluator';
 import { BATCH_TOKEN_PORT, type BatchTokenPort } from './batch-token.port';
 import { CONTROL_TABLE_SINK_PORT, type ControlTableSinkPort } from './control-table-sink.port';
 import { Flusher } from './flusher';
@@ -69,8 +71,9 @@ const CONSUMER_RESTART_MS = 1000;
 
 /**
  * flusher 보유 상한(06_pipeline/03 §행 수 상한과 flusher 메모리) — 자리별 최대 배치 수.
- * 합계 4 × R × 행당 메모리가 flusher 메모리 상한이다. 판정 인계 슬롯 · 판정 중은 판정기(ALM · S7)가 들어올 때 센다 —
- * S3에서 컨슈머 정지 조건은 창 버퍼(조립 중 · 닫혀 대기) + 삽입 중 = 2칸이다(S2는 조립 중을 세지 않았다 · 06_pipeline/03 미확인 등재).
+ * 합계 4 × R × 행당 메모리가 flusher 메모리 상한이다. 컨슈머 정지 조건은 창 버퍼(조립 중 · 닫혀 대기) + 삽입 중 = 2칸이다
+ * (S2는 조립 중을 세지 않았다 · 06_pipeline/03 미확인 등재). 판정 두 칸(S7)은 판정기가 쥔다 — 슬롯이 차면 flusher가 인계에서 기다리는
+ * 동안 삽입 중 칸(flushing)을 계속 쥐어 정지 셈에 그대로 들어간다(보유 = 2 + 인계 슬롯 1 + 판정 중 1 = 4 이하).
  */
 export const FLUSHER_HOLD_SLOTS = { windowBuffer: 1, inserting: 1, handoffSlot: 1, judging: 1 } as const;
 export const FLUSHER_ACTIVE_SLOTS = FLUSHER_HOLD_SLOTS.windowBuffer + FLUSHER_HOLD_SLOTS.inserting;
@@ -176,6 +179,7 @@ export class IngestService implements OnApplicationBootstrap, BeforeApplicationS
     @Inject(BATCH_TOKEN_PORT) tokens: BatchTokenPort,
     @Inject(CONTROL_TABLE_SINK_PORT) private readonly control: ControlTableSinkPort,
     @Inject(LATEST_VALUE_WRITE_PORT) latest: LatestValueWritePort,
+    @Optional() @Inject(ALARM_HANDOFF_PORT) private readonly alarm: AlarmHandoffPort | null = null,
   ) {
     this.params = INGEST_BATCH_PLANS[cfg.ingestBatchPlan];
     const names = consumerNames(this.params.consumers);
@@ -210,6 +214,7 @@ export class IngestService implements OnApplicationBootstrap, BeforeApplicationS
       },
       dlq: (items) => this.durable.appendDlq(STREAM_DLQ, items, DLQ_MAXLEN),
       latest,
+      alarm,
       labFault: createLabFault(cfg.ingestLabFault),
       sleep,
       stopping: () => this.stopping,
@@ -261,6 +266,9 @@ export class IngestService implements OnApplicationBootstrap, BeforeApplicationS
     this.drained = true;
     this.wakeFlusher?.();
     await this.flushLoop;
+    // 판정기 정지는 여기 하나다 — flusher가 마지막 인계까지 끝낸 뒤에 부른다(판정기는 자체 종료 훅이 없다 · 훅 순서에 기대지 않는다).
+    // 인계 슬롯 · 판정 중 배치 · alarm_eval 큐를 끝낸다 — 저장소 연결은 이 뒤(onApplicationShutdown)에 닫힌다
+    await this.alarm?.drain();
     this.updatePause(false);
     await this.control.close();
   }

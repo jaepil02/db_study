@@ -126,6 +126,8 @@ export class PostgresControlSink implements ControlTableSinkPort {
       connectionString: this.connectionString,
       application_name: 'db_study-control-copy',
       connectionTimeoutMillis: this.timeoutMs,
+      // 세션 synchronous_commit off(10_olap_vs_rdb_control §측정 조건 내구성 — 모드 D와 같은 조건) · 기동 인자라 배치마다 왕복이 없다
+      options: '-c synchronous_commit=off',
     });
     c.on('error', (e) => {
       this.log.warn(`대조군 전용 커넥션 오류 — ${e.message} · 다음 배치가 새로 연다`);

@@ -1,3 +1,4 @@
+export * from './alarms';
 export * from './datagen';
 export * from './errors';
 export * from './health';

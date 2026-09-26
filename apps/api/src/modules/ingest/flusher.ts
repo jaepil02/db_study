@@ -1,9 +1,11 @@
 // 단일 flusher의 배치 하나 — ⑥ 삽입 ⑦ 실패 처리 ⑧ 성공 후속(기전 정본 docs/06_pipeline/03_ingest_batch.md §적재 한 배치)
-// 순서 계약: ② 삽입 성공 → ③ 대조군 COPY(SW-09 · 1회) → ④ XACK → ⑤ 최신값(SW-11) — 04_routing §대조군 동시 적재 기전.
+// 순서 계약: ② 삽입 성공 → ③ 대조군 COPY(SW-09 · 1회) → ④ XACK → ⑤ 최신값(SW-11) → ⑥ 판정기 인계(S7 · 06_pipeline/08 ①)
+// — 04_routing §대조군 동시 적재 기전. 판정 실패는 XACK를 되돌리지 않는다(REQ-ING-13 · 인계 깊이 1 — 슬롯이 차면 여기서 기다린다).
 // XACK는 삽입 성공 뒤 또는 격리(DLQ) 뒤에만 한다(REQ-GLB-05 · 상태 머신 1).
 // 저장소 호출은 전부 주입받는다 — 순서 계약을 단위 테스트로 고정한다.
 import type { ClickHouseSettings } from '@clickhouse/client';
 import type { DlqItem } from '../../common/redis/durable-key-client';
+import type { AlarmHandoffPort } from '../alarm/eval/evaluator';
 import { type BatchTokenPort, insertSettings } from './batch-token.port';
 import type { ControlTableSinkPort } from './control-table-sink.port';
 import { ingestMetrics as m } from './ingest.metrics';
@@ -39,6 +41,8 @@ export interface FlusherDeps {
   ack(ids: string[]): Promise<void>;
   dlq(items: DlqItem[]): Promise<void>;
   latest: LatestValueWritePort;
+  /** ⑥ 판정기 인계 — 판정기가 없는 구성(단위 테스트)이면 null */
+  alarm?: AlarmHandoffPort | null;
   labFault: LabFault;
   sleep(ms: number): Promise<void>;
   /** 종료 중 — 실패한 배치를 더 기다리지 않고 PEL에 남긴다 */
@@ -104,6 +108,11 @@ export class Flusher {
     if (!(await this.ack(ids))) return 'abandoned'; // 확인되지 않은 값으로 최신값을 세우지 않는다(REQ-ING-07)
     // ⑤ 최신값(SW-11 ingest) — XACK 뒤
     await this.d.latest.write(piece.entries);
+    // ⑥ 판정기 인계 — 확정 배치의 행 배열 · 원 배치 토큰(alarm_eval 재시도가 같은 토큰을 쓴다)
+    if (this.d.alarm) {
+      await this.d.alarm.handoff({ token, rows });
+      m.routedRows.inc({ layer: 'alarm' }, rows.length);
+    }
     return 'inserted';
   }
 

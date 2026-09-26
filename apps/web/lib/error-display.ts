@@ -12,6 +12,13 @@ const TEXT: Record<string, string> = {
   'common.duplicate_key': '이미 있는 값',
   'master.scale_change_forbidden': '스케일 변경은 새 태그 발급으로만 한다',
   'master.reissue_source_inactive': '이미 비활성인 태그에서는 새 태그를 발급할 수 없다',
+  'alarms.ack_not_allowed': '이미 확인됐거나 해제된 알람',
+  'alarms.eval_store_unavailable': '판정 기록 저장소 응답 불가',
+  // 인증(S7 ②) 전에는 두 auth 코드가 알람 확인에서만 난다 — 로그인 화면이 없어 이동하지 않고 문구로 보인다
+  // (정본 07_api/07 §인증 전 확인 행위자 판정 · 11_glossary/02 대응 열). 인증 뒤 401은 표시 없이 AUTH-LOGIN으로 간다(08_screen/01).
+  'auth.unauthenticated':
+    '확인 행위자를 해석하지 못했다 — 인증 전에는 ALARM_ACK_ACTOR_EMAIL과 계정 시드를 고친다',
+  'auth.forbidden': '이 작업은 OPERATOR만 한다',
 };
 
 /** 띠 문구 — 코드가 있으면 코드와 함께 보인다. 코드 없는 실패(네트워크 · 500)는 상태로 가른다 */

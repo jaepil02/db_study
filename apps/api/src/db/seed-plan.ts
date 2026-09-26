@@ -1,5 +1,6 @@
 // 시드 구성 — 모양 정본 docs/05_data_stores/09_migrations_seed.md §시드 · 티어별 구성 docs/06_pipeline/10_datagen_inject.md §티어 시드 구성
 // S2 판정(사용자 결정 2026-09-24): 티어 시드와 S2 슬라이스(설비 1 · 태그 8 — 티어 S의 부분 구성) 두 가지.
+import { randomBytes } from 'node:crypto';
 import { CAPACITY_TIERS, type CapacityTier } from '@db-study/shared';
 
 export const SIM_BASE_PORT = 5020; // PlcSim 대역 5020~5119(REQ-SIM-01)
@@ -109,4 +110,55 @@ export function effectiveScanRateMs(p: SeedPlan, scanRateMs: number | null): num
 /** seed 완료 줄에 싣는 옵션 문장 — 측정 기록이 시드 조건을 로그에서 읽는다(scan_rate_ms는 완료 줄이 따로 싣는다) */
 export function describeSeedOptions(o: SeedOptions): string {
   return `deadband ${o.deadband} · range ${o.range ? `${o.range.min},${o.range.max}` : 'NULL'}`;
+}
+
+// ── S7 ① 계정 · 역할 시드 — 정본 docs/05_data_stores/09_migrations_seed.md §S7 ① 계정 · 역할 시드(행 7 = 역할 3 + 계정 1 + 부여 3)
+
+/** 이 순서로 넣어 IDENTITY role_id가 빈 볼륨마다 같다(OPERATOR 1 · ENGINEER 2 · ADMIN 3) */
+export const SEED_ROLES = ['OPERATOR', 'ENGINEER', 'ADMIN'] as const;
+/** 학습자 계정 email — 리드 판정 2026-09-26(비밀이 아닌 설계 값) · ALARM_ACK_ACTOR_EMAIL 값은 이 값과 같아야 한다 */
+export const SEED_LEARNER_EMAIL = 'learner@localhost';
+/** .env.example 자리표시(infra/init-env.sh) — 이 값이거나 비었으면 seed 거부(12_security/02 §자리표시 비밀로는 기동하지 않는다) */
+export const SECRET_PLACEHOLDER = 'CHANGE_ME';
+
+/** SEED_USER_PASSWORD — 트랜잭션 전에 거부한다. 원문은 로그 · 에러 문장에 싣지 않는다 */
+export function seedUserPassword(env: NodeJS.ProcessEnv = process.env): string {
+  const v = env.SEED_USER_PASSWORD;
+  if (!v || v === SECRET_PLACEHOLDER)
+    throw new Error('SEED_USER_PASSWORD가 비었거나 자리표시다 — seed 거부(.env에 학습자 비밀번호를 정한다)');
+  return v;
+}
+
+/**
+ * 비밀번호 해시 — 알고리즘 Argon2id(판정 12_security/01) · 결과는 자기 기술 문자열($argon2id$v=19$m=…,t=…,p=…$salt$hash).
+ * 비용 파라미터 값은 2계층 미정(12_security/01 §미확인) — 구현이 고른 값이 문자열에 남는다.
+ */
+export interface PasswordHasher {
+  hash(plain: string): Promise<string>;
+}
+
+/** 자기 기술 문자열이 Argon2id인가 — 다른 알고리즘 해시가 user_account에 들어가는 것을 막는다 */
+export function isArgon2idEncoded(h: string): boolean {
+  return /^\$argon2id\$v=\d+\$m=\d+,t=\d+,p=\d+\$[A-Za-z0-9+/]+\$[A-Za-z0-9+/]+$/.test(h);
+}
+
+/**
+ * Argon2id — hash-wasm(순수 WASM · alpine 네이티브 빌드 없음 · 버전 고정 09_tech_stack/03 "비밀번호 해시 라이브러리(Argon2id)" 행).
+ * 비용 파라미터(2계층 · 소유 12_security/01): 현행 OWASP Password Storage Cheat Sheet 최소 구성 m = 19 MiB · t = 2 · p = 1 · 솔트 16바이트.
+ * 출력은 자기 기술 문자열($argon2id$v=19$m=…) — 로그인(S7 ②)은 같은 문자열에서 파라미터를 읽어 검증한다.
+ */
+export const ARGON2ID_PARAMS = { memorySize: 19_456, iterations: 2, parallelism: 1, hashLength: 32 } as const;
+
+export function argon2idHasher(): PasswordHasher {
+  return {
+    async hash(plain: string): Promise<string> {
+      const { argon2id } = await import('hash-wasm');
+      return argon2id({
+        password: plain,
+        salt: randomBytes(16),
+        ...ARGON2ID_PARAMS,
+        outputType: 'encoded',
+      });
+    },
+  };
 }

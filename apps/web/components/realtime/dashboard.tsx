@@ -15,7 +15,7 @@ import { Card, CardContent, CardFooter, CardHeader, CardTitle } from '../ui/card
 import { LatestTable } from './latest-table';
 import { TrendChart } from './trend-chart';
 
-export function RealtimeDashboard({ deviceId }: { deviceId: number }) {
+export function RealtimeDashboard({ deviceId, focusTagId }: { deviceId: number; focusTagId?: number }) {
   const syncEpoch = useConnectionStore((s) => s.syncEpoch);
   const metaEpoch = useConnectionStore((s) => s.metaEpoch);
   const lastCloseCode = useConnectionStore((s) => s.lastCloseCode);
@@ -52,8 +52,8 @@ export function RealtimeDashboard({ deviceId }: { deviceId: number }) {
     void refetchLatest();
   }, [deviceId, syncEpoch, metaEpoch, refetchLatest]);
 
-  // 트렌드 태그 — 표에서 고른 태그 최대 8 · 기본은 앞 8개
-  const [picked, setPicked] = useState<number[] | null>(null);
+  // 트렌드 태그 — 표에서 고른 태그 최대 8 · 기본은 앞 8개 · 태그 딥링크 진입이면 그 태그 하나
+  const [picked, setPicked] = useState<number[] | null>(focusTagId === undefined ? null : [focusTagId]);
   const selectedKey = (picked ?? order.slice(0, TREND_MAX_TAGS)).join(',');
   const selected = useMemo(
     () => (selectedKey === '' ? [] : selectedKey.split(',').map(Number)),

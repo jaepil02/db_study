@@ -717,8 +717,345 @@ def step_summary(sd):
                       'cpuMax': {n: c['max'] for n, c in (v.get('cpu') or {}).items()}, 'signals': s}, ensure_ascii=False))
 
 
+# ── EXP-45 스트리밍 동시 적재(control-stream-ingest) — 정본 05_data_stores/10 §스트리밍 동시 적재 — EXP-45
+# 싱크 시간은 계단 창 앞뒤 두 캡처의 버킷 차 분위수(누적 히스토그램을 그대로 읽으면 앞 계단 표본이 섞인다).
+# 식은 apps/web/lib/compare.ts histQuantile · restartDetected와 같다(총량 = +Inf 칸 누적 · 빈 칸이면 윗경계 · +Inf 칸이면 마지막 유한 경계).
+BATCH_PLAN_WINDOW_MS = {'A': 1000, 'B': 5000, 'C': 1000}  # apps/api/src/config/app-config.ts INGEST_BATCH_PLANS · COPY 타임아웃 = W ÷ 2(control-table-sink.port)
+EXP45_CONTROL_RESOURCES = 'clickhouse=5-7/3758096384 postgres=8-10/3758096384'  # compose.control.yml(3584m · 5-7 · 8-10)
+
+
+def bucket_quantile(a, b, name, q, **want):
+    """버킷 차의 분위수(초) — 레이블 조합을 le별로 합친 뒤 선형 보간 · 표본 0이면 None(compare.ts histQuantile)"""
+    def by_le(d):
+        m = {}
+        for (n, l), v in d.items():
+            if n != f'{name}_bucket':
+                continue
+            lab = histdiff.labels(l)
+            if 'le' not in lab or any(lab.get(k) != str(val) for k, val in want.items()):
+                continue
+            le = math.inf if lab['le'] == '+Inf' else float(lab['le'])
+            m[le] = m.get(le, 0.0) + v
+        return m
+    ba, bb = by_le(a or {}), by_le(b or {})
+    les = sorted(bb)
+    cum = [bb[le] - ba.get(le, 0.0) for le in les]
+    total = cum[-1] if cum else 0.0
+    if total <= 0:
+        return None
+    rank = q * total
+    for i, le in enumerate(les):
+        if cum[i] >= rank:
+            lo = 0.0 if i == 0 else les[i - 1]
+            if math.isinf(le):
+                return lo
+            below = 0.0 if i == 0 else cum[i - 1]
+            inb = cum[i] - below
+            return le if inb <= 0 else lo + (le - lo) * ((rank - below) / inb)
+    return None
+
+
+def bucket_view(a, b, name, **want):
+    """창 표본 수(+Inf 칸 누적 차) · p50 · p95 — 표본 0이면 None"""
+    p50 = bucket_quantile(a, b, name, 0.5, **want)
+    if p50 is None:
+        return None
+    return {'metric': name, 'count': pdelta(a, b, f'{name}_count', **want), 'p50S': p50,
+            'p95S': bucket_quantile(a, b, name, 0.95, **want), 'basis': 'bucket-diff'}
+
+
+def restart_detected(a, b):
+    """재기동 감지 — 누적 계열(_total · _bucket · _count · _sum)이 하나라도 줄었다(compare.ts restartDetected)"""
+    if not a or not b:
+        return None
+    for (n, l), v in b.items():
+        if not re.search(r'_(total|bucket|count|sum)$', n):
+            continue
+        prev = a.get((n, l))
+        if prev is not None and v < prev:
+            return True
+    return False
+
+
+def _jdelta(a, b, key):
+    x, y = num((a or {}).get(key)), num((b or {}).get(key))
+    return None if x is None or y is None else y - x
+
+
+def exp45_sync_commit(k):
+    """대조군 COPY 세션의 유효 synchronous_commit — 연결 기동 인자(options '-c synchronous_commit=…')가 정한다
+    기동 인자(PGC_S_CLIENT)는 역할 · DB 설정(pg_db_role_setting)과 서버 설정보다 앞서므로 그 셋은 참고 칸이다(세션 값은 밖에서 보이지 않는다).
+    원천: start가 이미지 커밋의 control-table-sink.port.ts에서 읽은 options 문자열(kv controlCopyOptions)"""
+    opts = k.get('controlCopyOptions')
+    m = re.search(r'synchronous_commit=(\w+)', opts or '')
+    eff = m.group(1) if m else None
+    return {'effective': eff, 'off': None if eff is None else eff == 'off',
+            'basis': 'startup options(control-table-sink.port.ts)', 'options': opts or None, 'imageCommit': k.get('commit'),
+            'reference': jload_text(k.get('syncCommit'))}
+
+
+def jload_text(t):
+    try:
+        return json.loads(t) if t else None
+    except json.JSONDecodeError:
+        return None
+
+
+def exp45_step_view(sd, w_s, timeout_s):
+    """EXP-45 계단 하나 — 두 싱크 창 분위수(버킷 차) · 행 처리율 · 랙 · 쓰기 비용 · 실패 · 구간 count"""
+    m = meta(os.path.join(sd, 'meta'))
+    a0w, a1w = prom(os.path.join(sd, 'm0.worker')), prom(os.path.join(sd, 'm1.worker'))
+    a0, a1 = prom(os.path.join(sd, 'm0.api')), prom(os.path.join(sd, 'm1.api'))
+    win = samples(os.path.join(sd, 'win.samples'))
+    w0, w1 = num(m.get('winStartMs')), num(m.get('winEndMs'))
+    secs = (w1 - w0) / 1000 if (w0 and w1) else None
+    mb = modeb_view(jload(os.path.join(sd, 'modeb.json')))
+    ins = bucket_view(a0w, a1w, 'insert_duration')
+    cp = bucket_view(a0w, a1w, 'ing_control_copy_seconds')
+    fails = pdelta(a0w, a1w, 'ing_control_copy_failures_total')
+    ch_rows = pdelta(a0w, a1w, 'rows_inserted')
+    pg_rows = pdelta(a0w, a1w, 'ing_control_copy_rows_total')
+    pg0, pg1 = jload(os.path.join(sd, 'pg0.json')), jload(os.path.join(sd, 'pg1.json'))
+    ch0, ch1 = jload(os.path.join(sd, 'parts0.json')), jload(os.path.join(sd, 'parts1.json'))
+    pl = jload(os.path.join(sd, 'partlog.json'))
+    cnt = jload(os.path.join(sd, 'counts.json'))
+    restart = restart_detected(a0w, a1w) or restart_detected(a0, a1)
+    rate = lambda x: (x / secs) if (x is not None and secs) else None
+    pps = num(m.get('pps'))
+    count_ok = None
+    if cnt and cnt.get('tagRaw') is not None and cnt.get('control') is not None:
+        count_ok = num(cnt['tagRaw']) == num(cnt['control'])
+    v = {
+        'label': m.get('label'), 'tier': m.get('tier'), 'pps': pps, 'transS': num(m.get('transS')), 'winS': num(m.get('winS')),
+        'window': {'start': iso(w0), 'end': iso(w1)}, 'windowSeconds': secs,
+        'loadRange': {'launch': iso(m.get('launchMs')), 'exit': iso(m.get('exitMs'))},
+        'restartDetected': restart,
+        'generator': mb,
+        'generatorSaturated': None if not mb else bool((mb.get('achievedRatio') or 0) < 0.99 or (mb.get('lateTicks') or 0) > 0),
+        'sinkTime': {'clickhouse': ins, 'postgresql': cp},
+        'rows': {'clickhouse': ch_rows, 'postgresql': pg_rows,
+                 'clickhouseRps': rate(ch_rows), 'postgresqlRps': rate(pg_rows),
+                 'clickhouseAchieved': (rate(ch_rows) / pps) if (rate(ch_rows) is not None and pps) else None,
+                 'postgresqlAchieved': (rate(pg_rows) / pps) if (rate(pg_rows) is not None and pps) else None,
+                 'diff': (ch_rows - pg_rows) if (ch_rows is not None and pg_rows is not None) else None},
+        'lag': series_summary(col(win, 1)), 'lagGroup': series_summary(col(win, 2)), 'pending': series_summary(col(win, 3)),
+        'writeCost': {
+            'postgresql': {'walBytes': _jdelta(pg0, pg1, 'walBytes'), 'walFpi': _jdelta(pg0, pg1, 'walFpi'), 'walRecords': _jdelta(pg0, pg1, 'walRecords'),
+                           'autovacuum': _jdelta(pg0, pg1, 'autovacuum'), 'deadTuplesEnd': num((pg1 or {}).get('deadTuples')),
+                           'deadTuplesDelta': _jdelta(pg0, pg1, 'deadTuples'), 'basis': 'pg_stat_wal · pg_stat_all_tables(대조군 잎 파티션) 창 경계 직접 조회',
+                           'metricsRef': {'walBytes': pdelta(a0, a1, 'pg_wal_bytes_total'),
+                                          'autovacuum': pdelta(a0, a1, 'pg_autovacuum_total', table='plc_tag_raw_control'),
+                                          'note': 'OBS 수집 주기 15초의 거울 — 창 경계와 최대 15초 어긋난다(참고)'}},
+            'clickhouse': {'activePartsStart': num((ch0 or [None])[0]), 'activePartsEnd': num((ch1 or [None])[0]),
+                           'newParts': num(pl[0]) if pl else None, 'newPartBytes': num(pl[1]) if pl else None,
+                           'merges': num(pl[2]) if pl else None, 'mergeWrittenBytes': num(pl[3]) if pl else None,
+                           'mergeReadBytes': num(pl[4]) if pl else None, 'basis': 'system.part_log 창 [시작, 끝) · system.parts 창 경계'},
+        },
+        'failures': {'copyFailures': fails, 'dlq': pdelta(a0w, a1w, 'dlq_count'), 'insertRetries': pdelta(a0w, a1w, 'ing_insert_retries_total')},
+        'intervalCount': {'tagRaw': num((cnt or {}).get('tagRaw')), 'control': num((cnt or {}).get('control')), 'match': count_ok},
+    }
+    # 판정 점 신호(정본 표) — ClickHouse 삽입 p95 > W · PostgreSQL COPY p95 > COPY 타임아웃 또는 실패 ≥ 1
+    v['passed'] = {
+        'clickhouse': None if not ins else bool(ins['p95S'] is not None and ins['p95S'] > w_s),
+        'postgresql': None if (cp is None and fails is None) else bool((cp is not None and cp['p95S'] is not None and cp['p95S'] > timeout_s) or (fails or 0) > 0),
+    }
+    # ⑥ 구간 count가 어긋난 계단의 PostgreSQL 수치는 무효 · 재기동 창 · 생성기 포화 계단은 두 싱크의 상한으로 쓰지 않는다
+    v['valid'] = {
+        'clickhouse': not restart and not v['generatorSaturated'],
+        'postgresql': not restart and not v['generatorSaturated'] and count_ok is True,
+    }
+    return v
+
+
+def exp45_judgement(steps, w_s, timeout_s):
+    """판정 점 — 계단 실행 순서대로 첫 계단 · 넘지 않으면 관측 범위(유효 계단의 최소 · 최대 pps)
+    ClickHouse: 유효 계단 중 삽입 p95 > W인 첫 계단
+    PostgreSQL: COPY 실패 ≥ 1인 첫 계단(행 수가 어긋나도 실패는 사실이다) 또는 유효 계단 중 COPY p95 > 타임아웃인 첫 계단"""
+    def first(pred):
+        return next((s['pps'] for s in steps if pred(s)), None)
+    ok_ch = [s for s in steps if s['valid']['clickhouse']]
+    ok_pg = [s for s in steps if s['valid']['postgresql']]
+    ch = first(lambda s: s['valid']['clickhouse'] and s['passed']['clickhouse'])
+    pg_fail = first(lambda s: not s['restartDetected'] and not s['generatorSaturated'] and (s['failures']['copyFailures'] or 0) > 0)
+    pg_p95 = first(lambda s: s['valid']['postgresql'] and (s['sinkTime']['postgresql'] or {}).get('p95S') is not None
+                   and s['sinkTime']['postgresql']['p95S'] > timeout_s)
+    pg_first = None
+    for s in steps:
+        if s['pps'] in (pg_fail, pg_p95):
+            pg_first = s['pps']
+            break
+    rng = lambda xs: {'minPps': min(s['pps'] for s in xs), 'maxPps': max(s['pps'] for s in xs)} if xs else None
+    return {
+        'windowS': w_s, 'copyTimeoutS': timeout_s,
+        'clickhouse': {'firstPps': ch, 'rule': 'insert_duration p95 > W', 'observedRange': rng(ok_ch), 'notExceededInRange': ch is None and bool(ok_ch)},
+        'postgresql': {'firstPps': pg_first, 'byFailure': pg_fail, 'byP95': pg_p95, 'rule': 'ing_control_copy_seconds p95 > COPY 타임아웃 또는 첫 실패',
+                       'observedRange': rng(ok_pg), 'notExceededInRange': pg_first is None and bool(ok_pg)},
+    }
+
+
+def exp45_failure_log(p):
+    """worker 로그의 control_copy_failed 구조화 이벤트 — 무효 구간(ts 범위)의 원천"""
+    out = []
+    for ln in (rd(p, '') or '').splitlines():
+        i = ln.find('{')
+        if i < 0 or 'control_copy_failed' not in ln:
+            continue
+        try:
+            out.append(json.loads(ln[i:ln.rfind('}') + 1]))
+        except json.JSONDecodeError:
+            continue
+    return out
+
+
+def rec_exp45(d):
+    out = head(d, 'exp45-control-stream')
+    k = kv(d)
+    plan = (env_conditions(d).get('INGEST_BATCH_PLAN') or 'A').upper()
+    w_ms = num(k.get('windowMs')) or BATCH_PLAN_WINDOW_MS.get(plan, 1000)
+    to_ms = num(k.get('copyTimeoutMs')) or math.floor(w_ms / 2)
+    views = [exp45_step_view(sd, w_ms / 1000, to_ms / 1000) for sd in steps_in(d)]
+    out['window'] = overall_window(views)
+    c = out['conditions']
+    c['injectionMode'] = 'B'
+    c['cpuset'] = 'control-equalized' if k.get('storeResources') == EXP45_CONTROL_RESOURCES else None
+    c['controlMemoryMb'] = {'clickhouse': 3584, 'postgres': 3584} if c['cpuset'] else None
+    c['batchPlan'] = plan
+    c['windowMs'] = w_ms
+    c['copyTimeoutMs'] = to_ms
+    c['indexVariant'] = k.get('indexVariant')
+    c['controlCopySyncCommit'] = exp45_sync_commit(k)
+    c['startCounts'] = jload_text(k.get('startCounts'))
+    out['steps'] = views
+    out['judgement'] = exp45_judgement(views, w_ms / 1000, to_ms / 1000)
+    out['dailyCount'] = jload(os.path.join(d, 'daily-count.json'))
+    out['copyFailureEvents'] = exp45_failure_log(os.path.join(d, 'copy-failures.log'))
+    out['drainS'] = num(k.get('drainS'))
+    out['drained'] = None if k.get('drainS') in (None, '') else k.get('drainS') != '-1'
+    return out
+
+
+EXP45_METRICS = (('clickhouse', 'insert_duration_seconds'), ('postgresql', 'control_copy_seconds'))  # 규약 이름(.omc/record-conventions · 웹 픽스처)
+EXP45_DEVIATION_THRESHOLD = 0.2  # 04_experiment_protocol §반복과 폐기 — 현행 참고 20%(2계층)
+EXP45_MIN_RUNS = 3               # 04 §반복과 폐기 — 반복 수 3(구조값)
+
+
+def exp45_table_conditions(rows):
+    """반복 줄들의 판정 기준 조건 — 반복끼리 다르거나 비어 있으면 멈춘다(같은 조건의 3회가 아니면 중앙값이 없다)"""
+    def of(r):
+        c = r.get('conditions') or {}
+        w, to = num(c.get('windowMs')), num(c.get('copyTimeoutMs'))
+        sc = c.get('controlCopySyncCommit')
+        return {'flushWindowSeconds': None if w is None else w / 1000, 'copyTimeoutSeconds': None if to is None else to / 1000,
+                'batchPlan': c.get('batchPlan'), 'controlCopySyncCommit': sc.get('effective') if isinstance(sc, dict) else sc}
+    got = [of(r) for r in rows]
+    if not got:
+        raise SystemExit('EXP-45 반복 줄이 없다')
+    for key in got[0]:
+        vals = [g[key] for g in got]
+        if any(v is None for v in vals):
+            raise SystemExit(f'EXP-45 조건 {key}가 비어 있는 반복이 있다 — 반복 {[r.get("rep") for r, v in zip(rows, vals) if v is None]}')
+        if len(set(vals)) > 1:
+            raise SystemExit(f'EXP-45 조건 {key}가 반복끼리 다르다 — {dict(zip([r.get("rep") for r in rows], vals))}')
+    # L3 — 배치 안 B의 COPY 타임아웃(W ÷ 2)은 보간 거짓 판정을 낸다 · EXP-45는 배치 안 A만 돈다(기록 조건)
+    if got[0]['batchPlan'] != 'A':
+        raise SystemExit(f'EXP-45는 배치 안 A만 기록한다 — batchPlan {got[0]["batchPlan"]}')
+    return got[0]
+
+
+def exp45_stream_steps(rows):
+    """반복 원시 줄(보통 3) → 기계 판독 streamSteps(04_experiment_protocol) — 계단 pps마다 두 싱크의 p50 · p95 행
+    values · failures는 반복 자리 단위 — 반복 번호 순(reps[i]의 값 · 그 반복에 계단이 없으면 None) · median은 유효 값이 3회 이상일 때만
+    PostgreSQL 무효 반복(구간 count 불일치)의 값은 None · 재기동 · 생성기 포화 반복 자리는 두 싱크의 값과 failures가 None
+    행 valid:false = 그 저장소 유효 반복 0(판독기가 판정 · 관측 범위에서 뺀다) — 유효 반복은 그 저장소 수치가 유효한 반복과
+    PostgreSQL 실패 ≥ 1 반복(행 수가 어긋나도 실패는 사실이다 — exp45_judgement byFailure와 같다)"""
+    reps = [r.get('rep') for r in rows]
+    if len(set(reps)) != len(reps):
+        raise SystemExit(f'EXP-45 반복 번호가 겹친다 — {reps}')
+    order = sorted(reps)
+    by = {}
+    for r in rows:
+        seen = set()
+        for s in r.get('steps') or []:
+            if s['pps'] in seen:
+                raise SystemExit(f'EXP-45 반복 {r.get("rep")} 안에 같은 pps {s["pps"]} 계단이 둘이다')
+            seen.add(s['pps'])
+            by.setdefault(s['pps'], {})[order.index(r.get('rep'))] = s
+    out = []
+    for pps in sorted(by):
+        ss = [by[pps].get(i) for i in range(len(order))]
+        for store, metric in EXP45_METRICS:
+            fails = []
+            for s in ss:
+                if s is None or s.get('restartDetected') or s.get('generatorSaturated'):
+                    fails.append(None)
+                else:
+                    f = s.get('failures') or {}
+                    fails.append(f.get('copyFailures') if store == 'postgresql' else f.get('dlq'))
+            valid = any(s is not None and s['valid'][store] for s in ss) or (
+                store == 'postgresql' and any(x is not None and x > 0 for x in fails))
+            for q in ('p50', 'p95'):
+                vals = []
+                for s in ss:
+                    h = (s.get('sinkTime') or {}).get(store) if s else None
+                    vals.append(h.get(q + 'S') if (h and s['valid'][store]) else None)
+                got = [x for x in vals if x is not None]
+                out.append({'pps': pps, 'store': store, 'metric': f'{metric}_{q}', 'unit': 's', 'values': vals,
+                            'median': statistics.median(got) if len(got) >= EXP45_MIN_RUNS else None, 'failures': fails, 'valid': valid})
+    return order, out
+
+
+def exp45_repeat(steps, runs):
+    """repeat — 편차 = (최대 − 최소) ÷ 중앙값(04 §반복과 폐기) · 폐기 판정은 p50 행만(히스토그램 p95는 참고)
+    반복 3 미만이면 폐기(discard True — 중앙값이 없어 편차도 없다) · 3 이상인데 편차를 낼 p50 행이 없으면 멈춘다(null 기록을 만들지 않는다)"""
+    def dev(s):
+        got = [x for x in s['values'] if x is not None]
+        if s['median'] is None or not s['median']:
+            return None
+        return (max(got) - min(got)) / s['median']
+    by = {'p50': [], 'p95': []}
+    for s in steps:
+        d = dev(s)
+        if d is not None:
+            by[s['metric'][-3:]].append({'pps': s['pps'], 'store': s['store'], 'metric': s['metric'], 'deviation': d})
+    mx = lambda xs: max((x['deviation'] for x in xs), default=None)
+    d50 = mx(by['p50'])
+    if runs >= EXP45_MIN_RUNS and d50 is None:
+        raise SystemExit(f'EXP-45 편차를 낼 p50 행이 없다 — 반복 {runs}회인데 중앙값이 있는(0이 아닌) p50 행 0(유효 반복 3 미만 계단뿐)')
+    return {'runs': runs, 'deviation': d50, 'threshold': EXP45_DEVIATION_THRESHOLD,
+            'discard': runs < EXP45_MIN_RUNS or d50 > EXP45_DEVIATION_THRESHOLD,
+            'basis': 'p50(04 §반복과 폐기 — 히스토그램 p95는 참고)', 'deviationP95': mx(by['p95']),
+            'byMetric': by['p50'] + by['p95']}
+
+
+def rec_exp45_stream_steps(path):
+    rows = [json.loads(ln) for ln in (rd(path, '') or '').splitlines() if ln.strip()]
+    rows = [r for r in rows if r.get('kind') == 'exp45-control-stream']
+    cond = exp45_table_conditions(rows)
+    reps, steps = exp45_stream_steps(rows)
+    by_rep = {r.get('rep'): r for r in rows}
+    return {'kind': 'exp45-stream-steps', 'exp': 'EXP-45', 'reps': reps, 'conditions': cond,
+            'repeat': exp45_repeat(steps, len(reps)), 'streamSteps': steps,
+            'judgement': [{'rep': n, **(by_rep[n].get('judgement') or {})} for n in reps]}
+
+
+def exp45_step_print(sd, w_ms=1000, to_ms=None):
+    """계단 직후 사람이 읽는 한 줄 — 기록이 아니다(구간 count는 소진 뒤 stop이 채운다)"""
+    to_ms = to_ms if to_ms is not None else math.floor(w_ms / 2)
+    v = exp45_step_view(sd, w_ms / 1000, to_ms / 1000)
+    ins, cp = v['sinkTime']['clickhouse'] or {}, v['sinkTime']['postgresql'] or {}
+    g = v.get('generator') or {}
+    lag = v.get('lag') or {}
+    print(json.dumps({'pps': v['pps'], 'insertP50S': ins.get('p50S'), 'insertP95S': ins.get('p95S'), 'copyP50S': cp.get('p50S'), 'copyP95S': cp.get('p95S'),
+                      'copyFailures': v['failures']['copyFailures'], 'rowsDiff': v['rows']['diff'], 'lagLast': lag.get('last'), 'lagMax': lag.get('max'),
+                      'walBytes': v['writeCost']['postgresql']['walBytes'], 'achieved': g.get('achievedRatio'), 'restart': v['restartDetected'],
+                      'saturated': v['generatorSaturated'], 'passed': v['passed']}, ensure_ascii=False))
+
+
 KINDS = {'modeb-steps': rec_modeb_steps, 'bulk': rec_bulk, 'modea-steps': rec_modea_steps, 'mix': rec_mix,
          'spike': rec_spike, 'soak': rec_soak, 'ws': rec_ws, 'redismem': rec_redismem}
+# EXP-45 — exp45: 상태 디렉터리 → 반복 한 줄 · exp45-stream-steps: <원시 jsonl>의 반복 줄들 → streamSteps 한 줄
+KINDS['exp45'] = rec_exp45
+KINDS['exp45-stream-steps'] = rec_exp45_stream_steps
 
 
 def main():

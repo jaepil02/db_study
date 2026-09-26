@@ -124,6 +124,8 @@ services:
       INGEST_BATCH_PLAN: ${INGEST_BATCH_PLAN:-A}
       GEN_PROFILE: ${GEN_PROFILE:-SINE}
       SIM_FAULT_PLAN: ${SIM_FAULT_PLAN:-}
+      # 인증 전 알람 확인 행위자(09_tech_stack/04 · 07_api/07 §인증 전 확인 행위자 판정) — 기본 없음 · 없으면 확인만 401
+      ALARM_ACK_ACTOR_EMAIL: ${ALARM_ACK_ACTOR_EMAIL:-}
       INGEST_LAB_FAULT: ${INGEST_LAB_FAULT:-}
       # S5 — 모드 C 부하 주입 표면 게이트(스위치가 아님 · 07_api/09 · 기본 false · true면 기동 경고 1줄)
       DATAGEN_BULK_ENABLED: ${DATAGEN_BULK_ENABLED:-false}
@@ -195,6 +197,16 @@ services:
     environment:
       CLICKHOUSE_URL: ${CLICKHOUSE_URL:?CLICKHOUSE_URL 필요}
       APP_OWNER_PASSWORD: ${APP_OWNER_PASSWORD:?APP_OWNER_PASSWORD 필요}
+
+  # 역방향 대조 실행기(EXP-40~44 · S5) 전용 — datagen과 같은 이미지 · 환경에 ClickHouse 접속만 더한다(app_owner 비밀은 싣지 않는다 · 업무 테이블 쓰기는 app_rw 권한 안).
+  # 측정 경로에 앱이 끼지 않게 도구 CPU 11-12에서 저장소에 직접 붙는다(05_data_stores/10 §실험의 모양 측정 경로 행).
+  # 오케스트레이터가 run으로만 부른다: docker compose --profile oltp-lab run --rm --no-deps oltp-lab node dist/oltp-lab.js …
+  oltp-lab:
+    extends:
+      service: datagen
+    profiles: !override ["oltp-lab"]
+    environment:
+      CLICKHOUSE_URL: ${CLICKHOUSE_URL:?CLICKHOUSE_URL 필요}
 
   # 관측 스택(observability 프로파일 · S5) — 구성원 prometheus · grafana 2(09_tech_stack/03 · ADR-20) · 기본 기동에 포함되지 않는다
   # 정밀 측정 세션은 이 프로파일을 끈다(10_observability/03 §관측 부하 규칙) · CPU 13(측정 대상 · 부하 도구 밖 — 04_architecture/03)

@@ -28,6 +28,8 @@ REDIS_URL=redis://:${REDIS_PASSWORD}@redis:6379
 # ── 기동 역할 · 게이트
 APP_ROLE=all
 DATAGEN_BULK_ENABLED=false
+# 인증 전 알람 확인 행위자 — 시드 학습자 계정 email(S7 ② 인증 도입 때 폐기)
+ALARM_ACK_ACTOR_EMAIL=learner@localhost
 
 # ── 역할 스위치 11 — 기본값 정본 docs/02_features/13_switch_matrix.md
 REDIS_STREAM_BUFFER=on

@@ -245,7 +245,9 @@ prep_seed_snap() { # $1=스냅샷 이름 나머지=seed 인자
   [ ! -e "snapshots/$name" ] || { echo "이미 있다: snapshots/$name" >&2; return 0; }
   require_clean
   restore_snap "$SNAP_BASE"
-  $COMPOSE run --rm --no-deps api node dist/db/seed.js "$@"
+  # seed는 학습자 계정 비밀번호(SEED_USER_PASSWORD)를 요구한다 — 이 스크립트는 .env를 읽지 않으므로 task seed(dotenv 로드 ·
+  # -e SEED_USER_PASSWORD)로 넘긴다. --env-file은 Compose 파일 치환일 뿐 run -e의 값 원천이 되지 않는다(환경에 값이 있어야 한다)
+  task seed -- "$@"
   task snapshot NAME="$name" >/dev/null
   echo "$*" > "snapshots/$name/seed.txt"
   echo "스냅샷 $name 준비 완료 — seed $*"

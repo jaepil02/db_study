@@ -1,9 +1,11 @@
 // BFF 기록 읽기 — EXP-COMPARE 대조군 역전 지점 패널의 원천(08_screen/07 §대조군 역전 지점 · W5 리드 판정 후보 ①).
 // api 표면이 아니다 — Next.js 서버가 docs/measurements를 읽기 전용으로 읽고 판독 규칙 7(10_observability/04 §BFF 판독 규칙)을 적용해 내린다.
 // 쓰기 경로가 없다. 판독 불가 · 4요소 누락 · 제외 수를 함께 내려 조용히 빼지 않는다.
+// evidence — 실증 요약 패널(역방향 EXP-40~44 reverse · EXP-45 streamSteps)의 판독 결과. 역전 지점 판독(최상위 필드)은 그대로 둔다.
 import { access, readdir, readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { NO_STORE } from '../../../lib/bff';
+import { readEvidence } from '../../../lib/evidence';
 import { readMeasurements } from '../../../lib/measurements';
 
 export const dynamic = 'force-dynamic';
@@ -43,5 +45,8 @@ export async function GET(): Promise<Response> {
   const files = await Promise.all(
     names.map(async (name) => ({ name, text: await readFile(path.join(dir, name), 'utf8') })),
   );
-  return Response.json({ readAt: Date.now(), ...readMeasurements(files) }, { headers: NO_STORE });
+  return Response.json(
+    { readAt: Date.now(), ...readMeasurements(files), evidence: readEvidence(files) },
+    { headers: NO_STORE },
+  );
 }

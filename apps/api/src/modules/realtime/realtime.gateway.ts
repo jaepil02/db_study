@@ -1,7 +1,8 @@
 // F-07 실시간 푸시 — /ws/realtime 프로토콜 정본 docs/07_api/11_websocket.md · 기전 06_pipeline/05 §F-07 실시간 푸시 한 사이클
 // ① 핸드셰이크 Host 대조(업그레이드 전 400) · Origin 검증(업그레이드 뒤 4403) ③ subscribe · unsubscribe(연결당 설비 상한 · rejected limit)
 // ④ ch:rt 수신(SW-06 on) 또는 프로세스 안 버스(SW-06 off) · ch:cacheinv 즉시 중계(RLT-09 · 병합 없음 · 전 연결)
-// ⑤ 스로틀(SW-07 FrameThrottlePort) ⑥ JSON ping 30초 · pong 3회 미수신 4408 · 송신 대기량 한도 초과 4413. 인증(②) · 알람은 S7.
+// ⑤ 스로틀(SW-07 FrameThrottlePort) ⑥ JSON ping 30초 · pong 3회 미수신 4408 · 송신 대기량 한도 초과 4413. 인증(②)은 S7 ②.
+// alarm(S7 ① · RLT-08) — ch:alarm(SW-06 on) 또는 프로세스 안 버스 'alarm'(SW-06 off)을 병합 없이 즉시 전 연결에 중계한다(구독과 무관).
 // Nest 어댑터의 {event, data} 메시지 모양을 쓰지 않는다 — 계약은 type 봉투다(메시지를 연결 단위로 직접 받는다).
 import type { IncomingMessage } from 'node:http';
 import { WS_CLOSE, WsClientMessage, type WsServerMessageBody } from '@db-study/shared';
@@ -12,7 +13,7 @@ import { Counter, Gauge, Histogram } from 'prom-client';
 import type { WebSocket } from 'ws';
 import { isAllowedHost, isAllowedOrigin } from '../../common/http/surface-defense';
 import { appRegistry } from '../../common/metrics/registry';
-import { directBus, takeStamp } from '../../common/ports/realtime-fanout.port';
+import { type AlarmFrame, directBus, takeStamp } from '../../common/ports/realtime-fanout.port';
 import { RedisConnections } from '../../common/redis/connections';
 import type { LatestTuple } from '../../common/redis/durable-key-client';
 import { MasterReadService } from '../master/master-read.service';
@@ -93,6 +94,7 @@ export class RealtimeGateway implements OnGatewayConnection, OnModuleDestroy {
   private readonly pingTimer: NodeJS.Timeout;
   private readonly onDirect = (deviceId: number, tuples: LatestTuple[]) =>
     this.deliver(deviceId, tuples, 'direct');
+  private readonly onDirectAlarm = (frame: AlarmFrame) => this.broadcastAlarm(frame);
 
   constructor(
     redis: RedisConnections,
@@ -108,7 +110,10 @@ export class RealtimeGateway implements OnGatewayConnection, OnModuleDestroy {
     });
     // 무효화 신호는 구독과 무관하게 연결 전원에게 간다(RLT-09) — SW-06 대상이 아니라 끄지 않는다
     this.subscriber.subscribe('ch:cacheinv').catch(() => undefined);
+    // 알람도 구독과 무관하게 연결 전원에게 간다(RLT-08 브로드캐스트) — 발행 구현(SW-06)이 무엇이든 두 입구를 다 연다(발행자는 하나다)
+    this.subscriber.subscribe('ch:alarm').catch(() => undefined);
     directBus.on('rt', this.onDirect);
+    directBus.on('alarm', this.onDirectAlarm);
     this.flushTimer = throttle.windowMs > 0 ? setInterval(() => this.flushFrames(), throttle.windowMs) : null;
     this.pingTimer = setInterval(() => this.ping(), PING_INTERVAL_MS);
   }
@@ -228,6 +233,16 @@ export class RealtimeGateway implements OnGatewayConnection, OnModuleDestroy {
       for (const c of this.conns) this.send(c, { type: 'cacheinv', keys }, 'cacheinv');
       return;
     }
+    if (channel === 'ch:alarm') {
+      let frame: AlarmFrame;
+      try {
+        frame = JSON.parse(message) as AlarmFrame;
+      } catch {
+        return;
+      }
+      if (frame?.type === 'alarm') this.broadcastAlarm(frame);
+      return;
+    }
     if (!channel.startsWith('ch:rt:')) return;
     let tuples: LatestTuple[];
     try {
@@ -249,6 +264,11 @@ export class RealtimeGateway implements OnGatewayConnection, OnModuleDestroy {
       if (r.merged) merged.inc(r.merged);
       if (r.frame) this.sendRt(c, r.frame);
     }
+  }
+
+  /** alarm — 병합 없이 즉시 · 전 연결(07_api/11 §스로틀 병합 — 병합 대상은 ch:rt만) */
+  private broadcastAlarm(frame: AlarmFrame) {
+    for (const c of this.conns) this.send(c, frame, 'alarm');
   }
 
   /** 창 끝에 연결마다 rt 프레임 1회 — 한 창에 변화가 없으면 보내지 않는다 */
@@ -274,7 +294,7 @@ export class RealtimeGateway implements OnGatewayConnection, OnModuleDestroy {
     }
   }
 
-  private send(c: Conn, msg: WsServerMessageBody, channel: 'rt' | 'control' | 'cacheinv') {
+  private send(c: Conn, msg: WsServerMessageBody, channel: 'rt' | 'control' | 'cacheinv' | 'alarm') {
     if (c.ws.readyState !== c.ws.OPEN) return;
     // 느린 브라우저 — 송신 대기량이 한도를 넘으면 그 소켓만 4413(Redis 출력 버퍼 절단 4503과 다른 사건)
     if (c.ws.bufferedAmount > WS_SEND_BUFFER_LIMIT_BYTES) {
@@ -303,6 +323,7 @@ export class RealtimeGateway implements OnGatewayConnection, OnModuleDestroy {
 
   onModuleDestroy() {
     directBus.off('rt', this.onDirect);
+    directBus.off('alarm', this.onDirectAlarm);
     if (this.flushTimer) clearInterval(this.flushTimer);
     clearInterval(this.pingTimer);
     for (const c of this.conns) this.close(c, WS_CLOSE.going_away, 'going_away');

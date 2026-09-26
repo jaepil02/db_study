@@ -2,6 +2,7 @@
 // 공통 셸이 연결을 하나만 연다(08_screen/01 §요청 경로와 공통 셸). 화면은 subscribe · unsubscribe만 바꾼다.
 // 재연결 직후 순서: 연결 → 구독(보유 설비 전부) → syncEpoch 증가 → 화면이 REST 최신값 1회(REQ-RLT-13).
 import { create } from 'zustand';
+import type { AlarmFrame } from './alarms';
 import { WS_PING_INTERVAL_MS, WS_PING_MISS_LIMIT, wsUrl } from './config';
 import { useRealtimeStore } from './realtime-store';
 import { WsServerMessage } from './shared';
@@ -31,8 +32,11 @@ export const useConnectionStore = create<ConnectionState>()(() => ({
   metaEpoch: 0,
 }));
 
-/** 셸이 듣는 사건 — cacheinv 신호(받은 키 그대로) · 재연결(첫 연결이 아닌 open) */
-export type SocketEvent = { type: 'cacheinv'; keys: string[] } | { type: 'reconnected' };
+/** 셸이 듣는 사건 — cacheinv 신호(받은 키 그대로) · alarm 통지(열림 · 닫힘) · 재연결(첫 연결이 아닌 open) */
+export type SocketEvent =
+  | { type: 'cacheinv'; keys: string[] }
+  | { type: 'alarm'; frame: AlarmFrame }
+  | { type: 'reconnected' };
 
 /** 클라이언트가 스스로 닫는 코드 — ping 미수신(애플리케이션 대역 · 서버 계약 코드와 겹치지 않는다) */
 const CLIENT_PING_TIMEOUT = 4000;
@@ -135,8 +139,12 @@ class RealtimeSocket {
       } else if (msg.type === 'cacheinv') {
         // 무효화 신호 — 스로틀 · 병합 없이 받은 대로 셸에 넘긴다(08_screen/01 §무효화 신호 수신)
         this.emit({ type: 'cacheinv', keys: msg.keys });
+      } else if (msg.type === 'alarm') {
+        // 알람 열림 · 닫힘 통지 — 구독과 무관하게 전 연결에 온다 · 병합 없이 받은 대로 셸에 넘긴다(07_api/11 · RLT-08)
+        const { type: _t, ...frame } = msg;
+        this.emit({ type: 'alarm', frame });
       }
-      // subscribed · alarm · auth_ok — 화면이 쓰지 않는다(알람 띠 S7)
+      // subscribed · auth_ok — 화면이 쓰지 않는다
     };
     ws.onclose = (ev) => {
       if (this.ws !== ws) return;

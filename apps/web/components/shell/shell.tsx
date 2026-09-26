@@ -1,10 +1,12 @@
 'use client';
 // 공통 셸 — 정본 docs/08_screen/01_standards.md §요청 경로와 공통 셸
-// WebSocket 연결은 셸이 하나만 연다. 셸 요소는 메뉴 · WS 표지 · 무효화 신호 수신(S4 · RLT-09)(실험 조건 배지 · 사용자 메뉴는 이후 단계).
+// WebSocket 연결은 셸이 하나만 연다. 셸 요소는 메뉴 · WS 표지 · 무효화 신호 수신(S4 · RLT-09) · 알람 통지 수신(S7 ① · RLT-08 — 겹침 층)(실험 조건 배지 · 사용자 메뉴는 이후 단계).
 import { useQueryClient } from '@tanstack/react-query';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { type ReactNode, useEffect } from 'react';
+import { alarmKeys } from '../../lib/alarms';
+import { useAlarmOverlay } from '../../lib/alarms-store';
 import { actionsForSignal, RECONNECT_ACTIONS, type SignalAction } from '../../lib/cache-signal';
 import { markMasterFresh } from '../../lib/master-api';
 import { realtimeSocket, useConnectionStore } from '../../lib/realtime-socket';
@@ -15,6 +17,7 @@ import { WsIndicator } from './ws-indicator';
 const MENU = [
   { href: '/realtime', label: '실시간' },
   { href: '/trend', label: '트렌드' },
+  { href: '/alarms', label: '알람' },
   { href: '/admin/master', label: '관리' },
   { href: '/experiments', label: '실험' },
 ] as const;
@@ -37,9 +40,19 @@ export function Shell({ children }: { children: ReactNode }) {
         // permNotice — 역할 안내는 S7(로그인 사용자가 생긴 뒤)
       }
     };
-    const off = realtimeSocket.on((e) =>
-      e.type === 'cacheinv' ? apply(actionsForSignal(e.keys), true) : apply(RECONNECT_ACTIONS, false),
-    );
+    const off = realtimeSocket.on((e) => {
+      if (e.type === 'cacheinv') apply(actionsForSignal(e.keys), true);
+      else if (e.type === 'alarm') {
+        // 알람 통지 — 겹침 층에만 싣는다. 목록은 곧바로 다시 읽지 않는다: 서버 목록 캐시(cache:alarmevents)가
+        // 확인 커밋 뒤에만 지워져 지금 읽어도 옛 목록이다 — 겹침 행이 생긴 뒤 TTL이 지나면 콘솔이 한 번 다시 읽는다(08_screen/05)
+        useAlarmOverlay.getState().push(e.frame);
+      } else {
+        apply(RECONNECT_ACTIONS, false);
+        // 재연결 — 겹침 층을 비우고 알람 목록 재조회 1회(07_api/11 §연결 관리와 재연결 · 08_screen/05 §실시간 겹침)
+        useAlarmOverlay.getState().clear();
+        void qc.invalidateQueries({ queryKey: [...alarmKeys.events()] });
+      }
+    });
     realtimeSocket.start();
     return () => {
       off();

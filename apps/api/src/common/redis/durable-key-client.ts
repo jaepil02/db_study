@@ -295,11 +295,36 @@ export class DurableKeyClient {
   async readLatestField(deviceId: number, tagId: number): Promise<string | null> {
     return this.redis.hget(`rt:latest:${deviceId}`, String(tagId));
   }
+
+  /** alarm:state:{rule_id} 여러 개 — 파이프라인 HGETALL 1회(A2 · REQ-ALM-07 · 06_pipeline/08 ③). 하나라도 실패하면 던진다(판정 중단) */
+  async readAlarmStates(ruleIds: readonly number[]): Promise<Map<number, Record<string, string>>> {
+    const out = new Map<number, Record<string, string>>();
+    if (ruleIds.length === 0) return out;
+    const p = this.redis.pipeline();
+    for (const id of ruleIds) p.hgetall(`alarm:state:${id}`);
+    const res = await p.exec();
+    if (!res) throw new Error('파이프라인 응답 없음');
+    res.forEach(([err, v], i) => {
+      if (err) throw err;
+      out.set(ruleIds[i] as number, (v ?? {}) as Record<string, string>);
+    });
+    return out;
+  }
+
+  /** alarm:state:{rule_id} 여러 개 — 파이프라인 HSET 1회(06_pipeline/08 ⑥) · TTL 없음(봉인). 하나라도 실패하면 던진다 */
+  async writeAlarmStates(states: ReadonlyMap<number, Record<string, string>>): Promise<void> {
+    if (states.size === 0) return;
+    const p = this.redis.pipeline();
+    for (const [id, fields] of states) p.hset(`alarm:state:${id}`, fields);
+    const res = await p.exec();
+    if (!res) throw new Error('파이프라인 응답 없음');
+    for (const [err] of res) if (err) throw err;
+  }
 }
 
 /**
  * durable_wrapper_failures_total{prefix} — DurableKeyClient가 던진 실패(10_observability/01 · REQ-GLB-09 · S5).
- * 던지는 규칙은 그대로다 — 세고 다시 던진다. 접두는 메서드가 다루는 키 계열로 고정한다(닫힌 집합 stream · rt).
+ * 던지는 규칙은 그대로다 — 세고 다시 던진다. 접두는 메서드가 다루는 키 계열로 고정한다(닫힌 집합 stream · rt · alarm).
  */
 const durableFailures = new Counter({
   name: 'durable_wrapper_failures_total',
@@ -309,7 +334,7 @@ const durableFailures = new Counter({
 });
 for (const prefix of ['stream', 'rt', 'alarm']) durableFailures.inc({ prefix }, 0);
 
-const METHOD_PREFIX: Record<string, 'stream' | 'rt'> = {
+const METHOD_PREFIX: Record<string, 'stream' | 'rt' | 'alarm'> = {
   xaddWithBacklog: 'stream',
   xaddBatchWithBacklog: 'stream',
   ensureGroup: 'stream',
@@ -321,6 +346,8 @@ const METHOD_PREFIX: Record<string, 'stream' | 'rt'> = {
   writeLatestIfNewer: 'rt',
   readLatest: 'rt',
   readLatestField: 'rt',
+  readAlarmStates: 'alarm',
+  writeAlarmStates: 'alarm',
 };
 for (const [method, prefix] of Object.entries(METHOD_PREFIX)) {
   const proto = DurableKeyClient.prototype as unknown as Record<

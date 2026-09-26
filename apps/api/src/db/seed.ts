@@ -1,21 +1,28 @@
-// seed — 마스터 시드(S2 범위: 사이트 · 라인 · 설비 · 접속 설정 · 태그). 계정 · 역할 시드는 AUT 테이블이 생기는 단계(S7)다.
+// seed — 마스터 시드(S2 범위: 사이트 · 라인 · 설비 · 접속 설정 · 태그) + S7 ① 계정 · 역할 시드(역할 3 · 학습자 계정 1 · 부여 3 — 같은 트랜잭션).
 // 실행: docker compose run --rm api node dist/db/seed.js --tier S | --slice s2 [--deadband <값>] [--range <min>,<max>] [--scan-rate <ms>] (task seed)
 // S5 옵션: --scan-rate는 모든 태그의 scan_rate_ms다(모드 A 계단 · S5 판정 6 — 계단마다 빈 볼륨에 다시 시드하고 재기동).
 // S3 옵션: --deadband · --range는 모든 태그에 같은 값이다 — 티어 시드의 data_type 구성(FLOAT32 ABCD)은 바꾸지 않는다.
 // 빈 볼륨 전용 · 한 트랜잭션 — 두 번 시드한 볼륨은 tag_id 공간이 달라 같은 시드의 두 실험이 다른 태그를 본다(09_tooling §Taskfile 작업).
 // 시드는 감사하지 않는다 — 사람이 쓰기 표면으로 일으킨 변경이 아니다(REQ-WRK-07).
+// 계정 시드(09_migrations_seed §S7 ①): SEED_USER_PASSWORD가 비었거나 자리표시면 트랜잭션 전에 거부 · 원문은 로그에 남기지 않는다(Argon2id 해시만 저장).
+// 계정만 더하는 부분 시드를 두지 않는다 — 옛 스냅샷(마스터가 찬 볼륨)은 빈 볼륨 검사가 거부한다.
 
 import { createClient } from '@clickhouse/client';
 import { CAPACITY_TIER_NAMES, type CapacityTier } from '@db-study/shared';
 import { Client } from 'pg';
 import {
+  argon2idHasher,
   describeSeedOptions,
   effectiveScanRateMs,
+  isArgon2idEncoded,
   parseScanRate,
   parseSeedOptions,
+  SEED_LEARNER_EMAIL,
+  SEED_ROLES,
   type SeedTarget,
   seedDevices,
   seedPlan,
+  seedUserPassword,
 } from './seed-plan';
 
 function target(argv: string[]): SeedTarget {
@@ -55,11 +62,19 @@ async function main() {
   const opts = parseSeedOptions(process.argv);
   const devices = seedDevices(plan);
   const scanRateMs = effectiveScanRateMs(plan, parseScanRate(process.argv));
+  // 해시는 트랜잭션 밖에서 먼저 — 비용 파라미터만큼 걸리는 계산 동안 트랜잭션을 열어 두지 않는다
+  const password = seedUserPassword();
+  const passwordHash = await argon2idHasher().hash(password);
+  if (!isArgon2idEncoded(passwordHash))
+    throw new Error('password_hash가 Argon2id 자기 기술 문자열이 아니다 — seed 거부');
   const pg = new Client({ connectionString: process.env.POSTGRES_URL });
   await pg.connect();
   try {
     await pg.query('BEGIN');
-    const used = await pg.query('SELECT (SELECT count(*) FROM site) + (SELECT count(*) FROM device) AS n');
+    const used = await pg.query(
+      `SELECT (SELECT count(*) FROM site) + (SELECT count(*) FROM device)
+            + (SELECT count(*) FROM role) + (SELECT count(*) FROM user_account) AS n`,
+    );
     if (Number(used.rows[0]?.n) > 0)
       throw new Error('마스터가 비어 있지 않다 — 빈 볼륨 전용(task restore로 빈 상태를 되돌린다)');
     const site = await pg.query(
@@ -101,9 +116,18 @@ async function main() {
         tagCount++;
       }
     }
+    // S7 ① — 역할 3(순서 고정 → role_id 고정) → 학습자 계정 1 → 부여 3(학습자에게 역할 전부 · REQ-AUT-17)
+    for (const code of SEED_ROLES) await pg.query('INSERT INTO role (role_code) VALUES ($1)', [code]);
+    const user = await pg.query(
+      'INSERT INTO user_account (email, password_hash, is_active) VALUES ($1, $2, true) RETURNING user_id',
+      [SEED_LEARNER_EMAIL, passwordHash],
+    );
+    await pg.query('INSERT INTO user_role (user_id, role_id) SELECT $1, role_id FROM role ORDER BY role_id', [
+      user.rows[0].user_id,
+    ]);
     await pg.query('COMMIT');
     process.stdout.write(
-      `seed 완료 — ${plan.label} · 설비 ${devices.length} · 태그 ${tagCount} · ${describeSeedOptions(opts)} · scan_rate_ms ${scanRateMs}\n`,
+      `seed 완료 — ${plan.label} · 설비 ${devices.length} · 태그 ${tagCount} · ${describeSeedOptions(opts)} · scan_rate_ms ${scanRateMs} · 계정 ${SEED_LEARNER_EMAIL}(역할 ${SEED_ROLES.length})\n`,
     );
   } catch (e) {
     await pg.query('ROLLBACK').catch(() => undefined);
