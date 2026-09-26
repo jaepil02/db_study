@@ -3,7 +3,7 @@
 // 시나리오 셋(고정 도착률 · 서로 독립):
 //   latest — GET /api/v1/realtime/devices/{d}/tags · d = 1..NDEV 순환(RATE_LATEST · 기본 20/s)
 //   ts     — POST /api/v1/timeseries/query · now 기준 최근 TS_RANGE_MIN분 · 설비 d의 앞 TS_TAGS 태그(RATE_TS · 기본 5/s)
-//   master — GET /api/v1/devices(RATE_MASTER · 기본 1/s)
+//   master — GET /api/v1/devices?siteId=1(RATE_MASTER · 기본 1/s · siteId는 필수 필터 — 07_api/04 #2)
 // 태그 ID = (설비 − 1) × TPD + k(티어 시드 · 빈 기반 스냅샷에 한 번 시드 — seed.ts). 0인 도착률은 그 시나리오를 뺀다.
 import { check } from 'k6';
 import http from 'k6/http';
@@ -70,6 +70,6 @@ export function ts() {
 }
 
 export function master() {
-  const r = http.get('http://api:3000/api/v1/devices', { tags: { name: 'master' } });
+  const r = http.get('http://api:3000/api/v1/devices?siteId=1', { tags: { name: 'master' } });
   check(r, { 200: (x) => x.status === 200 });
 }
