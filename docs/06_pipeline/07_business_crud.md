@@ -2,6 +2,8 @@
 
 > **대상**: F-05 흐름의 기전 정본 — 읽기 · 쓰기 경로 · BFF 경유 기준 · **캐시 무효화 체인 6단(ADR-12)의 단계 번호 정본** · 도메인별 체인 적용 · 작업지시 no-store · 층별 옛 값의 창 · 체인 실패와 degrade · 인증 흐름의 BFF 경유 · 감사 트랜잭션
 > **작성일**: 2026-09-24
+> **개정일**: 2026-09-26 — W3 재검수 반영 — cache-aside 잔여 행 링크 칸 한계 등재 #22 · 알람 캐시 잔여 폭은 #22를 가리킴
+> **개정일**: 2026-09-26 — W3 반영 — cache-aside 잔여 경합 한계 등재 완료(02 #22 · cache:alarmrules · cache:alarmevents 포함)
 > **개정일**: 2026-09-25 — S4 as-built(3e8a46d · 기록 021) — ③ 페이로드 = 무효화된 키 이름의 JSON 배열(한 쓰기의 키는 한 메시지) · **⑥이 ⑤를 앞지르는 경합**과 신호 뒤 신선 창 판정(S4 검수 M5) · cache-aside 잔여 경합 한계 등재(검수 L7) · 층별 반영 사건 순서 실측(AC-06 3/3)
 > **개정일**: 2026-09-24 — 최종 정밀 검수 — 체인 번호 통일 행 닫힘(문서군 전체 6단)
 > **개정일**: 2026-09-24 — W7 검수 반영 — 대응표 머리 5단 표기(REQ-MST-09 · MST-08) → **옛 5단 표기(원본 · 선행 초안)** — 두 ID는 이미 6단 번호를 쓴다 · 체인 단 수 불변
@@ -174,7 +176,7 @@ W3 판정(cache:workorders Hash · BFF no-store)의 기전이다.
 | 층별 반영 시간 · CRUD p95 | 3계층 미확인 — 원본 예상치 Dictionary 최대 10분(④ 생략 시) · BFF 최대 30초 · CRUD 원본 목표 100 ms · **S4 기록**: 사건 순서 판정 AC-06 3/3 성립 · Dictionary 재적재 완료가 쓰기 응답 뒤 30~34 ms(기록 021 · 3e8a46d · 부하 실험 · S · 스위치 기본값) · CRUD p95는 EXP-36 | EXP-29(AC-06) · EXP-36 · REQ-NFR-09 |
 | ⑥ 신호 키 → 브라우저 쿼리 키 대응 · staleTime 값 | **대응은 닫힘**(W5 — 신호 키 4 · staleTime은 가장 가까운 서버 층 수명 하한과 같다는 관계식) · staleTime 설정값 **W6 판정**(관계식 파생표 — 240 · 24 · 30 · 60 · 0초) | [../08_screen/01_standards.md](../08_screen/01_standards.md) §무효화 신호 수신 · [../09_tech_stack/01_frontend.md](../09_tech_stack/01_frontend.md)(W6) |
 | BFF를 거치지 않은 쓰기의 ⑤ 누락 | 잔여 — revalidate 창만큼 | 한계 등재(W4 반영) |
-| cache-aside 잔여 경합 | **한계 등재(S4 검수 L7)** — 커밋 전에 PostgreSQL을 읽은 조회가 ② 삭제 뒤에 사본을 채우면 옛 태그 메타 · 설비 목록이 TTL(현행 참고 600초)만큼 남는다 · ②의 "지우기"는 이 순서를 막지 못한다(ADR-12는 덮어쓰기 경합만 막는다) · 잔여는 TTL과 다음 쓰기 신호가 끊는다 | [../05_data_stores/02_postgresql_constraints.md](../05_data_stores/02_postgresql_constraints.md) 한계 등재 대상 |
+| cache-aside 잔여 경합 | **한계 등재 완료(#22 · S4 검수 L7 · W3 알람 캐시 포함)** — 커밋 전에 PostgreSQL을 읽은 조회가 ② 삭제 뒤에 사본을 채우면 옛 태그 메타 · 설비 목록이 TTL(현행 참고 600초)만큼 남는다(알람 캐시 계열의 잔여 폭은 #22) · ②의 "지우기"는 이 순서를 막지 못한다(ADR-12는 덮어쓰기 경합만 막는다) · 잔여는 TTL과 다음 쓰기 신호가 끊는다 | [../05_data_stores/02_postgresql_constraints.md](../05_data_stores/02_postgresql_constraints.md) 한계 등재 #22 |
 | 체인 번호 표기 통일(5단 → 6단) | 닫힘 — 문서군 전체가 6단 번호를 쓴다(W7 검수 반영) · 대응표는 원본 5단 표기를 읽을 때만 쓴다 | §체인 번호 대응 |
 | 캐시 삭제 · 재적재 · 발행 실패 계수 이름 | **W6 판정** — mst_cache_delete_failures_total · mst_dict_reloads_total{result} · rlt_publish_failures_total{channel} | [../10_observability/01_metrics_catalog.md](../10_observability/01_metrics_catalog.md) |
 

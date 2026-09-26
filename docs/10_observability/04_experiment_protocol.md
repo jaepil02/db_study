@@ -2,6 +2,10 @@
 
 > **대상**: ★ 실험 규칙 정본 — 실험 한 번의 절차 · 3회 중앙값과 편차 폐기 기준 · 구조 판정과 분포 판정 · 스냅샷과 복원 · 캐시 키 초기화 · 기준선 · 회복 관측 · 조건 칸(4요소 + 부가 조건) · 조건 분리 강제 · **측정 기록 템플릿(docs/measurements/NNN-{slug}.md)** · **기계 판독 블록 형식(EXP-COMPARE BFF가 읽는다)** · 기록 상태와 정정 · 결과를 정본 문서에 올리는 절차
 > **작성일**: 2026-09-24
+> **개정일**: 2026-09-26 — 마지막 검수 반영 — streamSteps values null 자리(계단 없음 · 무효 반복) · median 조건을 값이 있는 반복 3 미만으로(러너 as-built)
+> **개정일**: 2026-09-26 — W3 재검수 반영(EXP-45 null 규칙 N1) — 기계 판독 블록 streamSteps 행의 failures · valid 규칙을 러너(scripts/lab/s5/load/_rec.py exp45-stream-steps) · 판독기(apps/web/lib/evidence.ts) · 08_screen/07 §실증 요약 패널 판독 행과 같은 문장으로 — failures 무효 계단 null → **반복 자리 단위 null** · **행 valid:false = 그 저장소 유효 반복 0** — 필드 행 수 · schema measurement/v1 불변
+> **개정일**: 2026-09-26 — W3 코드 검수 반영(r-web-lab M2 · M4 · L1 · L2) — 기계 판독 블록 conditions 행에 EXP-45 키 4(flushWindowSeconds · copyTimeoutSeconds · batchPlan · controlCopySyncCommit) · streamSteps 행에 지표 이름 규약 · values · median · failures의 빈 값 규칙 · 선택 키 valid — 필드 행 수 · schema measurement/v1 불변(판독 규칙 7)
+> **개정일**: 2026-09-26 — 목적 적합성 실증 W1 — 기계 판독 블록 선택 필드 2행 신설(reverse — 역방향 대조 기록 EXP-40~44 · streamSteps — EXP-45) — 필드 행 9 → **11** · 판독 규칙 7로 measurement/v1 유지
 > **개정일**: 2026-09-25 — S2 판정 반영(기록 011 · 012 관측 뒤 정한 규칙(S2)) — §반복과 폐기에 버킷 보간 분위수 조항 신설 — 히스토그램 계열은 p50으로 판정 · p95 이상은 참고 · 정확 분위수가 있으면 그것이 절대값
 > **개정일**: 2026-09-25 — S2 판정 반영(기록 013) — 기계 판독 블록 switches: 스위치 비교 기록은 대상 스위치만 arm 순서 값 배열
 > **개정일**: 2026-09-24 — S0 반영 — 기록 상태에 구조 사실 판별 기록(api 부재 단계) 조항 신설 — run · switches null 허용 · 수치 인용 불가 · 정본에는 구조 사실만
@@ -199,13 +203,16 @@ AC의 합격선은 두 종류다([../03_requirements/14_acceptance_criteria.md](
 | window | 예 | UTC ISO 시작 · 끝 | 사람 · 재현 |
 | run | 예 | health run 네 필드 그대로 | 4요소 툴팁 · 비교 성립 판정 |
 | switches | 예 | 스위치 11종 전부 · health switches.*.value 그대로 — **스위치 비교 기록(on/off 두 팔)은 대상 스위치만 results의 arm 순서대로 값 배열**(예: ["on", "off"]) · 나머지는 스칼라 | 상동 |
-| conditions | 예 | injectionMode · observability · cpuset · seed · generatorCpuMax · compression · swapUsed · wslNetworking · simFaultPlan(경로 · 해시 또는 null) 필수 · controlMemoryMb(대조 기록) · 나머지 실험별 | 조건 분리 판정 |
+| conditions | 예 | injectionMode · observability · cpuset · seed · generatorCpuMax · compression · swapUsed · wslNetworking · simFaultPlan(경로 · 해시 또는 null) 필수 · controlMemoryMb(대조 기록) · **EXP-45 기록은 flushWindowSeconds · copyTimeoutSeconds(초 · 판정 점 기준) · batchPlan · controlCopySyncCommit — 반복끼리 다르면 기록을 만들지 않는다** · 나머지 실험별 | 조건 분리 판정 · EXP-45 판정 점 기준 |
 | repeat | 예 | runs · deviation · threshold | 폐기 판정 |
 | results | 예(빈 배열 허용) | metric · arm · unit · values · median | 스위치 비교 기록 |
 | points | 대조 기록만 | query · rows · stage · store · index · cache · unit · values · median · resultMatch | 역전 지점 선 차트 |
 | axes | 대조 기록만 | axis(storage_bytes · compression_ratio · insert_rows_per_sec · write_amplification · index_bytes) · store · index · rows · value · unit | 비교 축 막대 |
+| reverse | 역방향 기록만(EXP-40~44) | exp · op · store · variant · scale · concurrency · rate · read · metric · unit · values · median · structural(구조 지표만 true) | 역방향 대조 해석 · 판독기는 structural true면 중앙값이 아니라 3회 전부를 본다 |
+| streamSteps | EXP-45만 | pps · store · metric(insert_duration_seconds_p50 · _p95 · control_copy_seconds_p50 · _p95) · unit · values(반복 번호 순 · 계단 없음 · 그 저장소 무효 반복 자리 null) · median(값이 있는 반복 3 미만이면 null) · failures · valid(선택 — false면 판정 제외 계단) — failures는 반복 자리 단위(재기동 · 포화 반복 자리는 null) · 행 valid:false = 그 저장소 유효 반복 0(PostgreSQL은 실패 ≥ 1 반복도 유효 반복으로 센다 — 행 수가 어긋나도 실패는 사실이다) | 계단별 두 싱크 시간 · 판정 점 |
 
-- 검산: 필드 행 = **9**
+- 검산: 필드 행 = **11** — 필수 7 + 대조 기록 선택 2 + 역방향 · 스트리밍 선택 2
+- **reverse · streamSteps를 더해도 schema는 measurement/v1이다(판정).** 판독 규칙 7이 모르는 필드를 무시하므로 필드 추가는 v1 판독기를 깨지 않는다 — 뜻을 바꾸거나 없앨 때만 v2로 올린다. points · axes는 판독 규칙 6에 따라 EXP-01~05 전용이라 역방향 · 스트리밍 값을 싣지 않는다. 키의 뜻과 형식 예시의 정본은 [../05_data_stores/10_olap_vs_rdb_control.md](../05_data_stores/10_olap_vs_rdb_control.md) §EXP 연결 · 기계 판독 블록 제안이다.
 - **비교 기록의 대상 스위치만 배열이다(S2 판정 · 기록 013).** 한 기록이 두 팔을 담으므로 대상 스위치의 값은 하나가 아니다 — 스칼라 하나를 적으면 다른 팔의 조건이 블록에서 사라지고, 두 기록으로 쪼개면 같은 복원 · 같은 반복 순서로 교대한 팔이 다른 기록이 되어 비교 성립 판정(나머지 10종 동일)을 블록 둘에 걸쳐 해야 한다. 판독기는 배열 값을 "이 스위치가 비교 대상"으로 읽고 BFF 규칙 4의 null 검사는 원소마다 한다. · axes의 axis 값 **5** + 쿼리 시간(points) 1 = 비교 축 **6**([../05_data_stores/10_olap_vs_rdb_control.md](../05_data_stores/10_olap_vs_rdb_control.md) §비교 축 6)
 
 ### BFF 판독 규칙

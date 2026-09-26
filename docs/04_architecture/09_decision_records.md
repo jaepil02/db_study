@@ -2,6 +2,8 @@
 
 > **대상**: db_study의 기술 결정 — ADR-01~25 · 결정 색인 · 분류 검산 · 상태 · 원본 보정 5건 대응 · D-NN과의 경계 — ADR-NN 채번 정본
 > **작성일**: 2026-09-24
+> **개정일**: 2026-09-26 — W1 검수 반영 — ADR-03 파급의 26.8 경량 UPDATE에 Beta 표기 — 정본 05_data_stores/10을 가리킨다 · 결정 본문 · ADR 수 · 상태 불변
+> **개정일**: 2026-09-26 — 목적 적합성 실증 W1 — ADR-03 파급 첫 문장 "UPDATE가 비동기 mutation이라 상태 갱신이 필요한 데이터를 싣지 않는다" → **상태 갱신이 필요한 데이터를 싣지 않는 근거는 검증 대상(EXP-40 · 42 · 43)** — 26.8 경량 UPDATE 반영 · 결정 본문 · ADR 수 · 상태 불변
 > **개정일**: 2026-09-24 — ClickHouse 26.8 LTS 전환(사용자 결정 · 25.x 보안 지원 종료) — ADR-14 상태 항목의 근거에 26.8 판별(기록 004) 추가 · 잔여 1 닫힘(먼저 성공한 MV가 있는 부분 실패도 보강 아래 정확) · 백필 재실행 문장을 버전 종속으로 교정
 > **개정일**: 2026-09-24 — S0 실측 반영(EXP-32 · 기록 001 · 사용자 결정) — ADR-14에 상태 항목 신설(보강 — 롤업 3테이블 윈도우 + 종속 MV 중복 제거 설정 한 쌍) — 결정 원문 보존 · ADR 수 · 상태 분류 불변
 > **개정일**: 2026-09-24 — 최종 정밀 검수 — ADR 파급 줄의 후속 판정 대상 표기 3곳을 판정 결과로 갱신(ADR-16 · 20 · 23 — 결정 본문 불변)
@@ -102,7 +104,7 @@
 - **맥락**: PLC 태그 데이터는 초당 수천~수십만 포인트 · 추가 전용 · 시간 범위 집계다. 학습 목표 ①은 "시계열을 RDB가 아니라 컬럼형으로 다루는 이유를 측정으로 안다"다(D-01).
 - **결정**: 시계열을 **ClickHouse**에 싣는다 — MergeTree · 코덱 · AggregatingMergeTree + MV 롤업 캐스케이드 · Dictionary를 쓴다. 앱은 HTTP 8123만 쓴다. 비교 상대는 PostgreSQL 대조군이다(ADR-17).
 - **버린 대안**: ① **TimescaleDB** — PostgreSQL 확장이라 대조가 "PostgreSQL 대 PostgreSQL 확장"이 되어 행 기반 RDB가 어디서 꺾이는지라는 질문(D-05)이 사라지고, 이종 DB 분리 운용을 배울 자리가 없다. ② **InfluxDB** — SQL 전이성이 낮아 대조군과 **같은 쿼리 5종**을 두 저장소에 돌릴 수 없고, 쿼리 언어 차이가 역전 지점에 섞인다. ③ **PostgreSQL 단독** — 그것이 대조군 자체다. 원본 예상치(삽입 · 압축)로 이미 역전이 예상되는 쪽을 주 저장소로 두면 목표 ②의 파이프라인이 목표 ①의 실험 대상에 묶인다.
-- **파급**: UPDATE가 비동기 mutation이라 상태 갱신이 필요한 데이터를 싣지 않는다 — 알람 확정 이벤트가 PostgreSQL로 가는 근거([04_storage_split.md](./04_storage_split.md)). 스키마 · 코덱 · 설정의 정본은 [../05_data_stores/03_clickhouse_schema.md](../05_data_stores/03_clickhouse_schema.md).
+- **파급**: 상태 갱신이 필요한 데이터를 싣지 않는다 — 알람 확정 이벤트가 PostgreSQL로 간다([04_storage_split.md](./04_storage_split.md)). 그 근거로 적었던 "UPDATE가 비동기 mutation"은 **검증 대상(EXP-40)**이다 — 26.8 경량 UPDATE는 SELECT에 즉시 보이므로(공식 문서상 **Beta** — 정본 [../05_data_stores/10_olap_vs_rdb_control.md](../05_data_stores/10_olap_vs_rdb_control.md) §역방향 대조 — 업무 워크로드) 근거가 가시성이 아니라 갱신 비용 · 원자성 · 제약(EXP-40 · 42 · 43)으로 옮겨질 수 있고, 결과로 확정한다([../05_data_stores/10_olap_vs_rdb_control.md](../05_data_stores/10_olap_vs_rdb_control.md) §역방향 대조 — 업무 워크로드). 스키마 · 코덱 · 설정의 정본은 [../05_data_stores/03_clickhouse_schema.md](../05_data_stores/03_clickhouse_schema.md).
 
 ## ADR-04 — 수집 버퍼 Redis Streams
 

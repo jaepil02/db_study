@@ -2,6 +2,8 @@
 
 > **대상**: /metrics로 노출하는 메트릭 전수 — 이름 규약 · 닫힌 레이블 집합 · **스위치 상태 레이블 이름** · **컨슈머 랙 산출식 판정(가장 중요한 단일 지표)** · 계열별 전수(앱 기본 · HTTP·WS · 수집 · 적재 · 알람 · 실시간 · 조회 · 업무 · 인증 · Redis · PostgreSQL · ClickHouse · E2E · 관측 자체) · 파생 지표 식 · 선행 문서 인계 메트릭 대응 · 수집 주기 · E2E 창 · 메모리 표본 수 조회 계약 · Pub/Sub 출력 버퍼 관련 메트릭
 > **작성일**: 2026-09-24
+> **개정일**: 2026-09-26 — 리드 판정 — table 레이블 ClickHouse 값 집합은 목적지 5 유지(계측물 3 제외 · 수집기 닫힌 집합과 일치) — 같은 날 5 → 8 개정을 되돌림 — 메트릭 이름 수 불변
+> **개정일**: 2026-09-26 — 목적 적합성 실증 W1 — 닫힌 레이블 table 값 집합 ClickHouse 테이블 5 → **8**(업무 대조 계측물 3 — 실험 스냅샷에서만 행이 있다) — 메트릭 이름 수 불변
 > **개정일**: 2026-09-25 — S4 as-built(3e8a46d · 기록 025) — rlt_fanout_delivery_seconds 정의 행 보정(발행 → 게이트웨이 도착 · channel 값 둘 · 첫 칸 해상도 한계와 평균 판정) · rlt_tag_unresolved_total 구현(검수 M4) — 계열 수 불변
 > **개정일**: 2026-09-25 — S3 실측 반영(기록 015 · 020) — AC-19 "0 유지" 표본 해석 불릿 신설(순간값 · 누적 판정 · pending 2배치 = 창 2개분 엔트리)
 > **개정일**: 2026-09-25 — S3 구현 반영 — ing_dedup_ignored_batches_total **S3 미구현 · 미등록**(@clickhouse/client 삽입 응답 요약에 ProfileEvents가 없고 written_rows는 중복 제거된 재시도에도 같다 — 0으로 내면 "중복 없음"으로 오독)
@@ -44,7 +46,7 @@
 | publisher · stage | collector · gen_b · gen_c · 백프레셔 단계 값 0 정상 · 1 주의 · 2 경고 · 3 위험 · 4 복구 | 발행 경로 3 · 단계 5 | backpressure_stage |
 | phase · from · to · severity | A1~A6 · total · 알람 상태 5 · 심각도 3 | [../04_architecture/05_latency_budget.md](../04_architecture/05_latency_budget.md) · 상태 머신 | alm |
 | prefix · stream | Redis 키 접두 8(stream · rt · alarm · cache · lock · rl · sess · auth) · raw · dlq | [../05_data_stores/05_redis_keyspace.md](../05_data_stores/05_redis_keyspace.md) | redis · mst · 래퍼 |
-| store · table | postgres · clickhouse · redis · PostgreSQL 테이블 15 · ClickHouse 테이블 5 | 루트 README 고정 기준 | obs · pg · ch |
+| store · table | postgres · clickhouse · redis · PostgreSQL 테이블 15 · ClickHouse 목적지 테이블 5 — 업무 대조 계측물 3은 레이블 집합에 넣지 않는다(역방향 대조 실험 스냅샷에서만 행이 있고 그 파트 · 머지 비용은 실행기가 system 테이블에서 직접 읽는다 · 수집기 닫힌 집합 CH_TABLES와 같다) | 루트 README 고정 기준 | obs · pg · ch |
 | **switch · env · value · impl · warning** | 스위치 11 · 환경변수 11 · 값(on · off · 정수 ms · ingest · collector) · 포트 구현 22 · stream_boundary_bypassed | [../02_features/13_switch_matrix.md](../02_features/13_switch_matrix.md) | obs_switch_info · obs_switch_warning |
 | commit_hash · memory_profile · capacity_tier | 기동 1값씩 | 프로세스 수명 동안 불변 | obs_run_info |
 | 나머지(result · reason · layer · writer · freshness · op · kind · class · rank · queryid · quantile) | 계열 표의 레이블 칸이 값을 적는다 | 각 계열 표 | 각 계열 |

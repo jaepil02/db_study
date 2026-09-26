@@ -2,6 +2,12 @@
 
 > **대상**: 설계 문서군이 인용하는 외부 공식 문서 · 릴리스 노트 · 표준의 URL 전수 — 런타임 · 저장소 · 저장소 확장 · 백엔드 라이브러리 · 프론트엔드 · 도구 · 부하 · 관측 · 실행 환경 · 프로토콜 표준 · 보안 참고 · 인용처 · 재확인 규칙
 > **작성일**: 2026-09-24
+> **개정일**: 2026-09-26 — 마지막 검수 반영 — 부분 확인 항목 수는 표 셀 한 자리에서만 센다(검산 불릿은 셀을 가리킴)
+> **개정일**: 2026-09-26 — 리드 판정 — ClickHouse 문서 행 부분 확인 항목 5 → **6**(비동기 삽입 세션 설정 — context7 대조) — 확인 7 · 미확인 63 · 등재 70 불변
+> **개정일**: 2026-09-26 — W1 재검수 반영 — ClickHouse 문서 행 부분 확인 항목 4 → **5**(삽입 재시도 중복 제거 — 비복제 MergeTree의 non_replicated_deduplication_window · 토큰이 없으면 블록 내용 해시 · 있으면 토큰 기준) — 확인 7 · 미확인 63 · 등재 수 불변
+> **개정일**: 2026-09-26 — W1 검수 반영 — ClickHouse 문서 행 확인일 2026-09-26 → **부분 — 역방향 근거 4항목 2026-09-26 · 나머지 미확인**(행 전체 확인일은 과대) — 확인 8 → **7** · 미확인 62 → **63** · 대조 항목에 Beta · enable_lightweight_update · apply_patch_parts · update_parallel_mode · non_replicated_deduplication_window · CHECK UPDATE 경로는 판별 대상 명시 · 등재 수 불변
+> **개정일**: 2026-09-26 — 리드 판정 — ClickHouse 문서 행 확인일 **2026-09-26**(context7 공식 문서 대조) — 확인 7 → **8** · 미확인 63 → **62** · 등재 수 불변
+> **개정일**: 2026-09-26 — 목적 적합성 실증 W1 — ClickHouse 문서 행 대조 항목에 역방향 대조 근거 4(UPDATE 문 · ALTER UPDATE mutation · ReplacingMergeTree · CREATE TABLE CONSTRAINT) · 링크 열에 05_data_stores/10 — 등재 수 불변(행 신설 없음)
 > **개정일**: 2026-09-24 — S1 반영 — 버전 고정표 37 → **38**행(Biome · Vitest 행 분리 — 두 구성요소는 이미 각자 행으로 등재돼 등재 수 불변)
 > **개정일**: 2026-09-24 — ClickHouse 26.8 LTS 전환(사용자 결정 · 25.x 보안 지원 종료) — ClickHouse 변경 이력 행의 확인 대상 25.8 → **26.8** LTS 패치 태그
 > **개정일**: 2026-09-24 — 착수 체크리스트 7 반영 — 저장소 6행 확인일 채움(릴리스 · 레지스트리 대조) · ClickHouse 보안 정책 행 신설(25.x 지원 종료 확인) · Python 행 신설(버전 고정표 36 → **37**행 대응) — 등재 68 → **70** · 저장소 9 → **10** · 도구 · 부하 · 관측 13 → **14** · 미확인 68 → **63**
@@ -42,7 +48,7 @@
 | PostgreSQL | 18 문서 | [https://www.postgresql.org/docs/18/](https://www.postgresql.org/docs/18/) | 선언적 파티션 · BRIN · COPY · 튜닝 파라미터 | [../05_data_stores/01_postgresql_schema.md](../05_data_stores/01_postgresql_schema.md) · [../05_data_stores/02_postgresql_constraints.md](../05_data_stores/02_postgresql_constraints.md) · [../05_data_stores/10_olap_vs_rdb_control.md](../05_data_stores/10_olap_vs_rdb_control.md) | 미확인 |
 | postgres 이미지 | 공식 이미지 | [https://hub.docker.com/_/postgres](https://hub.docker.com/_/postgres) | 18 alpine 태그 · 초기화 스크립트 규약 · 시간대 데이터 | [../09_tech_stack/03_data_infra.md](../09_tech_stack/03_data_infra.md) | 2026-09-24 |
 | ClickHouse | 변경 이력 | [https://clickhouse.com/docs/whats-new/changelog](https://clickhouse.com/docs/whats-new/changelog) | 26.8 LTS 패치 태그 | [../09_tech_stack/03_data_infra.md](../09_tech_stack/03_data_infra.md) | 2026-09-24 |
-| ClickHouse | 문서 | [https://clickhouse.com/docs](https://clickhouse.com/docs) | MergeTree · AggregatingMergeTree · MV · Dictionary · 코덱 · TTL · insert_deduplication_token · async_insert · 서버 설정과 사용자 프로파일 설정의 수준 · merge_with_ttl_timeout 기본값 | [../05_data_stores/03_clickhouse_schema.md](../05_data_stores/03_clickhouse_schema.md) · [../05_data_stores/04_clickhouse_rollup.md](../05_data_stores/04_clickhouse_rollup.md) · [../09_tech_stack/03_data_infra.md](../09_tech_stack/03_data_infra.md) | 미확인 |
+| ClickHouse | 문서 | [https://clickhouse.com/docs](https://clickhouse.com/docs) | MergeTree · AggregatingMergeTree · MV · Dictionary · 코덱 · TTL · insert_deduplication_token · async_insert · 서버 설정과 사용자 프로파일 설정의 수준 · merge_with_ttl_timeout 기본값 · UPDATE 문(경량 UPDATE · Beta 표기 · enable_lightweight_update · apply_patch_parts · update_parallel_mode · patch 파트 · 블록 번호 · 오프셋 컬럼 요구 · 키 컬럼 갱신 불가) · ALTER UPDATE mutation(mutations_sync · apply_mutations_on_fly) · ReplacingMergeTree(version · FINAL · 머지 뒤 중복 제거 · 정렬 키 단위) · CREATE TABLE CONSTRAINT CHECK(INSERT 검사 · **UPDATE 경로 검사는 문서 대조가 아니라 실행기 판별 대상**) · non_replicated_deduplication_window | [../05_data_stores/03_clickhouse_schema.md](../05_data_stores/03_clickhouse_schema.md) · [../05_data_stores/04_clickhouse_rollup.md](../05_data_stores/04_clickhouse_rollup.md) · [../05_data_stores/10_olap_vs_rdb_control.md](../05_data_stores/10_olap_vs_rdb_control.md) · [../09_tech_stack/03_data_infra.md](../09_tech_stack/03_data_infra.md) | 부분 — 역방향 근거 6항목 2026-09-26(UPDATE 문 · ALTER UPDATE mutation · ReplacingMergeTree · CREATE TABLE CONSTRAINT · 삽입 재시도 중복 제거 · 비동기 삽입 세션 설정) · 나머지 미확인 |
 | clickhouse-server 이미지 | 공식 이미지 | [https://hub.docker.com/r/clickhouse/clickhouse-server](https://hub.docker.com/r/clickhouse/clickhouse-server) | LTS 태그 · 설정 파일 마운트 경로 · 시간대 데이터 | [../09_tech_stack/03_data_infra.md](../09_tech_stack/03_data_infra.md) | 2026-09-24 |
 | ClickHouse | 보안 정책(지원 버전 표) | [https://github.com/ClickHouse/ClickHouse/blob/master/SECURITY.md](https://github.com/ClickHouse/ClickHouse/blob/master/SECURITY.md) | 고정한 LTS 계열의 보안 지원 여부 | [../09_tech_stack/03_data_infra.md](../09_tech_stack/03_data_infra.md) | 2026-09-24 |
 | Redis | 릴리스 | [https://github.com/redis/redis/releases](https://github.com/redis/redis/releases) | 8의 현행 부 버전 | [../09_tech_stack/03_data_infra.md](../09_tech_stack/03_data_infra.md) | 2026-09-24 |
@@ -160,7 +166,7 @@
 
 - 검산: 등재 = 런타임 4 + 저장소 10 + 저장소 확장 3 + 백엔드 라이브러리 13 + 프론트엔드 10 + 도구 · 부하 · 관측 14 + 실행 환경 2 + 프로토콜 표준 4 + 보안 참고 10 = **70**
 - **버전 고정표 38행이 모두 이 문서의 행 하나 이상에 닿는다**(Fastify 어댑터는 NestJS 문서 행 · 비밀번호 해시 라이브러리는 라이브러리 미선정이라 Argon2 RFC 9106 행 — 선정 시 그 공식 저장소 행을 더한다) — 고정표의 묶음 행(Zustand · React Hook Form · Tailwind CSS · Biome · Vitest · Supertest · Testcontainers)은 구성요소마다 한 행씩 나눠 등재했다. 해당 없음 행(shadcn/ui)도 복사 절차 확인을 위해 등재한다. pg_stat_statements · auto_explain은 엔진을 따르므로 버전이 아니라 적재 설정을 확인한다.
-- **등재했지만 대부분 확인하지 않았다** — 확인일 열 확인 7(저장소 릴리스 · 이미지 · ClickHouse 보안 정책 — 착수 체크리스트 7번 · 2026-09-24) + 미확인 63 = **70**. 나머지 대조는 각 구성요소를 쓰는 단계의 착수 때 한다.
+- **등재했지만 대부분 확인하지 않았다** — 확인일 열 확인 7(저장소 릴리스 · 이미지 · ClickHouse 보안 정책 — 착수 체크리스트 7번 · 2026-09-24) + 미확인 63 = **70**. 미확인 63에는 부분 확인 1행(ClickHouse 문서 — 그 행 확인일 칸이 적은 역방향 대조 근거 항목만 대조 · 나머지 확인할 것은 미대조)이 들어 있다 — 행 전체를 확인으로 세면 대조하지 않은 기본값 항목(merge_with_ttl_timeout 등)까지 확인된 것으로 읽힌다. 나머지 대조는 각 구성요소를 쓰는 단계의 착수 때 한다.
 
 ## 재확인 규칙
 

@@ -2,6 +2,7 @@
 
 > **대상**: db_study api 컨테이너의 REST 표면이 반환하는 에러 코드 전수 — 채번 정본
 > **작성일**: 2026-09-24
+> **개정일**: 2026-09-26 — W1 검수 반영 — auth.unauthenticated · auth.forbidden 발생 조건에 인증 도입(S7 ②) 전 알람 확인 조건(행위자 해석 실패 · 행위자 OPERATOR 없음 — 정본 07_api/07 §인증 전 확인 행위자 판정) 추가 — 코드 수 불변
 > **개정일**: 2026-09-24 — 최종 정밀 검수 — common.validation_failed 발생 조건에 Host 헤더 허용 목록 위반 추가(코드 수 불변)
 > **개정일**: 2026-09-24 — W7 검수 반영 — README ID 규약 예시와의 충돌 서술 → **W1에 고쳤다**로 갱신 — 코드 수 불변
 > **개정일**: 2026-09-24 — W5 표면 판정 반영 — 에러 코드 19 → **22종**(master.reissue_source_inactive/409 · alarms.eval_store_unavailable/503 · work_orders.production_log_not_allowed/409 신설) · common.duplicate_key 대상 · common.postgres_unavailable 인가 단계 표면 · invalid_status_transition fromStatus 경합 조건 보강
@@ -76,11 +77,11 @@
 | 코드 | HTTP | 발생 조건 | 발생 표면 | 클라이언트 대응 |
 |------|:----:|----------|----------|---------------|
 | auth.invalid_credentials | 401 | 로그인 자격 증명이 일치하지 않는다 | [../07_api/03_auth.md](../07_api/03_auth.md) | 입력을 고쳐 다시 로그인한다 |
-| auth.unauthenticated | 401 | Authorization 헤더가 없거나 액세스 토큰(JWT)의 형식 · 서명이 틀렸다 | 인증이 필요한 전 표면 | 로그인한다 |
+| auth.unauthenticated | 401 | Authorization 헤더가 없거나 액세스 토큰(JWT)의 형식 · 서명이 틀렸다. **인증 도입(S7 ②) 전에는 알람 확인에서 행위자 해석 실패(환경변수 없음 · 계정 없음 · 비활성)**도 이 코드다 — 신원이 없는 요청과 같은 뜻([../07_api/07_alarms.md](../07_api/07_alarms.md) §인증 전 확인 행위자 판정) | 인증이 필요한 전 표면 · 인증 전 알람 확인 | 로그인한다 · 인증 전에는 확인 행위자 환경변수와 계정 시드를 고친다 |
 | auth.token_expired | 401 | 액세스 토큰의 수명이 지났다(현행 15분 — 원본 architecture.md §11.2) | 인증이 필요한 전 표면 | BFF를 거쳐 리프레시로 새 액세스 토큰을 받고 원요청을 1회 다시 보낸다 |
 | auth.refresh_invalid | 401 | 리프레시 토큰이 auth:refresh:{refresh_token_id}에 없다 — 로그아웃으로 폐기 · 수명(현행 14일) 경과 · **메모리 압박으로 축출**. auth 계열은 TTL을 가진 캐시 계열이라 volatile-lru의 축출 후보다 | [../07_api/03_auth.md](../07_api/03_auth.md) | 다시 로그인한다 |
 | **auth.token_store_unavailable** | 503 | Redis에 접속할 수 없어 로그인 · 토큰 갱신 · 로그아웃이 리프레시 토큰 저장소에 닿지 못한다. **레이트 리밋은 이 코드를 내지 않는다** — 세지 않고 통과시키며 통과 수를 계측한다(REQ-AUT-14) | [../07_api/03_auth.md](../07_api/03_auth.md) | 백오프 후 다시 요청한다. 재로그인하지 않는다 — refresh_invalid와 대응이 달라 가른다 |
-| auth.forbidden | 403 | 인증은 됐으나 역할이 표면 권한 밖이다(원본 data_flow.md §6의 권한 검사). 역할 × 표면 대응의 정본은 [../02_features/12_permission_matrix.md](../02_features/12_permission_matrix.md) | 권한 검사가 있는 전 표면 | 요청을 멈춘다 |
+| auth.forbidden | 403 | 인증은 됐으나 역할이 표면 권한 밖이다(원본 data_flow.md §6의 권한 검사). 역할 × 표면 대응의 정본은 [../02_features/12_permission_matrix.md](../02_features/12_permission_matrix.md). **인증 도입(S7 ②) 전에는 알람 확인에서 해석된 행위자에 OPERATOR 역할이 없을 때**도 이 코드다([../07_api/07_alarms.md](../07_api/07_alarms.md) §인증 전 확인 행위자 판정) | 권한 검사가 있는 전 표면 · 인증 전 알람 확인 | 요청을 멈춘다 |
 
 - **token_expired와 unauthenticated를 가르는 이유는 대응이 다르기 때문이다.** 만료는 조용한 갱신 1회로 복구되고, 서명 불량은 갱신해도 복구되지 않는다. 하나로 묶으면 클라이언트가 서명 불량에도 갱신 루프를 돈다.
 - **refresh_invalid의 세 번째 원인은 반직관적이다.** Stream이 적체돼 Redis 메모리가 압박받으면 사용자가 로그아웃된다. 이것이 Stream MAXLEN이 maxmemory보다 먼저 걸리도록 산정한 이유이며(원본 data_flow.md §12.1), maxmemory를 낮춘 축출 실험 중에는 이 코드가 정상 관측값이다.

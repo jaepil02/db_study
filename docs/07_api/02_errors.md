@@ -2,6 +2,7 @@
 
 > **대상**: 에러 코드 정본의 **미러** — 코드 22종이 어느 표면(문서 #N)에서 나는가 · 표면 밖 실패 표현(헬스 503 · 스트림 중단 · WebSocket 종료 코드)의 자리 · W5 표면 판정이 낳아 정본이 채번한 코드 3종의 이력
 > **작성일**: 2026-09-24
+> **개정일**: 2026-09-26 — W1 검수 반영(정본 11_glossary/02 뒤따름) — auth.unauthenticated · auth.forbidden 발생 표면에 인증 전(S7 ①) 알람 확인 조건 추가 · 인증 표면 S7 → **S7 ②** — 코드 수 불변
 > **개정일**: 2026-09-24 — 최종 정밀 검수 — 미러 발생 위치에 Host 헤더 거절 추가(정본 11_glossary/02 반영)
 > **개정일**: 2026-09-24 — W5 판정 반영 — 코드 19 → **22종** 미러(master.reissue_source_inactive · alarms.eval_store_unavailable · work_orders.production_log_not_allowed 발생 표면 등재) · 채번 제안 절을 정본 채번 이력으로 전환 · 문구 보강 3건 반영 표기
 > **원천**: [../11_glossary/02_error_codes.md](../11_glossary/02_error_codes.md)(채번 정본 — 코드 · HTTP · 발생 조건 · 클라이언트 대응) · [01_conventions.md](./01_conventions.md) 에러 봉투 · 도메인 문서 8본의 표면 요약 표 · 원본 architecture.md §11 · §11.1 · §11.2(커밋 ff66a37)
@@ -26,7 +27,7 @@
 
 ## 표면별 발생 위치
 
-표기는 {문서} #N이다. **인증 표면 공통 4종**(auth.unauthenticated · auth.token_expired · auth.forbidden · common.rate_limited)은 S7부터 인증 표면 전부에서 나므로 표면을 나열하지 않고 범위로 적는다 — 인증 표면 = 전 표면 − 공개 2(10_metrics #1 · #2) − 리프레시 쿠키 · 공개 3(03_auth #1~#3).
+표기는 {문서} #N이다. **인증 표면 공통 4종**(auth.unauthenticated · auth.token_expired · auth.forbidden · common.rate_limited)은 인증 도입(S7 ②)부터 인증 표면 전부에서 나므로 표면을 나열하지 않고 범위로 적는다 — 인증 표면 = 전 표면 − 공개 2(10_metrics #1 · #2) − 리프레시 쿠키 · 공개 3(03_auth #1~#3). 인증 도입 전에는 [07_alarms.md](./07_alarms.md) #2 확인만 auth.unauthenticated · auth.forbidden을 낸다(행위자 대리 판정).
 
 ### common — 횡단
 
@@ -45,11 +46,11 @@
 | 코드 | HTTP | 발생 표면 | 미러 비고 |
 |------|:--:|------|------|
 | auth.invalid_credentials | 401 | 03_auth #1 | 비활성 · 없는 계정도 같은 코드 · 같은 본문 |
-| auth.unauthenticated | 401 | 인증 표면 전부(S7) — 공통 4종 | WebSocket은 4401 종료로 표현 |
+| auth.unauthenticated | 401 | 인증 표면 전부(S7 ②) — 공통 4종 · 인증 전(S7 ①) [07_alarms.md](./07_alarms.md) #2 행위자 해석 실패 | WebSocket은 4401 종료로 표현 |
 | auth.token_expired | 401 | 인증 표면 전부(S7) — 공통 4종 | 상동 |
 | auth.refresh_invalid | 401 | 03_auth #2 | 03_auth #3은 키가 없어도 204 — 이 코드를 내지 않는다 |
 | auth.token_store_unavailable | 503 | 03_auth #1 · #2 · #3 | 레이트 리밋은 이 코드를 내지 않고 통과한다 |
-| auth.forbidden | 403 | 인증 표면 전부(S7) — 공통 4종 · 역할 한정 표면은 역할 밖 사용자 · 전원 표면은 역할 0 사용자 | WebSocket은 4403 |
+| auth.forbidden | 403 | 인증 표면 전부(S7 ②) — 공통 4종 · 역할 한정 표면은 역할 밖 사용자 · 전원 표면은 역할 0 사용자 · 인증 전(S7 ①) [07_alarms.md](./07_alarms.md) #2 행위자에 OPERATOR 없음 | WebSocket은 4403 |
 
 - 검산: auth = **6**
 

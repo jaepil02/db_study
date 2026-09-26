@@ -2,6 +2,7 @@
 
 > **대상**: AUT 도메인이 소유하는 REST 표면 — 로그인 · 토큰 갱신 · 로그아웃의 요청 · 응답 · 실패 · 경로 계약 · 계정 · 역할 관리 표면의 부재 판정
 > **작성일**: 2026-09-24
+> **개정일**: 2026-09-26 — 목적 적합성 실증 W1(EXP-40~45 채번) — 미확인 행 "카탈로그 39에 없다 · 필요해지면 EXP-40부터" → **카탈로그에 없다 · 말미 채번(다음 번호는 카탈로그 §분류와 검산)** — EXP-40이 역방향 대조로 채번돼 옛 문구가 다른 실험을 가리킨다
 > **개정일**: 2026-09-24 — W7 검수 반영 — 키 표기 auth:refresh:{id} → **auth:refresh:{refresh_token_id}**(정본 05_data_stores/05) — 표면 수 불변
 > **개정일**: 2026-09-24 — W7 보안 판정 반영 — BFF 인증 Route Handler **Origin 대조** 추가 · 미설계 3행(회전 · 로그인 시도 제한 · CORS 제외) 닫힘 — 표면 수 불변(정본 12_security/01 · 03)
 > **개정일**: 2026-09-24 — W6 실험 채번 반영 — 실험 자리 W6 결과 반영(정본 10_observability/01 · 06)
@@ -119,7 +120,7 @@ AUT는 **표면 셋만 소유하고 나머지 전 표면에 끼어드는 도메�
 | 리프레시 토큰 회전 · 재사용 탐지 | **닫힘(W7)** — 회전하지 않는다 · 잔여(쿠키 사본의 수명 내 유효)는 보안 리뷰가 등재 | [../12_security/01_authn_authz.md](../12_security/01_authn_authz.md) |
 | 로그인 시도 제한 | **닫힘(W7)** — 두지 않는다 · 대입 속도는 비밀번호 해시 비용이 묶는다 · 잔여 등재 | [../12_security/03_api_surface_defense.md](../12_security/03_api_surface_defense.md) |
 | auth 표면의 CORS 제외 판정 | **닫힘(W7)** — 판정 유지 · BFF 인증 경로 Origin 대조를 더했다 | [../12_security/03_api_surface_defense.md](../12_security/03_api_surface_defense.md) |
-| 로그인 · 갱신 p50 · 해시 비용 | 3계층 미확인 — 확정 전 임의 값 고정 금지 · **W6 미채번**(카탈로그 39에 없다 · 필요해지면 EXP-40부터) | [../10_observability/06_experiment_catalog.md](../10_observability/06_experiment_catalog.md) |
+| 로그인 · 갱신 p50 · 해시 비용 | 3계층 미확인 — 확정 전 임의 값 고정 금지 · **W6 미채번**(카탈로그에 없다 · 필요해지면 말미 채번 — 다음 번호는 카탈로그 §분류와 검산) | [../10_observability/06_experiment_catalog.md](../10_observability/06_experiment_catalog.md) |
 
 ## 관련 문서
 

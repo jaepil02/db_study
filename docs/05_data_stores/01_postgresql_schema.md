@@ -2,6 +2,9 @@
 
 > **대상**: PostgreSQL 업무 테이블 14의 컬럼 · 타입 · 컬럼 제약 · 도메인 소유 · tag_master_history 설계 · 저장 enum 값 집합 확정(condition_type · severity · work_order.status) · 인계 판정(site.timezone · 알람 담당자 · 무인증 기간 감사 행위자) · 튜닝 파라미터와 조정값 소유처 — 테이블명 · 컬럼명 채번 정본
 > **작성일**: 2026-09-24
+> **개정일**: 2026-09-26 — W1 재검수 반영 — 무인증 기간 감사 행위자 판정 근거 칸 "인증은 S7" → **인증 도입은 S7 ②**(S7 ① 알람도 무인증) · 버린 대안 칸 S7 이후 → **인증 도입(S7 ②) 이후**
+> **개정일**: 2026-09-26 — W1 검수 잔여 — NULL 결함 불릿 본문의 S7 이후 → **인증 도입(S7 ②) 이후**(제목과 일치)
+> **개정일**: 2026-09-26 — S7 ① 알람 착수 반영 — 무인증 기간 경계 S4~S6 → **인증 도입(S7 ②) 전** · 예외 alarm_event.acked_by(시드 계정 대리 · 07_api/07) — 테이블 · 컬럼 수 불변
 > **개정일**: 2026-09-24 — 최종 정밀 검수 — 빈 표 칸을 닫힌 어휘 해당 없음으로 채움(표 열 규약) · 미확인 등재 3행 닫힘(enum 반영 · RATE_OF_CHANGE 경계 · 비활성 태그 규칙)
 > **개정일**: 2026-09-24 — W7 검수 반영 — 미확인 1행 닫힘(실적 기록 상태 조건) — 테이블 수 불변
 > **개정일**: 2026-09-24 — W7 보안 판정 반영 — password_hash 알고리즘 미기재 → **Argon2id**(PHC 자기 기술 문자열 · 컬럼 형 불변)(정본 12_security/01)
@@ -139,7 +142,7 @@
 | production_log | recorded_at | timestamptz | NOT NULL | 실적 시각 — 사람이 입력한다 |
 | production_log | good_qty · defect_qty | integer | NOT NULL · CHECK 0 이상 | 해당 없음 |
 | audit_log | audit_id | bigint | PK · IDENTITY ALWAYS | 해당 없음 |
-| audit_log | user_id | integer | **NULL 허용** · FK user_account | **NULL = 무인증 기간(S4~S6)의 행위** — §인계 판정 |
+| audit_log | user_id | integer | **NULL 허용** · FK user_account | **NULL = 무인증 기간(인증 도입 S7 ② 전)의 행위** — §인계 판정 |
 | audit_log | acted_at | timestamptz | NOT NULL · DEFAULT now() | 트랜잭션 시작 시각 — 같은 트랜잭션의 업무 행과 같은 값 |
 | audit_log | action | text | NOT NULL · CHECK IN ('INSERT', 'UPDATE') | 물리 DELETE 표면이 없다 — 논리 삭제 · 확인 · 상태 변경은 UPDATE |
 | audit_log | target_table | text | NOT NULL | 업무 테이블 이름 |
@@ -216,11 +219,11 @@ REQ-WRK-04가 요구한 허용 전이 표다. 표 밖 전이는 work_orders.inva
 |------|------|------|------|
 | site.timezone 용도 vs 표시 Asia/Seoul 고정 | **컬럼을 유지하되 값은 'Asia/Seoul' 하나로 CHECK 고정한다.** 표시 · 달력 경계(tag_1d 하루 · 파티션 경계)는 시스템 단일 시간대이며 이 컬럼이 바꾸지 않는다 | 달력 경계 시간대 판정 [04_clickhouse_rollup.md](./04_clickhouse_rollup.md) · [03_clickhouse_schema.md](./03_clickhouse_schema.md) — 모든 사이트가 한 tag_1d를 공유한다 | ① 컬럼 삭제 — 원본 ERD와 어긋나고 다중 시간대 확장의 자리까지 지운다. ② 자유 값 허용 — 다른 값이 들어오는 순간 사이트의 하루와 tag_1d의 하루가 **조용히** 어긋난다 |
 | 알람 담당자 배정 컬럼 | **두지 않는다.** alarm_event의 갱신은 확인(acked_by · acked_at)과 해제(state · cleared_at) 둘로 닫는다 | ALM-01~09에 배정 기능이 없다. 원본 "담당자 배정 등"(원본 data_flow.md §8.2)은 PostgreSQL을 고르는 이유의 예시다 | 컬럼만 두기 — 쓰는 기능이 없는 컬럼은 구현이 임의 뜻(최초 확인자 · 규칙 소유자)으로 채워 두 뜻이 섞인다 |
-| S4~S6 무인증 기간 audit_log 행위자 | **user_id NULL을 허용하고 NULL = 무인증 기간의 행위로 정의한다.** 시드 계정으로 채우지 않는다 | 인증은 S7이고 마스터 쓰기 감사는 S4부터다(REQ-MST-05 · REQ-WRK-12). 행위자를 모르는 사실을 그대로 기록한다 | 시드 계정 대입 — S7 이후 같은 계정의 실제 행위와 **구분할 수 없어** 감사가 거짓 귀속을 담는다. 시스템 전용 계정 신설 — 계정 생성 표면이 없는 원칙(REQ-AUT-17)에 예외 계정을 만든다 |
+| 인증 도입(S7 ②) 전 무인증 기간 audit_log 행위자 | **user_id NULL을 허용하고 NULL = 무인증 기간의 행위로 정의한다.** 시드 계정으로 채우지 않는다 — 예외는 alarm_event.acked_by 하나다(결합 CHECK 때문에 시드 계정이 대리 · 판정 [../07_api/07_alarms.md](../07_api/07_alarms.md) §인증 전 확인 행위자 판정) · 확인의 audit_log.user_id는 NULL 유지 | 인증 도입은 S7 ②이고(S7 ① 알람도 무인증) 마스터 쓰기 감사는 S4부터다(REQ-MST-05 · REQ-WRK-12). 행위자를 모르는 사실을 그대로 기록한다 | 시드 계정 대입 — 인증 도입(S7 ②) 이후 같은 계정의 실제 행위와 **구분할 수 없어** 감사가 거짓 귀속을 담는다. 시스템 전용 계정 신설 — 계정 생성 표면이 없는 원칙(REQ-AUT-17)에 예외 계정을 만든다 |
 | tag_master_history 컬럼 | §tag_master_history 설계 — 10컬럼 · new_tag_id UNIQUE | REQ-MST-07 기록 내용 | 일반 메타 변경까지 담기 — audit_log와 정본이 둘이 된다 |
 
 - 검산: 판정 = **4**
-- **S7 이후 user_id NULL은 결함이다.** 인증된 쓰기 표면만 감사 대상이므로(REQ-WRK-07) S7 이후에 NULL 행이 생기면 인증 없이 열린 쓰기 표면이 있다는 뜻이다. DB는 단계를 모르므로 막지 못한다 — 한계 등재 [02_postgresql_constraints.md](./02_postgresql_constraints.md) · 검증은 S7 이후 구간의 NULL 행 수 0 조회다.
+- **인증 도입(S7 ②) 이후 user_id NULL은 결함이다.** 인증된 쓰기 표면만 감사 대상이므로(REQ-WRK-07) 인증 도입(S7 ②) 이후에 NULL 행이 생기면 인증 없이 열린 쓰기 표면이 있다는 뜻이다. DB는 단계를 모르므로 막지 못한다 — 한계 등재 [02_postgresql_constraints.md](./02_postgresql_constraints.md) · 검증은 인증 도입(S7 ②) 이후 구간의 NULL 행 수 0 조회다.
 - 시드 쓰기는 감사하지 않는다 — 사람이 쓰기 표면으로 일으킨 변경이 아니다(REQ-WRK-07 기준 · [09_migrations_seed.md](./09_migrations_seed.md)).
 
 ## 튜닝 파라미터

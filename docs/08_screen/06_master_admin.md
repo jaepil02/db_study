@@ -2,6 +2,8 @@
 
 > **대상**: AUTH-LOGIN(로그인) · ADM-MASTER(사이트 · 라인 · 설비 · Modbus 접속 설정 · 태그 — 스케일 변경 = 새 태그 발급 · master.scale_change_forbidden/409) · ADM-WORKORDER(작업지시 status 4 · 허용 전이 4쌍 · work_orders.invalid_status_transition/409 · 생산 실적) · ADM-AUDIT(감사 로그 · 태그 변경 이력 조회)
 > **작성일**: 2026-09-24
+> **개정일**: 2026-09-26 — W1 검수 잔여 — AUTH-LOGIN 도입 단계 S7 → **S7 ②(인증)**(S7 ① 알람 선행은 무인증)
+> **개정일**: 2026-09-26 — W1 검수 반영 — 감사 목록 무인증 기간 표기 S4~S6 → **인증 도입(S7 ②) 전**(S7 ① 알람 확인도 감사 NULL · 정본 05_data_stores/01 §인계 판정)
 > **개정일**: 2026-09-24 — 최종 정밀 검수 — Modbus 매핑 변경 행 닫힘(07_api/04 W5 판정) · 새 태그 발급 다이얼로그 펜스 앞 도입문 추가
 > **원천**: 원본 architecture.md §6 · §11 · §11.2 · §12(커밋 ff66a37) · 원본 data_flow.md §7 · §7.1 · §7.2(커밋 ff66a37) · 원본 implementation_plan.md §5 S4 · S7 · §7.4(커밋 ff66a37) · docs_plan.md 실행 계획 보정 #13 · REQ-AUT-01~06 · 14 · 15 · 17 · REQ-MST-01~15 · REQ-WRK-01~12 · AC-06 · AC-37 · AC-38 · 기능 AUT-01 · 03 · MST-01~06 · WRK-01 · 02 · 03 · 05 · [../06_pipeline/07_business_crud.md](../06_pipeline/07_business_crud.md) · [../07_api/03_auth.md](../07_api/03_auth.md) · [../07_api/04_master.md](../07_api/04_master.md) · [../11_glossary/03_enums_state_machines.md](../11_glossary/03_enums_state_machines.md) 상태 머신 4 · [01_standards.md](./01_standards.md)
 
@@ -17,7 +19,7 @@
 | 웹 경로 | /login?next={내부 경로} |
 | 페르소나 | 전원 |
 | 역할 | 공개 — 인증 없이 연다 |
-| 도입 단계 | S7 — S2~S6에는 이 화면이 없고 /login은 /realtime으로 보낸다 |
+| 도입 단계 | S7 ②(인증) — 그 전(S2~S6 · S7 ① 알람 선행)에는 이 화면이 없고 /login은 /realtime으로 보낸다 |
 | 요청 경로 | BFF 경유만 — 브라우저가 로그인 표면을 직결로 부르지 않는다 |
 
 **목적**: 역할이 붙은 신원을 얻는다 — 리프레시 토큰은 httpOnly 쿠키로 BFF만 쥐고, 브라우저는 액세스 토큰과 user.roles만 받는다.
@@ -249,13 +251,13 @@ PATCH /api/v1/tags/{id}가 받는 필드의 세 갈래(정본 [../07_api/04_mast
 ┌─ [감사 로그] [태그 변경 이력]   기간 [2026-09-17 ~ 09-24 KST] (필수)  대상 [전체 ▾] ┐
 │ 시각 KST            행위자                 동작    대상 테이블   대상 id  [비교] │
 │ 2026-09-24 10:01    learner@localhost      UPDATE  tag_master    3401     ▸      │
-│ 2026-09-20 14:22    무인증 기간(S4~S6)       INSERT  device        12       ▸      │
+│ 2026-09-20 14:22    무인증 기간(S7 ② 전)     INSERT  device        12       ▸      │
 │   before { "tag_name": "온도1" }  →  after { "tag_name": "온도-1" }                │
 │                                                           [더 보기]            │
 └──────────────────────────────────────────────────────────────────────────────┘
 ```
 
-- **행위자가 비어 있는 행은 "알 수 없음"이 아니라 "무인증 기간(S4~S6)"이다.** audit_log.user_id NULL은 인증 도입 전 행위로 정의됐다([../05_data_stores/01_postgresql_schema.md](../05_data_stores/01_postgresql_schema.md) §인계 판정) — 시드 계정으로 채우면 S7 이후의 같은 계정 행위와 구분할 수 없다.
+- **행위자가 비어 있는 행은 "알 수 없음"이 아니라 "무인증 기간(인증 도입 S7 ② 전)"이다.** audit_log.user_id NULL은 인증 도입 전 행위로 정의됐다([../05_data_stores/01_postgresql_schema.md](../05_data_stores/01_postgresql_schema.md) §인계 판정) — S7 ① 알람 확인도 감사 행위자는 NULL이다. 시드 계정으로 채우면 인증 도입 뒤의 같은 계정 행위와 구분할 수 없다.
 - **기간은 늘 쿼리에 실린다.** 범위 없는 조회는 무기한 · 비분할 감사 테이블 전부를 훑는다(REQ-WRK-10) — from을 생략하면 서버가 7일을 채운다([../07_api/08_work_orders.md](../07_api/08_work_orders.md)). 한 태그의 계보를 7일 밖까지 보려면 화면이 from을 명시한다.
 
 | 요소 | 위치 | 동작 | 기능 ID | 표면 |

@@ -2,6 +2,8 @@
 
 > **대상**: 업무 데이터(WRK)의 동작 계약 — ③계층 비경유(Stream 미사용 · read-your-writes) · 작업지시 CRUD와 유일 제약 · 조회 캐시와 커밋 뒤 삭제 · 작업지시 상태 전이의 구조 · 생산 실적과 생산 카운터의 분리 · **감사 대상 기준과 감사 쓰기 트랜잭션** · 감사 로그 조회 · S7 시연 최소분 — REQ-WRK-NN 채번 정본
 > **작성일**: 2026-09-24
+> **개정일**: 2026-09-26 — W1 검수 잔여 — REQ-WRK-10 · 11 · 403 행의 인가 시작 S7 이후 → **인증 도입(S7 ②) 이후**(S7 ① 알람 선행 · 인증 전 무인증) — REQ 수 불변
+> **개정일**: 2026-09-26 — W1 검수 반영 — 미확인 등재 감사 행위자 행의 무인증 기간 S4~S6 → **인증 도입(S7 ②) 전** · NULL 결함 경계 S7 이후 → **인증 도입(S7 ②) 이후**(정본 05_data_stores/01 §인계 판정)
 > **개정일**: 2026-09-24 — 최종 정밀 검수 — CRUD p95 미확인 행에 EXP-36 연결
 > **개정일**: 2026-09-24 — W7 검수 반영 — 미확인 2행 닫힘(실적 · 감사 조회 표면 · 생산 카운터 구분) — REQ 수 불변
 > **개정일**: 2026-09-24 — W4 판정 반영 — REQ-WRK-03 · 보정 대응표 무효화 체인 ④ · ⑤단 → **⑤ · ⑥단**(6단 번호 표기) — REQ 수 불변
@@ -35,8 +37,8 @@
 | **REQ-WRK-07** | **사람이 인증된 쓰기 표면으로 일으킨 PostgreSQL 업무 테이블 변경**은 감사 대상이다. 시스템 쓰기(판정 경로 · 적재 · 대조군)와 PostgreSQL 밖의 쓰기는 대상이 아니다 — 판정 §감사 대상 기준 | 원본 architecture.md §18 · 이 문서 판정 · WRK-04 | 기준 없이 도메인마다 대상을 고르면 같은 성격의 변경이 한 도메인에서는 기록되고 다른 도메인에서는 빠져, 변경 이력 화면이 "기록이 없다"와 "변경이 없다"를 가를 수 없다 | 쓰기 표면별 변경 1건씩 → 대상 표면의 audit_log 행 1 · 비대상 쓰기의 행 0 | WRK-04 | F-05 | 해당 없음 |
 | **REQ-WRK-08** | 감사 행(행위자 · 시각 · 동작 · 대상 테이블 · before · after)은 **변경과 같은 트랜잭션에서** 변경을 일으킨 도메인이 쓴다. 감사 쓰기가 실패하면 변경 전체가 롤백된다 | 원본 data_flow.md §7 · 원본 architecture.md §18 · WRK-04 · [../02_features/02_master.md](../02_features/02_master.md) MST-04 | 트랜잭션을 가르면 변경은 커밋됐는데 감사가 빠지는 창이 생긴다 · WRK가 다른 도메인의 변경을 대신 기록하면 트랜잭션 경계가 모듈 경계를 넘는다 | audit_log 쓰기 강제 실패 → 업무 행 변화 0 · 정상 변경 → 업무 행과 audit_log 행의 트랜잭션 ID(xmin) 일치 | WRK-04 | F-05 | common.postgres_unavailable/503 |
 | **REQ-WRK-09** | audit_log에는 수정 · 삭제 표면을 두지 않고 캐시 무효화 체인의 대상으로 삼지 않는다. 보존은 파티션 · 보존 정책으로만 줄인다 | WRK-04 · WRK-05 · [../02_features/10_work_orders.md](../02_features/10_work_orders.md) §감사 로그 — 소유와 쓰기 | 감사 행을 고칠 수 있으면 감사가 변경의 증거가 아니게 된다 · 무효화 체인은 커밋 뒤의 사본을 지우는 것인데 감사는 커밋 안의 원본이다 | 감사 수정 · 삭제 경로 부재 확인 | WRK-04 · WRK-05 | F-05 | 해당 없음 |
-| **REQ-WRK-10** | 감사 로그 조회는 audit_log와 태그 변경 이력(tag_master_history)을 시각 범위 조건으로 돌려준다. S7 이후 ADMIN에게만 연다 | [../02_features/12_permission_matrix.md](../02_features/12_permission_matrix.md) WRK-05 · 원본 architecture.md §12 · WRK-05 | before · after 원문에는 다른 역할이 볼 이유가 없는 업무 값이 담긴다 · 범위 조건이 없으면 감사 테이블 전부를 훑는다 | ADMIN → 200 · OPERATOR · ENGINEER → 403 · 조회 실행 계획의 범위 조건 확인 | WRK-05 | F-05 | auth.forbidden/403 |
-| **REQ-WRK-11** | S7 이후 작업지시 · 실적 쓰기와 상태 변경은 ADMIN만, 조회는 역할이 1개 이상인 인증 사용자 전원에게 연다 | [../02_features/12_permission_matrix.md](../02_features/12_permission_matrix.md) WRK · D-07 | 쓰기 주체가 둘이면 감사 로그의 행위자로 변경 책임 축을 읽을 수 없다 | 역할별 토큰으로 등록 · 상태 변경 · 조회 → ADMIN만 쓰기 허용 | WRK-01 · WRK-02 · WRK-03 | F-05 | auth.forbidden/403 |
+| **REQ-WRK-10** | 감사 로그 조회는 audit_log와 태그 변경 이력(tag_master_history)을 시각 범위 조건으로 돌려준다. 인증 도입(S7 ②) 이후 ADMIN에게만 연다 | [../02_features/12_permission_matrix.md](../02_features/12_permission_matrix.md) WRK-05 · 원본 architecture.md §12 · WRK-05 | before · after 원문에는 다른 역할이 볼 이유가 없는 업무 값이 담긴다 · 범위 조건이 없으면 감사 테이블 전부를 훑는다 | ADMIN → 200 · OPERATOR · ENGINEER → 403 · 조회 실행 계획의 범위 조건 확인 | WRK-05 | F-05 | auth.forbidden/403 |
+| **REQ-WRK-11** | 인증 도입(S7 ②) 이후 작업지시 · 실적 쓰기와 상태 변경은 ADMIN만, 조회는 역할이 1개 이상인 인증 사용자 전원에게 연다 | [../02_features/12_permission_matrix.md](../02_features/12_permission_matrix.md) WRK · D-07 | 쓰기 주체가 둘이면 감사 로그의 행위자로 변경 책임 축을 읽을 수 없다 | 역할별 토큰으로 등록 · 상태 변경 · 조회 → ADMIN만 쓰기 허용 | WRK-01 · WRK-02 · WRK-03 | F-05 | auth.forbidden/403 |
 | **REQ-WRK-12** | S7에서 **시연 최소분**을 반드시 만든다 — 작업지시 등록 · 상태 변경 · 실적 기록 · 감사 기록 · 감사 조회의 경로가 각각 1개 이상 끝까지 동작한다. 생략 선택지를 두지 않는다 | D-11 · 원본 implementation_plan.md §5 S7 · [../01_overview/05_priorities_roadmap.md](../01_overview/05_priorities_roadmap.md) S7 합격 판정 ③ | ③이 비면 "성격이 경로를 고른다"는 명제의 반례 쪽이 비어 학습 목표 ②의 분기 대조가 절반만 남는다 | S7 인수 기준의 ③ 비경유 확인 통과([14_acceptance_criteria.md](./14_acceptance_criteria.md)) | WRK-01~05 | F-05 | 해당 없음 |
 
 - 검산: 이 표의 REQ = REQ-WRK-07~12 = **6** · 문서 전체 REQ = 6 + 6 = **12**(REQ-WRK-01~12 · 결번 없음)
@@ -110,7 +112,7 @@ W3이 값 · 전이 표를 확정해 오른쪽 열이 채워졌다. 상태 머�
 | 상태 전이 위반 | 409 | work_orders.invalid_status_transition/409 | REQ-WRK-04 |
 | 감사 쓰기 실패 | 변경 전체 롤백 | common.postgres_unavailable/503(접속 불가일 때) | REQ-WRK-08 |
 | PostgreSQL 접속 불가 | 503 · 시계열 조회는 계속 | common.postgres_unavailable/503 | REQ-WRK-06 |
-| 역할 밖 쓰기 · 감사 조회(S7 이후) | 403 | auth.forbidden/403 | REQ-WRK-10 · 11 |
+| 역할 밖 쓰기 · 감사 조회(인증 도입 S7 ② 이후) | 403 | auth.forbidden/403 | REQ-WRK-10 · 11 |
 | 캐시 계열 실패 | 200 · 느려짐 | 캐시 히트율 | REQ-WRK-03 |
 
 - 검산: 상황 = **8** · 코드를 내는 행 7 + 코드 없는 행 1 = **8**
@@ -144,7 +146,7 @@ W3이 값 · 전이 표를 확정해 오른쪽 열이 채워졌다. 상태 머�
 |------|------|------|------|
 | work_order.status 값 · 허용 전이 | text 컬럼 · (line_id, status) 인덱스 | **W3 확정** — 4값 · 4쌍 | [../05_data_stores/01_postgresql_schema.md](../05_data_stores/01_postgresql_schema.md) |
 | 상태 전이 위반 에러 코드 | 이 문서가 409 · work_orders 네임스페이스로 판정 | **채번 완료** — work_orders.invalid_status_transition/409 · 조건이 허용 전이 표에 대해 정의되므로 값 집합과 무관하게 성립한다 | [../11_glossary/02_error_codes.md](../11_glossary/02_error_codes.md)(리드) |
-| **S4~S6 무인증 기간의 감사 행위자** | 마스터 쓰기는 S4부터 audit_log에 쓰는데 인증은 S7이다 · audit_log.user_id는 user_account 참조다 | **W3 판정** — user_id NULL = 무인증 기간의 행위 · 시드 계정으로 채우지 않는다 · S7 이후 NULL은 한계 등재 #4 | [../05_data_stores/01_postgresql_schema.md](../05_data_stores/01_postgresql_schema.md) · [../05_data_stores/09_migrations_seed.md](../05_data_stores/09_migrations_seed.md)(W3) |
+| **인증 도입(S7 ②) 전 무인증 기간의 감사 행위자** | 마스터 쓰기는 S4부터 audit_log에 쓰는데 인증은 S7 ②다(S7 ① 알람도 무인증) · audit_log.user_id는 user_account 참조다 | **W3 판정** — user_id NULL = 무인증 기간의 행위 · 시드 계정으로 채우지 않는다 · 인증 도입(S7 ②) 이후 NULL은 한계 등재 #4 | [../05_data_stores/01_postgresql_schema.md](../05_data_stores/01_postgresql_schema.md) · [../05_data_stores/09_migrations_seed.md](../05_data_stores/09_migrations_seed.md)(W3) |
 | 업무 CRUD p95 | 원본 목표 100 ms 이하(4 vCPU 가정) · 지연 예산 80 ms | 미확인 — 확정 전 임의 값 고정 금지 · EXP-36 | [13_nonfunctional.md](./13_nonfunctional.md) |
 | 생산 실적 · 감사 조회 표면 | 원본 API 표에 work-orders 하나뿐이다 | 닫힘 — 실적 · 감사 조회 표면 신설 — [../07_api/08_work_orders.md](../07_api/08_work_orders.md) | [../07_api/08_work_orders.md](../07_api/08_work_orders.md)(W5) |
 | 생산 카운터와 production_log의 구분 기전 | 원본에 기전이 없다 | 닫힘 — 카운터 표본은 ① 경로 · production_log는 사람의 실적 입력 전용 — [../06_pipeline/04_routing.md](../06_pipeline/04_routing.md) | [../06_pipeline/04_routing.md](../06_pipeline/04_routing.md)(W4) |

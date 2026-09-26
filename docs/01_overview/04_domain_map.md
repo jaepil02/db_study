@@ -2,6 +2,7 @@
 
 > **대상**: 전 설계자 · 신규 합류자 — 11도메인이 어느 NestJS 모듈 · 평면 · 위치에 앉고, 서로 어떤 경계로 이어지며, 각 폴더에서 어디가 비는가
 > **작성일**: 2026-09-24
+> **개정일**: 2026-09-26 — W1 검수 반영 — 도메인 × 저장 객체 검산 ClickHouse 테이블 5 → **8**(목적지 5 + 소유 도메인 없는 계측물 3) · 표 밖 계측물 불릿 신설
 > **개정일**: 2026-09-24 — 최종 정밀 검수 — 공백 매트릭스를 폴더 README 현행 선언에 맞춤: 공백(미선언) 5 → **0**(05_data_stores COL · TSQ · RLT · OBS · 06_pipeline OBS 선언 완료) · 08_screen GEN 행 → **공백(선언)**(W5 GEN 화면 없음) · 행 23 → **22** · 공백(선언) 8 → **14** · 롤업 객체 ING 귀속 확정(W3)
 > **개정일**: 2026-09-24 — W3 판정 반영 — SIM · OBS APP_ROLE 배정(ADR-22) · GEN · ALM 역할 분할 서술
 > **개정일**: 2026-09-24 — W2 판정 반영 — 인가 간선 AUT → GEN 추가(부하 주입 표면은 환경변수 게이트 + 인증) · 인가 5 → **6** · 간선 17 → **18** · GEN · OBS 인가 미정 불릿을 판정 결과로 교체
@@ -113,7 +114,8 @@ flowchart LR
 | WRK | work_order · production_log · audit_log | 없음 | 없음 |
 | OBS | 없음 | 없음 | 없음 |
 
-- 검산(루트 README 고정 기준과의 대조): PostgreSQL AUT 3 + MST 6 + ING 1 + ALM 2 + WRK 3 = **15** · ClickHouse 테이블 ING 4 + ALM 1 = **5**. 두 값이 고정 기준(15 · 5)과 일치하므로 이 귀속표에 빠진 테이블은 없다.
+- 검산(루트 README 고정 기준과의 대조): PostgreSQL AUT 3 + MST 6 + ING 1 + ALM 2 + WRK 3 = **15** · ClickHouse 테이블 목적지(ING 4 + ALM 1 = 5) + 소유 도메인 없는 계측물 3 = **8**. 두 값이 고정 기준(15 · 8)과 일치하므로 이 귀속표와 아래 표 밖 계측물을 합쳐 빠진 테이블은 없다.
+- **ClickHouse 업무 대조 테이블 3(work_order_control · work_order_control_rmt · production_log_control)은 이 표에 행이 없다.** 역방향 대조(EXP-40~44) 계측물이라 앱 모듈이 읽지도 쓰지도 않고 도구 컨테이너의 실행기만 쓴다 — 소유 도메인이 없으므로 어느 도메인 행에 넣어도 앱에 없는 소유가 생긴다(정본 [../05_data_stores/03_clickhouse_schema.md](../05_data_stores/03_clickhouse_schema.md) §객체 목록). 도메인 공백(소유 테이블 없음)의 셈에도 영향이 없다.
 - **소유 PostgreSQL · ClickHouse 테이블이 없는 도메인이 여섯이다** — COL · SIM · GEN · TSQ · RLT · OBS. 검산: 11 − 테이블 소유 5(AUT · MST · ING · ALM · WRK) = **6**. [../05_data_stores/README.md](../05_data_stores/README.md) 도메인 공백 행이 여섯 전부를 소유 기준으로 선언한다(§폴더별 도메인 공백).
 
 ## 도메인별 문서 좌표

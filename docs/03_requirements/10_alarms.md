@@ -2,6 +2,8 @@
 
 > **대상**: 알람(ALM)의 동작 계약 — 규칙 관리와 캐시 무효화 · 규칙 변경 감사 · 판정 대상 품질 · 배치 단위 상태 조회 · 디바운스 상태 머신 · 목적이 다른 세 쓰기와 부분 실패 · 발행 · 이벤트 조회 · 확인(ACK) 허용 조건 · 판정 이력 분석 · S7 생략 불가 — REQ-ALM-NN 채번 정본
 > **작성일**: 2026-09-24
+> **개정일**: 2026-09-26 — S7 ① 착수 정합 — REQ-ALM-11 검증 방법 · B형 불릿 · 실패 표 2행의 옛 격리 문구(DLQ) → **분석 무효 구간 계수**(W4 판정 · 10_observability/01 alm_eval_gap_*) — REQ 수 불변
+> **개정일**: 2026-09-26 — S7 ① 선행 반영 — 조회 · 확인 · 분석 표 아래 **인증 전 단계 불릿 신설**("S7 이후" = 인증 도입 S7 ② 이후 · 확인 행위자 대리 · 감사 NULL — 정본 07_api/07) — REQ 수 불변
 > **개정일**: 2026-09-24 — 최종 정밀 검수 — 비활성 태그 열린 알람 닫는 수단 — 리드 판정 대기 → 두지 않는다(W5 알람 강제 해제 표면 없음 판정 반영)
 > **개정일**: 2026-09-24 — W7 검수 반영 — 미확인 1행 닫힘(규칙 · 판정 이력 표면) — REQ 수 불변
 > **개정일**: 2026-09-24 — W4 판정 반영 — REQ-ALM-11 소진 시 DLQ → **격리 없음 · 분석 무효 구간 기록** · REQ-ALM-16 확인 주체 판정 · 미확인 2행 판정 · 비활성 태그 열린 이벤트 닫는 수단 미확인 행 **신설** — REQ 수 불변
@@ -35,11 +37,11 @@
 | **REQ-ALM-08** | 상태 전이는 [../11_glossary/03_enums_state_machines.md](../11_glossary/03_enums_state_machines.md) 상태 머신 2의 전이만 허용하며 해제는 CLEARING 디바운스를 거친다. **디바운스 경과는 측정 시각 ts로 잰다** — 최초 위반 시각도 ts로 기록한다 | 원본 data_flow.md §8 · §8.1 · docs_plan 보정 #20 · W1 판정(해제 경로 §8.1 채택) | CLEARING을 건너뛰면 경계값 근처 노이즈마다 이벤트가 닫히고 다시 열려 alarm_event 행이 폭증한다 · 벽시계로 재면 백프레셔로 늦게 온 배치가 디바운스 창을 한꺼번에 통과해 순간 스파이크가 알람이 된다 | 디바운스 미만 스파이크 → PENDING → NORMAL · 이벤트 0 · 적체 후 소진 중 같은 스파이크 → 이벤트 0 | ALM-03 | F-06 | 해당 없음 |
 | **REQ-ALM-09** | PENDING → ACTIVE에서 alarm_event에 행을 열고(state ACTIVE · cleared_at NULL) event_id를 alarm:state에 둔다. 해제가 확정되면 그 행을 닫는다(state CLEARED · cleared_at 채움 · acked_by · acked_at 유지). **state에 ACTIVE · CLEARED 외의 값을 쓰지 않고 PENDING은 행을 남기지 않는다** | 원본 data_flow.md §8 · [../11_glossary/03_enums_state_machines.md](../11_glossary/03_enums_state_machines.md) alarm_event.state 대응 · ALM-04 | state에 ACKED를 쓰면 확인 여부가 해제 순간 state에서 사라지고, 열린 알람 조회가 state와 acked_at을 함께 읽어야 한다 · PENDING 행을 남기면 오탐 억제 구간이 확정 이벤트로 집계된다 | 알람 1건의 생애 동안 alarm_event.state 값 집합 = ACTIVE · CLEARED · PENDING 구간 행 수 0 | ALM-04 | F-06 | 해당 없음 |
 | **REQ-ALM-10** | PostgreSQL 쓰기(열기 · 닫기)가 실패하면 그 전이는 확정되지 않은 것으로 보고 alarm:state를 직전 상태로 되돌려 다음 판정 주기에 다시 시도한다. **ch:alarm 발행과 alarm:state의 확정 상태 기록은 PostgreSQL 커밋 뒤에만 한다** | 원본 data_flow.md §8 · §8.2 부분 실패 규칙 · ALM-04 · ALM-06 | 발행을 먼저 하면 PostgreSQL에 없는 알람이 화면에 떠 운영자가 확인하려는 순간 404를 받는다 · 상태를 되돌리지 않으면 Redis만 ACTIVE인 알람이 영영 PostgreSQL에 기록되지 않는다 | postgres 정지 중 위반 지속 → alarm:state가 PENDING 유지 · 발행 0 · 재기동 후 첫 주기에 행 1개 생성 · 발행 1 | ALM-04 · ALM-06 | F-06 · F-10 | 해당 없음 |
-| **REQ-ALM-11** | 매 판정 결과(시각 · 규칙 · 태그 · 값 · 위반 여부 · 심각도)를 alarm_eval에 쌓는다. 재시도는 Ingest 배치와 같은 정책(원 배치 토큰 · 같은 백오프 · 같은 횟수)이되 **소진 시 DLQ에 격리하지 않고 소진 배치의 ts 범위를 분석 무효 구간으로 기록한다**(W4 판정 — 판정 전수는 재생할 수 없다). **끝내 실패해도 알람 발생 · 해제 · 통지는 정상 동작한다** | 원본 data_flow.md §8 · §8.2 · 원본 architecture.md §7.3 · ALM-05 | alarm_eval 실패를 알람 확정 조건에 묶으면 분석용 로그의 장애가 운영 알람을 멈춘다 · 전수가 아니라 상태 변화만 쓰면 임계값 튜닝에 필요한 "위반했지만 확정되지 않은" 구간이 사라진다 | alarm_eval 삽입 강제 실패 → 이벤트 정상 생성 · DLQ 이동 · 판정 전수 행 수 = 판정한 행 수 | ALM-05 | F-06 | 해당 없음 |
+| **REQ-ALM-11** | 매 판정 결과(시각 · 규칙 · 태그 · 값 · 위반 여부 · 심각도)를 alarm_eval에 쌓는다. 재시도는 Ingest 배치와 같은 정책(원 배치 토큰 · 같은 백오프 · 같은 횟수)이되 **소진 시 DLQ에 격리하지 않고 소진 배치의 ts 범위를 분석 무효 구간으로 기록한다**(W4 판정 — 판정 전수는 재생할 수 없다). **끝내 실패해도 알람 발생 · 해제 · 통지는 정상 동작한다** | 원본 data_flow.md §8 · §8.2 · 원본 architecture.md §7.3 · ALM-05 | alarm_eval 실패를 알람 확정 조건에 묶으면 분석용 로그의 장애가 운영 알람을 멈춘다 · 전수가 아니라 상태 변화만 쓰면 임계값 튜닝에 필요한 "위반했지만 확정되지 않은" 구간이 사라진다 | alarm_eval 삽입 강제 실패 → 이벤트 정상 생성 · 무효 구간 계수(alm_eval_gap_batches_total · alm_eval_gap_rows_total) 증가 · 성공 배치의 판정 전수 행 수 = 판정한 행 수 | ALM-05 | F-06 | 해당 없음 |
 | **REQ-ALM-12** | 이벤트가 열리거나 닫히면 ch:alarm에 발행한다. SW-06 off면 게이트웨이를 직접 부르며 발행 내용은 같다 | 원본 data_flow.md §8 · ALM-06 · [09_realtime.md](./09_realtime.md) 알람 푸시 | 닫힘을 발행하지 않으면 화면의 열린 알람이 해제 뒤에도 남아 운영자가 이미 끝난 알람을 확인하려 한다 | 알람 1건 생애 → 발행 2건(열림 · 닫힘) · SW-06 off에서 같은 프레임 수신 | ALM-06 | F-06 · F-07 | 해당 없음 |
 
 - 검산: 이 표의 REQ = REQ-ALM-06~12 = **7**
-- **REQ-ALM-11은 B형이다.** 결론 — alarm_eval 삽입이 끝내 실패해도 알람은 정상이다. 반대 시나리오 — 확정 조건에 묶으면 ClickHouse 장애 한 번이 운영 알람을 멈춰 "진실은 PostgreSQL"이 거짓이 된다. 파생 지침 — 판정 전수의 결손은 dlq_count로 계측하고 알람 기능 판정에 넣지 않는다.
+- **REQ-ALM-11은 B형이다.** 결론 — alarm_eval 삽입이 끝내 실패해도 알람은 정상이다. 반대 시나리오 — 확정 조건에 묶으면 ClickHouse 장애 한 번이 운영 알람을 멈춰 "진실은 PostgreSQL"이 거짓이 된다. 파생 지침 — 판정 전수의 결손은 무효 구간 계수(alm_eval_gap_*)와 구간 로그로 계측하고 알람 기능 판정에 넣지 않는다.
 
 ## 요구사항 — 조회 · 확인 · 분석
 
@@ -55,6 +57,7 @@
 | **REQ-ALM-20** | 알람 판정 · 세 쓰기 · 확인은 S7에서 반드시 구현하며 **생략 선택지를 두지 않는다.** 학습 목표 ② 합격 판정(분기 대조표)은 이 도메인의 산출 없이 통과하지 않는다 | D-11 · 원본 implementation_plan.md §5 S7 · [../01_overview/05_priorities_roadmap.md](../01_overview/05_priorities_roadmap.md) S7 합격 판정 | 알람이 빠지면 ②계층이 한 번도 실행되지 않아 "같은 스트림의 데이터가 세 저장소로 갈린다"를 대조할 자리가 사라진다 | S7 인수 기준의 알람 ②계층 대조 · 부분 실패 항목 통과([14_acceptance_criteria.md](./14_acceptance_criteria.md)) | ALM-01~09 | F-06 | 해당 없음 |
 
 - 검산: 이 표의 REQ = REQ-ALM-13~20 = **8** · 문서 전체 REQ = 5 + 7 + 8 = **20**(REQ-ALM-01~20 · 결번 없음)
+- **인증 전 단계(S7 ① — 인증 S7 ②보다 먼저 · 2026-09-26 사용자 결정)** — REQ-ALM-17 · 18의 "S7 이후"는 인증 도입(S7 ②) 이후다. 그 전에는 전 표면이 무인증이고, REQ-ALM-14의 "acked_by에 요청자"는 환경변수가 가리키는 시드 학습자 계정이 대리하며 REQ-ALM-03 · 15의 감사 행위자는 NULL이다([../07_api/07_alarms.md](../07_api/07_alarms.md) §인증 전 확인 행위자 판정).
 
 ## 판정 한 건의 순서
 
@@ -113,7 +116,7 @@ W1이 넘긴 인계다. 확인 표면은 PostgreSQL 행만 보고 판정하며 R
 | 쓰기 | 실패 시 | 알람 기능 | 복구 | 요구 |
 |------|------|------|------|------|
 | PostgreSQL alarm_event | 전이 미확정 · alarm:state 되돌림 · 발행 없음 | 다음 판정 주기까지 확정 지연 | 다음 주기 재시도 | REQ-ALM-10 |
-| ClickHouse alarm_eval | 재시도 후 DLQ | **정상** | DLQ 재처리 | REQ-ALM-11 |
+| ClickHouse alarm_eval | 재시도 후 격리 없이 분석 무효 구간 기록 | **정상** | 재생 없음 — 무효 구간은 분석에서 뺀다 | REQ-ALM-11 |
 | Redis alarm:state | 판정 중단 — 봉인 계열이라 명시적 실패 | 판정 멈춤 | Redis 복구 뒤 재개 | REQ-ALM-07 |
 
 - 검산: 쓰기 = PostgreSQL 1 + ClickHouse 1 + Redis 1 = **3**
@@ -140,7 +143,7 @@ W1이 넘긴 인계다. 확인 표면은 PostgreSQL 행만 보고 판정하며 R
 | 규칙 형식 위반 · 없는 태그 참조 | 400 | common.validation_failed/400 | REQ-ALM-04 |
 | 역할 밖 쓰기 · 분석(S7 이후) | 403 | auth.forbidden/403 | REQ-ALM-17 · 18 |
 | PostgreSQL 접속 불가 | 503 · 판정 PENDING 유지 | common.postgres_unavailable/503 | REQ-ALM-19 |
-| alarm_eval 삽입 실패 | 코드 없음 · 알람 정상 | dlq_count | REQ-ALM-11 |
+| alarm_eval 삽입 실패 | 코드 없음 · 알람 정상 | alm_eval_gap_batches_total · alm_eval_gap_rows_total | REQ-ALM-11 |
 | 판정이 배치당 느림 | 수집 경로 상한 | 초당 판정 건수 · 판정 지연 | REQ-ALM-07 |
 
 - 검산: 상황 = **7** · 코드를 내는 행 5 + 코드 없는 행 2 = **7**

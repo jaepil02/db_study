@@ -2,6 +2,8 @@
 
 > **대상**: 기술 선정의 근거 상세 — 원본 비교 표 흡수(NestJS 대 Python · Next.js 대 React + Vite · 차트 라이브러리 · 시계열 저장소 · 수집 버퍼) · 단일 런타임의 감수 비용과 완화책 · 전환 조건 · **채택하지 않은 기술과 버린 대안의 실패 시나리오**(원본 §13 전 행 + W6 판정분) · ADR과의 경계
 > **작성일**: 2026-09-24
+> **개정일**: 2026-09-26 — W1 검수 반영 — 시계열 저장소 비교 표 UPDATE · DELETE 행 ClickHouse 칸에 **경량 DELETE** 추가 · 경량 UPDATE에 Beta 표기(정본 05_data_stores/10) — 판정 · 후보 수 불변
+> **개정일**: 2026-09-26 — 목적 적합성 실증 W1 — 시계열 저장소 비교 표 UPDATE · DELETE 행의 ClickHouse 칸 "비동기 mutation — 사실상 비권장" → **ALTER 비동기 mutation · 26.8 경량 UPDATE(patch 파트 · 즉시 보임) — 업무 갱신 적합성은 검증 대상(EXP-40 · 42 · 43)** — 판정 · 후보 수 불변
 > **개정일**: 2026-09-24 — S1 실측 반영(EXP-21 기록 006 · 410a146 · EXP-39 기록 007~009 · 019e54d) — 전환 조건 ①의 판정값 미확인 → **약 590만 pps(워커 1) · 전환하지 않음**
 > **개정일**: 2026-09-24 — W7 검수 반영 — 미확인 표 웨이브 표지 (W7) 제거
 > **개정일**: 2026-09-24 — W6 실험 채번 반영 — 실험 자리 반영(정본 10_observability/01 · 06)
@@ -129,7 +131,7 @@
 | 압축률 | 원본 예상치 10~30배 | 원본 예상치 5~15배 | 원본 예상치 10~20배 | 원본 예상치 1~3배 |
 | 대규모 범위 집계 | 최상 | 중상 | 상 | 하 |
 | SQL | 방언(표준 근접) | 완전 PostgreSQL 호환 | SQL + InfluxQL | 표준 |
-| UPDATE · DELETE | 비동기 mutation — 사실상 비권장 | 완전 지원 | 제한적 | 완전 지원 |
+| UPDATE · DELETE | ALTER 비동기 mutation · 26.8 경량 UPDATE(patch 파트 · SELECT에 즉시 보임 · 물리 반영은 머지 · 공식 문서상 **Beta** — 정본 [../05_data_stores/10_olap_vs_rdb_control.md](../05_data_stores/10_olap_vs_rdb_control.md)) · 경량 DELETE(DELETE FROM — 행을 마스크로 지우고 물리 삭제는 머지) — 업무 갱신 적합성은 **검증 대상**(EXP-40 · 42 · 43 · [../05_data_stores/10_olap_vs_rdb_control.md](../05_data_stores/10_olap_vs_rdb_control.md) §역방향 대조 — 업무 워크로드) | 완전 지원 | 제한적 | 완전 지원 |
 | 사전 집계 | MV + AggregatingMergeTree | 연속 집계 | 다운샘플링 태스크 | 수동 |
 | 운영 복잡도 | 중 | 낮음(PG 확장) | 중 | 낮음 |
 | 학습 가치 | 컬럼형 · 머지트리 · 코덱 · MV 전반 | PG 심화 | 시계열 DB 특화 | 낮음 |

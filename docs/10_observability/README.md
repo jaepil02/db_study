@@ -2,6 +2,7 @@
 
 > **대상**: db_study의 측정 체계 — 메트릭 전수 · 계측 지점 · 대시보드와 알림 · 실험 프로토콜 · 부하 시나리오 · 실험 전수 · 로컬 측정 한계
 > **작성일**: 2026-09-23
+> **개정일**: 2026-09-26 — 목적 적합성 실증 W1 — 고정 기준 축약 실험 39 → **45**(역방향 대조 EXP-40~44 · 스트리밍 동시 적재 EXP-45) · 신설 시작 EXP-40 → **EXP-46** · 파일 목차 06 행은 수를 세지 않고 고정 기준 행을 가리킨다
 > **개정일**: 2026-09-24 — W6 완성판 — 실험 **39**(EXP-01~39) · 메트릭 이름 136 · 알림 규칙 14 · 대시보드 6
 > **원천**: [../README.md](../README.md)(측정 기록 불변식 · 스위치 11) · 원본 architecture.md §14 · §16 · 원본 tech_stack.md §8 · §9 · §10.6 · 원본 data_flow.md §11.3 · §15 · §16 · 원본 implementation_plan.md §2.4 · §4 · §5 · §8(커밋 ff66a37) · docs_plan 학습 목표 1(대조군 실험)
 
@@ -18,7 +19,7 @@
 | [03_dashboards_alerts.md](./03_dashboards_alerts.md) | 대시보드 6종 · 알림 규칙 14 · 적체 기준 알림(backpressure_stage) · 히트율과 Stream 점유 메모리 패널 | architecture §14 | W6 |
 | [04_experiment_protocol.md](./04_experiment_protocol.md) | ★ **실험 규칙 정본** — 3회 중앙값 · 편차 폐기 기준 · 스냅샷과 복원 · 캐시 키 초기화 · 기준선 관측 · 기록 템플릿(docs/measurements 형식) · 4요소 병기 | implementation_plan §2.4 · §8 · data_flow §11.3 | W6 |
 | [05_load_scenarios.md](./05_load_scenarios.md) | k6 부하 시나리오 5 + 장애 주입 1 · 도구별 실행 계층 · 생성기 포화 판정 | tech_stack §8 | W6 |
-| [06_experiment_catalog.md](./06_experiment_catalog.md) | ★★ **EXP-NN 채번 정본** — 실험 39 · 대조군 실험(EXP-01~05) · 스위치별 실험 · 장애 재현 실험 · 각 실험의 가설 · 조건 · 판정 지표 · 결과 자리 | implementation_plan §4.2 · §5 · docs_plan 학습 목표 1 | W6 |
+| [06_experiment_catalog.md](./06_experiment_catalog.md) | ★★ **EXP-NN 채번 정본** — 실험 전수(수는 §고정 기준 (축약)) · 대조군 실험(EXP-01~05) · 스위치별 실험 · 장애 재현 실험 · 역방향 대조 · 스트리밍 동시 적재 실험 · 각 실험의 가설 · 조건 · 판정 지표 · 결과 자리 | implementation_plan §4.2 · §5 · docs_plan 학습 목표 1 | W6 |
 | [07_measurement_limits.md](./07_measurement_limits.md) | 로컬 측정 한계 · 흐름별 병목 예상 지점 · 완화책 · cpuset으로 되살린 원칙과 남은 한계 | tech_stack §10.6 · data_flow §16 · implementation_plan §2.4 · §2.5 | W6 |
 
 검산: 본문 7 + README 1 = **8**
@@ -29,7 +30,7 @@
 
 | 항목 | 기준 |
 |------|------|
-| 실험 ID | EXP-NN — **EXP-01~EXP-05는 대조군 쿼리 5종**(단일 태그 1시간 · 단일 태그 7일 · 설비 전체 1일 · 분 단위 롤업 재계산 · 비정렬 컬럼 조건 전 행 count)이다. 전체 **39**(EXP-01~39 · 결번 없음) — 분류 검산 5 + 10 + 5 + 1 + 5 + 2 + 11. 신설은 EXP-40부터 |
+| 실험 ID | EXP-NN — **EXP-01~EXP-05는 대조군 쿼리 5종**(단일 태그 1시간 · 단일 태그 7일 · 설비 전체 1일 · 분 단위 롤업 재계산 · 비정렬 컬럼 조건 전 행 count)이다. 전체 **45**(EXP-01~45 · 결번 없음) — 분류 검산 5 + 10 + 5 + 1 + 5 + 2 + 11 + 5 + 1 = **45**. 신설은 EXP-46부터 |
 | 측정 기록 | 커밋 해시 · 메모리 프로파일 · 용량 티어 · 스위치 상태 4요소 병기 · 3회 중앙값 |
 | 부하 시나리오 | **5**(Baseline · Ramp-up · Spike · Soak · Breakpoint) + 장애 주입 **1** |
 | 메트릭 | 이름 **136** · 알림 규칙 **14** · 대시보드 **6** — 정본 [01_metrics_catalog.md](./01_metrics_catalog.md) · [03_dashboards_alerts.md](./03_dashboards_alerts.md). 가장 중요한 단일 지표는 컨슈머 랙(그룹 lag + pending — XLEN 아님) |

@@ -2,13 +2,16 @@
 
 > **대상**: 스키마 적용의 저장소 간 순서 · PostgreSQL 순번 마이그레이션 · ClickHouse DDL 순번 · 도구 관리 테이블 · 시드(사이트 · 라인 · 설비 · 접속 설정 · 태그 · 계정 · 역할) · 스키마 변경 절차 · 스냅샷과의 관계
 > **작성일**: 2026-09-24
+> **개정일**: 2026-09-26 — 목적 적합성 실증 W1 — ClickHouse DDL 순번 **009 업무 대조 테이블 3**(009_business_control.sql · 역방향 대조 EXP-40~44 · 정본 03_clickhouse_schema §업무 대조 테이블) — 객체 검산 9 → **12** · 적용 순서 ⑤에 009 병기
+> **개정일**: 2026-09-26 — 리드 판정 — 학습자 계정 email **learner@localhost** · 확인 행위자 환경변수 이름 정본 등재(09_tech_stack/04) — 미확인 1행 닫힘
+> **개정일**: 2026-09-26 — S7 ① 선행 반영(알람 분기를 인증보다 먼저 · 사용자 결정) — **§S7 ① 계정 · 역할 시드 신설**(문서에 정해진 범위만 — 학습자 계정 1 · 역할 3 · 부여 3 · email 값 미확인 등재) · 무인증 기간 행위자 행의 경계 S4~S6 → **인증 도입(S7 ②) 전**과 확인 행위자 예외(정본 07_api/07 §인증 전 확인 행위자 판정) · 학습자 계정 시드 시점 불릿을 as-built에 맞춤 — 테이블 수 · 시드 행 수 불변
 > **개정일**: 2026-09-25 — S3 구현 반영 — §S3 적용 범위(as-built) 신설(PostgreSQL 003~007 · ClickHouse 003~008 · pg_partman 확장은 migrate 관리자 단계 · ⑨ RELOAD는 seed 끝 · ClickHouse 러너 다문장 분할)
 > **개정일**: 2026-09-24 — S2 구현 반영 — §S2 적용 범위(as-built) 신설(PostgreSQL 001 · 002 · ClickHouse 001 · 002 · 시드 --tier · --slice · changed_by 외래 키 003) · tag_master 시드 data_type 혼합(16 · 32비트) → **06_pipeline/10 §티어 시드 구성 인용(S = FLOAT32 · ABCD)** — 두 정본 불일치 해소
 > **개정일**: 2026-09-24 — 최종 정밀 검수 — 빈 표 칸을 닫힌 어휘 해당 없음으로 채움(표 열 규약) · BOOL · FC01 · FC02 시드 금지 근거를 W4 판정으로 갱신 · 도구 관리 테이블 제외 기준의 루트 README 반영 완료 표기
 > **개정일**: 2026-09-24 — W7 검수 반영 — 미확인 2행 닫힘(티어 시드 구성 · 알람 규칙 시드)
 > **개정일**: 2026-09-24 — W7 보안 판정 반영 — 학습자 계정 비밀번호 주입 방식 닫힘 — SEED_USER_PASSWORD · Argon2id 해시 · 원문 비저장(정본 12_security/02)
 > **개정일**: 2026-09-24 — W6 판정 반영 — 마이그레이션 도구 선택 → **node-pg-migrate**(SQL 순번 파일 · Prisma Migrate 채택하지 않음 — 정본 09_tech_stack/05)
-> **원천**: 원본 tech_stack.md §5.1 · §10.3 · §10.5 · §11(커밋 ff66a37) · 원본 architecture.md §3 · §6 · §7 · §18(커밋 ff66a37) · 원본 data_flow.md §10.2 · §14.2(커밋 ff66a37) · 웨이브 인계 W3 05_data_stores/01 · 09 행(무인증 기간 감사 행위자) · [../03_requirements/13_nonfunctional.md](../03_requirements/13_nonfunctional.md) REQ-TEC-05 · REQ-TEC-08 · [../02_features/03_collector.md](../02_features/03_collector.md) 모드 A SIMULATED 판정 · [../03_requirements/02_auth.md](../03_requirements/02_auth.md) REQ-AUT-17
+> **원천**: 원본 tech_stack.md §5.1 · §10.3 · §10.5 · §11(커밋 ff66a37) · 원본 architecture.md §3 · §6 · §7 · §18(커밋 ff66a37) · 원본 data_flow.md §10.2 · §14.2(커밋 ff66a37) · 웨이브 인계 W3 05_data_stores/01 · 09 행(무인증 기간 감사 행위자) · [../03_requirements/13_nonfunctional.md](../03_requirements/13_nonfunctional.md) REQ-TEC-05 · REQ-TEC-08 · [../02_features/03_collector.md](../02_features/03_collector.md) 모드 A SIMULATED 판정 · [../03_requirements/02_auth.md](../03_requirements/02_auth.md) REQ-AUT-17 · [../07_api/07_alarms.md](../07_api/07_alarms.md) §인증 전 확인 행위자 판정 · [../12_security/01_authn_authz.md](../12_security/01_authn_authz.md) Argon2id 판정
 
 **스키마는 순번 마이그레이션으로만 바뀐다**(REQ-TEC-05). 수동 DDL은 스냅샷 복원 · 새 환경에서 재현되지 않아 **같은 커밋에서 다른 스키마로 측정**하게 만든다. 기동 순서는 migrate(PostgreSQL 마이그레이션 + ClickHouse DDL 순번 파일) → seed다(원본 tech_stack.md §10.5). 스키마 소유권은 api(NestJS) 쪽에 둔다.
 
@@ -23,7 +26,7 @@
 ② PostgreSQL 업무 테이블          MST → AUT → ALM → WRK 순(FK 방향)
 ③ PostgreSQL 파티션 · 트리거 · 권한 alarm_event 월 파티션 · 대조군 일 파티션 · 가드 트리거 · REVOKE
 ④ ClickHouse 데이터베이스 plc
-⑤ ClickHouse 테이블 5            tag_raw · alarm_eval · tag_1m · tag_1h · tag_1d
+⑤ ClickHouse 테이블 8            tag_raw · alarm_eval · tag_1m · tag_1h · tag_1d · 업무 대조 3(009 — 의존 없음 · 순번은 008 뒤)
 ⑥ ClickHouse MV 3(위에서 아래로) mv_tag_1d → mv_tag_1h → mv_tag_1m
 ⑦ ClickHouse Dictionary          dict_tag — ①의 ch_reader · ②의 tag_master가 먼저 있어야 한다
 ⑧ 시드                           PostgreSQL 마스터 · 계정 · 역할
@@ -67,9 +70,11 @@ ClickHouse DDL은 순번 SQL 파일로 둔다(원본 tech_stack.md §11). 파일
 | 006 | mv_tag_1d · mv_tag_1h | 상동 | 상동 |
 | 007 | mv_tag_1m — 연쇄 입구를 마지막에 연다 | 상동 | 상동 |
 | 008 | dict_tag | [03_clickhouse_schema.md](./03_clickhouse_schema.md) | 상동 |
+| **009** | 업무 대조 테이블 3 — work_order_control · work_order_control_rmt · production_log_control(제안 파일명 009_business_control.sql) | [03_clickhouse_schema.md](./03_clickhouse_schema.md) §업무 대조 테이블 | 상동 |
 
-- 검산: 객체 = 테이블 5(002 · 003 · 004 · 005의 2) + MV 3(006의 2 · 007) + Dictionary 1(008) = **9** — 고정 기준과 같다
-- **ClickHouse 쪽에 적용 이력 테이블을 두지 않는다(판정).** 이력 테이블을 plc에 두면 ClickHouse 테이블 수 고정 기준(5)이 바뀐다. 대신 모든 파일을 IF NOT EXISTS로 멱등하게 쓰고 migrate가 **매번 전 파일을 순서대로** 적용한다. 멱등하게 쓸 수 없는 변경(아래 §스키마 변경 절차)은 새 순번 파일이 새 객체를 만드는 모양으로만 한다.
+- 검산: 객체 = 테이블 8(002 · 003 · 004 · 005의 2 · 009의 3) + MV 3(006의 2 · 007) + Dictionary 1(008) = **12**
+- **009는 앞 순번 어느 객체도 참조하지 않는다.** MV의 원천도 Dictionary 소스도 아니라 적용 위치가 결과를 바꾸지 않고, 말미 채번 규칙대로 008 뒤에 둔다. 기존 볼륨에 migrate를 다시 돌리면 IF NOT EXISTS로 이 셋만 새로 생긴다(§스냅샷과의 관계 복원 후 migrate 행). EXP-41의 그래뉼 256 변형은 이 순번에 없다 — 실행기가 실행 범위에서만 만든다([10_olap_vs_rdb_control.md](./10_olap_vs_rdb_control.md) §그래뉼 변형 판정).
+- **ClickHouse 쪽에 적용 이력 테이블을 두지 않는다(판정).** 이력 테이블을 plc에 두면 ClickHouse 테이블 수 고정 기준이 바뀐다. 대신 모든 파일을 IF NOT EXISTS로 멱등하게 쓰고 migrate가 **매번 전 파일을 순서대로** 적용한다. 멱등하게 쓸 수 없는 변경(아래 §스키마 변경 절차)은 새 순번 파일이 새 객체를 만드는 모양으로만 한다.
 - 비밀번호 같은 비밀 값은 DDL 파일에 쓰지 않고 설정 파일로 주입한다 — dict_tag 소스 비밀번호가 대표 사례다([../12_security/02_secrets_config.md](../12_security/02_secrets_config.md)).
 
 ## 도구 관리 테이블
@@ -134,6 +139,29 @@ S3는 초기 대역의 나머지를 전부 적용한다 — node-pg-migrate의 �
 - **확장 생성을 마이그레이션 파일에 두지 않은 이유** — 파일에 두면 마이그레이션 실행 역할이 superuser여야 하고, 그러면 마이그레이션이 만든 객체의 소유가 app_owner가 아니게 되어 app_rw 권한 부여 규칙(01_postgresql_schema)이 객체마다 갈린다. 관리자 단계는 멱등(IF NOT EXISTS)이라 migrate를 다시 돌려도 같다.
 - 빈 상태 스냅샷은 s3-base(migrate만) · s3-empty-slice · s3-empty-s다 — S2 스냅샷에는 003~008이 없어 그 위에 S3 이미지를 띄우면 롤업 · 사전 · 대조군 없이 돈다 — S3 측정은 S3 스냅샷에서만 시작한다.
 
+### S7 ① 계정 · 역할 시드
+
+S7 ①(알람 분기 — 인증 S7 ②보다 먼저)은 §시드 표의 계정 · 역할 세 행을 그대로 채운다 — 문서에 없는 값은 만들지 않고 §미확인 · 미설계 등재에 올린다. 마스터 시드와 **같은 트랜잭션 · 같은 빈 볼륨 규칙**이다. 인증 전 이 계정의 쓰임은 알람 확인의 acked_by 대리 하나다([../07_api/07_alarms.md](../07_api/07_alarms.md) §인증 전 확인 행위자 판정).
+
+| 테이블 | 행 | 값 | 정본 |
+|------|:------:|------|------|
+| role | 3 | role_code OPERATOR · ENGINEER · ADMIN — 이 순서로 넣어 IDENTITY role_id가 빈 볼륨마다 같다 | [01_postgresql_schema.md](./01_postgresql_schema.md) · [../02_features/12_permission_matrix.md](../02_features/12_permission_matrix.md) §역할 정의 |
+| user_account | 1 | email **learner@localhost**(리드 판정 2026-09-26 — 07_api/03 · 08_screen/06 예시 값을 채택 · 비밀이 아닌 설계 값) · password_hash = SEED_USER_PASSWORD의 Argon2id 자기 기술 문자열(비용 파라미터 2계층 미정) · is_active 참 | [../12_security/01_authn_authz.md](../12_security/01_authn_authz.md) · [../12_security/02_secrets_config.md](../12_security/02_secrets_config.md) #8 |
+| user_role | 3 | 학습자 계정 × 역할 3 | REQ-AUT-17 |
+| audit_log | 0 | 시드는 감사하지 않는다 | REQ-WRK-07 · 아래 불릿 |
+
+- 검산: 행이 있는 테이블 3 · 시드 행 = 3 + 1 + 3 = **7**
+
+| 규칙 | 내용 | 어기면 |
+|------|------|------|
+| 비밀번호 | SEED_USER_PASSWORD가 비었거나 자리표시와 같으면 seed 거부 · 원문은 시드 파일 · 로그 · 감사에 남지 않는다 | 모든 환경이 같은 학습자 비밀번호로 돌고 스냅샷 파일이 그 해시를 퍼뜨린다([../12_security/02_secrets_config.md](../12_security/02_secrets_config.md)) |
+| 시드 대상 | --tier · --slice 어느 쪽이든 계정 · 역할은 같다 | 슬라이스 시드에서 계정이 빠지면 수직 슬라이스 위의 알람 시연에서 확인만 401이 된다 |
+| 옛 스냅샷 | S2~S5 스냅샷은 마스터가 차 있어 seed가 거부한다 · **계정만 더하는 부분 시드를 두지 않는다** · 계정이 필요한 측정 · 시연은 migrate → seed를 새로 한 빈 볼륨에서 시작한다 | 부분 시드를 두면 한 볼륨에 두 시드 실행이 섞여 "빈 볼륨 + 같은 시드 = 같은 번호"가 깨진다 |
+| 확인 행위자 | 인증 전 행위자 환경변수 ALARM_ACK_ACTOR_EMAIL(정본 [../09_tech_stack/04_local_environment.md](../09_tech_stack/04_local_environment.md) §환경변수)의 값은 이 계정의 email과 같아야 한다 | 다르면 확인만 401 auth.unauthenticated — 나머지 알람 기능은 돈다 |
+
+- 검산: 규칙 = **4**
+- **옛 스냅샷 위에서도 api는 기동한다(B형).** 결론 — 계정이 없어도 판정 · 세 쓰기 · 조회 · 규칙 쓰기는 돌고 확인만 401이다. 반대 시나리오 — 계정 부재를 기동 거부로 막으면 계정 시드 없이 만든 S2~S5 스냅샷에서 알람과 무관한 부하 측정까지 새 이미지로 다시 재지 못한다. 파생 지침 — 확인까지 시연하는 기록은 조건 칸에 계정 시드가 든 스냅샷을 적는다(스냅샷 이름은 §미확인 · 미설계 등재).
+
 - **시드는 감사하지 않는다.** 감사 대상은 사람이 인증된 쓰기 표면으로 일으킨 변경이다(REQ-WRK-07). 시드 행에 감사 행을 만들면 "변경 이력 조회"에 존재하지 않은 변경이 나타난다.
 
 ## 시드의 결정성과 무인증 기간
@@ -143,10 +171,10 @@ S3는 초기 대역의 나머지를 전부 적용한다 — node-pg-migrate의 �
 | 빈 볼륨에서만 번호가 정해진다 | IDENTITY는 1부터 발급 — 빈 볼륨 + 같은 시드 = 같은 tag_id | 실험 기록 · 알람 규칙 · 대조 쿼리가 가리키는 tag_id가 환경마다 다르다 |
 | 재실행은 자연 키로 건너뛴다 | tag_code · device_code · email · role_code 유일 제약으로 중복을 건너뛴다 | 재실행이 두 번째 태그 집합을 만들어 Collector가 같은 주소를 두 번 폴링한다 |
 | 시드 값은 커밋과 함께 고정 | 시드 파일 변경은 측정 조건 변경이다 | 같은 커밋 해시의 두 측정이 다른 태그 구성에서 돈다(D-10 4요소) |
-| 무인증 기간 행위자 | **시스템 계정을 시드하지 않는다** — S4~S6 감사 행은 user_id NULL | 시드 계정을 행위자로 쓰면 S7 이후 같은 계정의 실제 행위와 구분되지 않는다(판정 [01_postgresql_schema.md](./01_postgresql_schema.md) §인계 판정) |
+| 무인증 기간 행위자 | **시스템 계정을 시드하지 않는다** — 인증 도입(S7 ②) 전의 감사 행은 user_id NULL · 예외 하나 — 알람 확인의 acked_by는 결합 CHECK가 NULL을 막아 환경변수가 가리키는 학습자 계정으로 대리하고, 그 확인의 감사 행은 여전히 NULL이다([../07_api/07_alarms.md](../07_api/07_alarms.md) §인증 전 확인 행위자 판정) | 시드 계정을 감사 행위자로 쓰면 인증 뒤 같은 계정의 실제 행위와 구분되지 않는다(판정 [01_postgresql_schema.md](./01_postgresql_schema.md) §인계 판정) |
 
 - 검산: 규칙 = **4**
-- **학습자 계정은 S7 이전에도 시드된다.** 인증이 없는 S4~S6에는 쓰이지 않고 S7에서 로그인 · 역할 판정의 대상이 된다 — 계정이 있다는 사실과 그 계정이 행위자라는 사실은 다르다.
+- **학습자 계정은 S7 ①부터 시드된다(as-built — S2~S5 시드는 넣지 않았다 · §S2 적용 범위).** 인증 전에는 로그인 대상이 아니고 알람 확인의 acked_by 대리로만 쓰이며, S7 ②에서 로그인 · 역할 판정의 대상이 된다 — 계정이 있다는 사실과 그 계정이 감사 행위자라는 사실은 다르다.
 
 ## 스키마 변경 절차
 
@@ -185,6 +213,9 @@ S3는 초기 대역의 나머지를 전부 적용한다 — node-pg-migrate의 �
 | M · M+ · L 티어의 시드 태그 구성 | 닫힘 — §티어 시드 구성(티어별 설비 · 태그/설비 · scan_rate_ms · 요청 산술) — [../06_pipeline/10_datagen_inject.md](../06_pipeline/10_datagen_inject.md) | [../06_pipeline/10_datagen_inject.md](../06_pipeline/10_datagen_inject.md)(W4) |
 | 알람 규칙 시연용 시드 여부(S7) | 닫힘 — 알람 규칙은 시드하지 않는다(현행 0행 유지) · S7 시연은 규칙 쓰기 표면으로 — [../06_pipeline/08_alarm.md](../06_pipeline/08_alarm.md) | [../06_pipeline/08_alarm.md](../06_pipeline/08_alarm.md)(W4) |
 | 학습자 계정 비밀번호 주입 방식 | **W7 닫힘** — seed가 SEED_USER_PASSWORD를 읽어 Argon2id로 해시해 넣는다 · 원문은 시드 파일 · 로그 · 감사에 남지 않는다 · 비었거나 자리표시면 seed 거부 | [../12_security/02_secrets_config.md](../12_security/02_secrets_config.md) |
+| 학습자 계정 email 값 | **닫힘(리드 판정 2026-09-26)** — learner@localhost · 예시 값([../07_api/03_auth.md](../07_api/03_auth.md) 로그인 응답 · [../08_screen/06_master_admin.md](../08_screen/06_master_admin.md) 감사 목록)을 채택 · 비밀이 아닌 설계 값이라 시드 코드에 고정한다 | 이 문서 |
+| Argon2id 비용 파라미터 값 | 2계층 미정 — S7 로그인 p50 기록과 같은 변경 단위 | [../12_security/01_authn_authz.md](../12_security/01_authn_authz.md) |
+| 계정 시드가 든 빈 상태 스냅샷 이름 | 미확인 — S3 이름(s3-base · s3-empty-slice · s3-empty-s)과 같은 모양의 새 이름이 필요하다 | [../09_tech_stack/04_local_environment.md](../09_tech_stack/04_local_environment.md) |
 | 도구 관리 테이블을 고정 기준에서 빼는 문장 | 닫힘 — 루트 README 고정 기준 PostgreSQL 테이블 행에 "세는 기준은 부모 테이블" 반영 | [../README.md](../README.md) |
 
 ## 관련 문서

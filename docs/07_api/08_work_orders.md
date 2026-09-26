@@ -2,6 +2,7 @@
 
 > **대상**: WRK 도메인 REST 표면 — 작업지시 조회 · 등록 · 수정 · 상태 전이 · 생산 실적 기록과 조회 · 감사 로그 조회 · 태그 새 발급 계보 조회 · **실적 기록 시점의 작업지시 상태 조건 판정** · 일반 수정 본문의 status 처리 판정 · 원본에 없는 표면 판정(생산 실적 · 감사 조회)
 > **작성일**: 2026-09-24
+> **개정일**: 2026-09-26 — W1 검수 반영 — userId null 행의 무인증 기간 S4~S6 → **인증 도입(S7 ②) 전**(S7 ①도 무인증 · 정본 05_data_stores/01 §인계 판정)
 > **개정일**: 2026-09-24 — 최종 정밀 검수 — §판정 → §실적 기록 시점의 작업지시 상태 조건 판정(절 참조 명확화)
 > **개정일**: 2026-09-24 — W5 판정 반영 — #7 실적 상태 조건 거절 → **work_orders.production_log_not_allowed/409** · #9 계보 조회 역할 ADMIN → **전원**(리드 판정) · 실적 정정 · 이중 제출 범위 밖 · 한계 등재 — 표면 수 불변
 > **원천**: 원본 architecture.md §6 · §11 · §12 · §18(커밋 ff66a37) · 원본 data_flow.md §7 · §7.2(커밋 ff66a37) · REQ-WRK-01~12 · D-04 · D-11 · ADR-12 · [../02_features/10_work_orders.md](../02_features/10_work_orders.md) WRK-01~05 · [../11_glossary/03_enums_state_machines.md](../11_glossary/03_enums_state_machines.md) 상태 머신 4 · [../05_data_stores/01_postgresql_schema.md](../05_data_stores/01_postgresql_schema.md) work_order · production_log · audit_log · tag_master_history · [../06_pipeline/07_business_crud.md](../06_pipeline/07_business_crud.md) 작업지시 캐시 · docs_plan.md 웨이브 인계 W5 07_api 행(실적 기록 시점의 작업지시 상태 조건 · 원본에 없는 표면)
@@ -143,7 +144,7 @@ PLANNED ──→ IN_PROGRESS ──→ COMPLETED
 | 응답 | items — auditId · userId · actedAt · action · targetTable · targetKey · before · after · meta.nextCursor |
 | 정렬 · 인덱스 | actedAt 내림차순 · auditId 내림차순 · 대상 필터면 audit_log (target_table, target_key, acted_at) · 아니면 audit_log (acted_at) |
 | before · after | jsonb 원문을 JSON 객체로 그대로 — INSERT의 before는 null |
-| userId null | 무인증 기간(S4~S6)의 행위 · 시스템 행위자가 아니다 |
+| userId null | 무인증 기간(인증 도입 S7 ② 전)의 행위 · 시스템 행위자가 아니다 |
 | 관련 REQ | REQ-WRK-07 · 09 · 10 |
 
 - **ADMIN만 여는 이유** — before · after 원문에는 다른 역할이 볼 이유가 없는 업무 값이 담긴다(권한 매트릭스 원문 읽기 예외).

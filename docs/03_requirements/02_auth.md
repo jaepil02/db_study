@@ -2,6 +2,7 @@
 
 > **대상**: 인증·인가(AUT · NestJS auth 모듈)의 동작 계약 — 로그인 · 토큰 수명과 보관 · 갱신 · 폐기 · 신원 확인 · 역할 인가 · 레이트 리밋 · 요청 출처 방어 · 저장소 장애 시 거동 — REQ-AUT-NN 채번 정본
 > **작성일**: 2026-09-24
+> **개정일**: 2026-09-26 — W1 재검수 반영 — 도입 단락 · REQ-AUT-16 인가 적용 S7부터 → **인증 도입(S7 ②)부터**(S2~S6 · S7 ① 무인증) · 문서 안 "S7" = 인증 도입(S7 ②) 해석 — REQ 수 불변
 > **개정일**: 2026-09-24 — W7 검수 반영 — 미확인 1행 닫힘(WebSocket 인증 실패 · Origin 종료 코드) — REQ 수 불변
 > **개정일**: 2026-09-24 — W7 보안 판정 반영 — REQ-AUT-13에 WebSocket Origin 검증 S7 → **S2** · **BFF 인증 경로 Origin 대조** · **Host 헤더 허용 목록** 추가 · 레이트 리밋 class 값 집합 · 토큰 수명 미정 행 닫힘 — REQ 수 불변(정본 12_security/01 · 03)
 > **개정일**: 2026-09-24 — W6 실험 채번 반영 — 메트릭 이름 반영(정본 10_observability/01 · 06)
@@ -10,7 +11,7 @@
 
 이 문서는 AUT 기능 7개가 **어떻게 동작하고 어떻게 실패하는가**를 고정한다. 기능의 존재와 경계는 [../02_features/01_auth.md](../02_features/01_auth.md), 역할 값과 역할 × 기능 대응은 [../02_features/12_permission_matrix.md](../02_features/12_permission_matrix.md), 토큰 수명 · 한도 값의 정본은 [../12_security/01_authn_authz.md](../12_security/01_authn_authz.md) · [../12_security/03_api_surface_defense.md](../12_security/03_api_surface_defense.md)가 갖는다. 여기서는 수명과 한도를 **값이 아니라 조회 계약**으로만 쓴다.
 
-**인증은 S7에 온다**(D-07). S2~S6의 표면은 무인증이며 127.0.0.1 바인드 안에 있다. 이 문서의 요구 중 REQ-AUT-12(CORS)와 REQ-AUT-13의 출처 검사(WebSocket Origin · Host 헤더)는 S2부터 적용되고 나머지는 S7에 적용된다 — 적용 시점이 다른 두 수치를 같은 조건으로 비교하지 않는 계약은 REQ-AUT-16이 갖는다.
+**인증은 S7 ②에 온다**(D-07 — S7 ① 알람 분기가 인증보다 먼저다). 인증 도입(S7 ②) 전(S2~S6 · S7 ①)의 표면은 무인증이며 127.0.0.1 바인드 안에 있다. 이 문서의 요구 중 REQ-AUT-12(CORS)와 REQ-AUT-13의 출처 검사(WebSocket Origin · Host 헤더)는 S2부터 적용되고 나머지는 S7 ②에 적용된다 — 이 문서의 다른 자리에 쓴 "S7"은 인증 도입(S7 ②)을 뜻한다 — 적용 시점이 다른 두 수치를 같은 조건으로 비교하지 않는 계약은 REQ-AUT-16이 갖는다.
 
 **AUT의 상태 셋 중 둘이 Redis 캐시 계열에 있다**(auth:refresh · rl). 캐시 계열의 실패 전략은 degrade(REQ-GLB-09)지만 **auth:refresh에는 우회할 원천 DB가 없다.** 이 비대칭이 웨이브 인계 "Redis 중단 시 로그인 · 갱신 · 레이트 리밋"을 판정하는 축이며 §Redis 장애 시 거동 판정이 닫는다.
 
@@ -50,7 +51,7 @@
 |------|------|------|------|------|------|------|------|
 | **REQ-AUT-14** | Redis에 접속할 수 없으면 ① 로그인 · 갱신 · 로그아웃은 **거절**하고 ② 레이트 리밋은 **세지 않고 통과(degrade)**하며 그 요청 수를 계측하고 ③ 액세스 토큰 검증(무상태)과 권한 판정(PostgreSQL 우회)은 계속한다. ①의 코드는 auth.token_store_unavailable/503이다. 로그아웃이 거절돼도 BFF는 쿠키를 지운다 | 원본 architecture.md §8 실패 전략 · §17 Redis 중단 · REQ-GLB-09 · 웨이브 인계 판정 | 로그인을 통과시키면 저장되지 않은 리프레시 토큰이 발급되어 폐기가 불가능하다. 레이트 리밋을 fail-closed로 두면 Redis 중단이 **시계열 조회까지 전부 막아** "조회 API는 캐시를 우회해 DB 직접 조회"(원본 §17)가 거짓이 된다. 갱신 실패를 refresh_invalid로 내면 클라이언트가 재로그인으로 가고 로그인도 실패해 원인을 오판한다 | docker stop redis 3분 — 로그인 · 갱신 거절 코드 · 시계열 조회 200 · 레이트 리밋 통과 계수 증가를 동시에 조회 | AUT-01 · AUT-02 · AUT-03 · AUT-06 | F-05 · F-10 | auth.token_store_unavailable/503 |
 | **REQ-AUT-15** | PostgreSQL에 접속할 수 없으면 로그인은 common.postgres_unavailable/503으로 거절한다. 이미 발급된 액세스 토큰의 검증은 계속하며, 권한 캐시가 비어 있는 사용자의 인가는 같은 코드로 거절한다 | 원본 architecture.md §17 PostgreSQL 중단 · [../11_glossary/02_error_codes.md](../11_glossary/02_error_codes.md) common | 자격 증명 불일치 코드로 내면 사용자가 비밀번호를 의심해 입력을 바꾸며 재시도한다 | docker stop postgres — 로그인 503 · 권한 캐시가 있는 사용자의 시계열 조회 200 확인 | AUT-01 · AUT-05 | F-05 · F-10 | common.postgres_unavailable/503 |
-| **REQ-AUT-16** | 인가는 S7부터 적용한다. S2~S6 표면은 무인증이지만 127.0.0.1 바인드 안에 있다. S7 전후의 조회 · 부하 주입(모드 C) 수치는 같은 스위치 상태여도 **다른 조건**이며 커밋 해시로 가르고 서로 비교하지 않는다. 무인증 표면은 /api/v1/health · /metrics 둘이고, /api/v1/ingest/bulk는 게이트가 켜진 뒤 인증을 요구한다 | D-07 · 원본 implementation_plan.md §5 S7 · [../02_features/12_permission_matrix.md](../02_features/12_permission_matrix.md) §GEN · OBS 표면 인가 · REQ-GLB-19 | S7 전후 수치를 한 표에 섞으면 인증 비용이 캐시 효과처럼 읽힌다. health에 인증을 걸면 Compose healthcheck가 로그인을 요구해 기동 순서가 순환한다 | 측정 기록의 커밋 해시 대조 · S7 커밋에서 무인증 호출 시 health · metrics 200, 그 밖의 표면 401 | AUT-04 · AUT-05 | F-03 · F-04 · F-09 | auth.unauthenticated/401 |
+| **REQ-AUT-16** | 인가는 인증 도입(S7 ②)부터 적용한다. 인증 도입 전(S2~S6 · S7 ①) 표면은 무인증이지만 127.0.0.1 바인드 안에 있다. 인증 도입(S7 ②) 전후의 조회 · 부하 주입(모드 C) 수치는 같은 스위치 상태여도 **다른 조건**이며 커밋 해시로 가르고 서로 비교하지 않는다. 무인증 표면은 /api/v1/health · /metrics 둘이고, /api/v1/ingest/bulk는 게이트가 켜진 뒤 인증을 요구한다 | D-07 · 원본 implementation_plan.md §5 S7 · [../02_features/12_permission_matrix.md](../02_features/12_permission_matrix.md) §GEN · OBS 표면 인가 · REQ-GLB-19 | S7 전후 수치를 한 표에 섞으면 인증 비용이 캐시 효과처럼 읽힌다. health에 인증을 걸면 Compose healthcheck가 로그인을 요구해 기동 순서가 순환한다 | 측정 기록의 커밋 해시 대조 · S7 커밋에서 무인증 호출 시 health · metrics 200, 그 밖의 표면 401 | AUT-04 · AUT-05 | F-03 · F-04 · F-09 | auth.unauthenticated/401 |
 | **REQ-AUT-17** | 계정 생성 · 역할 부여 표면을 두지 않는다. 계정과 역할은 시드로만 만들며 학습자 계정 하나에 세 역할을 모두 부여한다 | 원본 architecture.md §11 API 표 · [../02_features/12_permission_matrix.md](../02_features/12_permission_matrix.md) 역할 정의 | 원본에 없는 사용자 관리 표면을 만들면 그 표면의 권한 주체가 정해지지 않은 채 열린다 | API 표면 목록에 users · roles 쓰기 경로가 없는지 조회 · 시드 후 user_role 3행 확인 | AUT-01 · AUT-05 | F-05 | 해당 없음 |
 
 ## Redis 장애 시 거동 판정

@@ -2,6 +2,8 @@
 
 > **대상**: 어디서 · 어느 시각을 · 어떻게 재는가 — 구간별 계측 지점(시작 · 끝 시각) · 수집 방식(prom-client · Redis INFO · XINFO · MEMORY USAGE · pg_stat_* · system.* · 호스트 도구 · 부하 도구 출력 · 판정 SQL) · E2E 지연 SQL(게이지 · 기록) · **Stream 대기 측정 시작점 = 엔트리 ID 시각** · 키 계열별 메모리 샘플링(표본 수) · 트리밍 결함 검출 · **구간 기록의 자리(alarm_eval 무효 구간 · 대조군 실패 · 롤업 의심)** · **확인(ACK) 신호 부재의 계측** · 스위치 · run 노출
 > **작성일**: 2026-09-24
+> **개정일**: 2026-09-26 — W3 재검수 반영 — alarm_eval_gap 로그 필드에 사유 reason 3값 · 오류 문장(as-built · 정본 06_pipeline/08 §⑧ 쓰기 분리) — 기록 수 불변
+> **개정일**: 2026-09-26 — 목적 적합성 실증 W1 — 무효 구간 저장 대안 행의 테이블 수 인용(PostgreSQL 15 · ClickHouse 5)을 수 없는 형태로 교정 — ClickHouse 테이블 5 → **8**로 바뀌어 옛 수치가 남는다
 > **원천**: 원본 data_flow.md §15 · §16(커밋 ff66a37) · 원본 architecture.md §14(커밋 ff66a37) · 원본 tech_stack.md §9 · §10.6(커밋 ff66a37) · docs_plan.md 웨이브 인계 W6 10/02 행(Stream 대기 시작점) · W6 09 · 10/01 행(alarm_eval 무효 구간 기록 자리 · ACK 신호 부재 계측) · ADR-20 · ADR-21 · ADR-22 · REQ-OBS-03 · 04 · 05 · 11 · REQ-ING-18 · [../04_architecture/05_latency_budget.md](../04_architecture/05_latency_budget.md) §측정 지점 · [../06_pipeline/08_alarm.md](../06_pipeline/08_alarm.md) · [../07_api/07_alarms.md](../07_api/07_alarms.md)
 
 이 문서는 [01_metrics_catalog.md](./01_metrics_catalog.md)의 이름 하나하나가 **어느 코드 지점의 어느 시각 차**인지를 고정한다. 같은 이름이라도 시작 시각이 다르면 다른 양이다 — Stream 대기를 t0부터 재느냐 엔트리 ID 시각부터 재느냐가 튜닝 방향을 뒤집는다(§Stream 대기 측정 시작점).
@@ -137,7 +139,7 @@ stream_trimmed_unacked는 발행자가 셀 수 없다 — XADD MAXLEN ~가 조�
 
 | 안 | 자리 | 실패 시나리오 | 판정 |
 |------|------|------|------|
-| ① 저장 테이블 | PostgreSQL · ClickHouse에 무효 구간 테이블 | 고정 기준 테이블 수(PostgreSQL 15 · ClickHouse 5)가 바뀌고, ClickHouse가 멈춘 원인으로 생긴 구간을 ClickHouse에 쓸 수 없다 | 버림 |
+| ① 저장 테이블 | PostgreSQL · ClickHouse에 무효 구간 테이블 | 고정 기준 테이블 수가 바뀌고, ClickHouse가 멈춘 원인으로 생긴 구간을 ClickHouse에 쓸 수 없다 | 버림 |
 | ② Redis 키 | 새 키 계열 | 봉인 계열 · 캐시 계열 어느 쪽인지 정해야 하고, 캐시면 축출로 기록이 사라지고 봉인이면 무한히 쌓인다 | 버림 |
 | ③ 메트릭 레이블 | ts 범위를 레이블로 | 닫힌 레이블 집합이 깨진다(REQ-OBS-06) | 버림 |
 | ④ **계수 메트릭 + 구조화 로그 이벤트** | 계수는 /metrics · 구간(ts 최솟값 · 최댓값 · 행 수 · 규칙 수 · 토큰)은 api 로그 한 줄 | 로그를 읽는 표면이 없어 판정 이력 분석 API가 무효 구간을 응답에 싣지 못한다 | **채택** |
@@ -146,7 +148,7 @@ stream_trimmed_unacked는 발행자가 셀 수 없다 — XADD MAXLEN ~가 조�
 
 | 기록 | 계수 메트릭 | 로그 이벤트 | 로그 필드 | 쓰는 곳 |
 |------|------|------|------|------|
-| alarm_eval 무효 구간 | alm_eval_gap_batches_total · alm_eval_gap_rows_total | alarm_eval_gap | ts 최솟값 · 최댓값 · 행 수 · 규칙 수 · 원 배치 토큰 | 판정 분석 실험의 제외 구간(EXP-33) |
+| alarm_eval 무효 구간 | alm_eval_gap_batches_total · alm_eval_gap_rows_total | alarm_eval_gap | ts 최솟값 · 최댓값 · 행 수 · 규칙 수 · 원 배치 토큰 · 사유 reason(retry_exhausted · queue_full · shutdown) · 오류 문장 | 판정 분석 실험의 제외 구간(EXP-33) |
 | 대조군 COPY 실패 | ing_control_copy_failures_total | control_copy_failed | ts 최솟값 · 최댓값 · 행 수 · 토큰 | 대조 격자 구간 무효(EXP-01~05) |
 | 롤업 의심 구간 | ing_rollup_suspect_batches_total | rollup_suspect | 토큰 · ts 최솟값 · 최댓값 · 설비 목록 · 첫 오류 사유 | 정합 대조 우선 대상(EXP-31) |
 

@@ -1,7 +1,10 @@
 # ClickHouse 스키마 (03_clickhouse_schema)
 
-> **대상**: ClickHouse 객체 9(테이블 5 · MV 3 · Dictionary 1)의 목록과 원시 · 판정 테이블 tag_raw · alarm_eval DDL · 코덱 · 파티션 · 정렬 키(ADR-15) · 중복 제거(ADR-14) · 시각 컬럼 시간대 표기 통일 · dict_tag DDL · 품질 코드 컬럼 판정 · 서버 설정 계약
+> **대상**: ClickHouse 객체 12(테이블 8 · MV 3 · Dictionary 1)의 목록과 원시 · 판정 테이블 tag_raw · alarm_eval DDL · **업무 대조 테이블 3(역방향 대조 계측물)** DDL · 코덱 · 파티션 · 정렬 키(ADR-15) · 중복 제거(ADR-14) · 시각 컬럼 시간대 표기 통일 · dict_tag DDL · 품질 코드 컬럼 판정 · 서버 설정 계약
 > **작성일**: 2026-09-24
+> **개정일**: 2026-09-26 — W1 재검수 반영 — 보장 표 유일성 · MergeTree 칸 "재삽입은 윈도우 N + 토큰일 때만 버린다" → **윈도우 N일 때 버린다(토큰이 없으면 블록 내용 해시 · 있으면 토큰 기준)**(공식 문서 삽입 재시도 중복 제거 대조)
+> **개정일**: 2026-09-26 — W1 검수 반영 — 중복 제거 윈도우 불릿 "두지 않는다" → **DDL은 0 · EXP-43 ⓓ 윈도우 N + 토큰 변형만 실행 범위에서 MODIFY SETTING으로 켜고 0으로 복원** · 보장 표 다문장 원자성 칸에 뺀 이유와 실패 시나리오 · 갱신 가시성 칸 경량 UPDATE는 Beta(정본 10_olap_vs_rdb_control) · RMT가 order_no 중복을 합치지 않는 구조 사실
+> **개정일**: 2026-09-26 — 목적 적합성 실증 W1 — §업무 대조 테이블 신설(work_order_control · work_order_control_rmt · production_log_control · DDL 순번 009 · 역방향 대조 EXP-40~44) — 객체 9 → **12** · 테이블 5 → **8** · CH에 없는 것(UNIQUE · FK · 다문장 트랜잭션)과 있는 것(CHECK CONSTRAINT) 등재 · 그래뉼 256 변형은 테이블을 늘리지 않는다(실행 범위 변형 테이블 판정 · 정본 10_olap_vs_rdb_control)
 > **개정일**: 2026-09-25 — S3 구현 · 검수 반영 — dict_tag SOURCE를 as-built 명명 수집 NAME pg_dict로(접속 · ch_reader 비밀번호는 서버 설정 파일 config.d/named_collections.xml이 환경변수에서 읽는다 · 옛 표기 db 'plcdb'는 실제 DB plc와 달랐다) · 재계산 삽입 설정에 deduplicate_insert_select 'disable' 병기(26.8에서 insert_deduplicate를 대체)
 > **개정일**: 2026-09-24 — ClickHouse 26.8 LTS 전환(사용자 결정 · 25.x 보안 지원 종료) — 서버 설정 계약에 input_format_read_datetime_number_as_raw_value 1 신설(설정 9 → **10** — 26.8은 정수 ts를 초로 읽어 9999-12-31로 포화 · 기록 004) · 종속 MV 판별 근거에 26.8 · async_insert 동시 사용은 25.8 거부 · 26.8 허용 · 병합 풀 파생 설정 26.8 재확인 · 토큰 없는 같은 내용의 중복 제거(26.8) 불릿 신설
 > **개정일**: 2026-09-24 — S0 실측 반영(EXP-32 · 기록 001) — 미확인 "MV 재실행" 닫힘(ⓑ — 종속 MV가 다시 돈다) · ADR-14 보강(사용자 결정) — 중복 제거 계약 항목 6 → **7**(종속 MV) · 서버 설정 계약 8 → **9**(deduplicate_blocks_in_dependent_materialized_views 1) · B형 계측 수단 written_rows → **DuplicatedInsertedBlocks**(재시도 응답의 written_rows는 0이 되지 않는다)
@@ -10,7 +13,7 @@
 > **개정일**: 2026-09-24 — W6 실험 채번 반영 — 실험 자리 W6 결과 반영(정본 10_observability/01 · 06)
 > **개정일**: 2026-09-24 — W6 판정 반영 — 서버 timezone 미확인 → **Asia/Seoul**(정본 09_tech_stack/03) · 스키마는 여전히 서버 설정에 기대지 않는다 — 설정 수 불변
 > **개정일**: 2026-09-24 — W4 판정 반영 — Dictionary 즉시 반영 단 번호 ③ → **④**(무효화 체인 6단 표기)
-> **원천**: 원본 architecture.md §5 · §7.1 · §7.3 · §7.4 · §7.5 · §12 · §15(커밋 ff66a37) · 원본 tech_stack.md §5.2(커밋 ff66a37) · 원본 data_flow.md §4 · §4.3 · §11.2 · §14.1 · §14.2(커밋 ff66a37) · docs_plan.md 보정 #16 · 웨이브 인계(ingested_at · alarm_eval.ts 시간대 표기 통일) · ADR-03 · ADR-14 · ADR-15 · ADR-16 · [../11_glossary/05_units_and_time.md](../11_glossary/05_units_and_time.md) 시각 의미론 정본
+> **원천**: 원본 architecture.md §5 · §7.1 · §7.3 · §7.4 · §7.5 · §12 · §15(커밋 ff66a37) · 원본 tech_stack.md §5.2(커밋 ff66a37) · 원본 data_flow.md §4 · §4.3 · §11.2 · §14.1 · §14.2(커밋 ff66a37) · docs_plan.md 보정 #16 · 웨이브 인계(ingested_at · alarm_eval.ts 시간대 표기 통일) · ADR-03 · ADR-14 · ADR-15 · ADR-16 · [../11_glossary/05_units_and_time.md](../11_glossary/05_units_and_time.md) 시각 의미론 정본 · 목적 적합성 실증 계획 W1(2026-09-26 — 업무 대조 테이블) · ClickHouse 공식 문서 UPDATE 문 · ReplacingMergeTree · 테이블 제약(26.8 · 2026-09-26 context7 대조)
 
 ClickHouse는 **분기 ①계층(태그 원시값)의 유일한 목적지**이고 ②계층 판정 전수의 목적지다(ADR-03 · D-04). 이 문서는 원시 · 판정 테이블의 모양과 ClickHouse 쪽 공통 규약을 고정한다. 롤업 테이블 tag_1m · tag_1h · tag_1d와 MV 3의 명세는 [04_clickhouse_rollup.md](./04_clickhouse_rollup.md)가, Dictionary가 지키는 교차 저장소 원칙은 [07_cross_store_consistency.md](./07_cross_store_consistency.md)가 갖는다.
 
@@ -29,8 +32,12 @@ ClickHouse는 **분기 ①계층(태그 원시값)의 유일한 목적지**이�
 | 7 | plc.mv_tag_1h | MV | TO tag_1h | ING | tag_1m 삽입이 발동 | 상동 |
 | 8 | plc.mv_tag_1d | MV | TO tag_1d | ING | tag_1h 삽입이 발동 | 상동 |
 | 9 | plc.dict_tag | Dictionary | HASHED · PostgreSQL 소스 | MST | LIFETIME 재적재 · SYSTEM RELOAD | 이 문서 §dict_tag |
+| 10 | plc.work_order_control | 테이블 · 계측물 | MergeTree · 블록 번호 · 오프셋 컬럼 | 해당 없음 — 계측물 | 역방향 대조 실행기(EXP-40~44) | 이 문서 §업무 대조 테이블 |
+| 11 | plc.work_order_control_rmt | 테이블 · 계측물 | ReplacingMergeTree(version) | 해당 없음 — 계측물 | 상동(EXP-40 ④ · EXP-43) | 상동 |
+| 12 | plc.production_log_control | 테이블 · 계측물 | MergeTree | 해당 없음 — 계측물 | 상동(EXP-42 · EXP-44) | 상동 |
 
-- 검산: 테이블 5(#1~#5) + MV 3(#6~#8) + Dictionary 1(#9) = **9**
+- 검산: 테이블 8(#1~#5 · #10~#12) + MV 3(#6~#8) + Dictionary 1(#9) = **12** · 테이블 = 목적지 5 + 계측물 3
+- **업무 대조 테이블은 목적지가 아니라 계측물이다.** 업무 데이터의 목적지는 PostgreSQL뿐이며 이 셋은 분기 표에서 대조군 plc_tag_raw_control과 같은 계측물 자리를 받는다([../04_architecture/04_storage_split.md](../04_architecture/04_storage_split.md)). 앱은 이 테이블을 읽지도 쓰지도 않는다 — 쓰는 주체는 도구 컨테이너의 실행기뿐이고 소유 도메인이 없어 도메인 공백(소유 테이블 없음)의 셈에 영향이 없다.
 - **롤업 객체의 소유는 ING로 확정한다(잠정 → 확정).** 판정 근거는 [04_clickhouse_rollup.md](./04_clickhouse_rollup.md) §도메인 귀속 판정이다. GEN은 모드 D로 tag_raw · 롤업에 쓰지만 소유하지 않는다 — 도메인 공백(소유 테이블 없음 6)은 그대로다.
 - 모든 객체는 데이터베이스 plc로 한정해 이름을 쓴다(REQ-ING-05 — 한정하지 않은 이름은 default 데이터베이스의 같은 이름 객체에 오류 없이 닿는다).
 
@@ -218,6 +225,81 @@ LIFETIME(MIN 300 MAX 600);
 - 검산: 설정 = 원본 6 + 신설 4(materialized_views_ignore_errors · 서버 timezone 의존 부정 · 종속 MV 중복 제거 · 정수 ts 틱 해석) = **10** · 원본 merge_tree.merge_max_block_size(8192 · 기본값)는 스키마 쪽 계약이 없어 뺐다
 - 접속 프로토콜 — api는 HTTP 8123만 쓰고 네이티브 9000은 CLI · 벤치마크 전용이다(원본 tech_stack.md §5.2). 삽입 형식은 JSONCompactEachRow + 요청 압축이다(REQ-ING-05).
 
+## 업무 대조 테이블
+
+역방향 대조(업무 워크로드를 ClickHouse에 — EXP-40~44)의 ClickHouse 쪽 계약이다. 실험 설계 · 공정성 규칙 · 변형의 정본은 [10_olap_vs_rdb_control.md](./10_olap_vs_rdb_control.md) §역방향 대조 — 업무 워크로드이고, 이 절은 테이블의 모양만 고정한다. PostgreSQL 쪽은 대조 사본 없이 업무 테이블 work_order · production_log를 그대로 쓴다([01_postgresql_schema.md](./01_postgresql_schema.md)).
+
+| PostgreSQL 컬럼 | 타입 · 제약 | ClickHouse 타입 | 동형 판정 |
+|------|------|------|------|
+| work_order.order_id · production_log.log_id | bigint · PK IDENTITY | UInt64 · 정렬 키 | 값은 같다 — ClickHouse에 시퀀스가 없어 실행기가 PostgreSQL이 발급한 번호와 같은 값을 싣는다 |
+| work_order.line_id · production_log.order_id | integer · bigint · FK | UInt32 · UInt64 · 참조 검사 없음 | 값은 같다 · **FK는 옮기지 않는다** — 없는 기능이다 |
+| order_no · product_code | text · order_no UNIQUE | String · 유일 검사 없음 | 값은 같다 · **UNIQUE는 옮기지 않는다** |
+| target_qty · good_qty · defect_qty | integer · CHECK | **Int32** · CONSTRAINT CHECK | 부호 있는 정수로 둔다 — UInt면 음수 입력이 파싱 단계에서 거절되거나 감겨 CHECK 경로를 잴 수 없다 |
+| planned_start · planned_end · recorded_at | timestamptz · CHECK(planned_end > planned_start) | DateTime64(3, 'Asia/Seoul') · CONSTRAINT CHECK | 값은 epoch ms로 채운다 — PostgreSQL μs 정밀도가 ms 값을 정확히 담는다 |
+| status | text · DEFAULT 'PLANNED' · CHECK 4값 | **LowCardinality(String)** · CONSTRAINT CHECK 4값 | Enum8이면 값 밖 입력이 타입 변환에서 먼저 거절되어 CHECK 대 CHECK 비교가 되지 않는다 |
+
+- 검산: 컬럼 행 = **6**(work_order 8컬럼 · production_log 5컬럼을 뜻 단위로 묶음)
+- **RMT 테이블은 같은 컬럼에 version UInt64 하나를 더한다.** 새 버전 삽입이 갱신의 수단이라 버전이 없으면 같은 정렬 키 행 중 무엇이 남을지가 삽입 순서에 달린다(공식 문서 — 버전이 같으면 마지막 삽입 행).
+
+아래는 DDL 계약이다(설계 계약 · 구현 코드 아님). 적용 순번은 [09_migrations_seed.md](./09_migrations_seed.md) 009다.
+
+```sql
+CREATE TABLE IF NOT EXISTS plc.work_order_control
+(
+    order_id      UInt64,
+    line_id       UInt32,
+    order_no      String,
+    product_code  String,
+    target_qty    Int32,
+    planned_start DateTime64(3, 'Asia/Seoul'),
+    planned_end   DateTime64(3, 'Asia/Seoul'),
+    status        LowCardinality(String),
+    CONSTRAINT c_target_qty CHECK target_qty > 0,
+    CONSTRAINT c_planned    CHECK planned_end > planned_start,
+    CONSTRAINT c_status     CHECK status IN ('PLANNED', 'IN_PROGRESS', 'COMPLETED', 'CANCELLED')
+)
+ENGINE = MergeTree
+ORDER BY order_id
+SETTINGS index_granularity = 8192,
+         enable_block_number_column = 1,
+         enable_block_offset_column = 1;
+
+-- work_order_control_rmt: 위와 같은 컬럼 · 제약 + version UInt64
+--   ENGINE = ReplacingMergeTree(version) ORDER BY order_id SETTINGS index_granularity = 8192
+
+CREATE TABLE IF NOT EXISTS plc.production_log_control
+(
+    log_id      UInt64,
+    order_id    UInt64,
+    recorded_at DateTime64(3, 'Asia/Seoul'),
+    good_qty    Int32,
+    defect_qty  Int32,
+    CONSTRAINT c_good   CHECK good_qty >= 0,
+    CONSTRAINT c_defect CHECK defect_qty >= 0
+)
+ENGINE = MergeTree
+ORDER BY (order_id, log_id);
+```
+
+- **블록 번호 · 오프셋 컬럼은 work_order_control에만 켠다.** 경량 UPDATE의 요구 조건이다(공식 문서 UPDATE 문). RMT 테이블은 새 버전 삽입으로만 갱신하고 production_log_control은 갱신하지 않는다 — 켜 두면 쓰지 않는 시스템 컬럼이 저장 · 삽입 비용에 섞인다.
+- **정렬 키는 order_id 하나다.** 경량 UPDATE는 기본 키 · 파티션 키 컬럼을 갱신할 수 없다 — 갱신 대상인 status가 키에 들어가면 EXP-40 ③이 성립하지 않는다. 파티션 키 · TTL을 두지 않는다(업무 규모 10^6행 안 · 보존은 실험 범위).
+- **DDL은 중복 제거 윈도우를 두지 않는다(non_replicated_deduplication_window 기본 0).** EXP-43 ⓐ와 ⓓ 기본 팔이 토큰 · 내용 해시로 버려지면 "유일 검사 없음"이 아니라 "삽입 중복 제거"를 재게 된다. 윈도우 0이면 비복제 MergeTree는 토큰과 내용 해시 모두로 가르지 않는다(§중복 제거 — 윈도우 행) — 실행기는 첫 실행에서 DuplicatedInsertedBlocks 0을 원시에 남겨 26.8 동작을 판별한다. **재시도 멱등 수단(윈도우 N + insert_deduplication_token)은 EXP-43 ⓓ의 별도 변형으로 잰다** — 윈도우는 MODIFY SETTING으로 바꿀 수 있는 테이블 설정이라 실행기가 그 실행 범위에서만 켜고 끝에 0으로 복원한다. DDL과 스냅샷의 값은 0 그대로다(판정 [10_olap_vs_rdb_control.md](./10_olap_vs_rdb_control.md) §변형과 판정 지표).
+- **그래뉼 256 변형은 이 목록에 없다.** index_granularity는 생성 때 정해지므로 변형은 실행기가 EXP-41 실행 안에서만 plc 밖 실험 데이터베이스에 같은 DDL로 만들고 지운다 — 판정 [10_olap_vs_rdb_control.md](./10_olap_vs_rdb_control.md) §그래뉼 변형 판정. 테이블 수는 그래서 늘지 않는다.
+
+ClickHouse가 업무 보장 중 무엇을 줄 수 있고 없는지의 등재다. **없는 것을 앱 로직으로 흉내 내지 않는다** — 흉내의 비용을 엔진 비용으로 기록하게 된다(공정성 규칙 7).
+
+| 보장 | PostgreSQL | ClickHouse MergeTree | ClickHouse RMT | 이 차이를 재는 실험 |
+|------|------|------|------|------|
+| 유일성 | UNIQUE · PK — 커밋 전 거절 | 없음 — 같은 키 행이 그대로 쌓인다 · 같은 블록의 재삽입은 윈도우 N일 때 버린다(토큰이 없으면 블록 내용 해시 · 있으면 토큰 기준 — 공식 문서 삽입 재시도 중복 제거 · ⓓ 변형) | 정렬 키(order_id) 단위 · **머지 뒤에만** 합친다 · 조회 때 FINAL이 합친다 — **order_no는 정렬 키가 아니라 서로 다른 order_id의 order_no 중복은 머지 뒤에도 남는다**(엔진 정의 · 실측으로 확인) | EXP-43 ⓐ · ⓓ |
+| 참조 무결성 | FK — 커밋 전 거절 | 없음 | 없음 | EXP-43 ⓑ |
+| 값 검사 | CHECK — 커밋 전 거절 | CONSTRAINT CHECK — INSERT 때 행마다 거절 · UPDATE 경로 검사는 판별 대상 | 상동 | EXP-43 ⓒ |
+| 다문장 원자성 | 트랜잭션 | 문장 단위 · 다문장 트랜잭션 없음 — 실험 기능이라 기본 꺼짐 · 버전 종속이므로 켜지 않는다. 켜고 잰 부분 반영 0은 운영 경로에 쓸 수 없는 보장이라, 그것을 근거로 업무 쓰기를 옮기면 버전 갱신 하나로 보장이 사라진다([10_olap_vs_rdb_control.md](./10_olap_vs_rdb_control.md) §원리 대응) | 상동 | EXP-42 |
+| 경합 판정 | 조건부 UPDATE의 갱신 행 수 · 행 잠금 | 갱신 행 수 응답 여부는 판별 대상 | 해당 없음 — 갱신이 삽입이다 | EXP-42 |
+| 갱신 가시성 | 커밋 | 경량 UPDATE는 apply_patch_parts 1(기본)에서 조회에 적용(문서 · **Beta** — 정본 [10_olap_vs_rdb_control.md](./10_olap_vs_rdb_control.md) §역방향 대조) · ALTER UPDATE는 mutations_sync · apply_mutations_on_fly에 따른다 | FINAL 조회 즉시 · 비 FINAL은 머지 뒤 | EXP-40 |
+
+- 검산: 보장 = **6** · ClickHouse가 구조로 갖지 않는 것 = 유일성(MergeTree) · 참조 무결성 · 다문장 원자성 = **3**
+- **감사 대조 테이블은 두지 않는다(판정).** EXP-42의 판정은 부분 반영 · 경합 위반 건수이고 첫 문장 뒤 실패 주입으로 성립한다 — audit_log 사본을 더하면 테이블 하나가 지연 비교 없는 실험 하나를 위해 고정 기준에 남는다. 대가로 ClickHouse 쪽 완료 단위는 문장 둘이고 PostgreSQL은 셋이다 — 그래서 EXP-42는 지연을 비교하지 않는다([10_olap_vs_rdb_control.md](./10_olap_vs_rdb_control.md) §변형과 판정 지표).
+
 ## 미확인 · 미설계 등재
 
 | 항목 | 상태 | 확정 자리 |
@@ -225,7 +307,9 @@ LIFETIME(MIN 300 MAX 600);
 | 원시 삽입 성공 · MV 실패 뒤 같은 토큰 재시도가 MV를 다시 실행하는가 | **닫힘(S0 실측 · EXP-32 · 기록 001 · 004 — 25.8 · 26.8 같음)** — 다시 실행한다(ⓑ). 대가로 이미 성공한 MV도 다시 돌아 롤업이 이중 계수되므로 ADR-14를 보강했다(§중복 제거 종속 MV 행 · §서버 설정 계약) | [../06_pipeline/09_rollup.md](../06_pipeline/09_rollup.md) |
 | 압축률(프로파일별) · 코덱 대안 효과 | 3계층 미확인 — 확정 전 임의 값 고정 금지. 원본 예상치 혼합 8~15배 · RANDOM_WALK 2~4배 | [../03_requirements/13_nonfunctional.md](../03_requirements/13_nonfunctional.md) REQ-NFR-14 |
 | 서버 timezone 설정 | **W6 판정 — Asia/Seoul** · 스키마는 의존하지 않는다 — 수동 쿼리 · 시스템 테이블 표시에만 영향 | [../09_tech_stack/03_data_infra.md](../09_tech_stack/03_data_infra.md) |
-| index_granularity 4096 실험 | 원본 실험 후보 — **W6 미채번**(카탈로그 39에 없다 · 필요해지면 EXP-40부터 말미 채번) | [../10_observability/06_experiment_catalog.md](../10_observability/06_experiment_catalog.md) |
+| index_granularity 4096 실험 | 원본 실험 후보 — **W6 미채번**(카탈로그에 없다 · 필요해지면 말미 채번 — 다음 번호는 [../10_observability/06_experiment_catalog.md](../10_observability/06_experiment_catalog.md) §분류와 검산) | [../10_observability/06_experiment_catalog.md](../10_observability/06_experiment_catalog.md) |
+| 업무 대조 테이블의 판별 둘 — UPDATE가 갱신 행 수를 응답하는가 · CHECK CONSTRAINT가 UPDATE 경로에도 검사되는가 | 판별 대상 — EXP-42 · EXP-43 실행기 첫 실행이 원시에 남긴다 | [10_olap_vs_rdb_control.md](./10_olap_vs_rdb_control.md) |
+| 업무 대조 테이블의 갱신 · 조회 · 삽입 비용 | 3계층 미확인 — 확정 전 임의 값 고정 금지 | EXP-40~44 · [10_olap_vs_rdb_control.md](./10_olap_vs_rdb_control.md) |
 | 대량 태그 시 Dictionary 레이아웃 전환 | 원본 "수만 행을 넘으면 LIFETIME 확대 또는 CACHE 레이아웃" — 비활성 포함 적재로 행 수가 단조 증가한다 | [07_cross_store_consistency.md](./07_cross_store_consistency.md) |
 
 ## 관련 문서
@@ -233,7 +317,9 @@ LIFETIME(MIN 300 MAX 600);
 - [04_clickhouse_rollup.md](./04_clickhouse_rollup.md) — 롤업 테이블 · MV · 백필
 - [07_cross_store_consistency.md](./07_cross_store_consistency.md) — Dictionary 원칙 · 비활성 태그 판정
 - [08_retention_lifecycle.md](./08_retention_lifecycle.md) — TTL 보존 정본
-- [10_olap_vs_rdb_control.md](./10_olap_vs_rdb_control.md) — tag_raw 동형 대조군
+- [10_olap_vs_rdb_control.md](./10_olap_vs_rdb_control.md) — tag_raw 동형 대조군 · 역방향 대조(업무 대조 테이블의 실험 정본)
+- [01_postgresql_schema.md](./01_postgresql_schema.md) — 업무 대조 테이블의 원형 work_order · production_log
+- [09_migrations_seed.md](./09_migrations_seed.md) — DDL 순번 009
 - [../11_glossary/05_units_and_time.md](../11_glossary/05_units_and_time.md) — 시각 의미론
 - [../06_pipeline/03_ingest_batch.md](../06_pipeline/03_ingest_batch.md) — 배치 토큰 · 백오프 기전
 - [../04_architecture/09_decision_records.md](../04_architecture/09_decision_records.md) — ADR-03 · ADR-14 · ADR-15 · ADR-16

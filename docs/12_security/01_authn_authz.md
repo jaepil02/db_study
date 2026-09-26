@@ -2,13 +2,17 @@
 
 > **대상**: 인증 · 인가를 위협 관점에서 다시 읽는 리뷰 — **토큰 수명 정본** · 액세스 토큰 서명 · 리프레시 불투명 토큰(Redis 저장 · 즉시 폐기 · 회전 판정) · 쿠키 속성 · 비밀번호 저장(해시 알고리즘 정본) · 역할 기반 인가 · WebSocket 첫 메시지 인증 · sess 접두 판정 · 인증 잔여 등재
 > **작성일**: 2026-09-24
+> **개정일**: 2026-09-26 — W1 재검수 반영 — 미확인 · 미설계 등재 해시 라이브러리 행 본문의 정확 버전 → **라이브러리 이름만**(hash-wasm · 버전은 09_tech_stack/03 §버전 고정표 — 스택 정확 버전 단일 자리)
+> **개정일**: 2026-09-26 — S7 ① 계정 시드 착수 — Argon2id 비용 파라미터 현행 참고 m = 19 MiB · t = 2 · p = 1(OWASP 최소) · 해시 라이브러리 hash-wasm 4.12 닫힘(09_tech_stack/03)
+> **개정일**: 2026-09-26 — W1 검수 반영 — 도입 단락 인증 시점 S7 → **S7 ②**(S7 ① 알람도 무인증) · 계약 적용 S7부터 → **인증 도입(S7 ②)부터** · 인증 전 확인 행위자 판정 링크
+> **개정일**: 2026-09-26 — 목적 적합성 실증 W1(EXP-40~45 채번) — Argon2id 행 "필요해지면 EXP-40부터" → **말미 채번(다음 번호는 카탈로그 §분류와 검산)** — EXP-40이 역방향 대조로 채번돼 옛 문구가 다른 실험을 가리킨다
 > **원천**: 원본 architecture.md §2 · §11.2 · §18(커밋 ff66a37) · 원본 tech_stack.md §10.4(커밋 ff66a37) · REQ-AUT-01~17 · REQ-GLB-08 · 09 · 19 · REQ-RLT-09 · D-07 · ADR-02 · [../02_features/01_auth.md](../02_features/01_auth.md) AUT-01~07 · [../02_features/12_permission_matrix.md](../02_features/12_permission_matrix.md) · [../07_api/03_auth.md](../07_api/03_auth.md) · [../07_api/11_websocket.md](../07_api/11_websocket.md) · [../05_data_stores/05_redis_keyspace.md](../05_data_stores/05_redis_keyspace.md) · docs_plan.md 웨이브 인계 W7 12_security 행
 
 이 문서는 인증 · 인가를 **새로 설계하지 않는다.** 기능은 [../02_features/01_auth.md](../02_features/01_auth.md), 동작 계약은 [../03_requirements/02_auth.md](../03_requirements/02_auth.md), 표면은 [../07_api/03_auth.md](../07_api/03_auth.md)가 이미 고정했다. 이 문서가 **정본으로 갖는 것은 셋뿐이다** — 토큰 수명 값 · 비밀번호 해시 알고리즘 · 리프레시 토큰의 저장 모양 판정. 나머지는 정본을 위협 관점에서 다시 읽어 판정과 잔여를 남긴다.
 
 **방어선은 api 한 곳에 모인다.** 앞단 프록시가 없으므로 토큰 검증 · 역할 대조 · 폐기가 전부 NestJS Guard와 AUT 모듈의 일이다(원본 architecture.md §18). 대신할 계층이 없다는 것은 이 계층의 누락이 곧 무방비라는 뜻이다.
 
-**인증은 S7에 붙는다**(D-07). S2~S6의 표면은 무인증이며 이 문서의 계약은 S7부터 적용된다. 무인증 기간의 노출은 결함이 아니라 순서의 결과이고, 그 잔여는 [04_threat_model.md](./04_threat_model.md)가 받는다.
+**인증은 S7 ②에 붙는다**(D-07 — S7 ① 알람 분기가 인증보다 먼저다). 인증 도입(S7 ②) 전의 표면(S2~S6 · S7 ①)은 무인증이며 이 문서의 계약은 인증 도입(S7 ②)부터 적용된다. S7 ① 알람 확인의 행위자는 인증된 신원이 아니라 환경변수가 가리키는 시드 계정 대리다([../07_api/07_alarms.md](../07_api/07_alarms.md) §인증 전 확인 행위자 판정). 무인증 기간의 노출은 결함이 아니라 순서의 결과이고, 그 잔여는 [04_threat_model.md](./04_threat_model.md)가 받는다.
 
 ## 토큰 경로와 검사 지점
 
@@ -204,8 +208,8 @@
 
 | 항목 | 상태 | 확정 자리 |
 |------|------|------|
-| Argon2id 비용 파라미터 값 | 2계층 미정 — 외부 표준 최소 구성 이상 · S7 로그인 p50 기록과 같은 변경 단위 | 이 문서 · 로그인 p50은 3계층 미확인(EXP 미채번 — 필요해지면 EXP-40부터) [../10_observability/06_experiment_catalog.md](../10_observability/06_experiment_catalog.md) |
-| 해시 라이브러리 · 버전 | 미고정 — 알고리즘만 이 문서 판정 | [../09_tech_stack/03_data_infra.md](../09_tech_stack/03_data_infra.md) 버전 고정표 |
+| Argon2id 비용 파라미터 값 | **현행 참고(2026-09-26 · S7 ① 계정 시드)** — m = 19 MiB(19,456 KiB) · t = 2 · p = 1 · 솔트 16바이트 · 해시 32바이트(OWASP Password Storage Cheat Sheet 최소 구성) · 2계층 조정값 — 로그인 p50은 S7 ② 기록과 같은 변경 단위 · 3계층 미확인(EXP 미채번 — 필요해지면 말미 채번 · 다음 번호는 카탈로그 §분류와 검산) | 이 문서 · 로그인 p50은 3계층 미확인(EXP 미채번 — 필요해지면 말미 채번 · 다음 번호는 카탈로그 §분류와 검산) [../10_observability/06_experiment_catalog.md](../10_observability/06_experiment_catalog.md) |
+| 해시 라이브러리 · 버전 | **닫힘(2026-09-26)** — hash-wasm(순수 WASM · 자기 기술 문자열 출력) · 정확 버전은 [../09_tech_stack/03_data_infra.md](../09_tech_stack/03_data_infra.md) §버전 고정표가 갖는다 | [../09_tech_stack/03_data_infra.md](../09_tech_stack/03_data_infra.md) 버전 고정표 |
 | 리프레시 요약값의 함수 | 미설계 — 암호학적 요약 함수 하나로 고정한다는 계약만 | 이 문서 · 구현 착수 시 |
 | 쿠키 이름 · BFF 인증 경로 | 미설계 — Path를 좁힌다는 계약만 | [../09_tech_stack/01_frontend.md](../09_tech_stack/01_frontend.md) |
 | WebSocket 인증 대기 시간 | 2계층 미정 | [../07_api/11_websocket.md](../07_api/11_websocket.md) |

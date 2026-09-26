@@ -2,6 +2,7 @@
 
 > **대상**: 역할 스위치 11종의 채번 · 환경변수 · 기본값 · off · on 동작 · 측정 대상 · 교체되는 포트 · 관련 기능 · 흐름 · 원본 예상치 · 실험 자리 · 조합 제약 — SW-NN 채번 정본
 > **작성일**: 2026-09-24
+> **개정일**: 2026-09-26 — 목적 적합성 실증 — SW-09 실험 자리에 함께 쓰는 실험 EXP-45(on 고정) 병기(정본 10_observability/06) — 스위치 수 불변
 > **개정일**: 2026-09-25 — S4 실측 반영(기록 022~026) — SW-03~07 원본 예상치 열에 실측 병기(4요소는 기록) · 조합 제약 #1의 구현 — SW-03 off면 SW-05를 NoopRebuildLock으로 주입(S4 검수 M1) — 스위치 수 불변
 > **개정일**: 2026-09-25 — S3 구현 반영 — SW-08 off 동작에 서버 중복 제거 해제(deduplicate_insert 'disable') 명시 — 토큰만 빼면 26.8에서 off가 재현되지 않는다(기록 016)
 > **개정일**: 2026-09-24 — W7 검수 반영 — SW-09 분류 서술 Redis 역할 9 → **10**(같은 문서 §검산) · 미확인 2행 닫힘(SW-09 실패 의미론 · SW-01 off 토큰 재료) — 스위치 수 불변
@@ -51,7 +52,7 @@ SW-01~SW-10의 순서는 [README.md](./README.md) 고정 기준의 목록 순서
 | SW-06 | 팬아웃 경계 비용 | RealtimeFanoutPort — RedisPubSubFanout · DirectGatewayFanout | ING-08 · ALM-06 · RLT-05 · RLT-08 | F-06 · F-07 | 루프백 1홉(1 ms 미만) 대 확장 가능성 · **실측** 발행 → 게이트웨이 평균 off 2 µs · on 336 µs · 프레임 모양 동일(기록 025) | 상동 — **EXP-11** |
 | SW-07 | 프레임 폭증 | FrameThrottlePort — WindowMergeThrottle · PassthroughThrottle | RLT-06 | F-07 | 초당 5,000 → 10 프레임(태그 500 · 10 Hz) · **실측** 티어 M 1초 주기 · 연결당 설비 5에서 창 0 초당 5.0 → 창 100 약 1.05 · 이벤트 루프 차 없음(기록 026 — 폭증 조건 아님 · S5) | 상동 — **EXP-12** |
 | SW-08 | 재시도 중복 | BatchTokenPort — DeterministicBatchToken · NoBatchToken | ING-04 | F-02 | off — 재시도 시 중복 행 발생 · on — 미발생 | 상동 — **EXP-13** |
-| SW-09 | 목표 ①의 실행 — 쿼리별 역전 지점 · 비교 축 6 | ControlTableSinkPort — PostgresControlSink · NoopControlSink | ING-11 · GEN-10 | F-02 · F-09 | 원본 예상치 없음 — 역전 지점이 산출물이다 | 상동 — **EXP-01~EXP-05**(대조군 쿼리 5종)([../11_glossary/04_id_conventions.md](../11_glossary/04_id_conventions.md)) |
+| SW-09 | 목표 ①의 실행 — 쿼리별 역전 지점 · 비교 축 6 | ControlTableSinkPort — PostgresControlSink · NoopControlSink | ING-11 · GEN-10 | F-02 · F-09 | 원본 예상치 없음 — 역전 지점이 산출물이다 | 상동 — **EXP-01~EXP-05**(대조군 쿼리 5종) · 함께 쓰는 실험 **EXP-45**(스트리밍 동시 적재 · on 고정)([../11_glossary/04_id_conventions.md](../11_glossary/04_id_conventions.md)) |
 | SW-10 | 전송량 · ClickHouse 행 수 · 압축률 | DeadbandFilterPort — TagDeadbandFilter · PassthroughFilter | COL-06 | F-01 | 프로파일별 전송률 3~100%(원본 data_flow.md §3.3) | 상동 — **EXP-14** |
 | SW-11 | ClickHouse 중단 중 최신값 갱신 지속 · 적재 경로와 최신값의 결합도 | LatestValueWritePort — IngestLatestValueWriter · CollectorLatestValueWriter | ING-08 · COL-07 | F-01 · F-02 · F-03 · F-10 | 원본 예상치 없음 — ingest는 ClickHouse 중단 동안 최신값이 멈추고 collector는 계속 갱신된다는 구조적 차이만 있다(원본 implementation_plan.md §7.2) | 상동 — **EXP-15** |
 

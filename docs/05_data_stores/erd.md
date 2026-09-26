@@ -1,7 +1,8 @@
 # 전역 ERD (erd)
 
-> **대상**: db_study 저장소 전역의 관계도 — PostgreSQL 업무 14 + 대조군 1의 erDiagram · ClickHouse 객체 9의 관계 · 저장소를 넘는 논리 참조
+> **대상**: db_study 저장소 전역의 관계도 — PostgreSQL 업무 14 + 대조군 1의 erDiagram · ClickHouse 객체 12의 관계 · 저장소를 넘는 논리 참조
 > **작성일**: 2026-09-24
+> **개정일**: 2026-09-26 — 목적 적합성 실증 W1 — ClickHouse 객체 관계 그림에 업무 대조 테이블 3(계측물 · 선 없음 — 대조군 PLC_TAG_RAW_CONTROL과 같은 처리) — 객체 9 → **12** · 저장소를 넘는 논리 참조는 불변(앱이 읽지 않는 계측물)
 > **원천**: 원본 architecture.md §6 · §7.1 · §7.2 · §7.3 · §7.4 · §8.1 · §12(커밋 ff66a37) · docs_plan.md 보정 #15(tag_master_history) · [01_postgresql_schema.md](./01_postgresql_schema.md) · [02_postgresql_constraints.md](./02_postgresql_constraints.md) · [03_clickhouse_schema.md](./03_clickhouse_schema.md) · [04_clickhouse_rollup.md](./04_clickhouse_rollup.md) · [07_cross_store_consistency.md](./07_cross_store_consistency.md) · [10_olap_vs_rdb_control.md](./10_olap_vs_rdb_control.md)
 
 이 문서는 **그림의 자리**다. 컬럼 · 타입 · 제약의 정본은 [01_postgresql_schema.md](./01_postgresql_schema.md) · [02_postgresql_constraints.md](./02_postgresql_constraints.md) · [03_clickhouse_schema.md](./03_clickhouse_schema.md) · [04_clickhouse_rollup.md](./04_clickhouse_rollup.md)가 갖고, 이 문서는 관계만 그린다. 그림과 정본이 어긋나면 정본이 이긴다.
@@ -213,6 +214,9 @@ flowchart LR
     T3["plc.tag_1d<br/>년 파티션 · 무기한"]
     AE["plc.alarm_eval<br/>MergeTree · 일 파티션"]
     Q["조회 · dictGet"]
+    WOC["plc.work_order_control<br/>계측물 · MergeTree"]
+    WOR["plc.work_order_control_rmt<br/>계측물 · ReplacingMergeTree"]
+    PLC["plc.production_log_control<br/>계측물 · MergeTree"]
 
     PGTM -->|"SOURCE · LIFETIME · SYSTEM RELOAD"| DICT
     RAW -->|"삽입 블록"| MV1 --> T1
@@ -226,7 +230,8 @@ flowchart LR
     AE -.-> Q
 ```
 
-- 검산: 객체 = 테이블 5(tag_raw · tag_1m · tag_1h · tag_1d · alarm_eval) + MV 3 + Dictionary 1 = **9** — 루트 고정 기준과 같다
+- 검산: 객체 = 테이블 8(목적지 5 tag_raw · tag_1m · tag_1h · tag_1d · alarm_eval + 계측물 3 work_order_control · work_order_control_rmt · production_log_control) + MV 3 + Dictionary 1 = **12** — 루트 고정 기준과 같다
+- **업무 대조 테이블 셋에 선이 없는 것은 누락이 아니다.** 역방향 대조(EXP-40~44) 실행기만 쓰고 읽는 계측물이라 MV 연쇄 · Dictionary · 조회 표면 어디에도 닿지 않는다 — PostgreSQL 쪽 대조군 PLC_TAG_RAW_CONTROL에 선이 없는 것과 같은 판정이다. 같은 이유로 §저장소를 넘는 논리 참조에도 없다(정본 [03_clickhouse_schema.md](./03_clickhouse_schema.md) §업무 대조 테이블).
 - **alarm_eval은 연쇄에 없다.** 판정 경로(ALM)가 따로 쓰고 롤업이 붙지 않는다 — 판정 전수는 분석 로그라 집계 계층을 두지 않는다.
 - **Dictionary는 행을 잇지 않는다.** dictGet은 조회 시점에 tag_id를 해석으로 바꿀 뿐이며, 시계열 행은 이름을 갖지 않는다(ADR-16).
 
