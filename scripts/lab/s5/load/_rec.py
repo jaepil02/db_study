@@ -459,7 +459,10 @@ def rec_modea_steps(d):
         vf = jload(os.path.join(sd, 'verify.json')) or {}
         xi = jload(os.path.join(sd, 'xinfo.json')) or {}
         polls = pdelta(a0, a1, 'col_polls_total')
+        # 레이블 있는 계수기(device)는 첫 타임아웃 전에는 계열이 없다 — 폴링이 있으면 타임아웃 0으로 읽는다
         tos = pdelta(a0, a1, 'col_poll_timeouts_total')
+        if tos is None and polls:
+            tos = 0.0
         s['modeA'] = {
             'scanRateMs': num(m.get('scanRateMs')), 'health': jload(os.path.join(sd, 'health.json')),
             'pointsEmitted': pdelta(a0, a1, 'points_emitted'),
