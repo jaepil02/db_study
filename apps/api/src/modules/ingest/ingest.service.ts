@@ -88,6 +88,50 @@ export function heldBatches(
   return queued + Math.floor(assemblingRows / maxRows) + inserting;
 }
 
+/**
+ * 읽기 관문 — 보유 상한과 flusher 상태로 컨슈머 · 회수가 읽을지 정한다(06_pipeline/03 §행 수 상한과 flusher 메모리 · S5 개정).
+ * - read  : 보유 < 상한
+ * - pause : 보유 ≥ 상한이고 대기 조각 · 삽입 중이 있다 — 멈춰 기다리면 풀린다(S3 규칙 그대로)
+ * - probe : 보유 ≥ 상한인데 대기 조각도 삽입 중도 없다 — 조립 중 행이 확정 경계(컨슈머 하한 최솟값) 이상에 2R 넘게 막혔다.
+ *           멈추면 읽기(경계 전진)와 확정(상한 해제)이 서로를 기다린다(결함 D-S5-1 — 모드 B는 1초마다 그 초의 시점 전부를
+ *           파이프라인 한 번으로 보내 같은 밀리초 묶음이 100k pps · R 50,000에서 2R이 된다 · EXP-23 관측). 이때는 컨슈머 하나(탐침)만
+ *           읽어 경계를 올리고 나머지는 대기를 지킨다 — 탐침 한 번의 읽기가 뒤 밀리초 엔트리를 받거나 꼬리까지 읽어(markDrained) 경계가 넘어간다.
+ * 창 경계 · 조각 경계 · 토큰 규칙은 바뀌지 않는다(읽는 시점만 바뀐다). 보유 초과분 = 확정 접두 나머지(R 이하) + 경계 밀리초 묶음 +
+ * 탐침 한 번의 읽기(READ_COUNT 엔트리) + 회수 한 쪽(RECLAIM_COUNT 엔트리 — 회수는 pause에서만 멈춘다) + 회수 창 나머지(R 이하) — 예외로 잠든 컨슈머는
+ * 대기로 돌려 경계를 붙잡지 않고(검수 R1) PEL 재읽기 중인 컨슈머가 있으면 그 컨슈머가 탐침이다(R2 · 재읽기 분량은 이전 프로세스의 in-flight로 유계).
+ */
+export type ReadGate = 'read' | 'pause' | 'probe';
+
+export interface ProbeCandidate {
+  name: string;
+  alive: boolean;
+  /** PEL 재읽기 중 — 관문과 무관하게 읽는다(검수 D1) */
+  rereadingPel: boolean;
+}
+
+/**
+ * 탐침 선택 — probe 상태에서 읽을 컨슈머 하나.
+ * ① PEL 재읽기 중인 컨슈머가 있으면 그 컨슈머다 — 경계는 그 컨슈머의 옛 워터마크에 묶여 있어 '>' 탐침은 경계를 올리지 못한다(검수 R2).
+ *    그 컨슈머는 관문과 무관하게 읽으므로 '>' 컨슈머는 모두 대기한다.
+ * ② 현재 탐침이 살아 있으면 그대로 · ③ 아니면 묻는 컨슈머가 넘겨받는다.
+ */
+export function pickProbe(current: string | null, all: readonly ProbeCandidate[], asking: string): string {
+  const pel = all.find((c) => c.rereadingPel && c.alive);
+  if (pel) return pel.name;
+  const holder = current === null ? undefined : all.find((c) => c.name === current);
+  return holder?.alive ? (holder.name as string) : asking;
+}
+
+export function readGate(
+  queued: number,
+  assemblingRows: number,
+  maxRows: number,
+  inserting: number,
+): ReadGate {
+  if (heldBatches(queued, assemblingRows, maxRows, inserting) < FLUSHER_ACTIVE_SLOTS) return 'read';
+  return queued > 0 || inserting > 0 ? 'pause' : 'probe';
+}
+
 interface ConsumerLoop {
   name: string;
   conn: Redis | null;
@@ -120,6 +164,8 @@ export class IngestService implements OnApplicationBootstrap, BeforeApplicationS
   private reclaimTurn = 0;
   private lastLag = 0;
   private pausedSince: number | null = null;
+  /** 경계 막힘(readGate probe)에서 읽는 컨슈머 이름 — 하나만 읽어 보유 초과를 유계로 둔다 */
+  private probe: string | null = null;
 
   constructor(
     @Inject(APP_CONFIG) cfg: AppConfig,
@@ -220,11 +266,29 @@ export class IngestService implements OnApplicationBootstrap, BeforeApplicationS
   }
 
   /** 창 버퍼 칸 + 삽입 중이 차면 컨슈머 · 회수가 읽기를 멈춘다 — 적체를 프로세스 메모리가 아니라 Stream(lag)에 둔다 */
+  private gate(): ReadGate {
+    const g = readGate(this.queue.length, this.buffer.assemblingRows, this.params.maxRows, this.flushing);
+    if (g !== 'probe') this.probe = null;
+    this.updatePause(g !== 'read');
+    return g;
+  }
+
+  /** 회수의 관문 — 대기 조각 · 삽입 중이 있을 때만 멈춘다(경계 막힘이면 회수 커서도 읽어야 회수 창이 닫힌다 · 쪽당 RECLAIM_COUNT로 유계) */
   private full(): boolean {
-    const n = heldBatches(this.queue.length, this.buffer.assemblingRows, this.params.maxRows, this.flushing);
-    const isFull = n >= FLUSHER_ACTIVE_SLOTS;
-    this.updatePause(isFull);
-    return isFull;
+    return this.gate() === 'pause';
+  }
+
+  /** 이 컨슈머가 지금 읽는가 — 경계 막힘(probe)에서는 탐침 하나만 읽는다(살아 있지 않은 탐침은 넘겨받는다) */
+  private mayRead(c: ConsumerLoop): boolean {
+    const g = this.gate();
+    if (g === 'read') return true;
+    if (g === 'pause') return false;
+    this.probe = pickProbe(
+      this.probe,
+      this.consumers.map((x) => ({ name: x.name, alive: x.alive, rereadingPel: x.pendingCursor !== null })),
+      c.name,
+    );
+    return this.probe === c.name;
   }
 
   /** 정지 시간은 벽시계로 한 번만 센다 — 컨슈머 N이 함께 멈춰도 N배로 세지 않는다 */
@@ -244,7 +308,7 @@ export class IngestService implements OnApplicationBootstrap, BeforeApplicationS
         // PEL 재읽기 중인 컨슈머는 보유 상한에서도 멈추지 않는다 — 대기로 두면 하한이 전체 최댓값이 되어
         // 남은 옛 PEL 엔트리보다 먼저 옛 창이 닫히고, 재전달 조각의 경계 · 토큰이 크래시 전과 달라진다(검수 D1).
         // PEL은 이미 배달된 엔트리라 크기가 유계다(이전 프로세스의 in-flight 분량).
-        if (this.full() && c.pendingCursor === null) {
+        if (!this.mayRead(c) && c.pendingCursor === null) {
           // 대기 — 쥔 엔트리가 없으니 따라잡은 것으로 본다(창 닫힘 ⓐ) · 확정 접두를 내보내 flusher가 비면 풀린다
           this.buffer.setIdle(c.name, true);
           this.collect();
@@ -255,6 +319,10 @@ export class IngestService implements OnApplicationBootstrap, BeforeApplicationS
         await this.step(c, READ_BLOCK_MS);
       } catch (e) {
         c.alive = false;
+        // 잠든 동안 이 컨슈머의 뒤처진 워터마크가 경계를 붙잡지 않게 대기로 둔다(검수 R1) — 예외 시점에 쥔 in-flight가 없다:
+        // 인계된 엔트리는 창 버퍼 소유이고 인계되지 못한 엔트리는 PEL에 남아 회수로 간다 · '>' 배달은 last-delivered 뒤라 전체 최댓값 하한이 옳다.
+        // PEL 재읽기 중이면 대기로 두지 않는다(검수 D1 — 옛 창이 PEL 엔트리보다 먼저 닫힌다).
+        if (c.pendingCursor === null) this.buffer.setIdle(c.name, true);
         this.log.error(
           `컨슈머 ${c.name} 예외 — ${(e as Error).message} · ${CONSUMER_RESTART_MS} ms 뒤 재기동`,
         );

@@ -27,6 +27,8 @@ import {
   FLUSHER_ACTIVE_SLOTS,
   FLUSHER_HOLD_SLOTS,
   heldBatches,
+  pickProbe,
+  readGate,
 } from '../src/modules/ingest/ingest.service';
 import { createLabFault, LAB_FAULT_EXIT_CODE, labFaultWarning } from '../src/modules/ingest/lab-fault';
 import {
@@ -252,7 +254,78 @@ describe('flusher 보유 상한', () => {
     expect(FLUSHER_ACTIVE_SLOTS).toBe(2);
     expect(heldBatches(1, 0, 50_000, 1)).toBe(2); // 닫혀 대기 1 + 삽입 중 1 → 멈춤
     expect(heldBatches(0, 49_999, 50_000, 1)).toBe(1); // 조립 중 R 미만은 0칸
-    expect(heldBatches(0, 100_000, 50_000, 0)).toBe(2); // 조립 중 2R → 멈춤
+    expect(heldBatches(0, 100_000, 50_000, 0)).toBe(2); // 조립 중 2R
+  });
+
+  it('읽기 관문 — 대기 조각 · 삽입 중이 있으면 멈춤 · 둘 다 비면 탐침(D-S5-1)', () => {
+    expect(readGate(0, 49_999, 50_000, 1)).toBe('read'); // 상한 아래
+    expect(readGate(1, 0, 50_000, 1)).toBe('pause'); // 기다리면 풀린다
+    expect(readGate(0, 100_000, 50_000, 1)).toBe('pause');
+    expect(readGate(0, 100_000, 50_000, 0)).toBe('probe'); // 기다려도 풀리지 않는다 — 탐침 하나가 읽어 경계를 올린다
+  });
+
+  // 재현: 100k pps · 1초 격자 · 파이프라인 한 번 = 같은 밀리초 엔트리 500개(태그 200) · R 50,000
+  const LIM = { maxRows: 50_000, maxBytes: Number.POSITIVE_INFINITY };
+  const burst = (ms: number, n: number) => Array.from({ length: n }, (_, i) => entry(`${ms}-${i}`, 200));
+
+  it('교착 재료 — 모두 대기면 경계 밀리초 묶음은 확정되지 않고 관문은 probe다', () => {
+    const buf = new WindowBuffer({ limits: LIM, consumers: ['c1'] });
+    for (const e of burst(1790000000123, 500)) buf.add(e, 'c1');
+    buf.setIdle('c1', true); // 옛 규칙은 여기서 멈췄다 — 대기 하한 = 받은 최대 밀리초 · 확정은 < 경계
+    expect(buf.takePieces()).toEqual([]);
+    expect(buf.assemblingRows).toBe(100_000);
+    expect(readGate(0, buf.assemblingRows, 50_000, 0)).toBe('probe');
+  });
+
+  it('탐침이 다음 밀리초 엔트리를 받으면 풀리고 조각 경계는 창이 닫힌 뒤 통째로 자른 것과 같다(결정성)', () => {
+    const entries = [...burst(1790000000123, 500), entry('1790000000124-0', 200)];
+    const buf = new WindowBuffer({ limits: LIM, consumers: ['c1'] });
+    for (const e of entries.slice(0, 500)) buf.add(e, 'c1');
+    buf.setIdle('c1', true);
+    expect(buf.takePieces()).toEqual([]);
+    buf.setIdle('c1', false); // 탐침
+    buf.add(entries[500] as BatchEntry, 'c1');
+    const early = buf.takePieces();
+    expect(early.map((p) => p.rows)).toEqual([50_000]);
+    const rest = buf.drainPieces();
+    const whole = splitPieces(entries, LIM, true).pieces;
+    expect([...early, ...rest].map((p) => p.entries.map((e) => e.id))).toEqual(
+      whole.map((p) => p.map((e) => e.id)),
+    );
+  });
+
+  it('다음 엔트리가 없어도 꼬리까지 읽은 빈 응답(markDrained)으로 경계가 넘어간다', () => {
+    const buf = new WindowBuffer({ limits: LIM, consumers: ['c1'] });
+    for (const e of burst(1790000000123, 500)) buf.add(e, 'c1');
+    buf.setIdle('c1', false);
+    buf.markDrained('c1', 1790000000123 + 1 + buf.graceMs); // 읽기 시작 − 유예 > 묶음 밀리초
+    const pieces = buf.takePieces();
+    // 창이 아직 열려 있어 넘친 조각 하나만 나가고 나머지 R은 조립 중 — 보유가 상한 아래로 내려가 관문이 read로 돌아온다
+    expect(pieces.map((p) => p.rows)).toEqual([50_000]);
+    expect(readGate(0, buf.assemblingRows, 50_000, 0)).toBe('read');
+  });
+
+  it('컨슈머 셋 — 대기를 푼 컨슈머의 하한이 경계를 정한다(대기 컨슈머는 전체 최댓값 · 탐침 하나만 푸는 이유)', () => {
+    const buf = new WindowBuffer({ limits: LIM, consumers: ['c1', 'c2', 'c3'] });
+    buf.add(entry('1790000000100-0', 200), 'c2'); // c2의 워터마크는 뒤처져 있다
+    for (const e of burst(1790000000123, 500)) buf.add(e, 'c1');
+    buf.setIdle('c1', true);
+    buf.setIdle('c2', true);
+    buf.setIdle('c3', true);
+    expect(buf.finalBoundMs()).toBe(1790000000123); // 모두 대기 → 전체 최댓값
+    buf.setIdle('c2', false); // 뒤처진 c2가 대기를 풀면 경계가 c2 하한으로 내려간다
+    expect(buf.finalBoundMs()).toBe(1790000000100);
+    buf.setIdle('c2', true); // c2가 예외로 잠들면 러너가 대기로 돌린다(검수 R1) — 경계가 전체 최댓값으로 돌아온다
+    expect(buf.finalBoundMs()).toBe(1790000000123);
+  });
+
+  it('탐침 선택 — PEL 재읽기 우선 · 살아 있는 현재 탐침 유지 · 죽으면 묻는 컨슈머가 넘겨받는다(검수 R2)', () => {
+    const c = (name: string, alive = true, rereadingPel = false) => ({ name, alive, rereadingPel });
+    expect(pickProbe(null, [c('c1'), c('c2')], 'c1')).toBe('c1');
+    expect(pickProbe('c1', [c('c1'), c('c2')], 'c2')).toBe('c1'); // 하나만 읽는다
+    expect(pickProbe('c1', [c('c1', false), c('c2')], 'c2')).toBe('c2'); // 잠든 탐침은 넘겨받는다
+    expect(pickProbe('c1', [c('c1'), c('c2', true, true)], 'c1')).toBe('c2'); // PEL 재읽기 중인 컨슈머가 경계를 막는다
+    expect(pickProbe(null, [c('c1'), c('c2', false, true)], 'c1')).toBe('c1'); // 잠든 재읽기 컨슈머는 고르지 않는다
   });
 });
 
