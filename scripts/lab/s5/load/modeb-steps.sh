@@ -53,6 +53,8 @@ step)
   [ "$(kv_get open)" = 1 ] || { echo "열린 세그먼트가 없다 — start 먼저" >&2; exit 1; }
   SEGTIER=$(kv_get segTier)
   TIER=$(tier_for_pps "$PPS")
+  # L 세그먼트 위의 계단은 시드 모양이 L이다 — 로그 중점 정밀화(예: 250k · 초당 시점 5)도 L 시드 · --pps로 돈다
+  [ "$SEGTIER" != L ] || TIER=L
   # 시드 모양 대조 — M+는 M 시드 · 그 밖은 세그먼트 티어와 같아야 한다(모드 B가 tag_master 모양을 대조해 거부한다)
   case "$TIER:$SEGTIER" in
     M+:M|M:M|S:S|L:L) ;;
