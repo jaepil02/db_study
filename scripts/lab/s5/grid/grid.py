@@ -1017,7 +1017,9 @@ FROM system.query_log WHERE type = 'QueryFinish' AND query_id IN ({inlist})""", 
     return out
 
 
-PGSS_SNAP = """SELECT 'PSS', {i}, queryid, calls, total_exec_time FROM pg_stat_statements
+# pg_stat_statements의 행 키는 (userid, dbid, queryid, toplevel)이다 — queryid만으로 묶으면 EXPLAIN · capture 뒤 생긴
+# 같은 queryid의 다른 toplevel 행이 앞 행을 덮어 증분이 사라진다(격자 2차 1단계 반복 2 · 3 PG 서버 시간 null 실측)
+PGSS_SNAP = """SELECT 'PSS', {i}, userid || ':' || queryid || ':' || toplevel, calls, total_exec_time FROM pg_stat_statements
 WHERE dbid = (SELECT oid FROM pg_database WHERE datname = current_database())
   AND query NOT LIKE '%pg_stat_statements%' AND query ILIKE '%plc_tag_raw_control%';"""
 

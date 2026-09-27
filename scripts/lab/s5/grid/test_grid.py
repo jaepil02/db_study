@@ -1468,5 +1468,19 @@ class ParamsLaterCheckTest(GridDirCase):
         self.assertEqual(self.emitted, [])
 
 
+class PgssKeyTest(unittest.TestCase):
+    """같은 queryid에 toplevel이 다른 두 행이 있어도 증분을 잃지 않는다(키 = userid:queryid:toplevel)."""
+
+    def test_duplicate_queryid_rows_keep_increment(self) -> None:
+        out = "\n".join([
+            "PSS\t0\t10:77:false\t16\t50.0", "PSS\t0\t10:77:true\t1\t7.0",
+            "Time: 5.0 ms",
+            "PSS\t1\t10:77:false\t17\t53.5", "PSS\t1\t10:77:true\t1\t7.0",
+        ])
+        times, server = grid.parse_pg_timed(out, 1)
+        self.assertEqual(times, [5.0])
+        self.assertEqual(server, [3.5])
+
+
 if __name__ == '__main__':
     unittest.main()
