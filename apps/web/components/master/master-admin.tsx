@@ -498,7 +498,7 @@ function CreateForm({ kind, onClose }: { kind: 'site' | 'line' | 'device'; onClo
   const sites = useSites();
   const [siteId, setSiteId] = useState<number | null>(null);
   const sid = siteId ?? sites.data?.[0]?.siteId ?? null;
-  const lines = useLines(sid ?? 0);
+  const lines = useLines(sid);
   const [f, setF] = useState<Record<string, string>>({
     code: '',
     name: '',

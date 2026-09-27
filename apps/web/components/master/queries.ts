@@ -23,12 +23,15 @@ const common = { staleTime: MASTER_STALE_MS, retry: retryOn503 } as const;
 export const useSites = () =>
   useQuery({ queryKey: masterKeys.sites(), queryFn: () => bffGet('sites', listOf(SiteObject)), ...common });
 
-export const useLines = (siteId: number) =>
-  useQuery({
-    queryKey: masterKeys.lines(siteId),
-    queryFn: () => bffGet(`lines?siteId=${siteId}`, listOf(LineObject)),
-    ...common,
-  });
+/** 사이트를 아직 모르면(null) 부르지 않는다 — siteId=0으로 부르면 BFF가 400을 낸다(useDevices와 같은 방식) */
+export const linesQuery = (siteId: number | null) => ({
+  queryKey: masterKeys.lines(siteId ?? 0),
+  queryFn: () => bffGet(`lines?siteId=${siteId}`, listOf(LineObject)),
+  enabled: siteId !== null,
+  ...common,
+});
+
+export const useLines = (siteId: number | null) => useQuery(linesQuery(siteId));
 
 export const useDevices = (siteId: number | null, includeInactive = true) =>
   useQuery({

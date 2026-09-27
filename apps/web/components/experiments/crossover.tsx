@@ -23,11 +23,12 @@ import { Button, Select } from '../master/field';
 import { Band } from '../ui/band';
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from '../ui/card';
 import { type ChartOption, EChart } from './echart';
+import { STORE_LABEL, StructuralRangesTable } from './structural-ranges';
 
-const STORE_LABEL: Record<Store, string> = { postgresql: 'PostgreSQL 대조군', clickhouse: 'ClickHouse' };
 const STORE_COLOR: Record<Store, string> = { postgresql: '#2563eb', clickhouse: '#d97706' };
 const QUERIES = ['Q1', 'Q2', 'Q3', 'Q4', 'Q5'];
 const EMPTY = 'EXP-01~05 기록이 아직 없다';
+const NO_VALID_POINTS = '폐기 기록의 시간 점은 그리지 않는다 — 유효 기록의 점이 아직 없다';
 
 async function fetchRecords(): Promise<ReadResult & { readAt: number }> {
   const res = await fetch('/bff/measurements', { cache: 'no-store' });
@@ -195,7 +196,8 @@ function Counts({ d }: { d: ReadResult }) {
   const c = d.counts;
   return (
     <p className="text-xs text-slate-500">
-      기록 파일 {c.files} · 대조 기록 {c.control} · 판독 불가 기록 {c.unreadable}
+      기록 파일 {c.files} · 대조 기록 {c.control} · 구조 판정 원천 기록 {d.structural?.record ?? '없음'} ·
+      형식이 어긋난 structuralRanges 기록 {c.invalidStructural} · 판독 불가 기록 {c.unreadable}
       {d.unreadableFiles.length > 0 ? ` (${d.unreadableFiles.join(' · ')})` : ''} · 4요소 누락{' '}
       {c.missingConditions} · 폐기 · 정정 제외 {c.excludedStatus} · 편차 기준 초과 제외 {c.excludedDeviation}{' '}
       · 형식이 어긋난 점 {c.invalidPoints}
@@ -297,7 +299,8 @@ export function CrossoverPanel() {
           <div className="h-80 animate-pulse rounded bg-slate-100" />
         ) : !d ? null : points.length === 0 && axes.length === 0 ? (
           <>
-            <p className="text-slate-500">{EMPTY}</p>
+            <p className="text-slate-500">{d.structural ? NO_VALID_POINTS : EMPTY}</p>
+            {d.structural ? <StructuralRangesTable source={d.structural} /> : null}
             <Counts d={d} />
           </>
         ) : (
@@ -319,6 +322,11 @@ export function CrossoverPanel() {
                 상태를 고른다
               </p>
             )}
+            {d.structural ? (
+              <div className="border-t border-slate-100 pt-3">
+                <StructuralRangesTable source={d.structural} />
+              </div>
+            ) : null}
             <div className="flex flex-col gap-2 border-t border-slate-100 pt-3">
               <div className="flex items-center gap-2">
                 <span className="text-xs font-semibold text-slate-700">비교 축(쿼리 시간 외)</span>
@@ -348,7 +356,8 @@ export function CrossoverPanel() {
       </CardContent>
       <CardFooter>
         원천 docs/measurements(BFF 읽기 전용){d ? ` · 판독 ${formatKst(d.readAt, true)}` : ''} · 4요소 없는 점
-        · 폐기 기록은 그리지 않는다 · 속이 빈 점 = 두 저장소 결과 불일치 · 관찰 보조 — 기록 정본 아님
+        · 폐기 기록의 시간 점은 그리지 않는다(구조 판정 구간 표는 예외) · 속이 빈 점 = 두 저장소 결과 불일치 ·
+        관찰 보조 — 기록 정본 아님
       </CardFooter>
     </Card>
   );

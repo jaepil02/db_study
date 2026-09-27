@@ -100,6 +100,8 @@ export interface ReadCounts {
   invalidPoints: number;
   /** 같은 (쿼리 · 행 · 저장소 · 변형 · 캐시) 점이 여러 기록에 있어 뒤 기록만 남긴 수 */
   duplicatePoints: number;
+  /** structuralRanges가 배열이 아닌 대조 기록 — 구조 판정 원천 후보가 아니다 */
+  invalidStructural: number;
 }
 
 export interface ReadResult {
@@ -108,6 +110,39 @@ export interface ReadResult {
   unreadableFiles: string[];
   points: ControlPoint[];
   axes: AxisEntry[];
+  /** 구조 판정 역전 구간의 원천 — 없으면 null(08_screen/07 §대조군 역전 지점 계약 "구조 판정 원천 선택") */
+  structural: StructuralSource | null;
+}
+
+/** structuralRanges 한 행 — 역전이 있으면 crossover 구간, 없으면 winner · range */
+export type StructuralRange =
+  | {
+      query: string;
+      cache: string;
+      pgVariant: string;
+      /** 반개구간 (a, b] — 10_observability/04 §기계 판독 블록 */
+      crossover: [string, string];
+      /** 선택 — 역전 방향(앞선 쪽 → 뒤 쪽) · 없으면 null */
+      direction: { from: Store; to: Store } | null;
+      undetermined: string[];
+    }
+  | {
+      query: string;
+      cache: string;
+      pgVariant: string;
+      crossover: null;
+      winner: Store;
+      /** 닫힌 관측 범위 — 양 끝이 판정에 든다 */
+      range: [string, string];
+      undetermined: string[];
+    };
+
+export interface StructuralSource extends RecordRef {
+  /** 원천 기록의 status 그대로 — 근거 표지에 싣는다(폐기 기록이어도 구조 사실은 보인다) */
+  status: string;
+  ranges: StructuralRange[];
+  /** 형식이 어긋나 뺀 행 */
+  invalidRanges: number;
 }
 
 interface Block {
@@ -120,6 +155,8 @@ interface Block {
   repeat: { runs: number; deviation: number; threshold: number };
   points: unknown[];
   axes: unknown[];
+  /** undefined = 필드 없음 · 배열이 아니면 null */
+  structuralRanges: unknown[] | null | undefined;
 }
 
 const isObj = (v: unknown): v is Record<string, unknown> =>
@@ -171,6 +208,12 @@ function validate(v: unknown): Block | null {
     repeat: { runs: repeat.runs, deviation: repeat.deviation, threshold: repeat.threshold },
     points: (points as unknown[] | undefined) ?? [],
     axes: (axes as unknown[] | undefined) ?? [],
+    structuralRanges:
+      v.structuralRanges === undefined
+        ? undefined
+        : Array.isArray(v.structuralRanges)
+          ? v.structuralRanges
+          : null,
   };
 }
 
@@ -233,6 +276,66 @@ function parseAxis(a: unknown, ref: RecordRef): AxisEntry | null {
   };
 }
 
+/** 행 수 지수 표기 "10^k"(k 소수 허용) — 10_observability/04 §기계 판독 블록 */
+const EXP_NOTATION = /^10\^\d+(\.\d+)?$/;
+const isExp = (v: unknown): v is string => typeof v === 'string' && EXP_NOTATION.test(v);
+const isPair = (v: unknown): v is [string, string] => Array.isArray(v) && v.length === 2 && v.every(isExp);
+
+/** 필수 query · cache · pgVariant · crossover · undetermined · crossover null일 때만 winner · range · from · to 선택 */
+function parseRange(r: unknown): StructuralRange | null {
+  if (!isObj(r)) return null;
+  const { query, cache, pgVariant, crossover, winner, range, undetermined } = r;
+  if (typeof query !== 'string' || typeof cache !== 'string' || typeof pgVariant !== 'string') return null;
+  if (!Array.isArray(undetermined) || !undetermined.every(isExp)) return null;
+  const base = { query, cache, pgVariant, undetermined: undetermined as string[] };
+  if (crossover === undefined) return null;
+  if (crossover !== null) {
+    if (!isPair(crossover) || winner !== undefined || range !== undefined) return null;
+    if (r.from === undefined && r.to === undefined) return { ...base, crossover, direction: null };
+    const from = asStore(r.from);
+    const to = asStore(r.to);
+    if (!from || !to || from === to) return null;
+    return { ...base, crossover, direction: { from, to } };
+  }
+  const w = asStore(winner);
+  if (!w || !isPair(range)) return null;
+  return { ...base, crossover: null, winner: w, range };
+}
+
+/**
+ * 구조 판정 원천 — EXP-01~05 · structuralRanges 배열 · 4요소 완비 · superseded 아님인 기록 가운데 번호가 가장 큰 하나.
+ * 규칙 3의 status 조건(valid)과 규칙 5(편차)는 적용하지 않는다 — 구조 판정에는 편차 폐기가 없다(10_observability/04 §구조 판정과 분포 판정).
+ * superseded(status superseded 또는 다른 valid 기록의 supersedes 대상)는 뺀다 — 정정된 판정을 원천으로 삼지 않는다.
+ */
+function pickStructural(
+  blocks: readonly Block[],
+  superseded: ReadonlySet<string | null>,
+): StructuralSource | null {
+  const candidates = blocks
+    .filter((b) => b.exp.some((e) => (CONTROL_EXPS as readonly string[]).includes(e)))
+    .filter((b) => Array.isArray(b.structuralRanges))
+    .filter((b) => b.status !== 'superseded' && !superseded.has(b.record))
+    .sort((x, y) => y.record.localeCompare(x.record));
+  for (const b of candidates) {
+    const run = conditionsComplete(b);
+    if (!run) continue;
+    const ranges: StructuralRange[] = [];
+    let invalidRanges = 0;
+    for (const raw of b.structuralRanges as unknown[]) {
+      const r = parseRange(raw);
+      if (r) ranges.push(r);
+      else invalidRanges++;
+    }
+    return { record: b.record, run, switches: b.switches, status: b.status, ranges, invalidRanges };
+  }
+  return null;
+}
+
+/** 역전 구간(반개구간) — "(10^7, 10^7.25]행" */
+export const formatCrossover = ([a, b]: readonly [string, string]): string => `(${a}, ${b}]행`;
+/** 역전 없음의 관측 범위(닫힌 범위) — "10^5 ~ 10^9행" */
+export const formatExpRange = ([a, b]: readonly [string, string]): string => `${a} ~ ${b}행`;
+
 /** 기록 파일 목록 → 역전 지점 패널 입력. 규칙 1~7을 이 순서로 적용한다(규칙 6은 판독 뒤 · 3 · 5 · 4보다 먼저 — 다른 실험의 폐기 · 누락을 패널 수에 섞지 않는다) */
 export function readMeasurements(files: readonly { name: string; text: string }[]): ReadResult {
   const counts: ReadCounts = {
@@ -244,6 +347,7 @@ export function readMeasurements(files: readonly { name: string; text: string }[
     missingConditions: 0,
     invalidPoints: 0,
     duplicatePoints: 0,
+    invalidStructural: 0,
   };
   const unreadableFiles: string[] = [];
   const blocks: Block[] = [];
@@ -268,6 +372,7 @@ export function readMeasurements(files: readonly { name: string; text: string }[
   for (const b of blocks.sort((x, y) => x.record.localeCompare(y.record))) {
     if (!b.exp.some((e) => (CONTROL_EXPS as readonly string[]).includes(e))) continue; // 규칙 6
     counts.control++;
+    if (b.structuralRanges === null) counts.invalidStructural++; // 배열이 아닌 structuralRanges — 구조 판정 원천 후보가 아니다
     if (b.status !== 'valid' || superseded.has(b.record)) {
       counts.excludedStatus++; // 규칙 3
       continue;
@@ -304,7 +409,13 @@ export function readMeasurements(files: readonly { name: string; text: string }[
       axesByKey.set(key, a);
     }
   }
-  return { counts, unreadableFiles, points: [...byKey.values()], axes: [...axesByKey.values()] };
+  return {
+    counts,
+    unreadableFiles,
+    points: [...byKey.values()],
+    axes: [...axesByKey.values()],
+    structural: pickStructural(blocks, superseded),
+  };
 }
 
 // ── 역전 판정 ──

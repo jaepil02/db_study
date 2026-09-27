@@ -15,7 +15,7 @@ export function DevicePicker({ deviceId }: { deviceId: number | null }) {
   const sites = useSites();
   const [siteSel, setSite] = useState<number | null>(null);
   const siteId = siteSel ?? sites.data?.[0]?.siteId ?? null;
-  const lines = useLines(siteId ?? 0);
+  const lines = useLines(siteId);
   const devices = useDevices(siteId, true);
   const current = devices.data?.find((d) => d.deviceId === deviceId) ?? null;
   // 라인 기본값 — 보고 있는 설비의 라인 · 모르면 전체
