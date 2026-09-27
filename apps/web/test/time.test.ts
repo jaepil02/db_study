@@ -1,5 +1,5 @@
 // AC-04 웹 표시 절반 — 알려진 epoch 행(기록 010 반복 1의 AC-04 행)을 웹이 Asia/Seoul로 한 번만 변환하는가.
-// 기대값은 ClickHouse가 같은 행을 컬럼 시간대(DateTime64(3, 'Asia/Seoul'))로 낸 문자열이다 — 밀리초 오차 0.
+// 기대값은 ClickHouse가 같은 행을 toString(ts, 'Asia/Seoul')로 낸 문자열이다(컬럼 인자는 ADR-27 뒤 UTC — s2-verify AC-04가 인자를 명시한다) — 밀리초 오차 0.
 // 호스트 시간대와 무관해야 하므로 package.json test:tz가 TZ 3종(Asia/Seoul · UTC · America/New_York)으로 다시 돌린다.
 import { describe, expect, it } from 'vitest';
 import { formatKst, formatKstIso, toKstOffsetIso } from '../lib/time';

@@ -2,6 +2,7 @@
 
 > **대상**: 스키마 적용의 저장소 간 순서 · PostgreSQL 순번 마이그레이션 · ClickHouse DDL 순번 · 도구 관리 테이블 · 시드(사이트 · 라인 · 설비 · 접속 설정 · 태그 · 계정 · 역할) · 스키마 변경 절차 · 스냅샷과의 관계
 > **작성일**: 2026-09-24
+> **개정일**: 2026-09-28 — 구현 반영(i-utc 실측 · 리드 채택) — 기존 볼륨 경로 ②에 **pgmigrations.run_on 보정 단계**(KST 벽시계 행 → UTC 벽시계 · 재구성 볼륨만) · 불릿 신설 — 순서 검사 영구 실패 방지
 > **개정일**: 2026-09-28 — 리드 판정 — PostgreSQL 순번 **010 실행 수명 객체 함수**(010_run_perf_functions.sql · SECURITY DEFINER 2) · 이후 변경 대역 010~ → **011~**
 > **개정일**: 2026-09-28 — r-utc 검수 반영(M1 · L2 · L3 · L4) — §DB 시간대 전환 ClickHouse 판정 대상 → **테이블 8 · MV 제외**(mv_tag_1d.bucket의 'Asia/Seoul'은 정상 — 빈 볼륨 ⑤ · 멱등 불릿) · 기존 볼륨 ② 009 트랜잭션 부모마다 → **migrate 실행 하나(migrate.ts singleTransaction — 대기 순번 전체)** · 세션 시간대 SET → **SET LOCAL** · ③ INSERT SELECT에 ingested_at 명시 복사 · tag_raw 복사 중 디스크 일시 2배 전제
 > **개정일**: 2026-09-28 — 리드 판정 — 미확인 행 api · datagen 컨테이너 TZ 닫힘(UTC · 구현 목록 #24)
@@ -274,6 +275,7 @@ ADR-27(DB 처리 시간대 UTC · 저장 운영 경계 UTC · 달력 의미 경�
                      → create_parent(같은 간격 · p_start_partition = 옛 행 최솟값을 UTC 간격으로 내린 값 · 행 없으면 현재)
                      → 보존 설정 복원(alarm_event 2 years · 분리 보존 · 대조군 7 days · 삭제)
                      → 옛 자식 행 재삽입(alarm_event는 OVERRIDING SYSTEM VALUE) → 행 수 대조 → 옛 자식 DROP
+                     → 재구성을 했을 때만 pgmigrations.run_on 보정(이 트랜잭션이 넣지 않은 행을 KST 벽시계 → UTC 벽시계로)
 ③ ClickHouse 전환  판정 대상 테이블 8마다 카탈로그(system.columns) 판정 — MV 제외:
                      파티션 식이 시각 컬럼에 기대는 5(tag_raw · alarm_eval · tag_1m · tag_1h · tag_1d)
                        MV 3 DROP(입구 mv_tag_1m 먼저) → UTC 정의로 새 테이블(tag_1m을 tag_1h · tag_1d보다 먼저)
@@ -286,6 +288,7 @@ ADR-27(DB 처리 시간대 UTC · 저장 운영 경계 UTC · 달력 의미 경�
 
 - **③을 DDL 재적용보다 앞에 둔다.** MV가 없는 상태에서 복사해야 원시 복사분이 롤업에 한 번 더 들어가지 않고(롤업은 롤업대로 복사한다), ④가 연쇄 입구를 마지막에 연다(§저장소 간 적용 순서 ⑥).
 - **INSERT SELECT에 중복 제거 해제 두 설정을 준다.** 대상 테이블에 비복제 중복 제거 윈도우가 있어 같은 내용 블록이 오류 없이 버려질 수 있다 — 설정 근거는 [04_clickhouse_rollup.md](./04_clickhouse_rollup.md) §백필 절차 ④와 같다.
+- **pgmigrations.run_on을 UTC 벽시계로 옮긴다(구현 i-utc 실측 · 리드 채택).** run_on은 시간대 없는 timestamp(세션 벽시계)이고 순서 검사(checkOrder)는 ORDER BY run_on, id다 — KST로 기록된 옛 행 뒤 9시간 안에 UTC 세션이 009 행을 쓰면 009가 앞에 놓여 이후 모든 migrate가 "preceding already run migration"으로 영구히 실패한다(임시 컨테이너 재현). 009는 재구성을 한 경우(= KST 시대 볼륨)에만 같은 트랜잭션이 넣지 않은 행의 run_on을 9시간 당긴다 — 빈 볼륨 · 이미 UTC면 손대지 않는다.
 - **ingested_at을 컬럼 목록에 명시해 복사한다.** 빼면 DEFAULT now64(3)가 복사 시각을 넣어 적재 지연(ingested_at − ts) 이력이 전부 전환 시각으로 바뀐다.
 - **tag_raw 복사 중 디스크는 일시 2배를 전제한다.** 옛 테이블은 EXCHANGE · DROP 전까지 남으므로 복사가 끝날 때까지 tag_raw 크기만큼 여유가 더 있어야 한다 — 모자라면 복사가 중간에 실패하고 옛 테이블은 그대로 남는다(멱등 불릿).
 - **멱등 판정은 카탈로그다.** 전환 단계는 시작 때 남은 전환용 테이블(이름 접미)을 지우고 판정 대상 테이블 8(tag_raw · alarm_eval · tag_1m · tag_1h · tag_1d · 업무 대조 3) 가운데 'Asia/Seoul' 컬럼이 남은 테이블만 다시 한다 — 옛 테이블은 EXCHANGE 전까지 그대로라 중간에 멈춰도 잃는 것이 없다. **MV는 판정에서 뺀다** — mv_tag_1d.bucket의 DateTime('Asia/Seoul')은 정상(달력 의미 #1)이라 판정에 넣으면 전환이 끝나지 않는다. 009는 migrate 실행 하나의 트랜잭션 안에서 돈다(apps/api/src/db/migrate.ts가 node-pg-migrate에 singleTransaction을 준다 — 대기 순번 전체가 BEGIN · COMMIT 하나) — 부모 둘이 함께 커밋되거나 함께 되돌려지고 부모별 커밋은 없다 · 실패하면 재실행이 처음부터 다시 해 수렴한다 · SET LOCAL은 그 트랜잭션이 끝나면 풀린다.

@@ -28,7 +28,7 @@ almAcks.inc({ result: 'rejected' }, 0);
 /**
  * 이력 기본 범위 7일(2계층 현행 참고 · 소유 07_api/07) · 열린 · 미확인 필터의 기본 시작 = 보존 창 시작.
  * 보존 창 = pg_partman retention 2년(04_alarm.sql · 08_retention_lifecycle #9)이 남기는 가장 오래된 월 파티션의 시작 —
- * DB 기본 timezone이 Asia/Seoul이라 date_trunc('month')가 파티션 경계(Asia/Seoul 월 1일)와 같다.
+ * DB 기본 timezone이 UTC라(ADR-27) 인자 없는 date_trunc('month')가 파티션 경계(UTC 월 1일 · 009)와 저절로 같다.
  */
 const HISTORY_DEFAULT_RANGE = "interval '7 days'";
 const RETENTION_START = "date_trunc('month', now() - interval '2 years')";

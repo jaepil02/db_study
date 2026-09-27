@@ -31,8 +31,9 @@ function chFromUrl(raw: string) {
 
 async function ac04(ch: ReturnType<typeof chFromUrl>, out: Record<string, unknown>) {
   // ── AC-04: 알려진 epoch 행(최신 행 하나) → 시계열 API · 최신값 API의 ts가 같은 순간인가
+  // ts_kst는 시간대 인자를 명시한다 — 컬럼 인자가 UTC(ADR-27)라 인자 없는 toString은 UTC 문자열이 된다(웹 test/time.test.ts · 기록 010과 대조)
   const known = await ch.query({
-    query: `SELECT device_id, tag_id, toUnixTimestamp64Milli(ts) AS ts_ms, toString(ts) AS ts_kst
+    query: `SELECT device_id, tag_id, toUnixTimestamp64Milli(ts) AS ts_ms, toString(ts, 'Asia/Seoul') AS ts_kst
               FROM plc.tag_raw ORDER BY ts DESC LIMIT 1`,
     format: 'JSONEachRow',
   });

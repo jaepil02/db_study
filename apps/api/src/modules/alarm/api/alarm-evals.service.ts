@@ -38,7 +38,7 @@ export function buildEvalSql(interval: EvalInterval, by: 'rule' | 'tag'): string
               FROM plc.alarm_eval
              WHERE ${filter} AND ${range}
              ORDER BY rule_id, tag_id, ts_ms`;
-  // epoch 정렬 버킷 — 1분 · 1시간은 KST 오프셋(+9시간)의 약수라 KST 경계와 같다
+  // epoch 정렬 버킷 = UTC 경계 — 1분 · 1시간은 정수 시 오프셋(KST +9시간)의 약수라 KST로 읽어도 같은 경계다(ADR-27 전후 결과 불변)
   return `SELECT rule_id, tag_id, intDiv(toUnixTimestamp64Milli(ts), {bucket:Int64}) * {bucket:Int64} AS ts_ms,
                  min(value) AS vmin, max(value) AS vmax, sum(breached) AS breaches, count() AS evals
             FROM plc.alarm_eval

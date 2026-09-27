@@ -1,7 +1,7 @@
 // 모드 D 단독 실행 진입점(GEN-08 백필 + GEN-10 대조군 동일 행 · S5) — Nest 없이 돈다(mode-b.ts와 같은 모양 · dist/mode-d.js).
 // 사용: MEMORY_PROFILE=load WORKER_POOL_SIZE=2 node dist/mode-d.js --tier M --mix mixed --seed 42 --from <ISO> --to <ISO>
 //         [--control on|off] [--profile <신호 프로파일 — 전 태그>] [--rollup on|off] [--devices N] [--tags-per-device N]
-//       node dist/mode-d.js --prune-control        대조군 정리(tag_raw에 실제로 남은 KST 일 밖의 대조군 일 파티션 DETACH · DROP)
+//       node dist/mode-d.js --prune-control        대조군 정리(tag_raw에 실제로 남은 UTC 일 밖의 대조군 일 파티션 DETACH · DROP)
 // 접속: CLICKHOUSE_URL(8123) · POSTGRES_URL(app_rw — 태그 읽기 · COPY) · APP_OWNER_PASSWORD(과거 일 파티션 생성 · ⑧ 비우기 · 정리)
 // 출력은 JSON 한 줄 — run · switches는 설정 로더가 만든다(측정 기록 4요소). 종료 코드 0 전부 일치 · 2 불일치 일 있음 · 1 실패.
 // 한 번에 한 모드(REQ-GEN-05) — ② 주입 정지 확인이 최근 30초 실시간 적재 흔적을 보고 거부한다.
@@ -84,7 +84,7 @@ async function main() {
       const rawDays = await raw.rawDays();
       if (rawDays.length === 0 && !args.allowEmptyRaw)
         throw new ConfigRejectedError(
-          'tag_raw에 남은 KST 일이 없다 — 정리하면 과거 대조군 일 파티션이 전부 지워진다. 의도했으면 --allow-empty-raw',
+          'tag_raw에 남은 UTC 일이 없다 — 정리하면 과거 대조군 일 파티션이 전부 지워진다. 의도했으면 --allow-empty-raw',
         );
       const before = (await control.partitions()).length;
       const dropped = await control.prune(rawDays, Date.now());

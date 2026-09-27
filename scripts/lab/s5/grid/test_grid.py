@@ -59,7 +59,7 @@ class GridDirCase(unittest.TestCase):
 class TsAndGammaTest(unittest.TestCase):
     def test_ts_ms_offsets(self) -> None:
         base = int(dt.datetime(2026, 9, 26, 5, 0, tzinfo=UTC).timestamp()) * 1000   # 14:00 KST
-        self.assertEqual(grid.ts_ms('2026-09-26 14:00:00'), base)                  # 시간대 없음 = KST(ClickHouse TSV)
+        self.assertEqual(grid.ts_ms('2026-09-26 05:00:00'), base)                  # 시간대 없음 = UTC(ClickHouse TSV · 컬럼 인자 UTC — ADR-27)
         self.assertEqual(grid.ts_ms('2026-09-26 14:00:00+09'), base)               # PostgreSQL timestamptz
         self.assertEqual(grid.ts_ms('2026-09-26 14:00:00.5+09'), base + 500)
         self.assertEqual(grid.ts_ms('2026-09-26 14:00:00.123456+09:00'), base + 123)
@@ -134,9 +134,9 @@ class MatchTest(GridDirCase):
 
     def q2(self, pg_avg: float, *, pg_min: str = '-5', pg_max: str = '105', pg_count: int | None = None,
            aux_n: int | None = None) -> dict:
-        self.aux = tsv([['2026-09-26 13:00:00', aux_n or self.N, self.S]])
-        self.put('Q2', [['2026-09-26 13:00:00', repr(100.0), '-5', '105', self.N]],
-                 [['2026-09-26 13:00:00+09', repr(pg_avg), pg_min, pg_max, pg_count or self.N]])
+        self.aux = tsv([['2026-09-26 04:00:00', aux_n or self.N, self.S]])
+        self.put('Q2', [['2026-09-26 04:00:00', repr(100.0), '-5', '105', self.N]],
+                 [['2026-09-26 04:00:00+00', repr(pg_avg), pg_min, pg_max, pg_count or self.N]])
         return self.match('Q2')
 
     def test_avg_inside_bound_matches(self) -> None:
@@ -171,9 +171,9 @@ class MatchTest(GridDirCase):
         self.assertTrue(self.q2(100.0, pg_min='-5.0', pg_max='1.05e2')['resultMatch'])   # 표기만 다른 같은 값
 
     def test_key_set_difference_mismatches(self) -> None:
-        self.aux = tsv([['2026-09-26 13:00:00', self.N, self.S], ['2026-09-26 12:00:00', self.N, self.S]])
-        self.put('Q2', [['2026-09-26 13:00:00', '100', '-5', '105', self.N], ['2026-09-26 12:00:00', '100', '-5', '105', self.N]],
-                 [['2026-09-26 13:00:00+09', '100', '-5', '105', self.N]])
+        self.aux = tsv([['2026-09-26 04:00:00', self.N, self.S], ['2026-09-26 03:00:00', self.N, self.S]])
+        self.put('Q2', [['2026-09-26 04:00:00', '100', '-5', '105', self.N], ['2026-09-26 03:00:00', '100', '-5', '105', self.N]],
+                 [['2026-09-26 04:00:00+00', '100', '-5', '105', self.N]])
         r = self.match('Q2')
         self.assertFalse(r['resultMatch'])
         self.assertEqual(r['keyDiff'], 1)
@@ -193,11 +193,11 @@ class MatchTest(GridDirCase):
         self.assertFalse(self.match('Q5')['resultMatch'])
 
     def test_q1_rows_by_position(self) -> None:
-        ch = [['2026-09-26 13:59:59.000', '1.5', '0'], ['2026-09-26 13:59:58.000', '2.5', '4']]
-        pg = [['2026-09-26 13:59:59+09', '1.5', '0'], ['2026-09-26 13:59:58+09', '2.5', '4']]
+        ch = [['2026-09-26 04:59:59.000', '1.5', '0'], ['2026-09-26 04:59:58.000', '2.5', '4']]
+        pg = [['2026-09-26 04:59:59+00', '1.5', '0'], ['2026-09-26 04:59:58+00', '2.5', '4']]
         self.put('Q1', ch, pg)
         self.assertTrue(self.match('Q1')['resultMatch'])
-        self.put('Q1', ch, [pg[0], ['2026-09-26 13:59:58+09', '2.5', '2']])      # quality가 다르다
+        self.put('Q1', ch, [pg[0], ['2026-09-26 04:59:58+00', '2.5', '2']])      # quality가 다르다
         self.assertFalse(self.match('Q1')['resultMatch'])
         self.put('Q1', ch, pg[:1])                                                # 행 수가 다르다
         self.assertFalse(self.match('Q1')['resultMatch'])
@@ -205,12 +205,12 @@ class MatchTest(GridDirCase):
     # Q4: 키(분 버킷 · device · tag) 뒤 count · avg · min · max · bad — 롤업(tag_1m -Merge)도 같은 열 순서
     def q4(self, *, rollup_avg: float = 100.0, rollup_bad: int = 3, rollup_count: int = 60,
            rollup_extra: bool = False) -> dict:
-        key = ['2026-09-26 13:59:00', 7, 1401]
+        key = ['2026-09-26 04:59:00', 7, 1401]
         self.aux = tsv([key + [60, 6000.0]])
-        self.put('Q4', [key + [60, '100', '90', '110', 3]], [['2026-09-26 13:59:00+09', 7, 1401, 60, '100', '90', '110', 3]])
+        self.put('Q4', [key + [60, '100', '90', '110', 3]], [['2026-09-26 04:59:00+00', 7, 1401, 60, '100', '90', '110', 3]])
         rows = [key + [rollup_count, repr(rollup_avg), '90', '110', rollup_bad]]
         if rollup_extra:
-            rows.append(['2026-09-26 13:58:00', 7, 1401, 60, '100', '90', '110', 3])
+            rows.append(['2026-09-26 04:58:00', 7, 1401, 60, '100', '90', '110', 3])
         self.rollup = tsv(rows)
         return self.match('Q4')
 
@@ -237,10 +237,10 @@ class MatchTest(GridDirCase):
         self.assertEqual(r['rollupMismatchGroups'], 1)
 
     def test_q4_bad_count_between_stores(self) -> None:
-        key = ['2026-09-26 13:59:00', 7, 1401]
+        key = ['2026-09-26 04:59:00', 7, 1401]
         self.aux = tsv([key + [60, 6000.0]])
         self.rollup = tsv([key + [60, '100', '90', '110', 3]])
-        self.put('Q4', [key + [60, '100', '90', '110', 3]], [['2026-09-26 13:59:00+09', 7, 1401, 60, '100', '90', '110', 2]])
+        self.put('Q4', [key + [60, '100', '90', '110', 3]], [['2026-09-26 04:59:00+00', 7, 1401, 60, '100', '90', '110', 2]])
         self.assertFalse(self.match('Q4')['resultMatch'])
 
 
@@ -348,7 +348,7 @@ class BudgetTest(GridDirCase):
 
 # ───────────────────────── 격자 2차 — 미래 방향 기하 ─────────────────────────
 
-S = dt.datetime(2026, 9, 25, 1, 6, 20, tzinfo=UTC)     # KST 2026-09-25 10:06:20 · S ≡ 20초
+S = dt.datetime(2026, 9, 25, 10, 6, 20, tzinfo=UTC)    # UTC 자정(09-26 00:00Z) − 50020초 · S ≡ 20초(ADR-27 — 일 파티션 = UTC 일)
 
 
 def geo(stages: dict | None = None) -> dict:
@@ -362,15 +362,15 @@ class StartRuleTest(unittest.TestCase):
         self.assertEqual(int(s.timestamp()) % 60, grid.START_MOD)
         self.assertLessEqual(s + dt.timedelta(seconds=10 ** 5), now - dt.timedelta(seconds=60))
         midnight = s + dt.timedelta(seconds=grid.START_SPLIT_SEC)
-        k = midnight.astimezone(grid.KST)
-        self.assertEqual((k.hour, k.minute, k.second), (0, 0, 0))
+        k = midnight.astimezone(UTC)
+        self.assertEqual((k.hour, k.minute, k.second), (0, 0, 0))   # UTC 자정 = 일 파티션 경계(ADR-27)
         # 가장 늦은 자정 — 하루 뒤 자정이면 5단계 end가 지금 − 60초를 넘는다
         later = s + dt.timedelta(days=1)
         self.assertGreater(later + dt.timedelta(seconds=10 ** 5), now - dt.timedelta(seconds=60))
         self.assertEqual(grid.start_problems(s, now), [])
 
     def test_default_start_splits_stage5_at_midnight(self) -> None:
-        days = grid.kst_day_split(S, S + dt.timedelta(seconds=10 ** 5))
+        days = grid.utc_day_split(S, S + dt.timedelta(seconds=10 ** 5))
         self.assertEqual([d['sec'] for d in days], [50_020, 49_980])
 
     def test_start_problems(self) -> None:
@@ -727,9 +727,9 @@ class CheckChainTest(GridDirCase):
                 return '0\n'
             if 'countMerge' in sql:
                 return '320000\n'
-            return '100000\n' if "'2026-09-25 10:06:20.000'" in sql else '220000\n'
+            return '100000\n' if "'2026-09-25 19:06:20.000'" in sql else '220000\n'
         with mock.patch.object(grid, 'chq', fake_chq), \
-                mock.patch.object(grid, 'pgq', lambda sql: '0\n' if 'OR ts >=' in sql else ('100000\n' if "'2026-09-25 10:06:20.000+09'" in sql else '220000\n')):
+                mock.patch.object(grid, 'pgq', lambda sql: '0\n' if 'OR ts >=' in sql else ('100000\n' if "'2026-09-25 19:06:20.000+09'" in sql else '220000\n')):
             grid.cmd_check([pid])
         line = self.emitted[-1]
         self.assertEqual(line['chain'], ['r5.5', '1'])                  # 단계 2의 조각은 세지 않는다(복원으로 빠졌다)
@@ -1270,7 +1270,7 @@ class RefillTest(GridDirCase):
 
 class BoundaryTest(unittest.TestCase):
     def test_default_start_midnight_boundary(self) -> None:
-        m = dt.datetime(2026, 9, 26, 15, 0, tzinfo=UTC)                 # KST 2026-09-27 00:00
+        m = dt.datetime(2026, 9, 27, 0, 0, tzinfo=UTC)                  # UTC 자정 2026-09-27 00:00Z
         s = grid.default_start(m + dt.timedelta(seconds=50_040))       # S + 10^5 = 지금 − 60초 — 이 자정을 쓸 수 있는 첫 순간
         self.assertEqual(s, m - dt.timedelta(seconds=50_020))
         s = grid.default_start(m + dt.timedelta(seconds=50_039))       # 1초 이르면 하루 앞 자정

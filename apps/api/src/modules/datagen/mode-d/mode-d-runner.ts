@@ -1,5 +1,5 @@
 // 모드 D 백필 + 대조군 동일 행 — 절차 정본 docs/06_pipeline/10_datagen_inject.md §모드 D 백필과 대조군 동일 행 ①~⑧
-// ① 조건 확정(인자) ② 주입 정지 확인 ③ DETACH mv_tag_1m ④ KST 일 단위(벡터 → tag_raw INSERT → 대조군 COPY) ⑤ tag_1m INSERT SELECT
+// ① 조건 확정(인자) ② 주입 정지 확인 ③ DETACH mv_tag_1m ④ UTC 일 단위(벡터 → tag_raw INSERT → 대조군 COPY) ⑤ tag_1m INSERT SELECT
 // ⑥ ATTACH ⑦ 일마다 count(tag_raw) = count(대조군) = countMerge(tag_1m) ⑧ 불일치 일은 대조군 그 구간을 비우고 같은 시드로 다시 COPY → ⑦
 // 한 벡터를 두 저장소에 쓴다 — 하루치가 메모리에 들어가지 않아 일마다 같은 인자로 두 번 생성하고(형식만 다르다) 지문으로 같은 벡터임을 확인한다.
 // 도중 실패는 MV 분리 상태로 남기고 멈춘다 — 멱등 토큰이 없어 부분 재실행은 중복을 만든다(REQ-GEN-10 · 처음부터 다시).
@@ -12,7 +12,7 @@ import {
   PG_COPY_HEADER,
   PG_COPY_TRAILER,
 } from './mode-d-encode';
-import { type DaySegment, gridRange, type ModeDRunArgs, minuteCover, splitKstDays } from './mode-d-options';
+import { type DaySegment, gridRange, type ModeDRunArgs, minuteCover, splitUtcDays } from './mode-d-options';
 
 export interface EncodePool {
   run(task: EncodeTask): Promise<EncodeResult>;
@@ -33,7 +33,7 @@ export interface RawStore {
 
 /** PostgreSQL 대조군 쪽(plc_tag_raw_control) */
 export interface ControlStore {
-  /** 없는 KST 일 파티션을 만든다 — 만든 일(dayStartMs) 목록 */
+  /** 없는 UTC 일 파티션을 만든다 — 만든 일(dayStartMs) 목록 */
   ensureDayPartitions(dayStarts: readonly number[]): Promise<number[]>;
   countControl(fromMs: number, toMs: number): Promise<number>;
   /** 전용 커넥션 · 트랜잭션 1(BEGIN · COPY BINARY · COMMIT) · synchronous_commit off */
@@ -227,7 +227,7 @@ export class ModeDRunner {
 
   async run(): Promise<ModeDSummary> {
     const a = this.args;
-    const segs = splitKstDays(a.fromMs, a.toMs);
+    const segs = splitUtcDays(a.fromMs, a.toMs);
     // ② 주입 정지 확인 — 분리 중 들어온 실시간 행은 롤업되지 않는다(04_clickhouse_rollup §백필 절차 ①)
     const live = await this.raw.liveRows();
     if (live > 0)

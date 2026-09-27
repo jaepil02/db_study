@@ -2,7 +2,7 @@
 // 저장소 없이 가짜 클라이언트(질의를 받아 적기만 한다)와 순수 함수로 확인한다 — 실제 DETACH · DROP은 통합 확인의 몫이다.
 import { createRequire } from 'node:module';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { DAY_MS, kstDayName } from '../src/modules/datagen/mode-d/mode-d-options';
+import { DAY_MS, utcDayName } from '../src/modules/datagen/mode-d/mode-d-options';
 import {
   CONTROL_PARTITIONS_SQL,
   ownerUrl,
@@ -10,8 +10,8 @@ import {
 } from '../src/modules/datagen/mode-d/mode-d-stores';
 
 const HOUR = 3_600_000;
-/** KST 자정(y-m-d 00:00 +09:00)의 epoch ms */
-const kstMidnight = (y: number, m: number, d: number) => Date.UTC(y, m - 1, d) - 9 * HOUR;
+/** UTC 자정(y-m-d 00:00Z)의 epoch ms — 대조군 일 파티션 경계(ADR-27 · 009) */
+const utcMidnight = (y: number, m: number, d: number) => Date.UTC(y, m - 1, d);
 
 interface PartRow {
   name: string;
@@ -20,8 +20,8 @@ interface PartRow {
 }
 
 const dayRow = (y: number, m: number, d: number): PartRow => {
-  const lo = kstMidnight(y, m, d);
-  return { name: `plc_tag_raw_control_p${kstDayName(lo)}`, lo: new Date(lo), hi: new Date(lo + DAY_MS) };
+  const lo = utcMidnight(y, m, d);
+  return { name: `plc_tag_raw_control_p${utcDayName(lo)}`, lo: new Date(lo), hi: new Date(lo + DAY_MS) };
 };
 
 /** 가짜 클라이언트 — rw는 파티션 목록을 돌려주고 owner는 받은 질의를 적는다 */
@@ -47,13 +47,13 @@ function storeWith(rows: PartRow[]) {
   return { store, ownerSql, rwSql, ownerUrlOf };
 }
 
-/** 2026-09-20 ~ 2026-09-29 KST 일 파티션 + DEFAULT + 폭이 하루가 아닌 파티션 */
+/** 2026-09-20 ~ 2026-09-29 UTC 일 파티션 + DEFAULT + 폭이 하루가 아닌 파티션 */
 function fixture(): PartRow[] {
   const rows: PartRow[] = [{ name: 'plc_tag_raw_control_default', lo: null, hi: null }];
   rows.push({
     name: 'plc_tag_raw_control_wide',
-    lo: new Date(kstMidnight(2026, 9, 17)),
-    hi: new Date(kstMidnight(2026, 9, 19)),
+    lo: new Date(utcMidnight(2026, 9, 17)),
+    hi: new Date(utcMidnight(2026, 9, 19)),
   });
   for (let d = 20; d <= 29; d++) rows.push(dayRow(2026, 9, d));
   return rows;
@@ -67,16 +67,16 @@ describe('PostgresControlStore.partitions — 행 → ms 사상', () => {
     expect(parts[0]).toEqual({ name: 'plc_tag_raw_control_default', loMs: null, hiMs: null });
     expect(parts.find((p) => p.name.endsWith('p20260920'))).toEqual({
       name: 'plc_tag_raw_control_p20260920',
-      loMs: kstMidnight(2026, 9, 20),
-      hiMs: kstMidnight(2026, 9, 21),
+      loMs: utcMidnight(2026, 9, 20),
+      hiMs: utcMidnight(2026, 9, 21),
     });
   });
 });
 
 describe('PostgresControlStore.prune — 희생 파티션 선택', () => {
-  const NOW = kstMidnight(2026, 9, 26) + 12 * HOUR; // 2026-09-26 12:00 KST
+  const NOW = utcMidnight(2026, 9, 26) + 12 * HOUR; // 2026-09-26 12:00 UTC
 
-  it('tag_raw에 남은 KST 일 밖의 과거 일 파티션만 DETACH → DROP 순서로 지운다', async () => {
+  it('tag_raw에 남은 UTC 일 밖의 과거 일 파티션만 DETACH → DROP 순서로 지운다', async () => {
     const { store, ownerSql } = storeWith(fixture());
     const dropped = await store.prune(['20260923', '20260924', '20260925'], NOW);
     expect(dropped).toEqual([
@@ -94,7 +94,7 @@ describe('PostgresControlStore.prune — 희생 파티션 선택', () => {
     ]);
   });
 
-  it('오늘(KST) 이후 파티션 · DEFAULT · 폭이 하루가 아닌 파티션은 raw 목록에 없어도 남긴다', async () => {
+  it('오늘(UTC) 이후 파티션 · DEFAULT · 폭이 하루가 아닌 파티션은 raw 목록에 없어도 남긴다', async () => {
     const { store, ownerSql } = storeWith(fixture());
     const dropped = await store.prune([], NOW);
     const names = dropped.map((d) => d.partition);
@@ -119,27 +119,30 @@ describe('PostgresControlStore.prune — 희생 파티션 선택', () => {
     }
   });
 
-  it('오늘 경계 — KST 자정 정각이면 전날이 과거 · 자정 1 ms 전이면 그날이 오늘이다', async () => {
+  it('오늘 경계 — UTC 자정 정각이면 전날이 과거 · 자정 1 ms 전이면 그날이 오늘이다', async () => {
     const atMidnight = storeWith(fixture());
     const d1 = await atMidnight.store.prune(
       ['20260920', '20260921', '20260922', '20260923', '20260924'],
-      kstMidnight(2026, 9, 26),
+      utcMidnight(2026, 9, 26),
     );
     expect(d1.map((d) => d.day)).toEqual(['20260925']);
 
     const justBefore = storeWith(fixture());
     const d2 = await justBefore.store.prune(
       ['20260920', '20260921', '20260922', '20260923', '20260924'],
-      kstMidnight(2026, 9, 26) - 1,
+      utcMidnight(2026, 9, 26) - 1,
     );
     expect(d2).toEqual([]);
   });
 
-  it('UTC 날짜가 아니라 KST 날짜로 대조한다 — KST 00:00~08:59는 UTC로 전날이다', async () => {
-    // now = 2026-09-26 01:00 KST(= 09-25 16:00 UTC) — 오늘은 KST 26일이므로 25일 파티션은 과거다
-    const { store } = storeWith(fixture());
+  it('KST 날짜가 아니라 UTC 날짜로 대조한다 — KST 00:00~08:59는 UTC로 전날이다', async () => {
+    // now = 2026-09-26 01:00 KST(= 09-25 16:00 UTC) — 오늘은 UTC 25일이므로 25일 파티션은 아직 오늘이다
     const kept = ['20260920', '20260921', '20260922', '20260923', '20260924'];
-    const dropped = await store.prune(kept, kstMidnight(2026, 9, 26) + HOUR);
+    const early = storeWith(fixture());
+    expect(await early.store.prune(kept, Date.parse('2026-09-26T01:00:00+09:00'))).toEqual([]);
+    // now = 2026-09-26 09:00 KST(= 09-26 00:00 UTC) — 이제 25일이 과거다
+    const late = storeWith(fixture());
+    const dropped = await late.store.prune(kept, Date.parse('2026-09-26T09:00:00+09:00'));
     expect(dropped.map((d) => d.day)).toEqual(['20260925']);
   });
 
@@ -147,13 +150,13 @@ describe('PostgresControlStore.prune — 희생 파티션 선택', () => {
     const rows = fixture();
     const { store, ownerUrlOf } = storeWith(rows);
     Object.assign(store, { owner: null });
-    const all = rows.filter((r) => r.lo && r.hi).map((r) => kstDayName((r.lo as Date).getTime()));
+    const all = rows.filter((r) => r.lo && r.hi).map((r) => utcDayName((r.lo as Date).getTime()));
     expect(await store.prune(all, NOW)).toEqual([]);
     expect(ownerUrlOf).not.toHaveBeenCalled();
   });
 
   it('파티션 이름은 식별자 인용(큰따옴표 두 배)으로 싣는다', async () => {
-    const lo = kstMidnight(2026, 9, 20);
+    const lo = utcMidnight(2026, 9, 20);
     const { store, ownerSql } = storeWith([
       { name: 'p"x; DROP', lo: new Date(lo), hi: new Date(lo + DAY_MS) },
     ]);
@@ -182,22 +185,22 @@ describe('CONTROL_PARTITIONS_SQL — 경계 정규식', () => {
   });
 
   it('pg_partman 일 파티션 경계 → lo · hi 시각 문자열', () => {
-    const b = "FOR VALUES FROM ('2026-09-20 00:00:00+09') TO ('2026-09-21 00:00:00+09')";
-    expect(extract(b, 'lo')).toBe('2026-09-20 00:00:00+09');
-    expect(extract(b, 'hi')).toBe('2026-09-21 00:00:00+09');
-    // 두 값이 KST 자정 · 하루 폭이다(prune · ensureDayPartitions의 일 판정과 맞물린다)
-    const iso = (s: string) => Date.parse(s.replace(' ', 'T').replace(/\+09$/, '+09:00'));
-    expect(iso(extract(b, 'lo') as string)).toBe(kstMidnight(2026, 9, 20));
+    const b = "FOR VALUES FROM ('2026-09-20 00:00:00+00') TO ('2026-09-21 00:00:00+00')";
+    expect(extract(b, 'lo')).toBe('2026-09-20 00:00:00+00');
+    expect(extract(b, 'hi')).toBe('2026-09-21 00:00:00+00');
+    // 두 값이 UTC 자정 · 하루 폭이다(prune · ensureDayPartitions의 일 판정과 맞물린다 · 세션 timezone UTC의 출력)
+    const iso = (s: string) => Date.parse(s.replace(' ', 'T').replace(/\+00$/, 'Z'));
+    expect(iso(extract(b, 'lo') as string)).toBe(utcMidnight(2026, 9, 20));
     expect(iso(extract(b, 'hi') as string) - iso(extract(b, 'lo') as string)).toBe(DAY_MS);
   });
 
   it('DEFAULT · MINVALUE/MAXVALUE 경계는 null — 일 파티션으로 오인하지 않는다', () => {
     expect(extract('DEFAULT', 'lo')).toBeNull();
     expect(extract('DEFAULT', 'hi')).toBeNull();
-    const b = "FOR VALUES FROM (MINVALUE) TO ('2026-09-20 00:00:00+09')";
+    const b = "FOR VALUES FROM (MINVALUE) TO ('2026-09-20 00:00:00+00')";
     expect(extract(b, 'lo')).toBeNull();
-    expect(extract(b, 'hi')).toBe('2026-09-20 00:00:00+09');
-    expect(extract("FOR VALUES FROM ('2026-09-29 00:00:00+09') TO (MAXVALUE)", 'hi')).toBeNull();
+    expect(extract(b, 'hi')).toBe('2026-09-20 00:00:00+00');
+    expect(extract("FOR VALUES FROM ('2026-09-29 00:00:00+00') TO (MAXVALUE)", 'hi')).toBeNull();
   });
 
   it('부모는 public.plc_tag_raw_control · DEFAULT(lo null)가 맨 앞', () => {

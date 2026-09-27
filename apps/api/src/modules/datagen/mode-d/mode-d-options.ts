@@ -1,14 +1,12 @@
 // 모드 D(GEN-08) + 대조군 동일 행(GEN-10) 실행 인자 — CLI 정본 .omc/s5-interfaces.md §모드 D · 절차 정본 docs/06_pipeline/10_datagen_inject.md §모드 D
 // 구간 [from, to)는 원시 보존 창 안이어야 한다 — 창 밖 ts는 tag_raw TTL 머지로 곧 사라지고 대조군에만 남는다(05_data_stores/08 §대조군 보존 정합).
-// 일 단위는 KST 자정 경계다 — tag_raw PARTITION BY toYYYYMMDD(ts)(Asia/Seoul) · 대조군 일 파티션 경계(DB timezone Asia/Seoul)와 같다.
+// 일 단위는 UTC 자정 경계다(ADR-27) — tag_raw PARTITION BY toYYYYMMDD(ts)(컬럼 인자 UTC) · 대조군 일 파티션 경계(DB timezone UTC)와 같다.
 import { CAPACITY_TIER_NAMES, CAPACITY_TIERS, type CapacityTier, SIGNAL_PROFILES } from '@db-study/shared';
 import { type ProfileMix, parseMix } from '../signal/assignment';
 
 /** tag_raw TTL toDateTime(ts) + INTERVAL 7 DAY(infra/clickhouse/ddl/002 · 05_data_stores/08) — 대조군 보존도 같은 7일 */
 export const RAW_RETENTION_DAYS = 7;
 export const DAY_MS = 86_400_000;
-/** KST = UTC+9 · 일광 절약 없음 */
-export const KST_OFFSET_MS = 9 * 3_600_000;
 
 export interface ModeDRunArgs {
   action: 'fill';
@@ -106,19 +104,19 @@ export function assertInRetention(fromMs: number, toMs: number, nowMs: number): 
     throw new Error(`--to ${new Date(toMs).toISOString()} — 미래 ts는 모드 D가 채우지 않는다`);
 }
 
-/** 그 ms가 속한 KST 일의 자정(epoch ms) */
-export function kstDayStart(ms: number): number {
-  return Math.floor((ms + KST_OFFSET_MS) / DAY_MS) * DAY_MS - KST_OFFSET_MS;
+/** 그 ms가 속한 UTC 일의 자정(epoch ms) — epoch 연산이라 프로세스 TZ에 기대지 않는다 */
+export function utcDayStart(ms: number): number {
+  return Math.floor(ms / DAY_MS) * DAY_MS;
 }
 
-/** KST 일 이름 YYYYMMDD — tag_raw 파티션 ID(toYYYYMMDD)와 같은 모양 */
-export function kstDayName(ms: number): string {
-  const d = new Date(kstDayStart(ms) + KST_OFFSET_MS);
+/** UTC 일 이름 YYYYMMDD — tag_raw 파티션 ID(toYYYYMMDD)와 같은 모양 */
+export function utcDayName(ms: number): string {
+  const d = new Date(utcDayStart(ms));
   return `${d.getUTCFullYear()}${String(d.getUTCMonth() + 1).padStart(2, '0')}${String(d.getUTCDate()).padStart(2, '0')}`;
 }
 
 export interface DaySegment {
-  /** KST 일 YYYYMMDD */
+  /** UTC 일 YYYYMMDD */
   day: string;
   dayStartMs: number;
   /** 이 호출이 채우는 그 일의 부분 구간 [fromMs, toMs) */
@@ -128,15 +126,15 @@ export interface DaySegment {
   wholeDay: boolean;
 }
 
-/** [from, to)를 KST 일 경계로 자른다(④ 일 단위 반복 · 한 INSERT가 여러 파티션에 걸치지 않게) */
-export function splitKstDays(fromMs: number, toMs: number): DaySegment[] {
+/** [from, to)를 UTC 일 경계로 자른다(④ 일 단위 반복 · 한 INSERT가 여러 파티션에 걸치지 않게) */
+export function splitUtcDays(fromMs: number, toMs: number): DaySegment[] {
   const out: DaySegment[] = [];
-  for (let start = kstDayStart(fromMs); start < toMs; start += DAY_MS) {
+  for (let start = utcDayStart(fromMs); start < toMs; start += DAY_MS) {
     const a = Math.max(fromMs, start);
     const b = Math.min(toMs, start + DAY_MS);
     if (a < b)
       out.push({
-        day: kstDayName(start),
+        day: utcDayName(start),
         dayStartMs: start,
         fromMs: a,
         toMs: b,

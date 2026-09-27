@@ -1,4 +1,4 @@
-// 모드 D(GEN-08) + 대조군 동일 행(GEN-10) — 인자 · KST 일 분할 · 같은 시드 같은 벡터 · 두 적재 형식 · 절차 ①~⑧ · 출력 형식
+// 모드 D(GEN-08) + 대조군 동일 행(GEN-10) — 인자 · UTC 일 분할 · 같은 시드 같은 벡터 · 두 적재 형식 · 절차 ①~⑧ · 출력 형식
 // 저장소는 가짜(RowBinary · COPY BINARY 바이트를 풀어 행으로 보관)로 대신한다 — 실제 저장소 대조는 통합 확인(W3)의 몫이다.
 import { QUALITY } from '@db-study/shared';
 import { describe, expect, it } from 'vitest';
@@ -16,12 +16,12 @@ import {
   assertInRetention,
   DAY_MS,
   gridRange,
-  kstDayName,
-  kstDayStart,
   minuteCover,
   parseModeDArgs,
   periodMsOf,
-  splitKstDays,
+  splitUtcDays,
+  utcDayName,
+  utcDayStart,
 } from '../src/modules/datagen/mode-d/mode-d-options';
 import {
   type ControlStore,
@@ -143,7 +143,7 @@ class FakeControl implements ControlStore {
     const rows = parseCopyBinary(await drain(src));
     this.copies += 1;
     if (this.copies === 1 && this.loseOnFirstCopy > 0) rows.splice(0, this.loseOnFirstCopy);
-    for (const r of rows) expect(this.partitions.has(kstDayStart(r[0]))).toBe(true);
+    for (const r of rows) expect(this.partitions.has(utcDayStart(r[0]))).toBe(true);
     this.rows.push(...rows);
   }
   async clearSegment(seg: DaySegment) {
@@ -251,26 +251,28 @@ describe('인자(CLI 정본 s5-interfaces §모드 D)', () => {
   });
 });
 
-describe('KST 일 분할(④ 일 단위 · tag_raw toYYYYMMDD · 대조군 일 파티션과 같은 경계)', () => {
-  it('KST 자정 = 전날 15:00 UTC에서 자른다', () => {
-    const segs = splitKstDays(iso('2026-09-20T23:30:00+09:00'), iso('2026-09-21T00:30:00+09:00'));
+describe('UTC 일 분할(④ 일 단위 · tag_raw toYYYYMMDD(UTC) · 대조군 일 파티션과 같은 경계 · ADR-27)', () => {
+  it('UTC 자정(= KST 09:00)에서 자른다 — KST 자정에서는 자르지 않는다', () => {
+    const segs = splitUtcDays(iso('2026-09-20T23:30:00Z'), iso('2026-09-21T00:30:00Z'));
     expect(segs.map((s) => s.day)).toEqual(['20260920', '20260921']);
-    expect(new Date((segs[0] as DaySegment).toMs).toISOString()).toBe('2026-09-20T15:00:00.000Z');
+    expect(new Date((segs[0] as DaySegment).toMs).toISOString()).toBe('2026-09-21T00:00:00.000Z');
+    expect(splitUtcDays(iso('2026-09-20T23:30:00+09:00'), iso('2026-09-21T00:30:00+09:00'))).toHaveLength(1);
     expect(segs.every((s) => !s.wholeDay)).toBe(true);
   });
 
   it('여러 일 · 일 전체 표시 · 조각 합 = 구간', () => {
-    const from = iso('2026-09-19T12:00:00+09:00');
-    const to = iso('2026-09-22T00:00:00+09:00');
-    const segs = splitKstDays(from, to);
+    const from = iso('2026-09-19T12:00:00Z');
+    const to = iso('2026-09-22T00:00:00Z');
+    const segs = splitUtcDays(from, to);
     expect(segs.map((s) => [s.day, s.wholeDay])).toEqual([
       ['20260919', false],
       ['20260920', true],
       ['20260921', true],
     ]);
     expect(segs.reduce((n, s) => n + (s.toMs - s.fromMs), 0)).toBe(to - from);
-    expect(kstDayName(iso('2026-09-20T14:59:59.999Z'))).toBe('20260920');
-    expect(kstDayName(iso('2026-09-20T15:00:00.000Z'))).toBe('20260921');
+    expect(utcDayName(iso('2026-09-20T23:59:59.999Z'))).toBe('20260920');
+    expect(utcDayName(iso('2026-09-21T00:00:00.000Z'))).toBe('20260921');
+    expect(utcDayName(iso('2026-09-21T08:59:59.999+09:00'))).toBe('20260920'); // KST 09시 전은 UTC 전날
   });
 
   it('분 경계 넓히기 · 롤업 조각(태그 × 분 ≤ 상한)', () => {
@@ -357,8 +359,8 @@ describe('절차 ①~⑧(가짜 저장소)', () => {
     mix: 'mixed',
     profile: null,
     seed: 42,
-    fromMs: iso('2026-09-24T23:59:10+09:00'),
-    toMs: iso('2026-09-25T00:01:30+09:00'), // KST 자정을 걸친 140초 — 분 경계가 아닌 양 끝
+    fromMs: iso('2026-09-24T23:59:10Z'),
+    toMs: iso('2026-09-25T00:01:30Z'), // UTC 자정을 걸친 140초 — 분 경계가 아닌 양 끝
     control: true,
     rollup: true,
     devices: null,
@@ -382,7 +384,15 @@ describe('절차 ①~⑧(가짜 저장소)', () => {
       expect(d.rollupCount).toBe(d.rollupRawCount);
       expect(d.repaired).toBeNull();
     }
-    expect(raw.log).toEqual(['detach', 'insert mv=false', 'insert mv=false', 'rollup mv=false', 'attach']); // 태그 10 — 롤업 조각 1
+    // 태그 10 — 롤업 조각은 epoch(UTC 일) 정렬이라 UTC 자정을 걸친 창이 조각 2로 갈린다(일 파티션과 같은 경계)
+    expect(raw.log).toEqual([
+      'detach',
+      'insert mv=false',
+      'insert mv=false',
+      'rollup mv=false',
+      'rollup mv=false',
+      'attach',
+    ]);
     const key = (x: Row) => x.join(':');
     expect(ctl.rows.map(key).sort()).toEqual(raw.rows.map(key).sort());
     expect(r.totals.partitionsCreated).toBe(2);
@@ -422,7 +432,7 @@ describe('절차 ①~⑧(가짜 저장소)', () => {
       /주입 정지/,
     );
     const raw2 = new FakeRaw();
-    raw2.rows.push([iso('2026-09-25T00:00:00+09:00'), 1, 1, 0, 9, 0]);
+    raw2.rows.push([iso('2026-09-25T00:00:00Z'), 1, 1, 0, 9, 0]);
     await expect(
       new ModeDRunner(args(), tags, tuning, inProc, raw2, new FakeControl()).run(),
     ).rejects.toThrow(/이미 행이 있다/);

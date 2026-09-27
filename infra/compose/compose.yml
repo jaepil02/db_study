@@ -18,7 +18,7 @@ services:
     environment:
       POSTGRES_PASSWORD: ${POSTGRES_ADMIN_PASSWORD:?POSTGRES_ADMIN_PASSWORD 필요}
       POSTGRES_DB: plc
-      TZ: Asia/Seoul
+      TZ: UTC
     volumes:
       - pgdata:/var/lib/postgresql
       - ../postgres/postgresql.conf:/etc/postgresql/postgresql.conf:ro
@@ -131,7 +131,7 @@ services:
       INGEST_LAB_FAULT: ${INGEST_LAB_FAULT:-}
       # S5 — 모드 C 부하 주입 표면 게이트(스위치가 아님 · 07_api/09 · 기본 false · true면 기동 경고 1줄)
       DATAGEN_BULK_ENABLED: ${DATAGEN_BULK_ENABLED:-false}
-      TZ: Asia/Seoul
+      TZ: UTC
       # MEMORY_PROFILE · WORKER_POOL_SIZE · NODE_OPTIONS · UV_THREADPOOL_SIZE는 프로파일 덮어쓰기 파일이 준다 — 상한과 이름이 한 파일에서 나온다
     volumes:
       - spooldata:/app/spool
@@ -179,7 +179,7 @@ services:
       INGEST_BATCH_PLAN: ${INGEST_BATCH_PLAN:-A}
       CAPACITY_TIER: ${CAPACITY_TIER:-}
       GEN_PROFILE: ${GEN_PROFILE:-SINE}
-      TZ: Asia/Seoul
+      TZ: UTC
     depends_on:
       redis:
         condition: service_healthy

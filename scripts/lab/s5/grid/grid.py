@@ -37,7 +37,7 @@ from pathlib import Path
 
 CH = 'db_study-clickhouse-1'
 PG = 'db_study-postgres-1'
-KST = dt.timezone(dt.timedelta(hours=9))
+KST = dt.timezone(dt.timedelta(hours=9))   # 표시 문자열 · 인자 명시 쿼리 리터럴만(ADR-27 — 저장소 처리 · 파티션 경계는 UTC)
 UTC = dt.timezone.utc
 TAGS_M = 10_000                 # M 티어 설비 50 × 태그 200 · 1 Hz — 행 수 = 1만 × 초(격자 표)
 STAGES = (1, 2, 3, 4, 5)        # 6단계는 하지 않는다(계획 판정 2 · 보존 7일 판정)
@@ -45,7 +45,7 @@ SNAPSHOT_STAGES = (1, 2, 3, 4)  # 정밀화 구간의 아래 끝이 될 수 있�
 REFINE_FRACS = {None: 0.5, 'lower': 0.25, 'upper': 0.75}   # 적응형 로그 이분 2회 — m1 · m2(아래 반쪽 · 위 반쪽)
 RETENTION_SEC = 7 * 86400       # 원시 보존 7일(08_retention_lifecycle · 모드 D RAW_RETENTION_DAYS) — budget은 TTL을 다시 읽는다
 START_MOD = 20                  # S ≡ 20초(mod 60) → S + 10^4 · S + 10^5(차 90000 = 1500분)가 분 경계(Q4 분 버킷 · tag_1m 대조 창)
-START_SPLIT_SEC = 50_020        # 기본 S = KST 자정 − 50020초 → 5단계 [S, S + 10^5)가 자정 앞 13.89시간 · 뒤 13.88시간으로 갈린다
+START_SPLIT_SEC = 50_020        # 기본 S = UTC 자정 − 50020초 → 5단계 [S, S + 10^5)가 자정 앞 13.89시간 · 뒤 13.88시간으로 갈린다(일 파티션 = UTC 일 · ADR-27)
 ALIGN_OVER_SEC = 3600           # D > 1시간이면 Q4 창 [end − 1h, end)가 S 뒤에서 시작한다 — 그때만 end가 분 경계여야 한다
 MIN_CAMPAIGN_SEC = 2 * 86400    # init 시점 머리 만료까지 남은 시간의 하한(격자 1차 약 4.2시간 + 스냅샷 · 정밀화 여유)
 DEFAULT_FILL_RATE = 100_000     # 속도 실측이 없을 때 조각 소요 추정(행/초) — 1차 최저 약 13만(1단계)보다 보수적
@@ -322,11 +322,12 @@ def chunks_of(st: dict, pid: str, chunk: int) -> list[tuple[dt.datetime, dt.date
     return out
 
 
-def kst_day_split(a: dt.datetime, b: dt.datetime) -> list[dict]:
+def utc_day_split(a: dt.datetime, b: dt.datetime) -> list[dict]:
+    """[a, b)를 UTC 일(= tag_raw toYYYYMMDD(ts) · 대조군 일 파티션 경계 — ADR-27)로 가른다."""
     res, t = [], a
     while t < b:
-        k = t.astimezone(KST)
-        nxt = (k.replace(hour=0, minute=0, second=0, microsecond=0) + dt.timedelta(days=1)).astimezone(UTC)
+        k = t.astimezone(UTC)
+        nxt = k.replace(hour=0, minute=0, second=0, microsecond=0) + dt.timedelta(days=1)
         u = min(nxt, b)
         res.append({'day': k.strftime('%Y-%m-%d'), 'sec': int((u - t).total_seconds()),
                     'rowsNominal': int((u - t).total_seconds()) * TAGS_M})
@@ -335,15 +336,15 @@ def kst_day_split(a: dt.datetime, b: dt.datetime) -> list[dict]:
 
 
 def default_start(now: dt.datetime | None = None) -> dt.datetime:
-    """시작 시각 S 선택 규칙 — S = M − 50020초(M = KST 자정).
+    """시작 시각 S 선택 규칙 — S = M − 50020초(M = UTC 자정 = 일 파티션 경계 · ADR-27).
     ① S ≡ 20초(mod 60) — 4 · 5단계 end(S + 10^4 · S + 10^5)가 분 경계.
     ② 5단계 [S, S + 10^5)가 자정 M 앞뒤로 약 반씩(13.89 · 13.88시간) — 최대 일 파티션이 가장 작다(1차 판정 ③과 같은 뜻).
-    ③ M은 S + 10^5 ≤ 지금 − 60초를 만족하는 가장 늦은 KST 자정 — 모드 D는 미래 ts를 채우지 않는다.
+    ③ M은 S + 10^5 ≤ 지금 − 60초를 만족하는 가장 늦은 UTC 자정 — 모드 D는 미래 ts를 채우지 않는다.
     머리 만료(S + 7일)까지 남은 시간 = 7일 − (지금 − S) — ③에서 지금 − S는 약 1.16 ~ 2.16일이라 남은 시간은 4.8일 이상이다."""
     now = now or now_utc()
     latest = now - dt.timedelta(seconds=d_sec(5) - START_SPLIT_SEC + 60)
-    m = latest.astimezone(KST).replace(hour=0, minute=0, second=0, microsecond=0)
-    return (m - dt.timedelta(seconds=START_SPLIT_SEC)).astimezone(UTC)
+    m = latest.astimezone(UTC).replace(hour=0, minute=0, second=0, microsecond=0)
+    return m - dt.timedelta(seconds=START_SPLIT_SEC)
 
 
 def start_problems(start: dt.datetime, now: dt.datetime) -> list[str]:
@@ -400,7 +401,7 @@ def print_point(st: dict, pid: str) -> None:
           f'(KST {kst_text(end, False)}) 분 경계 {"예" if aligned else "아니오"}{" — 필요" if need_align else " — 불필요(D ≤ 1시간)"}')
     print(f'    base {base or "빈 테이블"} · 채우기 [{iso(a)}, {iso(b)}) {int((b - a).total_seconds())}초 · '
           f'{int((b - a).total_seconds()) * TAGS_M:,}행 · 조각 {len(ch)} × ≤ {default_chunk_sec(st, pid)}초')
-    for x in kst_day_split(s, end):
+    for x in utc_day_split(s, end):
         print(f"    파티션 plc_tag_raw_control_p{x['day'].replace('-', '')} · tag_raw {x['day'].replace('-', '')}: {x['rowsNominal']:,}행(누적)")
 
 
@@ -420,7 +421,7 @@ def cmd_plan(args: list[str]) -> None:
         print(f'  경고: {p}')
     for k in STAGES:
         print_point(st, str(k))
-    worst = max(x['rowsNominal'] for x in kst_day_split(start, point_end(st, '5')))
+    worst = max(x['rowsNominal'] for x in utc_day_split(start, point_end(st, '5')))
     print(f'5단계 최대 일 파티션 {worst:.2e}행 — 5단계 I2는 파티션별 비동기 빌드(i2-build → i2-build-poll).')
     print(f'채움 스냅샷: 단계 {", ".join(map(str, SNAPSHOT_STAGES))} 끝(i2-drop 뒤)에 snapshot <k> → 이름 {snapshot_name(1)[:-1]}<k>')
 
@@ -667,7 +668,7 @@ def mode_d(from_t: dt.datetime, to_t: dt.datetime, *, control: str, mix: str | N
            compose_var: str, capacity_tier: str | None = None) -> tuple[dict, float, int]:
     """모드 D 한 호출 — 종료 코드 0 전부 일치 · 2 불일치 일 있음(출력 JSON은 있다) · 1 실패(s5-inject 계약).
     모드 D는 대상 구간에 행이 이미 있거나 최근 30초 안에 ts · ingested_at이 둘 다 있는 행이 있으면 거부한다(api · 수집 정지 전제).
-    상태형 프로파일(RANDOM_WALK · BINARY · COUNTER)은 호출마다 KST 일 조각별로 초기 상태에서 다시 시작한다 — 조각 나누기가 값을 바꾸므로 chunkSec를 조건으로 남긴다."""
+    상태형 프로파일(RANDOM_WALK · BINARY · COUNTER)은 호출마다 UTC 일 조각별로 초기 상태에서 다시 시작한다 — 조각 나누기가 값을 바꾸므로 chunkSec를 조건으로 남긴다."""
     # capacity_tier — datagen-d 환경 CAPACITY_TIER(설정 로더 → 보고 run.capacityTier의 원천). 모드 D는 --tier와 다르면 거부한다.
     # EXP-35는 M(카탈로그 조건 "M 행 수") · 격자는 주지 않는다(EXP-01~05 "티어 해당 없음" — grid_run)
     env = ['-e', f'CAPACITY_TIER={capacity_tier}'] if capacity_tier else []
@@ -1296,7 +1297,7 @@ def ts_ms(s: str) -> int:
     if not m:
         die(f'시각 형식 {s!r}')
     frac = int(((m.group(5) or '.0')[1:] + '000')[:3])
-    off = m.group(6) or '+09'
+    off = m.group(6) or '+00'   # 시간대 없음 = ClickHouse TSV — 컬럼 인자 UTC라 UTC 문자열이다(ADR-27)
     sign = 1 if off[0] == '+' else -1
     oh, om = int(off[1:3]), int(off[-2:]) if len(off) > 3 else 0
     tz = dt.timezone(sign * dt.timedelta(hours=oh, minutes=om))
@@ -2124,9 +2125,9 @@ def cmd_exp35(args: list[str]) -> None:
         die(f'{base} 복원 뒤 tag_raw가 비어 있지 않다')
     end = parse_iso(os.environ['END']) if os.environ.get('END') else now_utc().replace(minute=0, second=0, microsecond=0)
     start = end - dt.timedelta(seconds=dur)
-    kd = end.astimezone(KST).replace(hour=0, minute=0, second=0, microsecond=0)
-    if start.astimezone(KST) < kd and end.astimezone(KST) != kd:   # 한 KST 일(= 한 파티션) 안에 두어 "파트 1개"가 문자 그대로 성립하게
-        end = kd.astimezone(UTC)
+    kd = end.astimezone(UTC).replace(hour=0, minute=0, second=0, microsecond=0)
+    if start < kd and end != kd:   # 한 UTC 일(= 한 파티션 · ADR-27) 안에 두어 "파트 1개"가 문자 그대로 성립하게
+        end = kd
         start = end - dt.timedelta(seconds=dur)
     out, wall, rc = mode_d(start, end, control='off', mix='mixed' if arm == 'mixed' else None,
                        profile=None if arm == 'mixed' else arm, seed=int(os.environ.get('SEED', 42)), compose_var='LCOMPOSE',

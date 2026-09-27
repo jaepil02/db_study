@@ -239,14 +239,14 @@ async function main() {
       };
     }
 
-    // ── AC-21 — KST 일별 count(tag_raw) = count(plc_tag_raw_control)
+    // ── AC-21 — UTC 일별 count(tag_raw) = count(plc_tag_raw_control) — 파티션 경계(ADR-27)와 같은 날짜 · 양쪽 인자 명시(한쪽만이면 9시간 어긋난 날짜를 비교한다)
     if (flag('--control')) {
       const chDays = await rows<{ d: string; n: string }>(
         ch,
-        `SELECT toString(toDate(ts, 'Asia/Seoul')) AS d, count() AS n FROM plc.tag_raw GROUP BY d ORDER BY d`,
+        `SELECT toString(toDate(ts, 'UTC')) AS d, count() AS n FROM plc.tag_raw GROUP BY d ORDER BY d`,
       );
       const pgDays = await pg.query<{ d: string; n: string }>(
-        `SELECT to_char((ts AT TIME ZONE 'Asia/Seoul')::date, 'YYYY-MM-DD') AS d, count(*)::text AS n
+        `SELECT to_char((ts AT TIME ZONE 'UTC')::date, 'YYYY-MM-DD') AS d, count(*)::text AS n
            FROM plc_tag_raw_control GROUP BY 1 ORDER BY 1`,
       );
       const pgMap = new Map(pgDays.rows.map((r) => [r.d, Number(r.n)]));

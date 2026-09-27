@@ -1,15 +1,15 @@
 // 모드 D 저장소 어댑터 — ClickHouse(HTTP 8123 · RowBinary 스트림 삽입) · PostgreSQL 대조군(전용 커넥션 · COPY BINARY · synchronous_commit off)
 // 롤업 · MV 정의는 소유하지 않는다 — 분리 · 재연결 · INSERT SELECT 절차만 실행한다(GEN-08 · 05_data_stores/04 §백필 절차).
-// 과거 KST 일 파티션 생성 · ⑧ 비우기 · 대조군 정리는 app_owner 권한이다(app_rw는 DDL · DELETE가 없다 — 05_data_stores/02).
+// 과거 UTC 일 파티션 생성 · ⑧ 비우기 · 대조군 정리는 app_owner 권한이다(app_rw는 DDL · DELETE가 없다 — 05_data_stores/02).
 import { Readable } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
 import { type ClickHouseClient, createClient } from '@clickhouse/client';
 import { Client } from 'pg';
 import { from as copyFrom } from 'pg-copy-streams';
-import { DAY_MS, type DaySegment, kstDayName, kstDayStart } from './mode-d-options';
+import { DAY_MS, type DaySegment, utcDayName, utcDayStart } from './mode-d-options';
 import type { ControlStore, RawStore } from './mode-d-runner';
 
-/** 백필 한 INSERT = KST 일 하나 — 파싱 블록을 키워 파트 수를 줄인다(1,048,576 기본 → 4배 · 블록당 약 170 MB) */
+/** 백필 한 INSERT = UTC 일 하나 — 파싱 블록을 키워 파트 수를 줄인다(1,048,576 기본 → 4배 · 블록당 약 170 MB) */
 export const RAW_INSERT_BLOCK_ROWS = 4_194_304;
 /** 일 하나 삽입 · 롤업 조각의 요청 타임아웃 — M+ 하루(86억 행)도 한 요청이다 */
 export const MODE_D_REQUEST_TIMEOUT_MS = 6 * 3_600_000;
@@ -24,7 +24,7 @@ SELECT toStartOfMinute(ts) AS bucket, device_id, tag_id,
        argMaxState(value, ts) AS last_v, quantilesTDigestState(0.95)(value) AS p95_v,
        countIfState(quality IN (2, 4)) AS bad_cnt
   FROM plc.tag_raw
- WHERE ts >= fromUnixTimestamp64Milli({lo:Int64}, 'Asia/Seoul') AND ts < fromUnixTimestamp64Milli({hi:Int64}, 'Asia/Seoul')
+ WHERE ts >= fromUnixTimestamp64Milli({lo:Int64}, 'UTC') AND ts < fromUnixTimestamp64Milli({hi:Int64}, 'UTC')
  GROUP BY bucket, device_id, tag_id`;
 export const CONTROL_COPY_BINARY_SQL =
   'COPY plc_tag_raw_control (ts, device_id, tag_id, value, quality, scan_seq) FROM STDIN (FORMAT binary)';
@@ -79,7 +79,7 @@ export class ClickHouseRawStore implements RawStore {
   countRaw(fromMs: number, toMs: number): Promise<number> {
     return this.scalar(
       `SELECT count() AS n FROM plc.tag_raw
-        WHERE ts >= fromUnixTimestamp64Milli({lo:Int64}, 'Asia/Seoul') AND ts < fromUnixTimestamp64Milli({hi:Int64}, 'Asia/Seoul')`,
+        WHERE ts >= fromUnixTimestamp64Milli({lo:Int64}, 'UTC') AND ts < fromUnixTimestamp64Milli({hi:Int64}, 'UTC')`,
       { lo: fromMs, hi: toMs },
     );
   }
@@ -87,7 +87,7 @@ export class ClickHouseRawStore implements RawStore {
   countRollup(fromMs: number, toMs: number): Promise<number> {
     return this.scalar(
       `SELECT countMerge(cnt) AS n FROM plc.tag_1m
-        WHERE bucket >= toDateTime(intDiv({lo:Int64}, 1000), 'Asia/Seoul') AND bucket < toDateTime(intDiv({hi:Int64}, 1000), 'Asia/Seoul')`,
+        WHERE bucket >= toDateTime(intDiv({lo:Int64}, 1000), 'UTC') AND bucket < toDateTime(intDiv({hi:Int64}, 1000), 'UTC')`,
       { lo: fromMs, hi: toMs },
     );
   }
@@ -116,7 +116,7 @@ export class ClickHouseRawStore implements RawStore {
     });
   }
 
-  /** tag_raw에 실제로 남은 KST 일 파티션(YYYYMMDD) — 대조군 정리의 기준(06_pipeline/10 §대조군 파티션 정리) */
+  /** tag_raw에 실제로 남은 UTC 일 파티션(YYYYMMDD) — 대조군 정리의 기준(06_pipeline/10 §대조군 파티션 정리) */
   async rawDays(): Promise<string[]> {
     const rs = await this.ch.query({
       query: `SELECT DISTINCT partition AS p FROM system.parts WHERE database = 'plc' AND table = 'tag_raw' AND active ORDER BY p`,
@@ -204,7 +204,7 @@ export class PostgresControlStore implements ControlStore {
     const have = await this.partitions();
     const missing = dayStarts.filter((d) => !have.some((p) => p.loMs === d && p.hiMs === d + DAY_MS));
     if (missing.length === 0) return [];
-    // pg_partman 5 — 지정 시각이 든 자식 파티션을 만든다(경계는 부모 설정 · 1 day · DB timezone Asia/Seoul 자정)
+    // pg_partman 5.5.0은 넘긴 시각을 하한 그대로 쓴다(내림하지 않는다 · 실측) — dayStarts는 UTC 자정이어야 부모 세트(1 day · UTC 자정 경계 · 009)와 맞는다
     await (await this.ownerClient()).query(
       `SELECT partman.create_partition_time('public.plc_tag_raw_control', $1::timestamptz[])`,
       [missing.map((d) => new Date(d).toISOString())],
@@ -212,7 +212,7 @@ export class PostgresControlStore implements ControlStore {
     const after = await this.partitions();
     const still = missing.filter((d) => !after.some((p) => p.loMs === d && p.hiMs === d + DAY_MS));
     if (still.length > 0)
-      throw new Error(`대조군 일 파티션을 만들지 못했다 — ${still.map((d) => kstDayName(d)).join(' · ')}`);
+      throw new Error(`대조군 일 파티션을 만들지 못했다 — ${still.map((d) => utcDayName(d)).join(' · ')}`);
     return missing;
   }
 
@@ -255,14 +255,14 @@ export class PostgresControlStore implements ControlStore {
   }
 
   /**
-   * 대조군 정리 — tag_raw에 실제로 남은 KST 일 목록 밖의 대조군 일 파티션을 DETACH · DROP(행 DELETE가 아니다).
-   * 오늘(KST) 이후 파티션은 pg_partman 선행 생성분이라 남긴다 · DEFAULT 파티션은 건드리지 않는다.
+   * 대조군 정리 — tag_raw에 실제로 남은 UTC 일 목록 밖의 대조군 일 파티션을 DETACH · DROP(행 DELETE가 아니다).
+   * 오늘(UTC) 이후 파티션은 pg_partman 선행 생성분이라 남긴다 · DEFAULT 파티션은 건드리지 않는다.
    */
   async prune(rawDays: readonly string[], nowMs: number): Promise<{ day: string; partition: string }[]> {
-    const today = kstDayStart(nowMs);
+    const today = utcDayStart(nowMs);
     const keep = new Set(rawDays);
     const victims = (await this.partitions()).filter(
-      (p) => p.loMs !== null && p.hiMs === p.loMs + DAY_MS && p.loMs < today && !keep.has(kstDayName(p.loMs)),
+      (p) => p.loMs !== null && p.hiMs === p.loMs + DAY_MS && p.loMs < today && !keep.has(utcDayName(p.loMs)),
     );
     if (victims.length === 0) return [];
     const o = await this.ownerClient();
@@ -270,7 +270,7 @@ export class PostgresControlStore implements ControlStore {
     for (const p of victims) {
       await o.query(`ALTER TABLE plc_tag_raw_control DETACH PARTITION ${quoteIdent(p.name)}`);
       await o.query(`DROP TABLE ${quoteIdent(p.name)}`);
-      dropped.push({ day: kstDayName(p.loMs as number), partition: p.name });
+      dropped.push({ day: utcDayName(p.loMs as number), partition: p.name });
     }
     return dropped;
   }
