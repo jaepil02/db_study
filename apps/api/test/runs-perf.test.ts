@@ -169,11 +169,13 @@ ORDER BY ts`);
     expect(
       pgQuerySql('Q2'),
     ).toBe(`SELECT date_trunc('hour', ts) AS b, avg(value), min(value), max(value), count(*) FROM run_perf_raw
-WHERE device_id = $1 AND tag_id = $2 AND ts >= $3 - interval '7 days' AND ts < $3
+WHERE device_id = $1::integer AND tag_id = $2::integer AND ts >= $3::timestamptz - interval '7 days' AND ts < $3::timestamptz
 GROUP BY b ORDER BY b`);
-    expect(pgQuerySql('Q3')).toContain("ts >= $2 - interval '1 day' AND ts < $2");
+    expect(pgQuerySql('Q3')).toContain("ts >= $2::timestamptz - interval '1 day' AND ts < $2::timestamptz");
     expect(pgQuerySql('Q4')).toContain('count(*) FILTER (WHERE quality IN (2, 4))');
-    expect(pgQuerySql('Q5')).toBe('SELECT count(*) FROM run_perf_raw WHERE value > $1');
+    expect(pgQuerySql('Q5')).toBe('SELECT count(*) FROM run_perf_raw WHERE value > $1::double precision');
+    // 자리표시 타입은 grid.py PREPARE q(integer, integer, timestamptz · double precision)와 같게 캐스트로 준다
+    expect(pgQuerySql('Q1')).toContain('$3::timestamptz - interval');
     // Q5x(조건 없는 count)는 돌리지 않는다
     expect(PERF_QUERIES).toEqual(['Q1', 'Q2', 'Q3', 'Q4', 'Q5']);
   });

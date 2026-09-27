@@ -204,30 +204,33 @@ export function pgStorageSql(): string {
 FROM pg_inherits WHERE inhparent = to_regclass($1)`;
 }
 
-/** §동일 쿼리 5종 PostgreSQL 쪽 — grid.py PREPARE 본문과 같다(자리표시 $1 …) */
+/**
+ * §동일 쿼리 5종 PostgreSQL 쪽 — grid.py PREPARE 본문과 같다. 자리표시 타입은 grid.py의 PREPARE q(integer, integer, timestamptz …)와
+ * 같게 캐스트로 준다 — 타입 없는 이름 준비문은 PostgreSQL이 "$3 - interval"에서 $3을 interval로 추론해 실패한다(통합 확인 2026-09-28).
+ */
 export function pgQuerySql(q: PerfQuery, n: PerfNames = PERF_NAMES): string {
   const t = ident(n.pg);
   switch (q) {
     case 'Q1':
       return `SELECT ts, value, quality FROM ${t}
-WHERE device_id = $1 AND tag_id = $2 AND ts >= $3 - interval '1 hour' AND ts < $3
+WHERE device_id = $1::integer AND tag_id = $2::integer AND ts >= $3::timestamptz - interval '1 hour' AND ts < $3::timestamptz
 ORDER BY ts`;
     case 'Q2':
       return `SELECT date_trunc('hour', ts) AS b, avg(value), min(value), max(value), count(*) FROM ${t}
-WHERE device_id = $1 AND tag_id = $2 AND ts >= $3 - interval '7 days' AND ts < $3
+WHERE device_id = $1::integer AND tag_id = $2::integer AND ts >= $3::timestamptz - interval '7 days' AND ts < $3::timestamptz
 GROUP BY b ORDER BY b`;
     case 'Q3':
       return `SELECT tag_id, avg(value), min(value), max(value), count(*) FROM ${t}
-WHERE device_id = $1 AND ts >= $2 - interval '1 day' AND ts < $2
+WHERE device_id = $1::integer AND ts >= $2::timestamptz - interval '1 day' AND ts < $2::timestamptz
 GROUP BY tag_id`;
     case 'Q4':
       return `SELECT date_trunc('minute', ts) AS b, device_id, tag_id,
        count(*), avg(value), min(value), max(value), count(*) FILTER (WHERE quality IN (2, 4))
 FROM ${t}
-WHERE ts >= $1 - interval '1 hour' AND ts < $1
+WHERE ts >= $1::timestamptz - interval '1 hour' AND ts < $1::timestamptz
 GROUP BY b, device_id, tag_id`;
     case 'Q5':
-      return `SELECT count(*) FROM ${t} WHERE value > $1`;
+      return `SELECT count(*) FROM ${t} WHERE value > $1::double precision`;
   }
 }
 
