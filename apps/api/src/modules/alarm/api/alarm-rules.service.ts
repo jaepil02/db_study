@@ -17,6 +17,7 @@ import type { PoolClient } from 'pg';
 import { ApiError, validationFailed } from '../../../common/http/api-error';
 import { Postgres } from '../../../common/postgres/postgres.module';
 import { FanoutPublisher } from '../../../common/redis/fanout-publisher';
+import { noteBizInvalidation } from '../../biz/biz-ledger';
 import { ALARM_CACHE, type AlarmCacheOps, countDeleteFailure } from './alarm-cache';
 import { audit, inTx, pgDown } from './alarm-tx';
 
@@ -149,7 +150,10 @@ export class AlarmRulesService {
 
   /** 체인 ② ③ — 커밋 뒤 · 응답 전. 실패는 요청을 실패시키지 않는다(커밋은 끝났고 진실은 PostgreSQL · TTL 300초가 상한) */
   private async invalidate(): Promise<void> {
-    if (!(await this.cache.delAlarmRules())) countDeleteFailure('cache:alarmrules');
-    await this.fanout.publishCacheInv(['cache:alarmrules']);
+    const t0 = performance.now();
+    const deleted = await this.cache.delAlarmRules();
+    if (!deleted) countDeleteFailure('cache:alarmrules');
+    const published = await this.fanout.publishCacheInv(['cache:alarmrules']);
+    noteBizInvalidation(t0, deleted ? 1 : 0, published);
   }
 }

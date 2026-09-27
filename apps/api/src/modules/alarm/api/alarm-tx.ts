@@ -1,10 +1,12 @@
 // 알람 쓰기 트랜잭션 · 감사 — master-write.service.ts의 tx() · audit()와 같은 모양(06_pipeline/07 §감사 트랜잭션)
 // 쓰기 하나 = 트랜잭션 하나(변경 + audit_log · 감사 실패는 변경 전체 롤백 — REQ-ALM-03 · 15).
 // 인증 전(S7 ②까지) 감사 행위자는 NULL이다 — 확인도 같다(07_api/07 §인증 전 확인 행위자 판정 · 확인 감사 행).
+// 업무 명령 경로(SW-12 stream)에서는 명령 워커가 부른다 — 원장 APPLIED 행은 COMMIT 직전 같은 트랜잭션(bizBeforeCommit · 06_pipeline/07 §적용 단계 ⑤).
 // 캐시 무효화는 커밋 뒤에만 건다 — 커밋 전에 지우면 그 사이 조회 · 판정이 옛 값으로 사본을 다시 채운다(REQ-ALM-02 · 13).
 import type { PoolClient } from 'pg';
 import { ApiError, validationFailed } from '../../../common/http/api-error';
 import type { Postgres } from '../../../common/postgres/postgres.module';
+import { BizLedgerConflict, bizBeforeCommit, noteBizTx } from '../../biz/biz-ledger';
 
 export const pgDown = () => new ApiError('common.postgres_unavailable', 'PostgreSQL에 접속할 수 없다');
 
@@ -30,16 +32,21 @@ export async function inTx<T>(
     throw pgDown();
   }
   let out: { result: T; afterCommit?: () => Promise<void> };
+  const t0 = performance.now();
   try {
     await client.query('BEGIN');
     out = await fn(client);
+    await bizBeforeCommit(client, out.result);
     await client.query('COMMIT');
   } catch (e) {
     await client.query('ROLLBACK').catch(() => undefined);
+    noteBizTx(t0);
+    if (e instanceof BizLedgerConflict) throw e;
     mapPgError(e);
   } finally {
     client.release();
   }
+  noteBizTx(t0);
   if (out.afterCommit) await out.afterCommit();
   return out.result;
 }

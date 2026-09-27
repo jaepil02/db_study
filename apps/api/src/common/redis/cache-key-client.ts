@@ -1,4 +1,4 @@
-// CacheKeyClient — 캐시 계열(cache · lock · rl · sess · auth) 래퍼(ADR-13 · 정본 docs/05_data_stores/05_redis_keyspace.md)
+// CacheKeyClient — 캐시 계열(cache · lock · rl · sess · auth · biz) 래퍼(ADR-13 · 정본 docs/05_data_stores/05_redis_keyspace.md)
 // ① TTL은 쓰기 메서드의 필수 인자다 — 빠뜨린 호출은 컴파일되지 않는다 ② PERSIST · KEYS · FLUSH를 노출하지 않는다
 // ③ 실패는 짧은 타임아웃(현행 50 ms · 소유 06_pipeline/06) 뒤 조용히 degrade — 결과 없음으로 돌려주고 계수한다
 // 지터 ±20%는 cache 접두의 단건 키에만 자동으로 건다 — 락 · rl · auth에 붙이면 만료가 소유자 작업보다 먼저 온다.
@@ -11,7 +11,7 @@ import { Counter } from 'prom-client';
 import { appRegistry } from '../metrics/registry';
 import { RedisConnections } from './connections';
 
-const CACHE_PREFIXES = ['cache:', 'lock:', 'rl:', 'sess:', 'auth:'] as const;
+const CACHE_PREFIXES = ['cache:', 'lock:', 'rl:', 'sess:', 'auth:', 'biz:'] as const;
 export const CACHE_CALL_TIMEOUT_MS = 50;
 const JITTER = 0.2;
 
@@ -48,6 +48,12 @@ async function withTimeout<T>(p: Promise<T>, ms: number): Promise<T> {
   }
 }
 
+/** 소유자 검증 갱신 — 남의 락(내 락이 만료된 뒤 다른 워커가 쥔 것)의 만료를 늘리지 않는다 */
+const RENEW_IF_OWNER = `
+if redis.call('GET', KEYS[1]) == ARGV[1] then return redis.call('PEXPIRE', KEYS[1], ARGV[2]) end
+return 0
+`;
+
 /** 소유자 검증 해제 — 단순 DEL은 자기 락이 만료된 뒤 남의 락을 지운다 */
 const RELEASE_IF_OWNER = `
 if redis.call('GET', KEYS[1]) == ARGV[1] then return redis.call('DEL', KEYS[1]) end
@@ -61,6 +67,12 @@ export class CacheKeyClient {
   constructor(conns: RedisConnections) {
     this.redis = conns.command;
     this.redis.defineCommand('releaseIfOwner', { numberOfKeys: 1, lua: RELEASE_IF_OWNER });
+    this.redis.defineCommand('renewIfOwner', { numberOfKeys: 1, lua: RENEW_IF_OWNER });
+  }
+
+  /** 지터 없는 쓰기 — 표지 · 결과 키처럼 만료 시각이 계약인 키(TTL 필수) */
+  private async setExact(key: string, value: string, ttlSeconds: number): Promise<boolean> {
+    return (await this.degrade(key, 'set', () => this.redis.set(key, value, 'EX', ttlSeconds))) !== null;
   }
 
   private async degrade<T>(key: string, op: string, fn: () => Promise<T>): Promise<T | null> {
@@ -244,5 +256,50 @@ export class CacheKeyClient {
   /** 체인 ② — 확인 커밋 뒤 키 하나 DEL */
   delAlarmEvents(): Promise<boolean> {
     return this.del('cache:alarmevents');
+  }
+
+  // ── 업무 명령(06_pipeline/07 §업무 명령 경로) · 흐름 표지(07_api/11 §흐름 이벤트)
+
+  /** biz:result:{cmdId} — 결과 JSON · failed는 degrade(부르는 쪽이 원장으로 간다 · 다시 채우지 않는다) */
+  async getBizResult(cmdId: string): Promise<{ value: string | null; failed: boolean }> {
+    const r = await this.getBuffer(`biz:result:${cmdId}`);
+    return { value: r.value ? r.value.toString('utf8') : null, failed: r.failed };
+  }
+
+  /** 결과 SET — 명령 워커만 쓴다 · TTL = 명령 유효 창(지터 없음) · 실패면 false */
+  setBizResult(cmdId: string, json: string, ttlSeconds: number): Promise<boolean> {
+    return this.setExact(`biz:result:${cmdId}`, json, ttlSeconds);
+  }
+
+  /** lock:biz:writer — 업무 명령 단일 소비자 선점(SET NX PX · 지터 없음) */
+  acquireBizWriterLock(ttlMs: number): Promise<{ token: string | null; failed: boolean }> {
+    return this.acquireLock('lock:biz:writer', ttlMs);
+  }
+
+  /** 토큰이 같을 때만 만료 연장 — false면 락을 잃었다(소비를 멈춘다) */
+  async renewBizWriterLock(token: string, ttlMs: number): Promise<boolean> {
+    const key = 'lock:biz:writer';
+    const r = await this.degrade(key, 'renew', () =>
+      (
+        this.redis as unknown as { renewIfOwner(k: string, t: string, ms: string): Promise<number> }
+      ).renewIfOwner(key, token, String(ttlMs)),
+    );
+    return r === 1;
+  }
+
+  releaseBizWriterLock(token: string): Promise<void> {
+    return this.releaseLock('lock:biz:writer', token);
+  }
+
+  /** cache:flow:subscribed — 흐름 구독 표지 읽기 · failed면 부르는 쪽은 발행하지 않는다 */
+  async getFlowSubscribed(): Promise<{ present: boolean; failed: boolean }> {
+    const key = 'cache:flow:subscribed';
+    const r = await this.degrade(key, 'exists', async () => ({ n: await this.redis.exists(key) }));
+    return r === null ? { present: false, failed: true } : { present: r.n > 0, failed: false };
+  }
+
+  /** 표지 갱신 — 게이트웨이가 흐름 구독 연결이 있는 동안 주기적으로(TTL · 지터 없음) */
+  setFlowSubscribed(owner: string, ttlSeconds: number): Promise<boolean> {
+    return this.setExact('cache:flow:subscribed', owner, ttlSeconds);
   }
 }

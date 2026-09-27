@@ -8,6 +8,7 @@ import { ClickHouse } from '../../common/clickhouse/clickhouse.module';
 import { appRegistry } from '../../common/metrics/registry';
 import { CacheKeyClient } from '../../common/redis/cache-key-client';
 import { FanoutPublisher } from '../../common/redis/fanout-publisher';
+import { noteBizInvalidation } from '../biz/biz-ledger';
 
 const reg = [appRegistry];
 export const mstMetrics = {
@@ -49,18 +50,24 @@ export class InvalidationChain {
 
   /** ② ③ — 커밋 뒤 · 응답 전. 새 값으로 덮지 않고 지운다(ADR-12) */
   async afterCommit(t: ChainTargets): Promise<void> {
+    const t0 = performance.now();
     const keys: string[] = [];
+    let deleted = 0;
     for (const id of t.tagIds ?? []) {
-      if (!(await this.cache.delTagMeta(id))) mstMetrics.cacheDeleteFailures.inc({ prefix: 'cache:tagmeta' });
+      if (await this.cache.delTagMeta(id)) deleted++;
+      else mstMetrics.cacheDeleteFailures.inc({ prefix: 'cache:tagmeta' });
       keys.push(`cache:tagmeta:${id}`);
     }
     for (const siteId of t.deviceSites ?? []) {
-      if (!(await this.cache.delDevList(siteId)))
-        mstMetrics.cacheDeleteFailures.inc({ prefix: 'cache:devlist' });
+      if (await this.cache.delDevList(siteId)) deleted++;
+      else mstMetrics.cacheDeleteFailures.inc({ prefix: 'cache:devlist' });
       keys.push(`cache:devlist:${siteId}`);
     }
     for (const siteId of t.signalOnlySites ?? []) keys.push(`cache:devlist:${siteId}`);
-    await this.fanout.publishCacheInv([...new Set(keys)]);
+    const unique = [...new Set(keys)];
+    const published = await this.fanout.publishCacheInv(unique);
+    // 흐름 요약 trace(업무 명령 범위 안에서만) — ② 지운 키 수 · ③ 발행 여부(키가 없으면 발행하지 않은 것)
+    noteBizInvalidation(t0, deleted, unique.length > 0 && published);
     if (t.reloadDictionary) this.reloadAfterResponse();
   }
 

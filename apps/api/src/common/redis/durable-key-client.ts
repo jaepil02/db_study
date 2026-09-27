@@ -173,6 +173,20 @@ export class DurableKeyClient {
     return parseXinfoGroups(await this.redis.xinfo('GROUPS', stream), group);
   }
 
+  /** 적체 + 길이 한 왕복(XINFO GROUPS · XLEN 파이프라인) — 주기 적체 계측이 흐름 요약 stream.length를 함께 얻는다(요약용 왕복 추가 없음) */
+  async groupBacklogWithLength(
+    stream: string,
+    group: string,
+  ): Promise<{ backlog: GroupBacklog | null; length: number }> {
+    assertSealed(stream);
+    const res = await this.redis.pipeline().xinfo('GROUPS', stream).xlen(stream).exec();
+    if (!res) throw new Error('파이프라인 응답 없음');
+    const [xinfo, xlen] = res;
+    if (xinfo?.[0]) throw xinfo[0];
+    if (xlen?.[0]) throw xlen[0];
+    return { backlog: parseXinfoGroups(xinfo?.[1], group), length: Number(xlen?.[1] ?? 0) };
+  }
+
   /** XREADGROUP — 블로킹 전용 연결로만 부른다(명령 연결을 막지 않는다) */
   async readGroup(
     blocking: Redis,
@@ -320,6 +334,57 @@ export class DurableKeyClient {
     if (!res) throw new Error('파이프라인 응답 없음');
     for (const [err] of res) if (err) throw err;
   }
+
+  // ── 업무 명령 스트림(stream:biz:cmd) — 엔트리 필드 하나(c)에 봉투 JSON(06_pipeline/07 §명령 봉투)
+
+  /** XADD MAXLEN ~ — 실패는 던진다(api가 common.postgres_unavailable/503 · biz_commands_total{result=unavailable}) */
+  async xaddBizCommand(stream: string, field: string, json: string, maxlen: number): Promise<string> {
+    assertSealed(stream);
+    return String(await this.redis.xadd(stream, 'MAXLEN', '~', maxlen, '*', field, json));
+  }
+
+  /** XREADGROUP(문자열 필드) — 블로킹 전용 연결 · fromId '0'은 자기 PEL, '>'는 새 엔트리 */
+  async readGroupText(
+    blocking: Redis,
+    stream: string,
+    group: string,
+    consumer: string,
+    field: string,
+    count: number,
+    blockMs: number,
+    fromId = '>',
+  ): Promise<{ id: string; value: string | null }[]> {
+    assertSealed(stream);
+    const reply = (await blocking.call(
+      'XREADGROUP',
+      'GROUP',
+      group,
+      consumer,
+      'COUNT',
+      String(count),
+      'BLOCK',
+      String(blockMs),
+      'STREAMS',
+      stream,
+      fromId,
+    )) as [string, [string, string[] | null][]][] | null;
+    if (!reply) return [];
+    return reply.flatMap(([, entries]) =>
+      entries.map(([id, fields]) => {
+        let value: string | null = null;
+        for (let i = 0; fields && i + 1 < fields.length; i += 2) {
+          if (fields[i] === field) value = fields[i + 1] ?? null;
+        }
+        return { id, value };
+      }),
+    );
+  }
+
+  /** XLEN — 명령 스트림 길이(관찰) */
+  async streamLength(stream: string): Promise<number> {
+    assertSealed(stream);
+    return this.redis.xlen(stream);
+  }
 }
 
 /**
@@ -339,10 +404,14 @@ const METHOD_PREFIX: Record<string, 'stream' | 'rt' | 'alarm'> = {
   xaddBatchWithBacklog: 'stream',
   ensureGroup: 'stream',
   groupBacklog: 'stream',
+  groupBacklogWithLength: 'stream',
   readGroup: 'stream',
   autoClaim: 'stream',
   appendDlq: 'stream',
   ack: 'stream',
+  xaddBizCommand: 'stream',
+  readGroupText: 'stream',
+  streamLength: 'stream',
   writeLatestIfNewer: 'rt',
   readLatest: 'rt',
   readLatestField: 'rt',

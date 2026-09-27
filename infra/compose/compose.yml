@@ -119,6 +119,8 @@ services:
       CONTROL_TABLE_ENABLED: ${CONTROL_TABLE_ENABLED:-off}
       COLLECTOR_DEADBAND: ${COLLECTOR_DEADBAND:-off}
       LATEST_VALUE_WRITER: ${LATEST_VALUE_WRITER:-ingest}
+      # SW-12 — 업무 쓰기 경로(stream 기본 · direct는 EXP-46 비교용 옛 경로 · 02_features/13)
+      BIZ_WRITE_PATH: ${BIZ_WRITE_PATH:-stream}
       CAPACITY_TIER: ${CAPACITY_TIER:-}
       # S3 — 배치 안(ADR-09 · EXP-34) · 모드 A 신호 프로파일 · SIM 주입 계획 경로(컨테이너 안) · 실험 전용 결함 주입(비우면 비활성)
       INGEST_BATCH_PLAN: ${INGEST_BATCH_PLAN:-A}

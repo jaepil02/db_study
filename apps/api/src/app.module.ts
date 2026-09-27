@@ -3,6 +3,7 @@
 // 기능 선택은 모듈 초기화가 한다 — 경로 안 분기를 두지 않는다(ADR-08과 같은 원리).
 import { type DynamicModule, Module } from '@nestjs/common';
 import { ClickHouseModule } from './common/clickhouse/clickhouse.module';
+import { FlowModule } from './common/flow/flow.module';
 import { PortsModule, RealtimeFanoutModule } from './common/ports/ports.module';
 import { PostgresModule } from './common/postgres/postgres.module';
 import { RedisModule } from './common/redis/redis.module';
@@ -10,6 +11,8 @@ import { WorkerPoolModule } from './common/workers/worker-pool';
 import type { AppConfig, AppRole } from './config/app-config';
 import { ConfigModule } from './config/config.module';
 import { AlarmApiModule } from './modules/alarm/api/alarm-api.module';
+import { BizWorkerModule } from './modules/biz/biz-worker.module';
+import { BizWriteModule } from './modules/biz/biz-write.module';
 import { CollectorModule } from './modules/collector/collector.module';
 import { DatagenModule } from './modules/datagen/datagen.module';
 import { DatagenModeAModule } from './modules/datagen/mode-a/mode-a.module';
@@ -38,6 +41,8 @@ const ROLE_MODULES: Record<AppRole, Imports> = {
     MetricsModule,
     DatagenModeCModule,
     AlarmApiModule,
+    BizWriteModule,
+    BizWorkerModule,
   ],
   api: [
     MasterModule,
@@ -47,8 +52,10 @@ const ROLE_MODULES: Record<AppRole, Imports> = {
     MetricsModule,
     DatagenModeCModule,
     AlarmApiModule,
+    BizWriteModule,
   ],
-  worker: [IngestModule, MetricsModule],
+  // 업무 명령 적용(grp:biz-writer · lock:biz:writer 단일 소비자)은 워커 역할 — 06_pipeline/07 §적용 단계
+  worker: [IngestModule, MetricsModule, BizWorkerModule],
   collector: [MasterModule, PlcSimModule, DatagenModeAModule, CollectorModule, MetricsModule],
   // 생성기 단독 실행 경로 — S1 bench(저장소 없음) · S3 모드 B(dist/mode-b.js · Nest 밖 진입점 · PostgreSQL 태그 읽기 + Redis 발행) · 모드 D는 S5
   datagen: [DatagenModule],
@@ -62,7 +69,7 @@ export class AppModule {
   static forConfig(cfg: AppConfig): DynamicModule {
     const stores: Imports = STORELESS.has(cfg.appRole)
       ? []
-      : [RedisModule, ClickHouseModule, PostgresModule, RealtimeFanoutModule];
+      : [RedisModule, ClickHouseModule, PostgresModule, RealtimeFanoutModule, FlowModule];
     return {
       module: AppModule,
       imports: [

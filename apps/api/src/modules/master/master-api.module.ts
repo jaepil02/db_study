@@ -1,13 +1,10 @@
 import { Module } from '@nestjs/common';
-import { InvalidationChain } from './invalidation-chain';
 import { MasterController } from './master.controller';
-import { MasterModule } from './master.module';
-import { MasterWriteService } from './master-write.service';
+import { MasterModule, MasterWriteModule } from './master.module';
 
-/** MST 표면(S4) — 조회 6 · 쓰기 11 · 무효화 체인 ②③④. HTTP 표면이라 api · all 역할만 싣는다(collector 역할은 조회 서비스만) */
+/** MST 표면(S4) — 조회 6 · 쓰기 11. HTTP 표면이라 api · all 역할만 싣는다(collector 역할은 조회 서비스만 · 쓰기 서비스는 MasterWriteModule) */
 @Module({
-  imports: [MasterModule],
+  imports: [MasterModule, MasterWriteModule],
   controllers: [MasterController],
-  providers: [MasterWriteService, InvalidationChain],
 })
 export class MasterApiModule {}

@@ -10,6 +10,7 @@ import { Counter } from 'prom-client';
 import { ApiError, validationFailed } from '../../../common/http/api-error';
 import { appRegistry } from '../../../common/metrics/registry';
 import { Postgres } from '../../../common/postgres/postgres.module';
+import { noteBizInvalidation } from '../../biz/biz-ledger';
 import { ACK_ACTOR_RESOLVER, type AckActorResolver } from './ack-actor';
 import { ALARM_CACHE, ALARM_EVENTS_TTL_SECONDS, type AlarmCacheOps, countDeleteFailure } from './alarm-cache';
 import { audit, inTx, pgDown } from './alarm-tx';
@@ -225,7 +226,10 @@ export class AlarmEventsService {
         return {
           result: rowToEvent(full.rows[0] as Row),
           afterCommit: async () => {
-            if (!(await this.cache.delAlarmEvents())) countDeleteFailure('cache:alarmevents');
+            const t0 = performance.now();
+            const deleted = await this.cache.delAlarmEvents();
+            if (!deleted) countDeleteFailure('cache:alarmevents');
+            noteBizInvalidation(t0, deleted ? 1 : 0, false);
           },
         };
       });

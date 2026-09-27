@@ -2,6 +2,7 @@
 // 쓰기 하나 = 트랜잭션 하나(변경 + audit_log · 감사 실패는 변경 전체 롤백 — REQ-MST-05 · REQ-WRK-08).
 // 무인증 기간(S4~S6)의 감사 행위자는 NULL이다(05_data_stores/01 §인계 판정). 인가(ADMIN)는 S7.
 // 체인 ②③은 커밋 뒤 · 응답 전(InvalidationChain) · ④는 응답 뒤. 체인 실패는 요청을 실패시키지 않는다(REQ-MST-10).
+// 업무 명령 경로(SW-12 stream)에서는 명령 워커가 이 서비스를 부른다 — 원장 APPLIED 행은 COMMIT 직전 같은 트랜잭션(bizBeforeCommit · 06_pipeline/07 §적용 단계 ⑤).
 import {
   type DeviceObjectBody,
   type LineObjectBody,
@@ -19,6 +20,7 @@ import { Injectable } from '@nestjs/common';
 import type { PoolClient } from 'pg';
 import { ApiError, validationFailed } from '../../common/http/api-error';
 import { Postgres } from '../../common/postgres/postgres.module';
+import { BizLedgerConflict, bizBeforeCommit, noteBizTx } from '../biz/biz-ledger';
 import { type ChainTargets, InvalidationChain } from './invalidation-chain';
 import { rowToTagMeta, TAG_META_SELECT, type TagMeta } from './tag-meta';
 
@@ -112,16 +114,21 @@ export class MasterWriteService {
       throw new ApiError('common.postgres_unavailable', 'PostgreSQL에 접속할 수 없다');
     }
     let out: { result: T; chain?: ChainTargets };
+    const t0 = performance.now();
     try {
       await client.query('BEGIN');
       out = await fn(client);
+      await bizBeforeCommit(client, out.result);
       await client.query('COMMIT');
     } catch (e) {
       await client.query('ROLLBACK').catch(() => undefined);
+      noteBizTx(t0);
+      if (e instanceof BizLedgerConflict) throw e;
       mapPgError(e, fieldFromConstraint);
     } finally {
       client.release();
     }
+    noteBizTx(t0);
     if (out.chain) await this.chain.afterCommit(out.chain);
     return out.result;
   }
