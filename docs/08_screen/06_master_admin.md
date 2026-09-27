@@ -2,12 +2,15 @@
 
 > **대상**: AUTH-LOGIN(로그인) · ADM-MASTER(사이트 · 라인 · 설비 · Modbus 접속 설정 · 태그 — 스케일 변경 = 새 태그 발급 · master.scale_change_forbidden/409) · ADM-WORKORDER(작업지시 status 4 · 허용 전이 4쌍 · work_orders.invalid_status_transition/409 · 생산 실적) · ADM-AUDIT(감사 로그 · 태그 변경 이력 조회)
 > **작성일**: 2026-09-24
+> **개정일**: 2026-09-28 — 리드 정정 — Redis 불가 코드 신설 없음 · **common.postgres_unavailable/503 재사용**(07_api/01) — 오류 칸 코드명 교체
+> **개정일**: 2026-09-28 — 07_api/01 확정 값 반영 — Redis 불가 **common.command_bus_unavailable/503** · 명령 조회 GET /api/v1/commands/{cmdId} 확정(확정 대기 표면 1 → **0**) · 재시도는 같은 Idempotency-Key
+> **개정일**: 2026-09-28 — 업무 쓰기 명령 경로 반영(사용자 결정 2026-09-27 · 정본 06_pipeline/07 §업무 명령 경로) — 도입 단락 "쓰기는 Redis Stream을 타지 않고" → **명령 스트림(stream:biz:cmd)을 거쳐 워커가 커밋한 뒤 응답** · 실적 불릿의 ③ 비경유 근거 교체 · 상태 4행(ADM-MASTER · ADM-WORKORDER)에 202 pending · Redis 불가 503 · 호출 표면 모음에 명령 조회 확정 대기 · 스위치 영향 "해당 없음" → **SW-12**
 > **개정일**: 2026-09-26 — W1 검수 잔여 — AUTH-LOGIN 도입 단계 S7 → **S7 ②(인증)**(S7 ① 알람 선행은 무인증)
 > **개정일**: 2026-09-26 — W1 검수 반영 — 감사 목록 무인증 기간 표기 S4~S6 → **인증 도입(S7 ②) 전**(S7 ① 알람 확인도 감사 NULL · 정본 05_data_stores/01 §인계 판정)
 > **개정일**: 2026-09-24 — 최종 정밀 검수 — Modbus 매핑 변경 행 닫힘(07_api/04 W5 판정) · 새 태그 발급 다이얼로그 펜스 앞 도입문 추가
 > **원천**: 원본 architecture.md §6 · §11 · §11.2 · §12(커밋 ff66a37) · 원본 data_flow.md §7 · §7.1 · §7.2(커밋 ff66a37) · 원본 implementation_plan.md §5 S4 · S7 · §7.4(커밋 ff66a37) · docs_plan.md 실행 계획 보정 #13 · REQ-AUT-01~06 · 14 · 15 · 17 · REQ-MST-01~15 · REQ-WRK-01~12 · AC-06 · AC-37 · AC-38 · 기능 AUT-01 · 03 · MST-01~06 · WRK-01 · 02 · 03 · 05 · [../06_pipeline/07_business_crud.md](../06_pipeline/07_business_crud.md) · [../07_api/03_auth.md](../07_api/03_auth.md) · [../07_api/04_master.md](../07_api/04_master.md) · [../11_glossary/03_enums_state_machines.md](../11_glossary/03_enums_state_machines.md) 상태 머신 4 · [01_standards.md](./01_standards.md)
 
-이 문서는 로그인과 업무 데이터 관리 화면 넷을 담는다(보정 #13 — 08_screen에 로그인 · 작업지시 자리가 따로 없어 이 파일이 함께 소유한다). 네 화면의 공통점은 **분기 ③계층의 화면**이라는 것이다 — 쓰기는 Redis Stream을 타지 않고 PostgreSQL 트랜잭션으로 동기 커밋된 뒤 응답하며(REQ-WRK-01), 캐시 사본은 커밋 뒤에만 지워진다. 그래서 이 화면들의 계약은 속도가 아니라 **쓴 사람이 저장 직후 새 값을 보는가**(read-your-writes)다.
+이 문서는 로그인과 업무 데이터 관리 화면 넷을 담는다(보정 #13 — 08_screen에 로그인 · 작업지시 자리가 따로 없어 이 파일이 함께 소유한다). 네 화면의 공통점은 **분기 ③계층의 화면**이라는 것이다 — 쓰기는 api가 검증한 뒤 명령 스트림(stream:biz:cmd)에 싣고 워커가 PostgreSQL 트랜잭션으로 커밋한 뒤에야 응답하며(사용자 결정 2026-09-27 · [../06_pipeline/07_business_crud.md](../06_pipeline/07_business_crud.md) §업무 명령 경로), 캐시 사본은 커밋 뒤 · 응답 전에 지워진다. 결과가 대기 상한 안에 오지 않으면 202 pending이 온다 — 화면 처리는 [01_standards.md](./01_standards.md) §업무 쓰기 응답 — 명령 경로가 공통으로 정한다. 그래서 이 화면들의 계약은 속도가 아니라 **쓴 사람이 저장 직후 새 값을 보는가**(read-your-writes)다.
 
 **관리자 한 번의 저장이 다른 화면의 태그명까지 바꾼다.** 태그 쓰기는 무효화 체인 6단(커밋 → Redis 삭제 → ch:cacheinv → Dictionary 재적재 → BFF 무효화 → 브라우저 무효화)을 건다([../06_pipeline/07_business_crud.md](../06_pipeline/07_business_crud.md)). 이 문서의 화면은 체인의 출발점이고, 체인의 끝(⑥)은 [01_standards.md](./01_standards.md) §무효화 신호 수신이 받는다.
 
@@ -145,8 +148,8 @@ PATCH /api/v1/tags/{id}가 받는 필드의 세 갈래(정본 [../07_api/04_mast
 |------|------|
 | 로딩 | 트리 골격과 상세 탭 머리를 먼저 그린다 · 탭 전환은 그 탭만 스켈레톤 |
 | 빈 값 | ① 사이트 0 — "등록된 사이트가 없다"와 사이트 등록(ADMIN) ② 설비의 태그 0 — "태그가 없다 · 수집 대상이 없다" ③ 비활성 포함을 꺼서 0 — "비활성 태그만 있다"와 토글 안내 |
-| 오류 | common.validation_failed/400 · common.duplicate_key/409(코드 필드 옆) · master.scale_change_forbidden/409 · master.reissue_source_inactive/409 · common.not_found/404 · common.postgres_unavailable/503 · auth.forbidden/403 — 표시는 [01_standards.md](./01_standards.md) §에러 코드별 사용자 표시. **503 중에는 폼 입력을 유지한다** — 커밋되지 않았으므로 재시도해도 이중 쓰기가 아니다 |
-| 정상 | 저장 성공 즉시 쓴 탭의 해당 쿼리를 로컬 무효화하고 재조회한다 · 태그 쓰기 성공 뒤 "다른 화면 반영 — 트렌드 태그명은 Dictionary 재적재 뒤 · 캐시된 조회 결과는 TTL까지 옛 이름" 한 줄 안내 |
+| 오류 | common.validation_failed/400 · common.duplicate_key/409(코드 필드 옆) · master.scale_change_forbidden/409 · master.reissue_source_inactive/409 · common.not_found/404 · common.postgres_unavailable/503 · auth.forbidden/403 · common.postgres_unavailable/503(업무 쓰기 — Redis 불가도 같은 코드 · 띠는 01_standards §업무 쓰기 응답) — 표시는 [01_standards.md](./01_standards.md) §에러 코드별 사용자 표시 · §업무 쓰기 응답 — 명령 경로. **503 중에는 폼 입력을 유지한다** — 커밋되지 않았으므로 같은 Idempotency-Key로 재시도해도 이중 쓰기가 아니다 · **202 pending은 오류가 아니다** — 폼을 잠그고 명령 조회로 결말을 본다(새 요청 재제출 금지) |
+| 정상 | 저장 성공 즉시 쓴 탭의 해당 쿼리를 로컬 무효화하고 재조회한다(202 뒤 명령 조회로 적용을 확인한 경우는 신선 창 표지를 달아 재조회) · 태그 쓰기 성공 뒤 "다른 화면 반영 — 트렌드 태그명은 Dictionary 재적재 뒤 · 캐시된 조회 결과는 TTL까지 옛 이름" 한 줄 안내 |
 
 ### 쓰기 뒤 체인과 화면
 
@@ -190,7 +193,7 @@ PATCH /api/v1/tags/{id}가 받는 필드의 세 갈래(정본 [../07_api/04_mast
 ```
 
 - **다음 전이 열은 현재 상태에서 나갈 수 있는 전이만 버튼으로 둔다.** 표 밖 전이 버튼은 비활성으로도 두지 않는다 — 누를 수 없는 버튼이 "권한이 없어 못 누른다"로 읽힌다.
-- **실적은 사람이 입력하는 업무 데이터다**(REQ-WRK-05). 설비 카운터(스트림 유래)와 값이 달라도 결함이 아니며 화면은 두 값을 한 표로 합치지 않는다 — 합치면 ③ "Stream을 타지 않는다"가 화면에서 거짓이 된다.
+- **실적은 사람이 입력하는 업무 데이터다**(REQ-WRK-05). 설비 카운터(수집 스트림 stream:plc:raw 유래 측정값)와 값이 달라도 결함이 아니며 화면은 두 값을 한 표로 합치지 않는다 — 실적은 명령 스트림을 거쳐 PostgreSQL에 확정된 ③계층 행이고 카운터는 ClickHouse의 ①계층 측정 사실이라, 합치면 진실이 다른 두 저장소의 값이 한 칸에서 섞인다.
 
 ### 상태 전이
 
@@ -229,7 +232,7 @@ PATCH /api/v1/tags/{id}가 받는 필드의 세 갈래(정본 [../07_api/04_mast
 |------|------|
 | 로딩 | 필터와 목록 머리를 먼저 그린다 · 전이 요청 중에는 그 행의 버튼만 진행 표시 |
 | 빈 값 | ① 조건 결과 0 — "조건에 맞는 작업지시가 없다" ② 작업지시 0 — "등록된 작업지시가 없다"와 등록(ADMIN) ③ 실적 0 — "기록된 실적이 없다" |
-| 오류 | common.validation_failed/400 · common.duplicate_key/409(지시번호) · work_orders.invalid_status_transition/409 · work_orders.production_log_not_allowed/409 · common.not_found/404 · common.postgres_unavailable/503 · auth.forbidden/403 — 표시는 [01_standards.md](./01_standards.md) §에러 코드별 사용자 표시. PostgreSQL 불가 동안 **쓰기를 브라우저에 보관했다가 나중에 보내지 않는다**(REQ-WRK-06) — 폼 입력은 유지하되 자동 재전송은 없다 |
+| 오류 | common.validation_failed/400 · common.duplicate_key/409(지시번호) · work_orders.invalid_status_transition/409 · work_orders.production_log_not_allowed/409 · common.not_found/404 · common.postgres_unavailable/503 · auth.forbidden/403 — 표시는 [01_standards.md](./01_standards.md) §에러 코드별 사용자 표시. PostgreSQL 불가 동안 **쓰기를 브라우저에 보관했다가 나중에 보내지 않는다**(REQ-WRK-06) — 폼 입력은 유지하되 자동 재전송은 없다 · S7 ②에서 작업지시 · 실적 쓰기가 명령 경로에 들어오면 202 pending · 업무 쓰기 503도 [01_standards.md](./01_standards.md) §업무 쓰기 응답 — 명령 경로를 따른다 — 202는 명령이 이미 스트림에 있다는 뜻이라 보관 · 재전송과 다르다 |
 | 정상 | 쓴 탭은 응답 즉시 목록 · 상세를 다시 읽어 새 상태를 본다(no-store) · 다른 사용자 화면은 cache:workorders TTL(현행 참고 60초)만큼 늦을 수 있다 — 체인 ③ · ⑥을 걸지 않는 판정의 결과 |
 
 - **A형 — "다른 관리자가 바꾼 상태가 내 목록에 1분 가까이 옛 상태로 보인다"는 결함이 아니다.** 통념은 무효화 체인이 모든 화면을 즉시 갱신한다는 것이다. 부정 — 작업지시는 ③ · ⑥을 걸지 않는다. 진짜 축은 read-your-writes가 **쓴 사람**의 보장이라는 것이다. 대체 경로 — 전이 전에 화면이 최신 상태를 모르면 서버 조건부 갱신이 409로 막고 화면이 다시 읽는다 — 잘못된 전이는 생기지 않는다.
@@ -283,12 +286,12 @@ PATCH /api/v1/tags/{id}가 받는 필드의 세 갈래(정본 [../07_api/04_mast
 | 화면 | 원본 표면(메서드 + 경로) | 07_api 신설 확정(메서드 + 경로) | 확정 대기 |
 |------|------|------|------|
 | AUTH-LOGIN | POST /api/v1/auth/login · POST /api/v1/auth/refresh · POST /api/v1/auth/logout | 없음 | 없음 |
-| ADM-MASTER | GET /api/v1/sites · GET /api/v1/devices · GET · POST · PATCH /api/v1/tags | POST · PATCH /api/v1/sites · GET · POST · PATCH /api/v1/lines · POST · PATCH /api/v1/devices · GET · PUT /api/v1/devices/{id}/modbus-config · GET /api/v1/tags/{id} · POST /api/v1/tags/{id}/deactivate · POST /api/v1/tags/{id}/reissue | 없음 |
-| ADM-WORKORDER | GET · POST · PATCH /api/v1/work-orders | GET /api/v1/lines · GET /api/v1/work-orders/{id} · POST /api/v1/work-orders/{id}/status · GET · POST /api/v1/work-orders/{id}/production-logs | 없음 |
+| ADM-MASTER | GET /api/v1/sites · GET /api/v1/devices · GET · POST · PATCH /api/v1/tags | POST · PATCH /api/v1/sites · GET · POST · PATCH /api/v1/lines · POST · PATCH /api/v1/devices · GET · PUT /api/v1/devices/{id}/modbus-config · GET /api/v1/tags/{id} · POST /api/v1/tags/{id}/deactivate · POST /api/v1/tags/{id}/reissue · GET /api/v1/commands/{cmdId}(명령 조회 — 01_conventions) | 없음 |
+| ADM-WORKORDER | GET · POST · PATCH /api/v1/work-orders | GET /api/v1/lines · GET /api/v1/work-orders/{id} · POST /api/v1/work-orders/{id}/status · GET · POST /api/v1/work-orders/{id}/production-logs · GET /api/v1/commands/{cmdId}(명령 조회 — 01_conventions · S7 ②) | 없음 |
 | ADM-AUDIT | 없음 | GET /api/v1/audit-logs · GET /api/v1/audit-logs/tag-reissues | 없음 |
 
-- 검산: 확정 대기 표면 = **0** — 네 화면의 표면은 07_api 03 · 04 · 08이 전부 확정했다
-- 스위치는 네 화면의 표시를 바꾸지 않는다 — 업무 CRUD의 무효화 체인은 정합성 계약이라 스위치를 두지 않는다([../02_features/13_switch_matrix.md](../02_features/13_switch_matrix.md) §검산 — 스위치가 걸리지 않는 흐름 F-05). 스위치 영향은 네 화면 모두 "해당 없음"이다.
+- 검산: 확정 대기 표면 = **0** — 네 화면의 표면은 07_api 01 · 03 · 04 · 08이 전부 확정했다(명령 조회는 01_conventions의 횡단 표면 · ADM-MASTER · ADM-WORKORDER 두 행이 같은 표면)
+- **스위치 영향은 SW-12 하나다(업무 쓰기 경로).** stream(기본)이면 202 pending · Redis 불가 중 쓰기 503(common.postgres_unavailable)이 올 수 있고, direct(옛 경로 · 비교 실험 EXP-46용)면 둘 다 없고 Redis 불가 중에도 쓰기가 된다 — 정상 응답의 모양은 같아 화면 표시는 202 처리 유무만 다르다. AUTH-LOGIN · ADM-AUDIT은 업무 쓰기가 없어 해당 없음이다. 무효화 체인 자체에는 여전히 스위치가 없다 — 정합성 계약이라서다([../02_features/13_switch_matrix.md](../02_features/13_switch_matrix.md)).
 
 ## 미확인 · 확정 대기 등재
 

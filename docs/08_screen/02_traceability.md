@@ -2,9 +2,13 @@
 
 > **대상**: 기능 91 → 화면 매핑 전수 · 화면 없는 기능의 닫힌 어휘(내부 모듈 · 표면 없음 · 화면 없음(API 전용)) · 주 화면별 파생 집계 · 권한 매트릭스와의 교차 검산 · 화면 → 표면 인용 목록 · 누락 0 · 유령 0 검산
 > **작성일**: 2026-09-24
+> **개정일**: 2026-09-28 — 07_api/01 확정 값 반영 — 명령 조회 GET /api/v1/commands/{cmdId}를 기능 11행(MST-01~06 · ALM-01 · ALM-08 · WRK-01~03) 호출 표면 열에 · 화면 → 표면 인용에 01_conventions 행 — 인용 표면 42 → **43**(+ 화면 없는 1 = 07_api 44) · 미확인 1행 닫힘 — 기능 · 분류 · 주 화면 수 불변
+> **개정일**: 2026-09-28 — 업무 쓰기 명령 경로 반영 — 미확인 등재에 명령 조회 표면(07_api/01 확정 대기) 1행 — 인용 표면 · 매핑 수 불변(확정 뒤 다시 센다)
+> **개정일**: 2026-09-28 — 리드 판정 1 — 주 기능 없는 두 화면을 **주 기능 없는 실증 화면(OBS 보조)** 분류로 닫는다(새 기능 ID 없음) · 고아 검산을 이 분류 밖 화면으로 · 미확인 1행 닫힘 — 기능 · 분류 · 주 화면 합 불변
+> **개정일**: 2026-09-27 — 새 화면 2(EXP-PERF · EXP-FLOW · 08_evidence_screens) — 보조 화면 4행(RLT-05 · OBS-01 · 02 · 03 → EXP-FLOW) · 산출이 보이는 자리 6행(MST-08 · GEN-08~10 · ING-01~13 · ALM-04 · 05 · 06) · 주 화면별 화면 코드 행 10 → **12**(두 화면 주 기능 0 — 고아 2 판정 대기) · 화면 → 표면 인용 호출 화면 2행 — 기능 91 · 분류 · 주 화면 합 42 · 인용 표면 42 불변
 > **개정일**: 2026-09-24 — 최종 정밀 검수 — GEN · OBS 귀속 제안 행 닫힘(README 반영)
 > **개정일**: 2026-09-24 — W7 검수 반영 — 미확인 1행 닫힘(전 축 정합 — 15_traceability 완성) — 매핑 수 불변
-> **원천**: [../02_features/12_permission_matrix.md](../02_features/12_permission_matrix.md) 역할 × 기능 매트릭스 · §검산 · 도메인 파일 11본 [../02_features/01_auth.md](../02_features/01_auth.md) ~ [../02_features/11_metrics.md](../02_features/11_metrics.md) 기능 목록 · [README.md](./README.md) 화면 인벤토리 · 화면 문서 5본의 요소 표 · [01_standards.md](./01_standards.md) 공통 셸 요소 표 · 07_api 도메인 문서의 표면 요약 · 원본 architecture.md §11(커밋 ff66a37)
+> **원천**: [../02_features/12_permission_matrix.md](../02_features/12_permission_matrix.md) 역할 × 기능 매트릭스 · §검산 · 도메인 파일 11본 [../02_features/01_auth.md](../02_features/01_auth.md) ~ [../02_features/11_metrics.md](../02_features/11_metrics.md) 기능 목록 · [README.md](./README.md) 화면 인벤토리 · 화면 문서 6본의 요소 표 · [01_standards.md](./01_standards.md) 공통 셸 요소 표 · 07_api 도메인 문서의 표면 요약 · 원본 architecture.md §11(커밋 ff66a37)
 
 이 문서는 **기능 → 화면 매핑과 파생 집계의 정본**이다. 기능 ID와 기능명의 정본은 02_features 도메인 파일 11본이고, 화면 코드의 정본은 [README.md](./README.md) 화면 인벤토리다. 이 문서는 둘을 잇기만 하며 기능도 화면도 새로 만들지 않는다.
 
@@ -38,21 +42,21 @@
 | AUT-05 | 역할 기반 인가 | 화면 | 공통 셸 | 역할 판정 화면(ALM-CONSOLE · ALM-RULES · ANL-TREND 내보내기 · ADM 3) | 인가 대상 전 표면 | 버튼 활성 · 403 제자리 안내 |
 | AUT-06 | 레이트 리밋 | 화면 | 공통 셸 | 전 인증 화면 | 인증이 필요한 전 REST 표면 | 429 띠 |
 | AUT-07 | 요청 출처 방어 | 화면 | 공통 셸 | DSH-REALTIME · ALM-CONSOLE(WS) | 직결 표면 · WS /ws/realtime | WS 끊김 표지 |
-| MST-01 | 사이트 · 라인 관리 | 화면 | ADM-MASTER | DSH-REALTIME · ANL-TREND · ALM-RULES · ADM-WORKORDER(선택 목록) | GET · POST /api/v1/sites · PATCH /api/v1/sites/{id} · GET · POST /api/v1/lines · PATCH /api/v1/lines/{id} | 해당 없음 |
-| MST-02 | 설비 관리 | 화면 | ADM-MASTER | DSH-REALTIME · ANL-TREND · ALM-RULES(선택 목록) | GET · POST /api/v1/devices · PATCH /api/v1/devices/{id} | 해당 없음 |
-| MST-03 | Modbus 접속 설정 관리 | 화면 | ADM-MASTER | 해당 없음 | GET · PUT /api/v1/devices/{id}/modbus-config · POST /api/v1/devices(함께 등록) | ADM-MASTER SIMULATED 표지 |
-| MST-04 | 태그 마스터 관리 | 화면 | ADM-MASTER | ANL-TREND · ALM-RULES(선택 목록) | GET · POST /api/v1/tags · PATCH /api/v1/tags/{id} · GET /api/v1/tags/{id} | 해당 없음 |
-| MST-05 | 태그 논리 삭제 | 화면 | ADM-MASTER | 해당 없음 | POST /api/v1/tags/{id}/deactivate | ALM-CONSOLE · ALM-RULES "태그 비활성" 표지 |
-| MST-06 | 스케일 변경 시 새 태그 발급 | 화면 | ADM-MASTER | 해당 없음 | POST /api/v1/tags/{id}/reissue | ADM-AUDIT 태그 변경 이력 · ANL-TREND 이어 보기 |
+| MST-01 | 사이트 · 라인 관리 | 화면 | ADM-MASTER | DSH-REALTIME · ANL-TREND · ALM-RULES · ADM-WORKORDER(선택 목록) | GET · POST /api/v1/sites · PATCH /api/v1/sites/{id} · GET · POST /api/v1/lines · PATCH /api/v1/lines/{id} · GET /api/v1/commands/{cmdId}(202 뒤 — 명령 조회) | 해당 없음 |
+| MST-02 | 설비 관리 | 화면 | ADM-MASTER | DSH-REALTIME · ANL-TREND · ALM-RULES(선택 목록) | GET · POST /api/v1/devices · PATCH /api/v1/devices/{id} · GET /api/v1/commands/{cmdId}(202 뒤 — 명령 조회) | 해당 없음 |
+| MST-03 | Modbus 접속 설정 관리 | 화면 | ADM-MASTER | 해당 없음 | GET · PUT /api/v1/devices/{id}/modbus-config · POST /api/v1/devices(함께 등록) · GET /api/v1/commands/{cmdId}(202 뒤 — 명령 조회) | ADM-MASTER SIMULATED 표지 |
+| MST-04 | 태그 마스터 관리 | 화면 | ADM-MASTER | ANL-TREND · ALM-RULES(선택 목록) | GET · POST /api/v1/tags · PATCH /api/v1/tags/{id} · GET /api/v1/tags/{id} · GET /api/v1/commands/{cmdId}(202 뒤 — 명령 조회) | 해당 없음 |
+| MST-05 | 태그 논리 삭제 | 화면 | ADM-MASTER | 해당 없음 | POST /api/v1/tags/{id}/deactivate · GET /api/v1/commands/{cmdId}(202 뒤 — 명령 조회) | ALM-CONSOLE · ALM-RULES "태그 비활성" 표지 |
+| MST-06 | 스케일 변경 시 새 태그 발급 | 화면 | ADM-MASTER | 해당 없음 | POST /api/v1/tags/{id}/reissue · GET /api/v1/commands/{cmdId}(202 뒤 — 명령 조회) | ADM-AUDIT 태그 변경 이력 · ANL-TREND 이어 보기 |
 | MST-07 | 태그 메타 캐시 | 표면 없음 | 해당 없음 | 해당 없음 | 해당 없음 — 내부 조회 | DSH-REALTIME 태그명 · "메타 없음" 표지 |
-| MST-08 | 캐시 무효화 체인 | 표면 없음 | 해당 없음 | 해당 없음 | 해당 없음 — 쓰기 표면의 후처리 | 공통 셸 신호 수신(⑥) · ADM-MASTER 쓰기 뒤 안내 |
+| MST-08 | 캐시 무효화 체인 | 표면 없음 | 해당 없음 | 해당 없음 | 해당 없음 — 쓰기 표면의 후처리 | 공통 셸 신호 수신(⑥) · ADM-MASTER 쓰기 뒤 안내 · EXP-FLOW 업무 점 · 목록(무효화 키 수 · ch:cacheinv) |
 | MST-09 | Dictionary 원천 제공 | 표면 없음 | 해당 없음 | 해당 없음 | 해당 없음 — TSQ-07이 소비 | ANL-TREND 범례 태그명 · 단위 |
 | COL-01~09 | 수집(9) | 내부 모듈 | 해당 없음 | 해당 없음 | 해당 없음 | DSH-REALTIME 품질 열(COL-05) · EXP-CONSOLE 스풀 · 발행량 카드(COL-07~09) |
 | SIM-01~05 | 시뮬레이션(5) | 내부 모듈 | 해당 없음 | 해당 없음 | 해당 없음 | DSH-REALTIME 품질 9 · 2 표기 |
 | GEN-01~06 | 생성 · 모드 A · B(6) | 표면 없음 | 해당 없음 | 해당 없음 | 해당 없음 — 실행 인자 | EXP-CONSOLE 생성기 pps 카드 · DSH-REALTIME 품질 9 |
 | GEN-07 | 모드 C 부하 주입 표면 | 화면 없음(API 전용) | 해당 없음 | 해당 없음 | POST /api/v1/ingest/bulk — k6 · datagen 컨테이너가 부른다 | EXP-CONSOLE 모드 C 거절 수 카드 |
-| GEN-08~10 | 모드 D · 단독 실측 · 대조군 백필(3) | 표면 없음 | 해당 없음 | 해당 없음 | 해당 없음 — 실행 인자 | EXP-COMPARE 역전 지점 패널(BFF가 docs/measurements 기록을 읽는다) |
-| ING-01~13 | 적재 · 분기(13) | 내부 모듈 | 해당 없음 | 해당 없음 | 해당 없음 | EXP-CONSOLE 랙 · 백프레셔 · DLQ 카드 · DSH-REALTIME 최신값(ING-08) · ALM 화면(ING-09 · 10) |
+| GEN-08~10 | 모드 D · 단독 실측 · 대조군 백필(3) | 표면 없음 | 해당 없음 | 해당 없음 | 해당 없음 — 실행 인자 | EXP-COMPARE 역전 지점 패널 · EXP-PERF(BFF가 docs/measurements 기록을 읽는다) |
+| ING-01~13 | 적재 · 분기(13) | 내부 모듈 | 해당 없음 | 해당 없음 | 해당 없음 | EXP-CONSOLE 랙 · 백프레셔 · DLQ 카드 · DSH-REALTIME 최신값(ING-08) · ALM 화면(ING-09 · 10) · EXP-FLOW 흐름도 · 배치 타임라인(flow 프레임 — 분기 ING-10 · 대조군 ING-11) |
 | TSQ-01 | 시계열 조회 | 화면 | ANL-TREND | DSH-REALTIME(트렌드 채움) | POST /api/v1/timeseries/query | 해당 없음 |
 | TSQ-02 | 해상도 자동 선택 | 화면 | ANL-TREND | 해당 없음 | POST /api/v1/timeseries/query(meta.interval) | 해당 없음 |
 | TSQ-03 | 캐시 키 정규화 | 표면 없음 | 해당 없음 | 해당 없음 | 해당 없음 — TSQ-04의 내부 단계 | ANL-TREND "캐시" 표지 켜짐 비율(SW-04 실험) |
@@ -66,28 +70,28 @@
 | RLT-02 | 단일 태그 최신값 | 화면 | DSH-REALTIME | 해당 없음 | GET /api/v1/realtime/tags/{id} | 해당 없음 |
 | RLT-03 | STALE 판정 · 메타 부착 | 화면 | DSH-REALTIME | 해당 없음 | GET /api/v1/realtime/devices/{id}/tags(quality · staleAfterMs · servedAt) | 해당 없음 |
 | RLT-04 | 빈 키 복원과 503 | 화면 | DSH-REALTIME | 해당 없음 | GET /api/v1/realtime/devices/{id}/tags(meta.source · restored) | 해당 없음 |
-| RLT-05 | WebSocket 구독 | 화면 | DSH-REALTIME | 공통 셸(연결) | WS /ws/realtime | 해당 없음 |
+| RLT-05 | WebSocket 구독 | 화면 | DSH-REALTIME | 공통 셸(연결) · EXP-FLOW(subscribe_flow — 구독 수단) | WS /ws/realtime | 해당 없음 |
 | RLT-06 | 스로틀 병합 | 화면 | DSH-REALTIME | 해당 없음 | WS /ws/realtime | 해당 없음 |
 | RLT-07 | 연결 관리 · 재연결 동기화 | 화면 | DSH-REALTIME | 공통 셸(WS 표지) · ALM-CONSOLE(재연결 재조회) | WS /ws/realtime · GET /api/v1/realtime/devices/{id}/tags | 해당 없음 |
 | RLT-08 | 알람 푸시 | 화면 | ALM-CONSOLE | DSH-REALTIME(알람 띠) | WS /ws/realtime | 해당 없음 |
 | RLT-09 | 무효화 신호 중계 | 화면 | 공통 셸 | DSH-REALTIME · ANL-TREND · ALM-RULES · ADM-MASTER(영향 화면) | WS /ws/realtime | 해당 없음 |
-| ALM-01 | 알람 규칙 관리 | 화면 | ALM-RULES | 해당 없음 | GET · POST /api/v1/alarms/rules · PATCH /api/v1/alarms/rules/{id} | 해당 없음 |
+| ALM-01 | 알람 규칙 관리 | 화면 | ALM-RULES | 해당 없음 | GET · POST /api/v1/alarms/rules · PATCH /api/v1/alarms/rules/{id} · GET /api/v1/commands/{cmdId}(202 뒤 — 명령 조회) | 해당 없음 |
 | ALM-02 | 규칙 캐시 | 표면 없음 | 해당 없음 | 해당 없음 | 해당 없음 — ALM-03의 내부 단계 | 해당 없음 — 저장 뒤 판정 반영 시점 안내만 |
 | ALM-03 | 디바운스 판정 | 표면 없음 | 해당 없음 | 해당 없음 | 해당 없음 — ING-09가 호출 | ALM-RULES 분석 위반 수 |
-| ALM-04 | 이벤트 확정 | 표면 없음 | 해당 없음 | 해당 없음 | 해당 없음 — ALM-03의 후속 | ALM-CONSOLE 목록 행 |
-| ALM-05 | 판정 전수 기록 | 표면 없음 | 해당 없음 | 해당 없음 | 해당 없음 — ALM-03의 후속 | ALM-RULES 분석 차트 |
-| ALM-06 | 발생 · 해제 발행 | 표면 없음 | 해당 없음 | 해당 없음 | 해당 없음 — RLT-08이 전달 | ALM-CONSOLE 실시간 겹침 · DSH-REALTIME 알람 띠 |
+| ALM-04 | 이벤트 확정 | 표면 없음 | 해당 없음 | 해당 없음 | 해당 없음 — ALM-03의 후속 | ALM-CONSOLE 목록 행 · EXP-FLOW 흐름도 ◆(opened · closed) |
+| ALM-05 | 판정 전수 기록 | 표면 없음 | 해당 없음 | 해당 없음 | 해당 없음 — ALM-03의 후속 | ALM-RULES 분석 차트 · EXP-FLOW alarm_eval 갈래(judgedRows) |
+| ALM-06 | 발생 · 해제 발행 | 표면 없음 | 해당 없음 | 해당 없음 | 해당 없음 — RLT-08이 전달 | ALM-CONSOLE 실시간 겹침 · DSH-REALTIME 알람 띠 · EXP-FLOW ch:alarm 갈래 |
 | ALM-07 | 알람 이벤트 조회 | 화면 | ALM-CONSOLE | 해당 없음 | GET /api/v1/alarms/events | 해당 없음 |
-| ALM-08 | 알람 확인 | 화면 | ALM-CONSOLE | 해당 없음 | POST /api/v1/alarms/events/{id}/ack | 해당 없음 |
+| ALM-08 | 알람 확인 | 화면 | ALM-CONSOLE | 해당 없음 | POST /api/v1/alarms/events/{id}/ack · GET /api/v1/commands/{cmdId}(202 뒤 — 명령 조회) | 해당 없음 |
 | ALM-09 | 판정 이력 분석 | 화면 | ALM-RULES | 해당 없음 | GET /api/v1/alarms/evaluations | 해당 없음 |
-| WRK-01 | 작업지시 관리 | 화면 | ADM-WORKORDER | 해당 없음 | GET · POST /api/v1/work-orders · GET · PATCH /api/v1/work-orders/{id} | 해당 없음 |
-| WRK-02 | 작업지시 상태 관리 | 화면 | ADM-WORKORDER | 해당 없음 | POST /api/v1/work-orders/{id}/status | 해당 없음 |
-| WRK-03 | 생산 실적 기록 | 화면 | ADM-WORKORDER | 해당 없음 | GET · POST /api/v1/work-orders/{id}/production-logs | 해당 없음 |
+| WRK-01 | 작업지시 관리 | 화면 | ADM-WORKORDER | 해당 없음 | GET · POST /api/v1/work-orders · GET · PATCH /api/v1/work-orders/{id} · GET /api/v1/commands/{cmdId}(202 뒤 — 명령 조회) | 해당 없음 |
+| WRK-02 | 작업지시 상태 관리 | 화면 | ADM-WORKORDER | 해당 없음 | POST /api/v1/work-orders/{id}/status · GET /api/v1/commands/{cmdId}(202 뒤 — 명령 조회) | 해당 없음 |
+| WRK-03 | 생산 실적 기록 | 화면 | ADM-WORKORDER | 해당 없음 | GET · POST /api/v1/work-orders/{id}/production-logs · GET /api/v1/commands/{cmdId}(202 뒤 — 명령 조회) | 해당 없음 |
 | WRK-04 | 감사 로그 기록 | 표면 없음 | 해당 없음 | 해당 없음 | 해당 없음 — 쓰기 트랜잭션 안 단계 | ADM-AUDIT 목록 행 |
 | WRK-05 | 감사 로그 조회 | 화면 | ADM-AUDIT | ANL-TREND(이전 태그 이어 보기 — 계보 표면만 · 인증 사용자 전원) | GET /api/v1/audit-logs · GET /api/v1/audit-logs/tag-reissues | 해당 없음 |
-| OBS-01 | 앱 메트릭 통합 노출 | 화면 | EXP-COMPARE | EXP-CONSOLE(요약 카드) | GET /metrics(화면은 BFF 경유) | 해당 없음 |
-| OBS-02 | 저장소 메트릭 수집 | 화면 | EXP-CONSOLE | 해당 없음 | GET /metrics | 해당 없음 |
-| OBS-03 | 키 계열별 메모리 샘플링 | 화면 | EXP-CONSOLE | 해당 없음 | GET /metrics | 해당 없음 |
+| OBS-01 | 앱 메트릭 통합 노출 | 화면 | EXP-COMPARE | EXP-CONSOLE(요약 카드) · EXP-FLOW(저장소 누적 · 발생원 초당 포인트) | GET /metrics(화면은 BFF 경유) | 해당 없음 |
+| OBS-02 | 저장소 메트릭 수집 | 화면 | EXP-CONSOLE | EXP-FLOW(저장소 누적 카드) | GET /metrics | 해당 없음 |
+| OBS-03 | 키 계열별 메모리 샘플링 | 화면 | EXP-CONSOLE | EXP-FLOW(Redis 카드 접두별) | GET /metrics | 해당 없음 |
 | OBS-04 | E2E 지연 게이지 | 화면 | EXP-CONSOLE | 해당 없음 | GET /metrics | 해당 없음 |
 | OBS-05 | 헬스체크 | 화면 | EXP-CONSOLE | 해당 없음 | GET /api/v1/health | 해당 없음 |
 | OBS-06 | 스위치 상태 노출 | 화면 | EXP-CONSOLE | EXP-COMPARE · 공통 셸(실험 조건 배지) · DSH-REALTIME(구성 배지) | GET /api/v1/health · GET /metrics | 해당 없음 |
@@ -124,11 +128,13 @@
 | ADM-AUDIT | 1 | WRK-05 |
 | EXP-CONSOLE | 5 | OBS-02 · 03 · 04 · 05 · 06 |
 | EXP-COMPARE | 1 | OBS-01 |
+| EXP-PERF | 0 | 없음 — 측정 기록 읽기(api 표면 없음) |
+| EXP-FLOW | 0 | 없음 — 보조 4(RLT-05 · OBS-01 · 02 · 03) · 흐름 이벤트는 기능 ID 없음 |
 | 공통 셸 | 5 | AUT-04 · 05 · 06 · 07 · RLT-09 |
 
-- 검산: 3 + 8 + 5 + 3 + 2 + 6 + 3 + 1 + 5 + 1 + 5 = **42** = 분류 "화면" · 화면 코드 행 = **10** — 인벤토리 선점 10과 같다
-- **유령 0 · 고아 0** — 주 화면 열의 화면 코드는 전부 인벤토리에 있고(유령 0), 인벤토리의 화면 10은 전부 주 기능을 1개 이상 갖는다(고아 0). ADM-AUDIT · EXP-COMPARE가 1개뿐인 것은 한 기능을 깊게 보는 화면이라서다 — 쪼갠 화면이 아니다.
-- **추가 화면 제안 0** — 선점 10으로 화면 있는 기능 42를 전부 담았다. 새 화면이 필요하면 [README.md](./README.md) 인벤토리 말미에 추가하고 이 표를 다시 센다.
+- 검산: 3 + 8 + 5 + 3 + 2 + 6 + 3 + 1 + 5 + 1 + 0 + 0 + 5 = **42** = 분류 "화면" · 화면 코드 행 = **12** — 인벤토리 12와 같다
+- **유령 0 · 고아 0 · 주 기능 없는 실증 화면 2** — 주 화면 열의 화면 코드는 전부 인벤토리에 있다(유령 0). 인벤토리 12 중 EXP-PERF · EXP-FLOW는 **주 기능 없는 실증 화면(OBS 보조)**으로 분류하고(리드 판정 1 · 2026-09-28 — 새 기능 ID를 만들지 않는다), 나머지 10은 전부 주 기능을 1개 이상 갖는다(고아 0). EXP-PERF는 원천이 api 표면이 아닌 BFF 기록 읽기라(EXP-COMPARE 역전 지점 패널과 같은 사정) 붙일 기능이 없고, EXP-FLOW의 흐름 이벤트(ch:flow 발행 · flow 중계)는 관찰 보조 채널이라 기능으로 세지 않는다 — 두 화면의 기능 매핑은 보조 화면 열과 산출이 보이는 자리 열에만 있다. 이 분류 밖의 화면이 주 기능 0이면 그것은 고아다.
+- **추가 화면 2(2026-09-27 · 사용자 요구 · 리드 채번)** — EXP-PERF · EXP-FLOW. 화면 있는 기능 42는 선점 10이 이미 담으므로 두 화면은 주 기능 없이 보조 매핑 · 산출 표시만 늘린다 — 기능 수 · 분류 · 주 화면 합은 불변이다.
 
 ### 도메인별
 
@@ -155,6 +161,7 @@
 
 | 07_api 문서 | 화면이 인용한 표면 | 수 | 호출 화면 |
 |------|------|------|------|
+| [../07_api/01_conventions.md](../07_api/01_conventions.md) | GET /api/v1/commands/{cmdId}(명령 조회 — 횡단 · 업무 쓰기 202 뒤) | 1 | ADM-MASTER · ALM-RULES · ALM-CONSOLE · ADM-WORKORDER |
 | [../07_api/03_auth.md](../07_api/03_auth.md) | POST /api/v1/auth/login · POST /api/v1/auth/refresh · POST /api/v1/auth/logout | 3 | AUTH-LOGIN · 공통 셸 |
 | [../07_api/04_master.md](../07_api/04_master.md) | GET · POST /api/v1/sites · PATCH /api/v1/sites/{id} · GET · POST /api/v1/lines · PATCH /api/v1/lines/{id} · GET · POST /api/v1/devices · PATCH /api/v1/devices/{id} · GET · PUT /api/v1/devices/{id}/modbus-config · GET · POST /api/v1/tags · GET · PATCH /api/v1/tags/{id} · POST /api/v1/tags/{id}/deactivate · POST /api/v1/tags/{id}/reissue | 17 | ADM-MASTER · DSH-REALTIME · ANL-TREND · ALM-RULES · ADM-WORKORDER |
 | [../07_api/05_timeseries.md](../07_api/05_timeseries.md) | POST /api/v1/timeseries/query · GET /api/v1/timeseries/export | 2 | ANL-TREND · DSH-REALTIME |
@@ -162,11 +169,11 @@
 | [../07_api/07_alarms.md](../07_api/07_alarms.md) | GET /api/v1/alarms/events · POST /api/v1/alarms/events/{id}/ack · GET · POST /api/v1/alarms/rules · PATCH /api/v1/alarms/rules/{id} · GET /api/v1/alarms/evaluations | 6 | ALM-CONSOLE · ALM-RULES |
 | [../07_api/08_work_orders.md](../07_api/08_work_orders.md) | GET · POST /api/v1/work-orders · GET · PATCH /api/v1/work-orders/{id} · POST /api/v1/work-orders/{id}/status · GET · POST /api/v1/work-orders/{id}/production-logs · GET /api/v1/audit-logs · GET /api/v1/audit-logs/tag-reissues | 9 | ADM-WORKORDER · ADM-AUDIT · ANL-TREND |
 | [../07_api/09_datagen.md](../07_api/09_datagen.md) | 없음 — POST /api/v1/ingest/bulk는 화면 없음(API 전용) | 0 | 해당 없음 |
-| [../07_api/10_metrics.md](../07_api/10_metrics.md) | GET /api/v1/health · GET /metrics(화면은 BFF 경유) | 2 | EXP-CONSOLE · EXP-COMPARE · 공통 셸 |
-| [../07_api/11_websocket.md](../07_api/11_websocket.md) | WS /ws/realtime | 1 | DSH-REALTIME · ALM-CONSOLE · 공통 셸 |
+| [../07_api/10_metrics.md](../07_api/10_metrics.md) | GET /api/v1/health · GET /metrics(화면은 BFF 경유) | 2 | EXP-CONSOLE · EXP-COMPARE · EXP-FLOW(metrics만) · 공통 셸 |
+| [../07_api/11_websocket.md](../07_api/11_websocket.md) | WS /ws/realtime | 1 | DSH-REALTIME · ALM-CONSOLE · EXP-FLOW(subscribe_flow · flow) · 공통 셸 |
 
-- 검산: 인용 표면 = 3 + 17 + 2 + 2 + 6 + 9 + 0 + 2 + 1 = **42** · 화면이 인용하지 않은 표면 = POST /api/v1/ingest/bulk **1**
-- **EXP-COMPARE 역전 지점 패널의 원천은 이 표에 없다** — api 표면이 아니라 BFF가 docs/measurements를 읽기 전용으로 읽는다(W5 리드 판정 · [07_experiment_console.md](./07_experiment_console.md)).
+- 검산: 인용 표면 = 1 + 3 + 17 + 2 + 2 + 6 + 9 + 0 + 2 + 1 = **43** · 화면이 인용하지 않은 표면 = POST /api/v1/ingest/bulk **1** · 43 + 1 = 44 = [../07_api/README.md](../07_api/README.md) 표면 총수와 같다
+- **EXP-COMPARE 역전 지점 패널과 EXP-PERF의 원천은 이 표에 없다** — api 표면이 아니라 BFF가 docs/measurements를 읽기 전용으로 읽는다(W5 리드 판정 · [07_experiment_console.md](./07_experiment_console.md) · [08_evidence_screens.md](./08_evidence_screens.md)). EXP-FLOW의 flow 프레임은 새 표면이 아니라 WS /ws/realtime 한 표면의 메시지 type이다 — 표면이 늘지 않으므로 인용 수도 늘지 않는다. 명령 조회(01_conventions)는 업무 쓰기 명령 경로가 더한 새 표면이라 따로 센다.
 - **원본 표면 중 화면이 부르지 않는 것은 부하 주입 하나뿐이다.** 원본 API 표(원본 architecture.md §11)의 나머지는 전부 화면 요소에 걸려 있다 — 화면 없는 표면이 늘면 그 표면의 호출 주체를 이 표에 적는다.
 - 07_api README의 표면 총수와 이 표의 합이 다르면 차이는 화면 없는 표면이다 — 표면 총수의 정본은 [../07_api/README.md](../07_api/README.md)이고 이 표는 그것을 세지 않는다.
 
@@ -175,12 +182,15 @@
 | 항목 | 상태 | 확정 자리 |
 |------|------|------|
 | README 도메인 공백 행의 GEN · OBS 잠정 귀속 | 닫힘 — README 도메인 공백 행 반영(GEN 화면 없음 · OBS는 EXP-CONSOLE · EXP-COMPARE) · 인벤토리 EXP-CONSOLE 주 도메인도 OBS로 맞춤 | [README.md](./README.md) |
+| 주 기능 없는 화면 2(EXP-PERF · EXP-FLOW) · 흐름 이벤트 기능 ID | **닫힘(리드 판정 1 · 2026-09-28)** — 새 기능 ID 없음 · 주 기능 없는 실증 화면(OBS 보조) 분류 인정 · 기능 91 · 42 등식과 권한 매트릭스 교차 검산은 기능을 늘리지 않으므로 그대로 성립 | 이 문서 |
+| 명령 조회 표면(GET /api/v1/commands/{cmdId}) | **닫힘(2026-09-28)** — 07_api/01 확정(횡단 표면 #1 · 기능 MST-01~06 · ALM-01 · ALM-08 · WRK-01~03) · 해당 기능 행의 호출 표면 열과 화면 → 표면 인용 표에 반영 · 화면 처리는 [01_standards.md](./01_standards.md) §업무 쓰기 응답 — 명령 경로 | 이 문서 |
 | 기능 ↔ REQ ↔ 흐름 ↔ 화면 ↔ API ↔ 테이블 전 축 정합 | 닫힘 — 전 축 매핑 완성(미매핑 0 · 유령 0) — [../03_requirements/15_traceability.md](../03_requirements/15_traceability.md) | [../03_requirements/15_traceability.md](../03_requirements/15_traceability.md) |
 
 ## 관련 문서
 
 - [README.md](./README.md) — 화면 인벤토리 · 화면 코드 채번
 - [01_standards.md](./01_standards.md) — 명세 템플릿 · 공통 셸 요소 표
+- [08_evidence_screens.md](./08_evidence_screens.md) — EXP-PERF · EXP-FLOW 요소 표
 - [../02_features/12_permission_matrix.md](../02_features/12_permission_matrix.md) — 역할 × 기능 · 교차 검산 상대
 - [../03_requirements/15_traceability.md](../03_requirements/15_traceability.md) — 전 축 추적성
 - [../07_api/README.md](../07_api/README.md) — 표면 목차 · 표면 총수

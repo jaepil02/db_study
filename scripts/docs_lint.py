@@ -3,7 +3,7 @@
 
 사용: python3 scripts/docs_lint.py [--final] [파일 또는 폴더 ...]  (task docs:lint -- [인자] 와 같다)
   인자가 없으면 docs/ 전체(docs/measurements 제외)를 검사한다.
-  --final 이면 예정 파일로 가는 링크도 오류로 보고 파일 수 122를 검사한다.
+  --final 이면 예정 파일로 가는 링크도 오류로 보고 파일 수 123을 검사한다.
 """
 import os
 import re
@@ -38,7 +38,7 @@ PLANNED = {
                '06_realtime.md', '07_alarms.md', '08_work_orders.md', '09_datagen.md', '10_metrics.md',
                '11_websocket.md'],
     '08_screen': ['README.md', '01_standards.md', '02_traceability.md', '03_realtime_dashboard.md',
-                  '04_trend_analysis.md', '05_alarm_console.md', '06_master_admin.md', '07_experiment_console.md'],
+                  '04_trend_analysis.md', '05_alarm_console.md', '06_master_admin.md', '07_experiment_console.md', '08_evidence_screens.md'],
     '09_tech_stack': ['README.md', '01_frontend.md', '02_backend.md', '03_data_infra.md',
                       '04_local_environment.md', '05_tooling_devops.md', '06_decisions_rationale.md'],
     '10_observability': ['README.md', '01_metrics_catalog.md', '02_instrumentation.md', '03_dashboards_alerts.md',
@@ -220,8 +220,8 @@ def main():
         errs += check(f, final)
     if final:
         allf = md_files([ROOT])
-        if len(allf) != 122:
-            errs.append(f'파일 수 {len(allf)} ≠ 122')
+        if len(allf) != 123:
+            errs.append(f'파일 수 {len(allf)} ≠ 123')
         missing = sorted(PLANNED_SET - {os.path.normpath(f) for f in allf})
         errs += [f'미작성: {os.path.relpath(m, ROOT)}' for m in missing]
     for x in errs:

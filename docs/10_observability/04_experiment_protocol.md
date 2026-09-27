@@ -2,6 +2,10 @@
 
 > **대상**: ★ 실험 규칙 정본 — 실험 한 번의 절차 · 3회 중앙값과 편차 폐기 기준 · 구조 판정과 분포 판정 · 역전 구간 우열 3/3 구조 판정 · 스냅샷과 복원 · 캐시 키 초기화 · 기준선 · 회복 관측 · 조건 칸(4요소 + 부가 조건) · 조건 분리 강제 · **측정 기록 템플릿(docs/measurements/NNN-{slug}.md)** · **기계 판독 블록 형식(EXP-COMPARE BFF가 읽는다)** · 기록 상태와 정정 · 결과를 정본 문서에 올리는 절차
 > **작성일**: 2026-09-24
+> **개정일**: 2026-09-28 — 웨이브 1 검수 판정 반영(f-screens · r-screens M3 · r-biz M3) — BFF 판독 규칙 4 "switches 11키" → **기록 시점 스위치 정본의 키 전부**(SW-12 도입 2026-09-27 전 기록은 SW-01~11 11키 · SW-12 부재는 기본값 stream으로 읽는다) · 현재 수 자리 스위치 11종 → **12종**(조건 칸 · 스위치 기록 불릿 · 조건 분리 비교 · 블록 switches · 정본 반영 불릿) · 조합 제약 9건 → **10건**(#10 SW-12 stream) · 스위치 값에 stream · direct — 규칙 · 칸 수 불변
+> **개정일**: 2026-09-28 — 표지 키 리드 재판정 — §조건 칸 러너 불릿의 키 rt:flow:subscribed → **cache:flow:subscribed** — 칸 수 불변
+> **개정일**: 2026-09-28 — 흐름 이벤트 측정 오염 방지(리드 판정) — §조건 칸에 러너의 흐름 구독 표지 부재 확인 한 줄 — 칸 수 불변
+> **개정일**: 2026-09-27 — 새 화면 EXP-PERF(리드 판정 1) — §기록 상태와 정정에 화면의 참고값 표시 예외 한 줄(표시만 · 정본 인용 불가 · 배지 필수) — 상태 · 판독 규칙 수 불변
 > **개정일**: 2026-09-27 — W6 리드 요청(x-web4 제안 · 기록 053) — 기계 판독 블록 선택 필드 structuralRanges 신설(대조 기록 선택 · 지수 표기 10^k · 역전 구간 (a, b] · 역전 없음은 winner · range · 우열 미정 점 undetermined · from · to 선택) · BFF 판독 보조 문장(규칙 3 · 5 미적용 · 규칙 4 적용 · 번호가 가장 큰 기록 하나) — 필드 행 11 → **12** · 판독 규칙 7로 measurement/v1 유지
 > **개정일**: 2026-09-27 — W6 종합(규약 · 한계 · 계측 · 기록 048~054) — §구조 판정과 분포 판정에 §역전 구간 — 우열 3/3 구조 판정 신설(반복별 부호 규칙 · 동률 점 서버 µs 규칙 · 편차 폐기 면제의 적용 · serverTimeAsymmetry 한계 — 리드 판정 1 · 2) · §실험 한 번의 절차에 격자 2차 적재 · 정밀화 절차 사실 불릿(리드 판정 5) · §기록 상태와 정정의 discarded 정본 인용 칸을 구조 사실 · 결정적 값 인용으로 명확화(비 쿼리 축 바이트 포함 · 삽입 처리량 제외) · §미확인 등재에 검토 과제 2(콜드 반복 방식 · 서버 µs 값의 절대 차 하한) · 격자 러너 보강 1행 — 판정 · 상태 · 필드 행 수와 schema measurement/v1 불변
 > **개정일**: 2026-09-27 — 목적 적합성 W5 리드 판정 — §조건 칸에 도구 컨테이너 경로의 memoryLimitMb null 조항(선택 키 run.memoryLimitSource가 있으면 4요소 충족 · 추정 채움 금지 유지) — 칸 수 · schema measurement/v1 불변(판독 규칙 7)
@@ -112,7 +116,7 @@ AC의 합격선은 두 종류다([../03_requirements/14_acceptance_criteria.md](
 | 커밋 해시 | health run.commitHash | 문자열 | **인용 불가** — 4요소 누락 |
 | 메모리 프로파일 | health run.memoryProfile · memoryLimitMb | 문자열 · 정수 | 상동 |
 | 용량 티어 | health run.capacityTier | S · M · M+ · L | 상동 |
-| 스위치 상태 | health switches 11종 전부의 value · impl | on · off · 정수(SW-07) · ingest · collector | 상동 |
+| 스위치 상태 | health switches 12종 전부의 value · impl | on · off · 정수(SW-07) · ingest · collector · stream · direct(SW-12) | 상동 |
 | 주입 모드 | 실행 명령 | A · B · C · D · 없음 | 모드를 섞었는지 판정할 수 없다 |
 | 관측 스택 | 기동 명령 | off(정밀 세션) · on(탐색 — 상대 비교용) | 절대값 인용 여부를 가를 수 없다 |
 | 생성기 CPU | 호스트 도구 · 생성기 지표 | 실행 중 최대 사용률 | 포화 구간을 폐기할 수 없다(REQ-GEN-13) |
@@ -125,9 +129,10 @@ AC의 합격선은 두 종류다([../03_requirements/14_acceptance_criteria.md](
 
 - 검산: 칸 = 4요소 4 + 부가 9 = **13**
 - 환경변수 이름(MEMORY_PROFILE — load · dev · mid · CAPACITY_TIER · 빌드 인자 COMMIT_HASH · WORKER_POOL_SIZE · SIM_FAULT_PLAN)의 정본은 [../09_tech_stack/04_local_environment.md](../09_tech_stack/04_local_environment.md)다. health run의 memoryProfile 값은 MEMORY_PROFILE 값 그대로다.
-- **스위치는 기계 판독 블록에서 11종 전부를 적는다.** 사람이 읽는 조건 표는 "바꾼 것만 명시 · 나머지 기본값"을 허용하지만(REQ-TEC-10), 기본값 자체가 바뀌면(스위치 기본값 변경 절차) 옛 기록의 "기본값"이 다른 조건을 가리킨다 — 블록은 값 전부를 싣는다.
+- **스위치는 기계 판독 블록에서 12종 전부를 적는다**(기록 시점 스위치 정본의 전부 — SW-12 도입 전 기록은 11종이고 판독은 규칙 4가 맞춘다). 사람이 읽는 조건 표는 "바꾼 것만 명시 · 나머지 기본값"을 허용하지만(REQ-TEC-10), 기본값 자체가 바뀌면(스위치 기본값 변경 절차) 옛 기록의 "기본값"이 다른 조건을 가리킨다 — 블록은 값 전부를 싣는다.
 - **health 값이 null이면 그 기록은 4요소가 빠진 기록이다.** 추정값으로 채우지 않는다 — null은 인용 불가 표지이고 BFF가 그 점을 그리지 않는다.
 - **도구 컨테이너 경로의 memoryLimitMb null은 누락이 아니다(목적 적합성 W5 리드 판정 · 2026-09-27).** 측정 경로에 앱이 끼지 않는 실험(모드 D 격자 EXP-01~05 · EXP-35 · 역방향 EXP-40~44)은 api health가 없고 도구 컨테이너(datagen-d · oltp-lab)가 health와 같은 모양의 run을 낸다. 이 컨테이너에는 compose 메모리 상한이 없어 cgroup memory.max가 max이고 run의 memoryLimitMb가 null이다 — 이 null은 재지 못한 값이 아니라 상한이 없다는 사실값이다. 이 경우 블록 run에 선택 키 memoryLimitSource(문자열 — 예: cgroup max — datagen-d 서비스에 compose 상한 없음)를 함께 싣고, BFF는 memoryLimitSource가 공백이 아닌 문자열인 null을 4요소 충족으로 본다(빈 문자열 · 공백만이면 누락). 대조 저장소 상한(3,584 MB) 같은 다른 값으로 채우지 않는다 — 그 값은 저장소 컨테이너의 상한이지 측정 프로세스의 상한이 아니며, 저장소 자원은 conditions가 싣는다. api health 경로의 null은 위 불릿대로 누락이다.
+- **러너는 흐름 구독 표지(cache:flow:subscribed) 부재를 확인한 뒤 측정 창을 연다(리드 판정 · 2026-09-28).** 표지가 있으면 워커가 배치 · 업무 명령마다 흐름 요약을 만들어 ch:flow로 발행해 flusher 후속 구간과 명령 적용 구간에 PUBLISH 비용이 섞인다 — EXP-FLOW를 닫고 표지 TTL이 지나 키가 사라진 것을 본 뒤 창을 연다([../07_api/11_websocket.md](../07_api/11_websocket.md) §흐름 이벤트 — flow).
 
 ## 조건 분리 강제
 
@@ -136,8 +141,8 @@ AC의 합격선은 두 종류다([../03_requirements/14_acceptance_criteria.md](
 | 규칙 | 판정 시점 | 위반 기록의 처리 |
 |------|------|------|
 | 주입 모드 하나 | 조건 칸 | 무효 — 병목 계층을 가를 수 없다 |
-| 조합 제약 9건(#8 · #9 — SW-10 on · SW-11 collector는 모드 A 전용 포함) | 조건 칸의 스위치 · 모드 대조 | 무효 — 차이가 0으로 나와 "효과 없음"이 거짓으로 기록된다 |
-| 비교는 대상 스위치 하나만 다르게 | 두 기록의 스위치 11종 대조 | 비교 불성립 — 두 기록은 각각 유효하다 |
+| 조합 제약 10건(#8 · #9 — SW-10 on · SW-11 collector는 모드 A 전용 · #10 — SW-12 stream은 worker 역할이 도는 구성 전용 포함) | 조건 칸의 스위치 · 모드 대조 | 무효 — 차이가 0으로 나와 "효과 없음"이 거짓으로 기록된다 |
+| 비교는 대상 스위치 하나만 다르게 | 두 기록의 스위치 12종 대조(한쪽 기록에 없는 스위치는 도입 전 기본값으로 읽는다 — BFF 판독 규칙 4) | 비교 불성립 — 두 기록은 각각 유효하다 |
 | 나머지 3요소 같음 | 두 기록의 커밋 · 프로파일 · 티어 대조 | 비교 불성립 |
 | 개발 · 중간 프로파일 수치를 목표와 비교하지 않음 | 프로파일 칸 | 기록은 유효 · 정본 인용 불가(REQ-TEC-07) |
 | 관측 스택 on 수치는 상대 비교용 | 관측 스택 칸 | 절대값 인용 불가 |
@@ -223,7 +228,7 @@ AC의 합격선은 두 종류다([../03_requirements/14_acceptance_criteria.md](
 | schema · record · exp · status · supersedes | 예 | measurement/v1 · 3자리 · EXP-NN 배열 · valid · discarded · superseded · 기록 번호 또는 null | BFF 필터 |
 | window | 예 | UTC ISO 시작 · 끝 | 사람 · 재현 |
 | run | 예 | health run 네 필드 그대로 | 4요소 툴팁 · 비교 성립 판정 |
-| switches | 예 | 스위치 11종 전부 · health switches.*.value 그대로 — **스위치 비교 기록(on/off 두 팔)은 대상 스위치만 results의 arm 순서대로 값 배열**(예: ["on", "off"]) · 나머지는 스칼라 | 상동 |
+| switches | 예 | 스위치 12종 전부(기록 시점 스위치 정본의 전부 — SW-12 도입 2026-09-27 전 기록은 11종) · health switches.*.value 그대로 — **스위치 비교 기록(on/off 두 팔)은 대상 스위치만 results의 arm 순서대로 값 배열**(예: ["on", "off"]) · 나머지는 스칼라 | 상동 |
 | conditions | 예 | injectionMode · observability · cpuset · seed · generatorCpuMax · compression · swapUsed · wslNetworking · simFaultPlan(경로 · 해시 또는 null) 필수 · controlMemoryMb(대조 기록) · **EXP-45 기록은 flushWindowSeconds · copyTimeoutSeconds(초 · 판정 점 기준) · batchPlan · controlCopySyncCommit — 반복끼리 다르면 기록을 만들지 않는다** · 나머지 실험별 | 조건 분리 판정 · EXP-45 판정 점 기준 |
 | repeat | 예 | runs · deviation · threshold | 폐기 판정 |
 | results | 예(빈 배열 허용) | metric · arm · unit · values · median | 스위치 비교 기록 |
@@ -245,7 +250,7 @@ AC의 합격선은 두 종류다([../03_requirements/14_acceptance_criteria.md](
 | 1 | 파일명이 NNN-{slug}.md 모양이다 | 무시 — 기록 파일이 아니다 |
 | 2 | schema가 measurement/v1인 json 블록이 정확히 1개다 | "판독 불가 기록"으로 센다 |
 | 3 | status가 valid이고, 다른 valid 기록의 supersedes가 이 기록을 가리키지 않는다 | 제외 — 폐기 · 정정된 기록 |
-| 4 | run 네 필드와 switches 11키가 전부 null이 아니다 | 점을 그리지 않고 "4요소 누락"으로 센다 |
+| 4 | run 네 필드와 switches의 키 — **기록 시점 스위치 정본의 키 전부** — 가 null이 아니다 · SW-12 도입(2026-09-27) 전 기록은 SW-01~11 11키이며 SW-12 부재는 기본값 stream으로 읽는다 | 점을 그리지 않고 "4요소 누락"으로 센다 |
 | 5 | repeat.runs ≥ 3이고 deviation ≤ threshold다 | 제외 — 폐기 기준 초과 |
 | 6 | 역전 지점 패널은 exp에 EXP-01~05 중 하나가 있는 기록의 points만 쓴다 | 다른 실험의 점이 대조 선에 섞이지 않는다 |
 | 7 | 모르는 필드는 무시한다 · 필드를 없애거나 뜻을 바꾸면 schema를 measurement/v2로 올린다 | v1 판독기가 새 기록을 조용히 잘못 읽는다 |
@@ -266,6 +271,7 @@ AC의 합격선은 두 종류다([../03_requirements/14_acceptance_criteria.md](
 - 검산: 상태 = **3**
 - **구조 사실 판별 기록(api 부재 단계)** — health가 없는 단계(S0)의 판별 · 회귀 기록은 run의 티어 · switches를 null로 두고 status valid로 쓴다. 4요소가 비었으므로 수치는 인용하지 않고, 정본에는 구조 사실(동작 여부 · 1계층 개수 · 설정 채택 근거)만 올린다. BFF 규칙 4는 그대로 적용해 "4요소 누락"으로 센다. 기계 판독 블록 conditions에 recordKind structural-discrimination을 적는다.
 - **폐기 기록의 인용 규칙(W6 리드 판정 · 기록 047 · 048~053).** discarded 기록에서 정본 문장에 올릴 수 있는 것은 두 종류다. ① **구조 사실** — 우열 3/3(§역전 구간) · 인덱스 선택 · 계획 노드 · 읽은 행 · 블록 수 · 결과 일치 · 원자성 · 제약 판정처럼 3회 전부 같은 값으로 성립한 판정. ② **결정적 값** — 반복 대상이 아닌 단계당 1회 측정 · 채움 1회의 산출이다 — 비 쿼리 축의 저장 바이트 · 압축률 · 인덱스 바이트 · WAL 바이트와 행 · 파트 수. 결정적 값을 올릴 때는 "결정적 값 · 기록 NNN · discarded"를 밝힌다. **ms · 배수 · 처리량 같은 크기 수치는 참고로도 정본 문장에 넣지 않고 기록 번호만 가리킨다** — 삽입 처리량(행/s)은 비 쿼리 축이지만 시간을 재는 값이라 이 금지에 든다(쿼리 시간과 같은 실행 분산을 탄다). 이 규칙은 정본 문장의 인용 범위이고 BFF 판독 규칙 3은 바뀌지 않는다 — 화면은 discarded 기록을 그대로 뺀다.
+- **예외 — 화면의 참고값 표시(리드 판정 1 · 2026-09-27).** EXP-PERF는 discarded 격자 기록의 크기 수치(ms · 배수)를 **표시만** 한다 — 점선 · 회색 · "참고값 — 편차 기준 초과(구조 판정만 정본)" 배지와 반복 최소~최대 막대가 필수이고, 화면 값은 정본 문장에 인용하지 않으며, 역전 구간은 structuralRanges(구조 판정)만 쓴다(판독 규칙 3 · 5의 대체는 [../08_screen/08_evidence_screens.md](../08_screen/08_evidence_screens.md) §판독 규칙).
 - **기록은 사후에 고치지 않는다**(REQ-TEC-11). 잘못 적은 기록은 새 번호의 정정 기록을 쓰고 supersedes로 옛 번호를 가리킨다 — 옛 파일의 status를 바꾸지 않아도 BFF 규칙 3이 옛 기록을 뺀다.
 
 ## 결과를 정본 문서에 올리는 절차
@@ -282,7 +288,7 @@ AC의 합격선은 두 종류다([../03_requirements/14_acceptance_criteria.md](
 ```
 
 - **①의 예외는 discarded 기록의 구조 사실 · 결정적 값이다(§기록 상태와 정정).** ③의 형식은 "구조 사실(기록 NNN · discarded · 우열 3/3)" 또는 "값(결정적 값 · 기록 NNN · discarded · 4요소)"이다.
-- **③에서 4요소 중 스위치는 변경분만 적는다.** 전수는 기록 번호가 가리키는 블록에 있다 — 정본 문서 본문이 11종을 반복하지 않는다.
+- **③에서 4요소 중 스위치는 변경분만 적는다.** 전수는 기록 번호가 가리키는 블록에 있다 — 정본 문서 본문이 12종을 반복하지 않는다.
 - **목표 대비 판정은 ③ 뒤에 한다.** 원본 목표를 합격선으로 쓰지 않고 첫 실측을 기준선으로 삼는다([../03_requirements/13_nonfunctional.md](../03_requirements/13_nonfunctional.md)) — 기준선 확정과 목표 확정은 다른 변경 단위다.
 - **as-built 승격은 이 절차의 끝이다.** 한 문서의 미확인 행이 전부 기록 인용으로 바뀌면 그 문서의 성격을 as-built로 올린다(루트 README 성격 줄).
 

@@ -2,6 +2,9 @@
 
 > **대상**: ALM-CONSOLE(활성 · 미확인 · 이력 · 확인) · ALM-RULES(규칙 관리 · 판정 이력 분석 — min · max 쌍 차트) — ACK 허용 조건 · alarms.ack_not_allowed/409 표시 · 역할 OPERATOR · ENGINEER
 > **작성일**: 2026-09-24
+> **개정일**: 2026-09-28 — 리드 정정 — Redis 불가 코드 신설 없음 · **common.postgres_unavailable/503 재사용**(07_api/01) — 오류 칸 코드명 교체
+> **개정일**: 2026-09-28 — 07_api/01 확정 값 반영 — Redis 불가 **common.command_bus_unavailable/503** · 두 화면 호출 표면에 명령 조회 GET /api/v1/commands/{cmdId}(202 뒤) — ALM-CONSOLE 표면 3 → **4** · ALM-RULES 묶음 3 → **4**
+> **개정일**: 2026-09-28 — 업무 쓰기 명령 경로 반영(사용자 결정 2026-09-27 · SW-12) — ALM-CONSOLE 확인 · ALM-RULES 규칙 저장의 상태 4행 오류 칸에 202 pending · Redis 불가 503 인용 한 줄씩(공통 규칙 01_standards §업무 쓰기 응답 — 명령 경로) — 행 수 불변
 > **개정일**: 2026-09-26 — W3 코드 검수 반영(r-alarm M1 · L7) — 확인 버튼 판정 트리의 **acked_at 분기를 CLEARED 분기보다 먼저**(확인된 행은 CLEARED여도 확인자 표시) · 빈 버킷 주의 표지 요소 동작에 **웹의 누락 버킷 합성**(meta.interval · from · to · 1m · 1h만 — raw는 합성하지 않음 · 리드 추가 판정) 명시 · 해설 불릿 2 — 요소 · 표면 수 불변
 > **개정일**: 2026-09-26 — S7 ① 선행 반영(알람 분기를 인증보다 먼저 · 사용자 결정) — 두 화면 역할 · 도입 단계 행에 **S7 ① 먼저(인증 전) — 표시와 쓰기는 무인증 · 확인 행위자는 시드 계정** · 확인 버튼 판정 트리에 인증 전 분기(역할 숨김 없음 · 401) 추가(정본 07_api/07 §인증 전 확인 행위자 판정) — 요소 · 표면 수 불변
 > **개정일**: 2026-09-24 — 최종 정밀 검수 — 비활성 태그 열린 알람 닫는 수단 — 리드 판정 대기 → 두지 않는다(W5 알람 강제 해제 표면 없음 판정 반영)
@@ -107,7 +110,7 @@
 |------|------|
 | 로딩 | 탭 머리와 필터를 먼저 그리고 목록 행만 스켈레톤. 탭 전환 중에는 이전 탭 목록을 지운다 — 활성 탭의 행을 이력 탭으로 오인하지 않게 |
 | 빈 값 | ① 활성 0 · 미확인 0 — "열린 알람이 없다"(정상 상태) ② 이력 범위에 0 — "이 범위에 발생한 알람이 없다"와 범위 표시 ③ **규칙 0**(S7 첫 기동 — 규칙은 시드하지 않는다) — "판정 규칙이 없다"와 ALM-RULES 링크 |
-| 오류 | common.postgres_unavailable/503 · alarms.ack_not_allowed/409 · common.not_found/404 · auth.forbidden/403 · auth.unauthenticated/401(S7 ① 확인 행위자 없음 — §확인 허용 판정) · common.rate_limited/429 · common.validation_failed/400(범위) — 표시는 [01_standards.md](./01_standards.md) §에러 코드별 사용자 표시. PostgreSQL 불가 중에도 **실시간 겹침은 받는다** — 다만 PostgreSQL이 멈추면 새 알람이 확정되지 않아(REQ-ALM-10) 새 통지도 오지 않는다 |
+| 오류 | common.postgres_unavailable/503 · alarms.ack_not_allowed/409 · common.not_found/404 · auth.forbidden/403 · auth.unauthenticated/401(S7 ① 확인 행위자 없음 — §확인 허용 판정) · common.rate_limited/429 · common.validation_failed/400(범위) — 표시는 [01_standards.md](./01_standards.md) §에러 코드별 사용자 표시. PostgreSQL 불가 중에도 **실시간 겹침은 받는다** — 다만 PostgreSQL이 멈추면 새 알람이 확정되지 않아(REQ-ALM-10) 새 통지도 오지 않는다 · **확인(ACK) 요청의 202 pending · 쓰기 503(Redis 불가도 common.postgres_unavailable — 업무 쓰기 명령 경로)** — 표시는 [01_standards.md](./01_standards.md) §업무 쓰기 응답 — 명령 경로 · 202는 오류가 아니라 확인 대기(확인 버튼 잠금 · 명령 조회로 결말 · 새 키로 확인 재전송 금지 — 다시 보낼 때는 같은 Idempotency-Key) |
 | 정상 | 행마다 심각도(1 LOW · 2 MEDIUM · 3 HIGH) · 발생값 · 발생 시각 · 해제 시각 · 확인 여부. **다른 운영자의 확인은 ch:alarm에 실리지 않아 목록 캐시 TTL(cache:alarmevents)만큼 늦게 이 화면에 반영된다** — 쓴 탭만 즉시 본다. 발생 · 해제 시각은 **행 ts 기준**(측정 시각)이라 적체 소진 중 확정된 이벤트도 원래 시각에 놓인다. 확인은 "확인자 · 시각", 비활성 태그는 "태그 비활성 — 판정 중단" |
 
 - **발생 시각이 확정 시각이 아닌 이유** — occurred_at은 디바운스를 채운 행의 ts다. 벽시계로 쓰면 ClickHouse 중단 뒤 적체 소진 중 확정된 이벤트가 소진 시각에 몰려 알람 폭주로 보인다([../06_pipeline/08_alarm.md](../06_pipeline/08_alarm.md) §디바운스 전이와 세 쓰기).
@@ -119,8 +122,9 @@
 | GET /api/v1/alarms/events | 진입 · 탭 · 필터 변경 · 더 보기 · 확인 뒤 · 재연결 뒤 · 겹침 TTL 경과 | BFF(no-store) | items(eventId · ruleId · tagId · severity · state · triggerValue · occurredAt · clearedAt · ackedBy · ackedAt · tagIsActive 등 — 필드 정본 [../07_api/07_alarms.md](../07_api/07_alarms.md)) · meta.nextCursor |
 | POST /api/v1/alarms/events/{id}/ack | 확인 버튼 | BFF | 200이면 목록 재조회 · 409 · 404 · 403 |
 | WS /ws/realtime | 공통 셸 연결 · 이 화면은 알람 통지만 쓴다 | 직결 | alarm 메시지(eventId · ruleId · tagId · transition OPENED · CLEARED · ts · severity) — 확인은 푸시되지 않는다 |
+| GET /api/v1/commands/{cmdId} | 확인이 202 pending일 때만 · 백오프 | BFF(no-store) | status · httpStatus · result · error — 처리는 [01_standards.md](./01_standards.md) §업무 쓰기 응답 — 명령 경로 |
 
-- 검산: 표면 = **3**
+- 검산: 표면 = **4**
 - **범위 조건은 언제나 쿼리에 실린다** — 화면이 from을 생략해도 서버가 필터별 기본 범위를 채운다(REQ-ALM-13 · 07_api/07_alarms 판정). 열린 · 미확인 조회의 넓은 기본 범위가 싼 이유는 부분 인덱스가 파티션마다 열린 · 미확인 행만 담기 때문이다.
 
 ## ALM-RULES — 알람 규칙 관리 · 판정 분석
@@ -195,7 +199,7 @@
 |------|------|
 | 로딩 | 목록 · 폼 골격을 먼저 그린다. 분석 차트는 규칙을 고른 뒤에만 조회하고 그동안 축만 그린다 — 진입 즉시 분석을 부르면 대량 스캔 한도를 열람만으로 쓴다 |
 | 빈 값 | ① **규칙 0** — "규칙이 없다 · 여기서 만든다"(시드하지 않는다 — 규칙 쓰기의 감사와 무효화 체인이 시연 안에서 함께 검증된다) ② 분석 범위에 alarm_eval 행 0 — "이 범위에 판정 기록이 없다" · 규칙 생성 이전 범위인지 안내 ③ ENGINEER 아닌 사용자 — 분석 패널 자리에 "판정 분석은 엔지니어만" |
-| 오류 | common.validation_failed/400(비활성 태그 규칙 등록 · 불변 필드 포함) · common.not_found/404 · auth.forbidden/403 · common.rate_limited/429(분석 — 대량 조회 한도) · common.postgres_unavailable/503(규칙) · alarms.eval_store_unavailable/503(분석 — ClickHouse 불가 · 규칙 편집은 계속) — 표시는 [01_standards.md](./01_standards.md) §에러 코드별 사용자 표시 |
+| 오류 | common.validation_failed/400(비활성 태그 규칙 등록 · 불변 필드 포함) · common.not_found/404 · auth.forbidden/403 · common.rate_limited/429(분석 — 대량 조회 한도) · common.postgres_unavailable/503(규칙) · alarms.eval_store_unavailable/503(분석 — ClickHouse 불가 · 규칙 편집은 계속) — 표시는 [01_standards.md](./01_standards.md) §에러 코드별 사용자 표시 · **규칙 저장(POST · PATCH)의 202 pending · 쓰기 503(Redis 불가도 common.postgres_unavailable — 업무 쓰기 명령 경로)** — 표시는 [01_standards.md](./01_standards.md) §업무 쓰기 응답 — 명령 경로 · 202는 오류가 아니라 저장 대기(폼 입력 유지 · 폼 잠금 · 명령 조회로 결말 · 새 키로 재제출 금지) · 분석 조회는 명령 경로가 아니라 영향 없음 |
 | 정상 | 규칙 목록 · 편집 폼. 분석 차트는 버킷별 min · max 밴드 · 현재 임계선 · 위반 버킷 표지 · 빈 버킷 주의 표지. 보존 창(현행 참고 30일) 밖 구간은 빈 points다. 늦게 도착한 행의 판정도 alarm_eval에 남아 차트에 보인다 — 상태 전이는 일으키지 않았더라도 |
 
 ### 호출 표면
@@ -205,8 +209,9 @@
 | GET · POST /api/v1/alarms/rules · PATCH /api/v1/alarms/rules/{id} | 진입 · 저장 · 신호 무효화 뒤 | BFF(no-store) | 규칙 객체(ruleId · tagId · conditionType · threshold · thresholdLow · debounceMs · severity · enabled) |
 | GET /api/v1/alarms/evaluations | 규칙 선택 · 범위 변경 | 직결 | meta(interval · from · to · columns · pointCount · rule) · points [ts, min, max, breachCount, evalCount] |
 | GET /api/v1/sites · GET /api/v1/devices · GET /api/v1/tags | 태그 선택기 | BFF | 식별자 · 이름 · isActive |
+| GET /api/v1/commands/{cmdId} | 규칙 저장이 202 pending일 때만 · 백오프 | BFF(no-store) | status · httpStatus · result · error — 처리는 [01_standards.md](./01_standards.md) §업무 쓰기 응답 — 명령 경로 |
 
-- 검산: 표면 묶음 = **3**(규칙 3 · 분석 1 · 선택 목록 3 — 7개 표면)
+- 검산: 표면 묶음 = **4**(규칙 3 · 분석 1 · 선택 목록 3 · 명령 조회 1 — 8개 표면)
 - **규칙 저장 뒤 다른 사용자 화면은 체인 ⑥ 신호로 갱신된다** — cache:alarmrules 키 이름이 ch:cacheinv로 오면 alarm · rules 쿼리를 무효화한다([01_standards.md](./01_standards.md) §무효화 신호 수신). 쓴 탭은 저장 응답으로 즉시 무효화한다.
 - 분석 요청은 min · max 쌍을 돌려받는다 — 평균만 받으면 임계값 근처의 순간 초과가 사라져 오탐 분석 근거가 없어진다(REQ-ALM-17 · 원본 data_flow.md §6.3).
 

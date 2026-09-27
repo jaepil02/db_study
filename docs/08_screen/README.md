@@ -1,7 +1,10 @@
 # 08_screen — 화면 명세
 
-> **대상**: db_study 웹(Next.js)의 화면 — 명세 표준 · 기능 추적성 · 실시간 대시보드 · 트렌드 분석 · 알람 콘솔 · 관리 화면 · 실험 콘솔
+> **대상**: db_study 웹(Next.js)의 화면 — 명세 표준 · 기능 추적성 · 실시간 대시보드 · 트렌드 분석 · 알람 콘솔 · 관리 화면 · 실험 콘솔 · 실증 화면(규모별 성능 비교 · 분산 처리 모니터링)
 > **작성일**: 2026-09-23
+> **개정일**: 2026-09-28 — 웨이브 1 검수 판정 반영(f-screens · r-screens L7) — 08_evidence_screens 파일 목차 설명 "업무 이벤트" → **업무 명령**(본문 용어) — 파일 수 불변
+> **개정일**: 2026-09-28 — 리드 판정 1 — 두 새 화면을 주 기능 없는 실증 화면(OBS 보조)으로 확정 · 인벤토리 주 도메인 칸 · 기능 → 화면 줄 · EXP-FLOW 업무 길을 명령 경로로(08_evidence_screens)
+> **개정일**: 2026-09-27 — 새 화면 2(리드 채번 — EXP-PERF 규모별 성능 비교 · EXP-FLOW 분산 처리 모니터링) — 화면 10 → **12**(EXP 2 → 4 · 표면 접두 6 불변) · 명세 파일 08_evidence_screens.md 신설 · 경로 분리 줄에 EXP-PERF BFF 기록 읽기 · EXP-FLOW flow 프레임 · 기능 → 화면 91 불변(두 화면 주 기능 0 — 판정 대기 02_traceability)
 > **개정일**: 2026-09-24 — 최종 정밀 검수 — EXP-CONSOLE 주 도메인 OBS · GEN → OBS(GEN은 간접 표시 — 02_traceability와 일치)
 > **개정일**: 2026-09-24 — W5 완성판 — 화면 10 확정(추가 0) · 기능 → 화면 91 누락 0 · GEN 화면 없음 · 대조군 역전 지점은 BFF 파일 읽기
 > **원천**: [../README.md](../README.md) · [../01_overview/03_personas_roles.md](../01_overview/03_personas_roles.md) · 원본 tech_stack.md §4 · 원본 data_flow.md §6.3 · §7.2 · §9.1 · 원본 implementation_plan.md §4 · §5 S2(커밋 ff66a37)
@@ -21,8 +24,9 @@
 | [05_alarm_console.md](./05_alarm_console.md) | 활성 알람 · 확인 · 이력 · 규칙 관리 · min/max 쌍 분석 차트 | data_flow §8 · §6.3 | W5 |
 | [06_master_admin.md](./06_master_admin.md) | **관리 화면군** — 로그인 · 사이트 · 라인 · 설비 · 태그 마스터 · 작업지시 · 생산 실적 | architecture §11 · data_flow §7 | W5 |
 | [07_experiment_console.md](./07_experiment_console.md) | ★ 스위치 상태 표시 · 실험 실행 기록 · on/off 비교 대시보드 · 전환 절차 안내 | implementation_plan §4 · §8 | W5 |
+| [08_evidence_screens.md](./08_evidence_screens.md) | 규모별 성능 비교(격자 기록 참고값 곡선 · 구조 판정 역전 구간 · 원리 증거 · 저장 비용) · 분산 처리 모니터링(flow 프레임 흐름도 · 배치 타임라인 · 저장소 누적 · 업무 명령) | 신설(사용자 요구 2026-09-27) | 실증 화면 |
 
-검산: 표준 · 추적성 2 + 화면 문서 5 + README 1 = **8**
+검산: 표준 · 추적성 2 + 화면 문서 6 + README 1 = **9**
 
 ## 화면 인벤토리
 
@@ -40,8 +44,10 @@ W5 착수 전 리드가 화면 코드를 선점한다. 07_api를 쓰는 팀원�
 | ADM-AUDIT | 감사 로그 조회 | [06_master_admin.md](./06_master_admin.md) | 관리자 | WRK |
 | EXP-CONSOLE | 실험 콘솔(스위치 상태 표시 · 생성기 · 메트릭 요약 · 전환 절차 안내) | [07_experiment_console.md](./07_experiment_console.md) | 실험 수행자 | OBS(GEN 산출은 간접 표시 — 주 화면 아님) |
 | EXP-COMPARE | 실험 비교(on/off · 구현값 비교 · 대조군 역전 지점) | [07_experiment_console.md](./07_experiment_console.md) | 실험 수행자 | OBS |
+| EXP-PERF | 규모별 성능 비교(PostgreSQL 대 ClickHouse · 10^5~10^9행 · 참고값 곡선 · 구조 판정 역전 구간) | [08_evidence_screens.md](./08_evidence_screens.md) | 실험 수행자 · 시연 청중 | OBS 보조 — 주 기능 없는 실증 화면(측정 기록 읽기) |
+| EXP-FLOW | 분산 처리 모니터링(대용량 · 업무 경로의 갈림과 처리 · flow 프레임 실시간) | [08_evidence_screens.md](./08_evidence_screens.md) | 실험 수행자 · 시연 청중 | OBS 보조 — 주 기능 없는 실증 화면(flow 프레임) |
 
-검산: 화면 **10** — AUTH 1 + DSH 1 + ANL 1 + ALM 2 + ADM 3 + EXP 2 = **10**
+검산: 화면 **12** — AUTH 1 + DSH 1 + ANL 1 + ALM 2 + ADM 3 + EXP 4 = **12**
 
 ## 고정 기준 (축약)
 
@@ -49,11 +55,11 @@ W5 착수 전 리드가 화면 코드를 선점한다. 07_api를 쓰는 팀원�
 
 | 항목 | 기준 |
 |------|------|
-| 화면 코드 | **10** — 표면 접두 6(AUTH 1 · DSH 1 · ANL 1 · ALM 2 · ADM 3 · EXP 2). 채번 자리는 §화면 인벤토리 · 세는 기준은 화면 명세 H2 블록 수 |
-| 기능 → 화면 | 화면 있음 42 + 내부 모듈 27 + 표면 없음 21 + 화면 없음(API 전용) 1 = **91** · 누락 0(정본 [02_traceability.md](./02_traceability.md)) |
+| 화면 코드 | **12** — 표면 접두 6(AUTH 1 · DSH 1 · ANL 1 · ALM 2 · ADM 3 · EXP 4). 채번 자리는 §화면 인벤토리 · 세는 기준은 화면 명세 H2 블록 수 |
+| 기능 → 화면 | 화면 있음 42 + 내부 모듈 27 + 표면 없음 21 + 화면 없음(API 전용) 1 = **91** · 누락 0(정본 [02_traceability.md](./02_traceability.md)) · 주 기능 없는 실증 화면 2(EXP-PERF · EXP-FLOW — OBS 보조 · 리드 판정 1) |
 | 도메인 공백 | COL · SIM · ING은 전용 화면이 없다 — 산출물은 대시보드 · 실험 콘솔의 메트릭으로만 보인다. **GEN도 화면이 없다**(생성기 실행 제어 표면을 두지 않는다 — 산출은 EXP-CONSOLE 메트릭으로만 보인다). OBS는 EXP-CONSOLE · EXP-COMPARE가 담는다. AUT의 로그인과 WRK의 작업지시는 06_master_admin이 담는다 |
-| 경로 분리 | 저빈도 조회는 BFF 경유, 최신값 · 시계열 · WebSocket은 api 직결 — 정본 [../07_api/01_conventions.md](../07_api/01_conventions.md) · 화면이 부르는 health · /metrics는 BFF 경유 · EXP-COMPARE의 대조군 역전 지점은 BFF가 docs/measurements를 읽기 전용으로 읽는다(api 표면 없음) |
-| 실험 콘솔 접근 | 인증 사용자 전원 · **표시 전용** — 정본 [../02_features/12_permission_matrix.md](../02_features/12_permission_matrix.md) |
+| 경로 분리 | 저빈도 조회는 BFF 경유, 최신값 · 시계열 · WebSocket은 api 직결 — 정본 [../07_api/01_conventions.md](../07_api/01_conventions.md) · 화면이 부르는 health · /metrics는 BFF 경유 · EXP-COMPARE의 대조군 역전 지점과 EXP-PERF는 BFF가 docs/measurements를 읽기 전용으로 읽는다(api 표면 없음) · EXP-FLOW는 셸 WebSocket 연결의 flow 프레임(subscribe_flow)과 BFF 경유 메트릭 5초 폴링 |
+| 실험 콘솔 접근 | 인증 사용자 전원 · **표시 전용**(EXP-PERF · EXP-FLOW 포함 — 부하 · 장애 제어 버튼 없음) — 정본 [../02_features/12_permission_matrix.md](../02_features/12_permission_matrix.md) |
 | 차트 | uPlot 주력 · ECharts 보조. 서버 다운샘플이 1차 방어선이고 차트는 2차 방어선이다 |
 
 ## 관련 문서
