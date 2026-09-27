@@ -18,8 +18,12 @@ export const CH_TZ_SUFFIX = '__tz_utc';
 
 const KST = "'Asia/Seoul'";
 const UTC = "'UTC'";
-/** 복사 중복 제거 해제(04_clickhouse_rollup §백필 절차 ④와 같은 근거 — 26.8은 뒤 설정이 앞 설정을 대체한다) */
-const COPY_SETTINGS = { insert_deduplicate: 0, deduplicate_insert_select: 'disable' };
+/**
+ * 복사 중복 제거 해제(04_clickhouse_rollup §백필 절차 ④와 같은 근거 — 26.8은 뒤 설정이 앞 설정을 대체한다) ·
+ * optimize_on_insert 0 — 집계 테이블(tag_1m · 1h · 1d)은 기본값에서 삽입 블록 안 같은 키 행을 미리 합쳐 물리 행 수가 줄어든다
+ * (운영 전환 실측 2026-09-28: tag_1m 3,052,600 → 2,986,709 · countMerge는 같음). 행을 1:1로 옮겨야 엄격한 행 수 대조가 선다.
+ */
+const COPY_SETTINGS = { insert_deduplicate: 0, deduplicate_insert_select: 'disable', optimize_on_insert: 0 };
 
 export interface ChTzPort {
   command(query: string, settings?: Record<string, string | number>): Promise<void>;

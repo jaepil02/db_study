@@ -148,7 +148,11 @@ describe('ClickHouse 시간대 전환 — KST 볼륨', () => {
     expect(i(`DROP TABLE ${tmp} SYNC`)).toBeGreaterThan(i(`EXCHANGE TABLES ${tmp} AND plc.tag_raw`));
     // ingested_at을 컬럼 목록에 명시 · 중복 제거 해제 두 설정
     expect(insert).toContain('`ingested_at`) SELECT');
-    expect(ch.settings[insert]).toEqual({ insert_deduplicate: 0, deduplicate_insert_select: 'disable' });
+    expect(ch.settings[insert]).toEqual({
+      insert_deduplicate: 0,
+      deduplicate_insert_select: 'disable',
+      optimize_on_insert: 0,
+    });
     // 업무 대조 — 파티션 키가 없어 MODIFY COLUMN(인자만 UTC)
     expect(ch.log).toContain(
       "ALTER TABLE plc.work_order_control MODIFY COLUMN `planned_start` DateTime64(3, 'UTC')",
