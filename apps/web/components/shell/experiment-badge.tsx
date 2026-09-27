@@ -37,10 +37,10 @@ export function ExperimentBadge() {
           : `기본값과 다른 스위치 ${n} — 누르면 실험 콘솔`
       }
       className={cn(
-        'rounded border px-2 py-0.5 text-xs',
+        'rounded-full border px-3 py-1 text-sm font-medium',
         n !== null && n > 0
           ? 'border-amber-300 bg-amber-50 text-amber-800'
-          : 'border-slate-200 text-slate-500 hover:text-slate-800',
+          : 'border-slate-300 bg-slate-50 text-slate-700 hover:bg-slate-100',
       )}
     >
       {label}

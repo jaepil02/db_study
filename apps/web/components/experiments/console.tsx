@@ -87,8 +87,8 @@ export function ExperimentConsole() {
 
   return (
     <div className="flex flex-col gap-4">
-      <div className="flex items-center justify-between">
-        <h1 className="text-lg font-semibold">실험 콘솔</h1>
+      {/* 화면 제목은 셸 콘텐츠 머리의 h1이 정본이다 — 여기는 정밀 측정 토글만 */}
+      <div className="flex items-center justify-end">
         <label className="flex items-center gap-2 text-sm">
           <input type="checkbox" checked={precise} onChange={(e) => setPrecise(e.target.checked)} />
           정밀 측정 모드 — 폴링 정지

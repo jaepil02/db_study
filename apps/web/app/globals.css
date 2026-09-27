@@ -1,5 +1,29 @@
 @import "tailwindcss";
 
+/* 셸 색 · 치수 토큰 — 사이드바는 시맨틱 이름으로만 칠한다(원시 색을 컴포넌트에 직접 쓰지 않는다)
+   값은 밝은 중립 사이드바 + 파랑 강조(대비 실측: sidebar-fg #333d4d · 사이드바 바탕 위 10.5:1 · 강조 fg #1d4ed8 · 강조 바탕 위 6.2:1 · muted #636e7e · 사이드바 바탕 4.9:1 · canvas 4.7:1) */
+@theme {
+  --color-canvas: #f1f4f7;
+  --color-surface: #ffffff;
+  --color-line: #e4e8ee;
+  --color-accent: #2563eb;
+  --color-sidebar: #f8fafc;
+  --color-sidebar-line: #e4e8ee;
+  --color-sidebar-hover: #eef1f5;
+  --color-sidebar-fg: #333d4d;
+  --color-sidebar-fg-strong: #151c27;
+  --color-sidebar-fg-muted: #636e7e;
+  --color-sidebar-active: #eff6ff;
+  --color-sidebar-active-fg: #1d4ed8;
+}
+
+:root {
+  --header-height: 56px;
+  --nav-item-height: 34px;
+  --sidebar-width: 248px;
+  --sidebar-rail-width: 56px;
+}
+
 body {
   font-family: system-ui, -apple-system, "Apple SD Gothic Neo", "Noto Sans KR", sans-serif;
 }

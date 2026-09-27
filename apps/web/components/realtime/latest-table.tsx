@@ -38,7 +38,7 @@ export function LatestTable({ loading, dimmed, selected, maxSelected, onToggle }
     <Table className={cn(dimmed && 'opacity-50')}>
       <TableHeader>
         <TableRow>
-          <TableHead className="w-12">트렌드</TableHead>
+          <TableHead className="w-14 whitespace-nowrap">트렌드</TableHead>
           <TableHead>태그명</TableHead>
           <TableHead className="text-right">값</TableHead>
           <TableHead>단위</TableHead>

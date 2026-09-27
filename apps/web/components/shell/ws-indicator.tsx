@@ -30,10 +30,13 @@ export function WsIndicator() {
     label = `끊김${lastCloseCode === null ? '' : ` · ${lastCloseCode}`}`;
   }
   return (
-    <div className="flex items-center gap-2 text-xs text-slate-600" title="WebSocket /ws/realtime">
-      <span className={cn('inline-block h-2 w-2 rounded-full', dot)} />
+    <div
+      className="flex items-center gap-2 rounded-full border border-slate-200 bg-white px-3 py-1 text-sm text-slate-700"
+      title="WebSocket /ws/realtime"
+    >
+      <span className={cn('inline-block h-2.5 w-2.5 rounded-full', dot)} />
       <span>WS {label}</span>
-      {status === 'open' && <span className="tabular-nums text-slate-400">{framesPerSec} 프레임/초</span>}
+      {status === 'open' && <span className="tabular-nums text-slate-500">{framesPerSec} 프레임/초</span>}
     </div>
   );
 }

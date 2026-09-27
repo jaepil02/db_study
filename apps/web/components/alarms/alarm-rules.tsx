@@ -53,8 +53,8 @@ export function AlarmRules({ ruleId }: { ruleId: number | null }) {
 
   return (
     <div className="flex flex-col gap-4">
+      {/* 화면 제목은 셸 콘텐츠 머리의 h1이 정본이다 — 여기는 툴바만 */}
       <div className="flex items-center gap-3">
-        <h1 className="text-lg font-semibold">알람 규칙</h1>
         <Link className="text-xs text-slate-500 underline" href="/alarms">
           알람 콘솔
         </Link>

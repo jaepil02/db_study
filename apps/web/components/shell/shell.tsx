@@ -2,8 +2,8 @@
 // 공통 셸 — 정본 docs/08_screen/01_standards.md §요청 경로와 공통 셸
 // WebSocket 연결은 셸이 하나만 연다. 셸 요소는 메뉴 · 실험 조건 배지(OBS-06 표시 — health 1회) · WS 표지 · 무효화 신호 수신(S4 · RLT-09) ·
 // 알람 통지 수신(S7 ① · RLT-08 — ALM-CONSOLE 겹침 층 · DSH 알람 띠 세션 목록 둘에 싣는다)(사용자 메뉴는 S7 ② 로그인 뒤).
+// 레이아웃: 좌측 내비 트리(sidebar.tsx · 접으면 레일) + 콘텐츠 머리(고정 · 섹션 › 화면 · 우측 표지) + 콘텐츠 본문(이 영역만 스크롤).
 import { useQueryClient } from '@tanstack/react-query';
-import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { type ReactNode, useEffect } from 'react';
 import { useAlarmBandStore } from '../../lib/alarm-band';
@@ -11,19 +11,13 @@ import { alarmKeys } from '../../lib/alarms';
 import { useAlarmOverlay } from '../../lib/alarms-store';
 import { actionsForSignal, RECONNECT_ACTIONS, type SignalAction } from '../../lib/cache-signal';
 import { markMasterFresh } from '../../lib/master-api';
+import { resolveNav } from '../../lib/nav';
 import { realtimeSocket, useConnectionStore } from '../../lib/realtime-socket';
 import { useRealtimeStore } from '../../lib/realtime-store';
 import { cn } from '../../lib/utils';
 import { ExperimentBadge } from './experiment-badge';
+import { Sidebar, useSidebarCollapsed } from './sidebar';
 import { WsIndicator } from './ws-indicator';
-
-const MENU = [
-  { href: '/realtime', label: '실시간' },
-  { href: '/trend', label: '트렌드' },
-  { href: '/alarms', label: '알람' },
-  { href: '/admin/master', label: '관리' },
-  { href: '/experiments', label: '실험' },
-] as const;
 
 export function Shell({ children }: { children: ReactNode }) {
   const pathname = usePathname();
@@ -64,30 +58,55 @@ export function Shell({ children }: { children: ReactNode }) {
       realtimeSocket.stop();
     };
   }, [qc]);
+  const current = resolveNav(pathname);
+  const [collapsed, setCollapsed] = useSidebarCollapsed();
   return (
-    <>
-      <header className="flex h-12 items-center gap-6 border-b border-slate-200 bg-white px-4">
-        <span className="font-semibold">db_study</span>
-        <nav className="flex gap-4 text-sm">
-          {MENU.map((m) => (
-            <Link
-              key={m.href}
-              href={m.href}
-              className={cn(
-                'text-slate-500 hover:text-slate-900',
-                pathname.startsWith(m.href) && 'font-medium text-slate-900',
-              )}
-            >
-              {m.label}
-            </Link>
-          ))}
-        </nav>
-        <div className="ml-auto flex items-center gap-4">
-          <ExperimentBadge />
-          <WsIndicator />
-        </div>
-      </header>
-      <main className="mx-auto max-w-6xl p-4">{children}</main>
-    </>
+    <div className="flex h-dvh overflow-hidden bg-canvas">
+      <aside
+        data-shell="nav"
+        className={cn(
+          'shrink-0 border-r border-sidebar-line',
+          collapsed ? 'w-[var(--sidebar-rail-width)]' : 'w-[var(--sidebar-width)]',
+        )}
+      >
+        <Sidebar pathname={pathname} collapsed={collapsed} onCollapsedChange={setCollapsed} />
+      </aside>
+      <div className="flex min-w-0 flex-1 flex-col">
+        <header
+          data-shell="content-header"
+          className="flex h-[var(--header-height)] shrink-0 items-center gap-3 border-b border-line bg-surface px-5"
+        >
+          <div className="flex min-w-0 items-center gap-2">
+            {current ? (
+              <>
+                {current.section.flat ? null : (
+                  <>
+                    <span className="text-sm text-sidebar-fg-muted">{current.section.label}</span>
+                    <span aria-hidden className="text-sidebar-fg-muted">
+                      /
+                    </span>
+                  </>
+                )}
+                <h1 className="truncate text-base font-semibold text-sidebar-fg-strong">
+                  {current.item.label}
+                </h1>
+                <span className="rounded bg-canvas px-1.5 py-0.5 font-mono text-[11px] text-sidebar-fg-muted">
+                  {current.item.code}
+                </span>
+              </>
+            ) : (
+              <h1 className="text-base font-semibold text-sidebar-fg-strong">db_study</h1>
+            )}
+          </div>
+          <div className="ml-auto flex shrink-0 items-center gap-2">
+            <ExperimentBadge />
+            <WsIndicator />
+          </div>
+        </header>
+        <main data-shell="content-body" className="min-h-0 flex-1 overflow-y-auto">
+          <div className="mx-auto max-w-[1600px] p-5">{children}</div>
+        </main>
+      </div>
+    </div>
   );
 }

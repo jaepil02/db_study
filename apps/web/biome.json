@@ -4,5 +4,10 @@
   "extends": "//",
   "files": {
     "includes": ["**", "!.next", "!next-env.d.ts"]
+  },
+  "css": {
+    "parser": {
+      "tailwindDirectives": true
+    }
   }
 }
