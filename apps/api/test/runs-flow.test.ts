@@ -8,7 +8,7 @@ import { flowSecond } from '../src/common/workers/tasks';
 import type { WorkerPool } from '../src/common/workers/worker-pool';
 import type { BizWriteOutcome, BizWritePort, BizWriteRequest } from '../src/modules/biz/biz-contracts';
 import { thresholdsFor } from '../src/modules/datagen/mode-b/backpressure-gate';
-import { buildFlowSecond, type FlowTag, flowPoint } from '../src/modules/runs/flow-gen';
+import { buildFlowSecond, type FlowTag, flowPoint, flowTagsSuffice } from '../src/modules/runs/flow-gen';
 import {
   commandPlan,
   type DemoRows,
@@ -360,6 +360,21 @@ describe('flow 실행기 — prepare(시연 전용 행) · publish · drain', ()
     const o = await (await runFlow(r, { pps: 10, durationSec: 2, bizPerSec: 0 })).done;
     expect(o.status).toBe('failed');
     expect(o.error?.message).toContain('시드 활성 태그');
+  });
+
+  it('⌈pps ÷ L⌉ > 1000(한 초 ts 간격 0)이면 prepare failed — 시연 전용 행 명령 없음 · 뒤 단계 skipped', async () => {
+    const r = rig(tagsOf(1, 5));
+    const o = await (await runFlow(r, { pps: 10_000, durationSec: 2, bizPerSec: 1 })).done;
+    expect(o.status).toBe('failed');
+    expect(o.error).toMatchObject({ code: null });
+    expect(o.error?.message).toContain('활성 태그 수가 pps에 비해 적다');
+    expect(o.steps.map((x) => x.status)).toEqual(['failed', 'skipped', 'skipped']);
+    expect(r.port.reqs).toEqual([]);
+    expect(r.xadds).toEqual([]);
+    // 경계 — ⌈pps ÷ L⌉ = 1000이면 ts 간격 1 ms로 낼 수 있다
+    expect(flowTagsSuffice(5_000, 5)).toBe(true);
+    expect(flowTagsSuffice(5_001, 5)).toBe(false);
+    expect(flowTagsSuffice(10, 0)).toBe(false);
   });
 });
 

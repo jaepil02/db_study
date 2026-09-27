@@ -287,6 +287,10 @@ describe('표면 #2~#5 — 상태 코드 · 에러 봉투 · no-store', () => {
     const one = await call('GET', `/api/v1/runs/${runId}`);
     expect(one.statusCode).toBe(200);
     expect(RunObject.parse(one.json()).runId).toBe(runId);
+    // 대문자로 온 같은 runId도 같은 실행(소문자 정규화 — commands.controller cmdId와 같다)
+    const upper = await call('GET', `/api/v1/runs/${runId.toUpperCase()}`);
+    expect(upper.statusCode).toBe(200);
+    expect(RunObject.parse(upper.json()).runId).toBe(runId);
   });
 
   it('#4 · #5 — UUID 아님 400 · 메모리에 없음 404 common.not_found', async () => {

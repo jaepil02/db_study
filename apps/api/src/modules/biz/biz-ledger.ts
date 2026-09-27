@@ -119,7 +119,8 @@ export class BizLedger {
 
   /**
    * REJECTED · EXPIRED — 별도 트랜잭션(단문). 'conflict'면 같은 cmdId가 먼저 판정됐다(저장된 판정을 다시 읽는다).
-   * 다른 실패는 common.postgres_unavailable — 거절은 결과 키로만 남고 같은 키 재요청이 판정을 다시 계산한다.
+   * 다른 실패는 common.postgres_unavailable — 거절은 결과 키로만 남는다. 결과 키가 TTL(300초) 동안 첫 판정을 돌려주고,
+   * 만료 뒤에 온 같은 키 재요청만 판정을 다시 계산한다.
    */
   async record(
     key: LedgerKey,

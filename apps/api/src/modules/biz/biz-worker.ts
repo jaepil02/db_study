@@ -4,6 +4,9 @@
 // ⑦ 결과 SET → ch:bizreply → XACK → 흐름 요약(표지 있을 때만). XACK가 결과 SET 뒤라 그 사이 크래시는 PEL 재전달 · ③이 막는다.
 // PostgreSQL 불가는 재시도하지 않는다 — 결과 키에만 common.postgres_unavailable 503(FAILED · 원장 행 없음) · XACK(REQ-WRK-06).
 // 락 키 · 갱신 · 실패 전략 정본 docs/05_data_stores/05_redis_keyspace.md lock:biz:writer 행(획득 실패 · 갱신 실패 = 소비 중단 · 대기).
+// 갱신 실패는 둘로 가른다 — 소유자 아님(lost)은 곧바로 소비 중단 · 불확실(타임아웃 · 오류)은 락 유지 · 다음 틱 재시도(마지막 확인 뒤 TTL이 지나면 중단).
+// 확인 시각은 락 호출 **전** 시각이다(Redis가 만료를 잡은 시각은 호출 전 ~ 응답 사이 — 전 시각이 가장 이른 만료를 준다).
+// 불확실 틱은 다음 틱 전에 TTL이 지날 수 있으면 지금 멈추고, 엔트리 루프도 확인 뒤 TTL이 지났으면 멈춘다(틱이 늦거나 걸려도).
 import { randomUUID } from 'node:crypto';
 import {
   BIZ_CONSUMER,
@@ -53,9 +56,13 @@ export interface BizWorkerDeps {
   handlers: BizHandlers;
   ledger: Pick<BizLedger, 'find' | 'record'>;
   results: { set(cmdId: string, json: string, ttlSeconds: number): Promise<boolean> };
+  /** 소유자 토큰 — 워커 인스턴스 UUID(05_redis_keyspace lock:biz:writer 값) */
+  token: string;
   lock: {
-    acquire(ttlMs: number): Promise<{ token: string | null; failed: boolean }>;
-    renew(token: string, ttlMs: number): Promise<boolean>;
+    /** resumed = 값이 이미 내 토큰(앞 획득 · 갱신이 응답만 잃었다) — 이어 쓴다 */
+    acquire(token: string, ttlMs: number): Promise<'acquired' | 'resumed' | 'held' | 'failed'>;
+    /** lost = 소유자 아님(0) · uncertain = 타임아웃 · 오류(소유 여부 모름) */
+    renew(token: string, ttlMs: number): Promise<'renewed' | 'lost' | 'uncertain'>;
     release(token: string): Promise<void>;
   };
   stream: {
@@ -100,6 +107,8 @@ const failedResult = (actor: number | null): BizResultBody => ({
 });
 
 const isPgDown = (e: unknown) => e instanceof ApiError && e.code === 'common.postgres_unavailable';
+/** XREADGROUP이 그룹 · 스트림이 없다고 답했다(누가 스트림 · 그룹을 지움) — 다음 바퀴에 그룹을 다시 만든다 */
+const isNoGroup = (e: unknown) => e instanceof Error && /NOGROUP/i.test(e.message);
 
 /** 흐름 요약 result — ok · 오류 코드 · expired(07_api/11 §흐름 이벤트 biz 행) */
 function flowResultOf(r: BizResultBody): string {
@@ -114,6 +123,8 @@ function flowResultOf(r: BizResultBody): string {
  */
 export class BizCommandRunner {
   private token: string | null = null;
+  /** 락 소유를 마지막으로 확인한 시각(획득 · 이어 쓰기 · 갱신 성공의 호출 전 시각) — 여기서 TTL이 지나면 소비를 멈춘다 */
+  private confirmedAt = 0;
   private pelCursor: string | null = null;
   private groupReady = false;
   private running = false;
@@ -165,24 +176,37 @@ export class BizCommandRunner {
 
   private async run(): Promise<void> {
     while (this.running) {
-      try {
-        if (!(await this.step())) await this.sleep(BIZ_LOCK_RENEW_MS);
-      } catch (e) {
-        this.d.log.warn(`명령 워커 루프 오류 — ${(e as Error).message}`);
-        await this.sleep(ERROR_BACKOFF_MS);
-      }
+      const ms = await this.turn();
+      if (ms > 0) await this.sleep(ms);
+    }
+  }
+
+  /** 한 바퀴와 그 예외 처리 — 다음 바퀴 전에 쉴 시간(ms)을 돌려준다(0이면 곧바로) */
+  async turn(): Promise<number> {
+    try {
+      return (await this.step()) ? 0 : BIZ_LOCK_RENEW_MS;
+    } catch (e) {
+      // 예외 뒤에는 항상 PEL부터 — > 로 받고 XACK하지 못한 명령(같은 묶음의 남은 명령 포함)은 PEL에만 있고 > 로는 다시 오지 않는다
+      this.pelCursor = '0';
+      if (isNoGroup(e)) this.groupReady = false;
+      this.d.log.warn(`명령 워커 루프 오류 — ${(e as Error).message}`);
+      return ERROR_BACKOFF_MS;
     }
   }
 
   /** 한 바퀴 — 락이 없으면 쥐려 하고(못 쥐면 false · 재시도 주기 대기), 쥐었으면 PEL → > 순으로 한 번 읽어 직렬 처리한다 */
   async step(): Promise<boolean> {
     if (!this.token) {
-      const r = await this.d.lock.acquire(BIZ_LOCK_TTL_MS);
-      if (!r.token) return false;
-      this.token = r.token;
+      const calledAt = this.d.now();
+      const r = await this.d.lock.acquire(this.d.token, BIZ_LOCK_TTL_MS);
+      if (r !== 'acquired' && r !== 'resumed') return false;
+      this.token = this.d.token;
+      this.confirmedAt = calledAt;
       // 쥘 때마다 자기 PEL부터 — 앞 소유자(같은 소비자 이름)가 읽고 XACK하지 못한 명령이 새 명령보다 먼저다
       this.pelCursor = '0';
-      this.d.log.log(`${BIZ_WRITER_LOCK} 획득 — ${BIZ_STREAM} · ${BIZ_GROUP} · ${BIZ_CONSUMER} PEL부터 소비`);
+      this.d.log.log(
+        `${BIZ_WRITER_LOCK} ${r === 'resumed' ? '이어 쓰기' : '획득'} — ${BIZ_STREAM} · ${BIZ_GROUP} · ${BIZ_CONSUMER} PEL부터 소비`,
+      );
     }
     if (!this.groupReady) {
       await this.d.stream.ensureGroup();
@@ -197,19 +221,49 @@ export class BizCommandRunner {
     for (const e of entries) {
       // 락을 잃었거나 종료 중이면 남은 명령은 PEL에 둔다 — 락 없이 소비하지 않는다
       if (!this.token || this.stopping) break;
+      // 갱신 틱이 늦거나 갱신 호출이 걸려도 — 마지막 확인 뒤 TTL이 지났으면 락이 이미 만료됐을 수 있다
+      if (this.d.now() - this.confirmedAt >= BIZ_LOCK_TTL_MS) {
+        this.token = null;
+        this.d.log.warn(
+          `${BIZ_WRITER_LOCK} 마지막 확인 뒤 TTL이 지났다 — 남은 명령은 PEL에 두고 재획득을 기다린다`,
+        );
+        break;
+      }
       await this.process(e.id, e.value);
     }
     return true;
   }
 
-  /** 락 갱신 — 토큰이 같을 때만 · 실패(남이 쥠 · Redis 불가)면 소비를 멈추고 재획득을 기다린다 */
+  /**
+   * 락 갱신 — 토큰이 같을 때만. 소유자 아님(lost)이면 소비를 멈추고 재획득을 기다린다.
+   * 불확실(타임아웃 · 오류)이면 락을 쥔 채 소비를 잇고 다음 틱에 다시 갱신한다 — 다음 틱 전에 마지막 확인 뒤 TTL이
+   * 지날 수 있으면(now − 확인 + 갱신 주기 ≥ TTL) 락이 그 사이 만료될 수 있으므로 지금 멈춘다(재획득이 GET == 내 토큰이면 이어 쓴다).
+   */
   async renewLock(): Promise<void> {
     const token = this.token;
     if (!token) return;
-    if (!(await this.d.lock.renew(token, BIZ_LOCK_TTL_MS)) && this.token === token) {
-      this.token = null;
-      this.d.log.warn(`${BIZ_WRITER_LOCK} 갱신 실패 — 소비를 멈추고 재획득을 기다린다`);
+    const calledAt = this.d.now();
+    const r = await this.d.lock.renew(token, BIZ_LOCK_TTL_MS);
+    if (this.token !== token) return;
+    if (r === 'renewed') {
+      this.confirmedAt = calledAt;
+      return;
     }
+    if (r === 'lost') {
+      this.token = null;
+      this.d.log.warn(`${BIZ_WRITER_LOCK} 갱신 실패(소유자 아님) — 소비를 멈추고 재획득을 기다린다`);
+      return;
+    }
+    if (this.d.now() - this.confirmedAt + BIZ_LOCK_RENEW_MS >= BIZ_LOCK_TTL_MS) {
+      this.token = null;
+      this.d.log.warn(
+        `${BIZ_WRITER_LOCK} 갱신 불확실 — 다음 주기 전에 마지막 확인 뒤 TTL이 지날 수 있다 · 소비를 멈추고 재획득을 기다린다`,
+      );
+      return;
+    }
+    this.d.log.warn(
+      `${BIZ_WRITER_LOCK} 갱신 불확실(타임아웃 · 오류) — 락을 유지하고 다음 주기에 다시 갱신한다`,
+    );
   }
 
   /** biz_stream_lag = lag + pending — 실패면 직전 값 유지 · obs_collect_errors_total{store=redis} */
@@ -266,7 +320,9 @@ export class BizCommandRunner {
       return;
     }
 
-    // ⑤ 트랜잭션(+ ⑥ 체인 ②③이 반환 전에 끝난다)
+    // ⑤ 트랜잭션(+ ⑥ 체인 ②③이 반환 전에 끝난다) — ⑦(finish)은 try 밖이다: 결과 SET · XACK의 예외를
+    // 적용 예외로 잡으면 커밋된 APPLIED 결과를 FAILED로 덮어쓴다(예외는 바퀴로 올라가 PEL부터 다시 읽는다)
+    let judged: Judgment;
     try {
       const out = await this.d.handlers.apply(env, { ledger: true });
       const result: BizResultBody = {
@@ -275,12 +331,12 @@ export class BizCommandRunner {
         httpStatus: out.httpStatus,
         body: out.body,
       };
-      await this.finish({ ...base, result, duplicate: false, trace: out.trace }, id);
+      judged = { ...base, result, duplicate: false, trace: out.trace };
     } catch (e) {
       const trace = bizTraceOf(e);
       if (e instanceof BizLedgerConflict) {
         // 겹친 워커가 같은 cmdId를 먼저 커밋했다 — 롤백됐고 저장된 판정을 낸다
-        await this.finish(await this.stored(key, base, trace), id);
+        judged = await this.stored(key, base, trace);
       } else if (e instanceof ApiError && !isPgDown(e)) {
         // 도메인 오류 — 롤백 뒤 별도 트랜잭션으로 REJECTED 행(같은 cmdId는 첫 판정에 고정)
         const rejected: BizResultBody = {
@@ -289,13 +345,14 @@ export class BizCommandRunner {
           httpStatus: e.status,
           error: { code: e.code, message: e.message, ...(e.details ? { details: e.details } : {}) },
         };
-        await this.finish(await this.judge(key, 'REJECTED', rejected, base, trace), id);
+        judged = await this.judge(key, 'REJECTED', rejected, base, trace);
       } else {
         if (!isPgDown(e))
           this.d.log.error(`명령 적용 결함 ${env.kind} ${env.cmdId} — ${(e as Error).message}`);
-        await this.finish({ ...base, result: failedResult(env.actor), duplicate: false, trace }, id);
+        judged = { ...base, result: failedResult(env.actor), duplicate: false, trace };
       }
     }
+    await this.finish(judged, id);
   }
 
   /** 거절 · 만료 판정을 원장에 남긴다 — 충돌이면 저장된 판정 · PostgreSQL 불가면 거절은 결과 키에만 · 만료는 FAILED */
@@ -311,7 +368,8 @@ export class BizCommandRunner {
       if (r === 'conflict') return this.stored(key, base, trace);
       return { ...base, result, duplicate: false, trace };
     } catch {
-      // 거절 판정은 다시 계산할 수 있다(같은 키 재요청이 적용을 다시 시도 — 이중 적용 없음) · 만료는 원장 없이 확정하지 않는다
+      // 거절 판정은 원장 없이 결과 키에만 — 결과 키가 TTL(300초) 동안 이 첫 판정을 돌려주고, 만료 뒤 같은 키 재요청만
+      // 적용을 다시 시도해 판정을 새로 계산한다(원장 행이 없어 이중 적용은 없다) · 만료는 원장 없이 확정하지 않는다
       return status === 'REJECTED'
         ? { ...base, result, duplicate: false, trace }
         : { ...base, result: failedResult(key.actor), duplicate: false, trace };
@@ -432,11 +490,12 @@ export class BizWorker implements OnApplicationBootstrap, BeforeApplicationShutd
     const conn = this.conns.blockingConnection(`${BIZ_CONSUMER}-consumer`);
     const instance = randomUUID();
     this.runner = new BizCommandRunner({
+      token: instance,
       handlers: this.handlers,
       ledger: this.ledger,
       results: { set: (cmdId, json, ttl) => this.cache.setBizResult(cmdId, json, ttl) },
       lock: {
-        acquire: (ttl) => this.cache.acquireBizWriterLock(ttl),
+        acquire: (token, ttl) => this.cache.acquireBizWriterLock(token, ttl),
         renew: (token, ttl) => this.cache.renewBizWriterLock(token, ttl),
         release: (token) => this.cache.releaseBizWriterLock(token),
       },

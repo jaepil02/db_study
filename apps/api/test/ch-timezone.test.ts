@@ -9,6 +9,7 @@ import {
   CH_TZ_SUFFIX,
   type ChTzPort,
   convertClickHouseTimezone,
+  insertPatterns,
   rebuildStatement,
 } from '../src/db/ch-timezone';
 
@@ -54,6 +55,16 @@ class FakeCh implements ChTzPort {
   /** 옛 · 새 테이블 행 수 — 새 테이블 값을 바꾸면 불일치 */
   rowsOld = 10;
   rowsNew: number | null = null;
+  /** system.processes에 보이는 판정 대상 INSERT 수 */
+  inserting = 0;
+  processParams: Record<string, unknown> | undefined;
+  /** 원본 count 호출 수 — growAfter번째 뒤부터 원본이 1행 늘어 보인다(복사 뒤 쓰기 · growTable이면 그 테이블만 센다) */
+  sourceCounts = 0;
+  growAfter: number | null = null;
+  growTable: string | null = null;
+  /** 이 원본은 첫 count() 뒤 백그라운드 병합으로 물리 행이 3 줄어 보인다(AggregatingMergeTree) — countMerge는 불변 */
+  mergeShrink: string | null = null;
+  private physicalCounts = 0;
   constructor(kst: Col[] = KST_COLS, leftovers: string[] = []) {
     this.kst = kst.map((c) => ({ ...c }));
     for (const l of leftovers) this.tables.add(l);
@@ -73,6 +84,10 @@ class FakeCh implements ChTzPort {
   }
   async rows<T>(q: string, params?: Record<string, unknown>): Promise<T[]> {
     if (q.includes('system.databases')) return [{ n: this.dbExists ? '1' : '0' }] as T[];
+    if (q.includes('system.processes')) {
+      this.processParams = params;
+      return [{ n: String(this.inserting) }] as T[];
+    }
     if (q.includes('endsWith(name'))
       return [...this.tables].filter((t) => t.endsWith(CH_TZ_SUFFIX)).map((name) => ({ name })) as T[];
     if (q.includes("position(type, 'Asia/Seoul')")) {
@@ -84,10 +99,17 @@ class FakeCh implements ChTzPort {
       return (t.startsWith('tag_raw') ? RAW_COLS : ['a', 'b']).map((name) => ({ name })) as T[];
     }
     const m = /FROM plc\.(\w+)$/.exec(q.trim());
-    if (m?.[1])
-      return [
-        { n: String(m[1].endsWith(CH_TZ_SUFFIX) ? (this.rowsNew ?? this.rowsOld) : this.rowsOld) },
-      ] as T[];
+    if (m?.[1]) {
+      if (m[1].endsWith(CH_TZ_SUFFIX)) return [{ n: String(this.rowsNew ?? this.rowsOld) }] as T[];
+      const merged = q.includes('countMerge(cnt)');
+      let shrink = 0;
+      if (!merged && m[1] === this.mergeShrink && this.physicalCounts++ > 0) shrink = 3;
+      if (this.growTable !== null && m[1] !== this.growTable)
+        return [{ n: String(this.rowsOld - shrink) }] as T[];
+      this.sourceCounts++;
+      const grown = this.growAfter !== null && this.sourceCounts > this.growAfter;
+      return [{ n: String(this.rowsOld + (grown ? 1 : 0) - shrink) }] as T[];
+    }
     throw new Error(`가짜가 모르는 질의: ${q}`);
   }
 }
@@ -183,6 +205,58 @@ describe('ClickHouse 시간대 전환 — KST 볼륨', () => {
     expect(ch.log.some((q) => q.startsWith('EXCHANGE'))).toBe(false);
   });
 
+  it('판정 대상으로 가는 INSERT가 돌면 시작 전에 거부한다 — MV · 복사 · EXCHANGE 없음', async () => {
+    const ch = new FakeCh();
+    ch.inserting = 2;
+    await expect(convertClickHouseTimezone(ch, 'plc', statements)).rejects.toThrow(
+      /INSERT 2건이 돌고 있다 · 적재 · 명령 워커를 먼저 멈춘다/,
+    );
+    expect(ch.log).toEqual([]);
+    expect(ch.processParams).toMatchObject({ db: 'plc' });
+  });
+
+  it('이미 UTC 볼륨이면 INSERT가 돌아도 확인하지 않는다(전환할 것이 없다)', async () => {
+    const ch = new FakeCh([]);
+    ch.inserting = 1;
+    await expect(convertClickHouseTimezone(ch, 'plc', statements)).resolves.toMatchObject({ rebuilt: [] });
+    expect(ch.processParams).toBeUndefined();
+  });
+
+  it('EXCHANGE 직전 원본 재count가 복사 시점 값과 다르면 멈춘다 — 옛 테이블 유지', async () => {
+    const ch = new FakeCh();
+    ch.growAfter = 1; // tag_raw 대조(1번째) 뒤 재count(2번째)에서 1행 늘었다
+    await expect(convertClickHouseTimezone(ch, 'plc', statements)).rejects.toThrow(
+      /tag_raw 원본 count\(\) 값이 복사 뒤 바뀌었다 10 → 11/,
+    );
+    expect(ch.log.some((q) => q.startsWith('EXCHANGE'))).toBe(false);
+    expect(ch.kst.some((c) => c.table === 'tag_raw')).toBe(true);
+    // 재실행은 남은 전환용 테이블을 지우고 처음부터 수렴한다
+    ch.growAfter = null;
+    ch.log = [];
+    const r = await convertClickHouseTimezone(ch, 'plc', statements);
+    expect(r.droppedLeftovers).toEqual([`tag_raw${CH_TZ_SUFFIX}`]);
+    expect(r.rebuilt).toEqual([...CH_TZ_REBUILD]);
+  });
+
+  it('집계 테이블(tag_1*) 재검사는 countMerge(cnt) — 복사 뒤 백그라운드 병합으로 물리 행이 줄어도 멈추지 않는다', async () => {
+    const ch = new FakeCh();
+    ch.mergeShrink = 'tag_1m'; // 첫 count()(복사 뒤 대조) 10 · 그 뒤 count()는 7
+    const r = await convertClickHouseTimezone(ch, 'plc', statements);
+    expect(r.rebuilt).toEqual([...CH_TZ_REBUILD]);
+    expect(ch.log).toContain(`EXCHANGE TABLES plc.tag_1m${CH_TZ_SUFFIX} AND plc.tag_1m`);
+  });
+
+  it('집계 테이블 재검사 — countMerge(cnt)가 복사 뒤 늘면(쓰기) 척도를 밝혀 멈춘다 · 옛 테이블 유지', async () => {
+    const ch = new FakeCh();
+    ch.growTable = 'tag_1m';
+    ch.growAfter = 2; // tag_1m count()(1) · countMerge 대조(2) 뒤 재검사(3)에서 늘었다
+    await expect(convertClickHouseTimezone(ch, 'plc', statements)).rejects.toThrow(
+      /tag_1m 원본 countMerge\(cnt\) 값이 복사 뒤 바뀌었다 10 → 11/,
+    );
+    expect(ch.log.some((q) => q.startsWith('EXCHANGE TABLES plc.tag_1m'))).toBe(false);
+    expect(ch.kst.some((c) => c.table === 'tag_1m')).toBe(true);
+  });
+
   it('두 번째 실행은 아무것도 하지 않는다(카탈로그 멱등)', async () => {
     const ch = new FakeCh();
     await convertClickHouseTimezone(ch, 'plc', statements);
@@ -190,6 +264,23 @@ describe('ClickHouse 시간대 전환 — KST 볼륨', () => {
     const r = await convertClickHouseTimezone(ch, 'plc', statements);
     expect(r).toEqual({ rebuilt: [], modified: [], droppedLeftovers: [] });
     expect(ch.log).toEqual([]);
+  });
+});
+
+describe('insertPatterns — 판정 대상으로 가는 INSERT만', () => {
+  // ClickHouse match(re2)와 JS RegExp가 이 식에서 같게 읽는다((?i) 접두만 플래그로 옮긴다) — 실제 match 검증은 보고 참조
+  const re = (p: string) => new RegExp(p.replace('(?i)', ''), 'i');
+  const { qualified, bare } = insertPatterns('plc');
+  it.each([
+    ['INSERT INTO tag_raw (ts, device_id) FORMAT JSONCompactEachRow', false, true],
+    ['insert into plc.tag_1m SELECT 1', true, false],
+    ['INSERT INTO plc.work_order_control_rmt(a) VALUES', true, false],
+    [`INSERT INTO plc.tag_raw${CH_TZ_SUFFIX} (a) SELECT`, false, false],
+    ['INSERT INTO tag_raw_x (a)', false, false],
+    ['SELECT 1 FROM tag_raw', false, false],
+  ])('%s', (q, isQualified, isBare) => {
+    expect(re(qualified).test(q)).toBe(isQualified);
+    expect(re(bare).test(q)).toBe(isBare);
   });
 });
 

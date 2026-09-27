@@ -8,7 +8,13 @@ import type { BizWriteOutcome, BizWritePort, BizWriteRequest } from '../biz/biz-
 import { genPointsGenerated } from '../datagen/datagen.service';
 import { BackpressureGate, type Thresholds } from '../datagen/mode-b/backpressure-gate';
 import { genPublishHaltedEntries, genPublishHaltedPoints } from '../datagen/mode-b/mode-b-runner';
-import type { FlowSecondResult, FlowSecondTask, FlowTag } from './flow-gen';
+import {
+  FLOW_MAX_REPS_PER_TAG,
+  type FlowSecondResult,
+  type FlowSecondTask,
+  type FlowTag,
+  flowTagsSuffice,
+} from './flow-gen';
 import {
   type RunEnding,
   type RunError,
@@ -219,6 +225,11 @@ export class FlowRunExecutor implements RunExecutor {
       await state.runStep('prepare', async () => {
         tags = await this.deps.loadTags();
         if (tags.length === 0) throw new Error('시드 활성 태그가 없다 — 시드 뒤 다시 시작');
+        // 한 초 한 태그 점 수가 상한을 넘으면 ts 간격이 0이라 (태그 · ts)가 겹친다 — 시연 전용 행을 건드리기 전에 거절
+        if (!flowTagsSuffice(pps, tags.length))
+          throw new Error(
+            `활성 태그 수가 pps에 비해 적다 — 활성 태그 ${tags.length}개 · pps ${pps}(한 초 한 태그 ${Math.ceil(pps / tags.length)}점 > ${FLOW_MAX_REPS_PER_TAG})`,
+          );
         if (state.stopRequested) throw new RunStopped();
         demoDeviceId = await this.ensureDemo(state);
         const b = await this.deps.backlog().catch(() => null);

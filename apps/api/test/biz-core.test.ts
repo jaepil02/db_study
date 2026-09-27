@@ -1,7 +1,13 @@
 // 업무 명령 적용 쪽 — 명령 워커 단계 ②~⑦ · 멱등 표 6경우 · 단일 소비자 락 · BizHandlers 원장 같은 트랜잭션(06_pipeline/07 §업무 명령 경로)
 // 가짜 deps로 단계 순서(결과 SET → 알림 → XACK)와 원장 · 결과 키의 갈래를 본다. 저장소는 띄우지 않는다.
 import { randomUUID } from 'node:crypto';
-import { BIZ_RESULT_TTL_S, type BizCommandEnvelopeBody, type BizResultBody } from '@db-study/shared';
+import {
+  BIZ_LOCK_RENEW_MS,
+  BIZ_LOCK_TTL_MS,
+  BIZ_RESULT_TTL_S,
+  type BizCommandEnvelopeBody,
+  type BizResultBody,
+} from '@db-study/shared';
 import { describe, expect, it } from 'vitest';
 import type { ClickHouse } from '../src/common/clickhouse/clickhouse.module';
 import type { FlowBizInput } from '../src/common/flow/flow-publisher';
@@ -41,6 +47,10 @@ function world(
     recordDown?: boolean;
     lockFree?: boolean;
     flowOn?: boolean;
+    /** 적용이 원장 APPLIED 행을 남긴다(BizHandlers ledger true와 같게) */
+    ledgerOnApply?: boolean;
+    /** 적용 한 건이 걸리는 시간(가짜 시계를 민다) */
+    applyMs?: number;
   } = {},
 ) {
   const log: string[] = [];
@@ -51,13 +61,36 @@ function world(
   const reads: string[] = [];
   const flow: FlowBizInput[] = [];
   let lockOwner: string | null = opts.lockFree === false ? 'other' : null;
+  /** 다음 갱신 결과를 강제한다(null이면 소유자 비교) */
+  let renewOverride: 'uncertain' | null = null;
+  /** 불확실 갱신이 돌아오기까지 걸리는 시간(0 = 빠른 reject · 500 = 호출 상한 타임아웃) */
+  let renewMs = 0;
+  /** 락 호출(획득 · 갱신)이 돌아오기까지 걸리는 시간 — Redis는 호출 시작 시각에 처리한다(가장 이른 만료) */
+  let lockCallMs = 0;
+  /** Redis의 락 만료 시각 — PX TTL(setLockOwner로 둔 값은 만료 없음) */
+  let lockExpiresAt = Number.POSITIVE_INFINITY;
+  /** Redis 만료 뒤 적용한 명령 수 — 단일 소비자 위반 */
+  let appliedAfterExpiry = 0;
+  /** 다음 ack 한 번을 던지게 한다 */
+  let ackThrows = 0;
+  /** 다음 read 한 번을 이 오류로 던지게 한다 */
+  let readError: Error | null = null;
+  let now = NOW;
   let applied = 0;
   const handlers: BizHandlers = {
     apply: async (env) => {
       applied++;
+      if (now >= lockExpiresAt) appliedAfterExpiry++;
       log.push(`APPLY ${env.cmdId}`);
+      now += opts.applyMs ?? 0;
       if (opts.apply) return opts.apply(env);
       log.push('CHAIN');
+      if (opts.ledgerOnApply)
+        ledger.set(env.cmdId, {
+          status: 'APPLIED',
+          result: { status: 'APPLIED', actor: env.actor, httpStatus: 201, body: { siteId: 1 } },
+          actor: env.actor,
+        });
       return { httpStatus: 201, body: { siteId: 1 }, trace };
     },
   };
@@ -84,13 +117,29 @@ function world(
         return true;
       },
     },
+    token: 'me',
     lock: {
-      acquire: async () => {
-        if (lockOwner) return { token: null, failed: false };
-        lockOwner = 'me';
-        return { token: 'me', failed: false };
+      acquire: async (token) => {
+        if (lockOwner && now >= lockExpiresAt) lockOwner = null;
+        const r = lockOwner === token ? 'resumed' : lockOwner ? 'held' : 'acquired';
+        if (r !== 'held') {
+          lockOwner = token;
+          lockExpiresAt = now + BIZ_LOCK_TTL_MS;
+        }
+        now += lockCallMs;
+        return r;
       },
-      renew: async (token) => lockOwner === token,
+      renew: async (token) => {
+        if (renewOverride) {
+          now += renewMs;
+          return renewOverride;
+        }
+        if (lockOwner && now >= lockExpiresAt) lockOwner = null;
+        const ok = lockOwner === token;
+        if (ok) lockExpiresAt = now + BIZ_LOCK_TTL_MS;
+        now += lockCallMs;
+        return ok ? 'renewed' : 'lost';
+      },
       release: async (token) => {
         if (lockOwner === token) lockOwner = null;
       },
@@ -99,13 +148,27 @@ function world(
       ensureGroup: async () => {
         log.push('GROUP');
       },
+      // Redis와 같게 > 로 받은 엔트리는 XACK 전까지 PEL에 남는다
       read: async (fromId) => {
         reads.push(fromId);
-        if (fromId === '>') return fresh.splice(0);
-        const i = fromId === '0' ? 0 : pel.findIndex((e) => e.id === fromId) + 1;
-        return pel.slice(i);
+        if (readError) {
+          const e = readError;
+          readError = null;
+          throw e;
+        }
+        if (fromId === '>') {
+          const got = fresh.splice(0);
+          pel.push(...got);
+          return got;
+        }
+        // Redis와 같게 fromId보다 큰 ID만(fromId가 PEL에 없어도 — 이미 XACK된 ID 등)
+        return pel.filter((e) => cmpId(e.id, fromId) > 0);
       },
       ack: async (id) => {
+        if (ackThrows > 0) {
+          ackThrows--;
+          throw new Error('XACK 실패(Redis 불가)');
+        }
         log.push(`XACK ${id}`);
         const i = pel.findIndex((e) => e.id === id);
         if (i >= 0) pel.splice(i, 1);
@@ -123,7 +186,7 @@ function world(
         flow.push(i);
       },
     },
-    now: () => NOW,
+    now: () => now,
     log: { log: () => {}, warn: () => {}, error: () => {} },
   };
   const runner = new BizCommandRunner(deps);
@@ -137,10 +200,41 @@ function world(
     reads,
     flow,
     applied: () => applied,
+    appliedAfterExpiry: () => appliedAfterExpiry,
+    lockExpiresAt: () => lockExpiresAt,
+    now: () => now,
     steal: () => {
       lockOwner = 'other';
     },
+    lockOwner: () => lockOwner,
+    setLockOwner: (o: string | null) => {
+      lockOwner = o;
+      lockExpiresAt = Number.POSITIVE_INFINITY;
+    },
+    renewUncertain: (on: boolean, ms = 0) => {
+      renewOverride = on ? 'uncertain' : null;
+      renewMs = ms;
+    },
+    setLockCallMs: (ms: number) => {
+      lockCallMs = ms;
+    },
+    failNextAck: () => {
+      ackThrows = 1;
+    },
+    failNextRead: (e: Error) => {
+      readError = e;
+    },
+    advance: (ms: number) => {
+      now += ms;
+    },
   };
+}
+
+/** 스트림 ID 비교(ms-seq) — '0'은 모든 ID보다 작다 */
+function cmpId(a: string, b: string): number {
+  const [am = 0, as = 0] = a.split('-').map(Number);
+  const [bm = 0, bs = 0] = b.split('-').map(Number);
+  return am !== bm ? am - bm : as - bs;
 }
 
 const entry = (env: BizCommandEnvelopeBody, id = '1-0') => ({ id, value: JSON.stringify(env) });
@@ -401,11 +495,179 @@ describe('명령 워커 — 단일 소비자 락 · PEL 우선', () => {
     expect(w.pel.map((e) => e.id)).toEqual(['2-0']);
   });
 
+  it('바퀴 예외(XACK 실패) 뒤 다음 바퀴는 PEL부터 — > 로 받은 같은 묶음의 2 · 3번을 적용한다', async () => {
+    const w = world({ ledgerOnApply: true });
+    const [a, b, c] = [envelope(), envelope(), envelope()];
+    await w.runner.step(); // 락 · PEL(ID 0) 비어 있음 → 다음은 >
+    w.fresh.push(entry(a, '1-0'), entry(b, '2-0'), entry(c, '3-0'));
+    w.failNextAck();
+    expect(await w.runner.turn()).toBeGreaterThan(0); // > 로 1 · 2 · 3을 받고 1번 XACK에서 던진다
+    expect(w.applied()).toBe(1);
+    expect(w.pel.map((e) => e.id)).toEqual(['1-0', '2-0', '3-0']);
+    await w.runner.turn();
+    expect(w.reads.slice(-2)).toEqual(['>', '0']);
+    // 1번은 원장 행이 있어 재적용 없이 저장된 결과(APPLIED 그대로) · 2 · 3번은 적용
+    expect(w.applied()).toBe(3);
+    expect(w.results.get(a.cmdId)?.status).toBe('APPLIED');
+    expect(w.flow.map((f) => f.duplicate)).toEqual([true, false, false]);
+    expect(w.log.filter((l) => l.startsWith('APPLY'))).toEqual([
+      `APPLY ${a.cmdId}`,
+      `APPLY ${b.cmdId}`,
+      `APPLY ${c.cmdId}`,
+    ]);
+    expect(w.pel).toEqual([]);
+  });
+
+  it('XREADGROUP NOGROUP — 다음 바퀴에 그룹을 다시 만든다', async () => {
+    const w = world();
+    await w.runner.step();
+    expect(w.log.filter((l) => l === 'GROUP')).toHaveLength(1);
+    w.failNextRead(new Error("NOGROUP No such key 'stream:biz:cmd' or consumer group 'grp:biz-writer'"));
+    await w.runner.turn();
+    await w.runner.turn();
+    expect(w.log.filter((l) => l === 'GROUP')).toHaveLength(2);
+    // 다른 오류는 그룹을 다시 만들지 않는다
+    w.failNextRead(new Error('Connection is closed.'));
+    await w.runner.turn();
+    await w.runner.turn();
+    expect(w.log.filter((l) => l === 'GROUP')).toHaveLength(2);
+  });
+
+  it('갱신 불확실(타임아웃 · 오류) — 락을 유지하고 소비를 잇는다 · 다음 틱에 갱신되면 그대로', async () => {
+    const w = world();
+    await w.runner.step();
+    w.renewUncertain(true);
+    await w.runner.renewLock();
+    expect(w.runner.holdsLock).toBe(true);
+    w.fresh.push(entry(envelope(), '1-0'));
+    await w.runner.step();
+    await w.runner.step();
+    expect(w.applied()).toBe(1);
+    w.renewUncertain(false);
+    w.advance(5_000);
+    await w.runner.renewLock();
+    expect(w.runner.holdsLock).toBe(true);
+  });
+
+  it('갱신 불확실 — 다음 틱 전에 마지막 확인 뒤 TTL이 지날 수 있으면 그 틱에서 멈춘다', async () => {
+    const w = world();
+    await w.runner.step();
+    w.renewUncertain(true);
+    w.advance(5_000);
+    await w.runner.renewLock(); // 5 + 5 < 15
+    expect(w.runner.holdsLock).toBe(true);
+    w.advance(5_000);
+    await w.runner.renewLock(); // 10 + 5 ≥ 15 — 다음 틱(15초)이면 이미 만료됐을 수 있다
+    expect(w.runner.holdsLock).toBe(false);
+  });
+
+  // 획득 시각 A(틱 뒤 위상 x) · 5초 주기 틱 · 매 틱 불확실 — 틱 사이마다 새 명령을 넣고 소비한다.
+  // Redis 만료(A + TTL) 뒤 적용 0 · 만료 전에 멈춘다 · 멈춘 뒤 명령은 PEL(또는 스트림)에 남는다
+  async function uncertainAfterPhase(x: number, renewMs: number, lockCallMs: number) {
+    const w = world();
+    w.setLockCallMs(lockCallMs);
+    await w.runner.step(); // 획득(A = NOW) · PEL(ID 0) 비어 있음
+    const expiresAt = w.lockExpiresAt();
+    expect(expiresAt).toBe(NOW + BIZ_LOCK_TTL_MS);
+    w.setLockCallMs(0);
+    w.renewUncertain(true, renewMs);
+    let tick = NOW + (BIZ_LOCK_RENEW_MS - x); // 획득이 앞 틱 x초 뒤 — 다음 틱까지 5 − x초
+    let stoppedAt: number | null = null;
+    for (let n = 0; n < 6; n++) {
+      // 틱 사이 — 명령을 넣고 다음 틱 직전까지 두 바퀴 소비
+      for (const at of [tick - BIZ_LOCK_RENEW_MS + 1_000, tick - 1]) {
+        if (at > w.now()) w.advance(at - w.now());
+        w.fresh.push(entry(envelope(), `${at}-${n}`));
+        await w.runner.step();
+      }
+      if (tick > w.now()) w.advance(tick - w.now());
+      await w.runner.renewLock();
+      if (!w.runner.holdsLock && stoppedAt === null) stoppedAt = w.now();
+      tick += BIZ_LOCK_RENEW_MS;
+    }
+    return { w, expiresAt, stoppedAt };
+  }
+
+  it('M-1 획득 위상 0.1초(다음 틱 4.9초 뒤) · 4.9초 · 불확실 타임아웃(500 ms) · 획득 응답 450 ms — Redis 만료 전에 멈추고 만료 뒤 소비 0', async () => {
+    // x = 100이 판별 위상 — 확인 시각을 응답 뒤로 잡는 변이는 여기서 만료(15.0초) 뒤 15.4초에야 멈춘다(r3-api 변이 시험)
+    for (const x of [100, 4_900]) {
+      const { w, expiresAt, stoppedAt } = await uncertainAfterPhase(x, 500, 450);
+      expect(stoppedAt).not.toBeNull();
+      expect(stoppedAt as number).toBeLessThan(expiresAt);
+      expect(w.appliedAfterExpiry()).toBe(0);
+      expect(w.applied()).toBeGreaterThan(0);
+    }
+  });
+
+  it('M-1 빠른 reject(불확실이 곧바로) — 위상 0 · 2.5 · 4.9초 모두 Redis 만료 뒤 소비 0', async () => {
+    for (const x of [0, 2_500, 4_900]) {
+      const { w, expiresAt, stoppedAt } = await uncertainAfterPhase(x, 0, 0);
+      expect(stoppedAt).not.toBeNull();
+      expect(stoppedAt as number).toBeLessThan(expiresAt);
+      expect(w.appliedAfterExpiry()).toBe(0);
+    }
+  });
+
+  it('M-1 확인 시각은 락 호출 전 — 획득 응답이 늦어도(450 ms) 확인 뒤 TTL은 Redis 만료와 같다', async () => {
+    const w = world();
+    w.setLockCallMs(450);
+    await w.runner.step(); // Redis 만료 = NOW + TTL · 응답은 NOW + 450
+    w.setLockCallMs(0);
+    w.fresh.push(entry(envelope(), '1-0'));
+    await w.runner.step(); // 만료 전 — 적용
+    expect(w.applied()).toBe(1);
+    // 갱신 틱 없이(걸림) 만료 + 100 ms — 확인 시각이 응답 뒤(NOW + 450)였다면 경과 14.65초 < TTL이라 소비했을 것
+    w.advance(NOW + BIZ_LOCK_TTL_MS + 100 - w.now());
+    w.fresh.push(entry(envelope(), '2-0'));
+    await w.runner.step();
+    expect(w.applied()).toBe(1);
+    expect(w.appliedAfterExpiry()).toBe(0);
+  });
+
+  it('M-1 엔트리 루프 — 갱신 틱이 걸려도 마지막 확인 뒤 TTL이 지나면 남은 명령은 PEL에 두고 멈춘다', async () => {
+    const w = world({ applyMs: 8_000 });
+    await w.runner.step(); // 획득 · PEL 비어 있음
+    w.fresh.push(entry(envelope(), '1-0'), entry(envelope(), '2-0'), entry(envelope(), '3-0'));
+    await w.runner.step(); // 0 → 8 → 16초 — 3번 앞에서 멈춘다
+    expect(w.applied()).toBe(2);
+    expect(w.runner.holdsLock).toBe(false);
+    expect(w.pel.map((e) => e.id)).toEqual(['3-0']);
+    expect(w.appliedAfterExpiry()).toBe(0);
+    // 재획득(만료 뒤 — 남이 없으면 새로 쥔다) · PEL부터 3번
+    await w.runner.step();
+    expect(w.applied()).toBe(3);
+    expect(w.pel).toEqual([]);
+  });
+
+  it('L-b 가짜 PEL 읽기 — fromId보다 큰 ID만(fromId가 PEL에 없어도)', async () => {
+    const w = world();
+    w.pel.push(entry(envelope(), '1-0'), entry(envelope(), '3-0'));
+    await w.runner.step(); // PEL 0 → 1 · 3 적용 · 커서 3-0
+    expect(w.applied()).toBe(2);
+    w.pel.push(entry(envelope(), '2-0'), entry(envelope(), '4-0')); // 커서보다 작은 2-0은 돌려주지 않는다
+    await w.runner.step();
+    expect(w.reads).toEqual(['0', '3-0']);
+    expect(w.log.filter((l) => l.startsWith('XACK'))).toEqual(['XACK 1-0', 'XACK 3-0', 'XACK 4-0']);
+  });
+
+  it('재획득 때 락 값이 내 토큰이면 이어 쓴다(PEL부터) · 남의 토큰이면 기다린다', async () => {
+    const w = world();
+    w.setLockOwner('me'); // 앞 획득이 응답만 잃었다 — 값은 내 토큰
+    expect(await w.runner.step()).toBe(true);
+    expect(w.runner.holdsLock).toBe(true);
+    expect(w.reads).toEqual(['0']);
+    const v = world();
+    v.setLockOwner('other');
+    expect(await v.runner.step()).toBe(false);
+    expect(v.runner.holdsLock).toBe(false);
+  });
+
   it('stop — 락을 토큰 확인으로 해제한다', async () => {
     const w = world();
     await w.runner.step();
     await w.runner.stop();
     expect(w.runner.holdsLock).toBe(false);
+    expect(w.lockOwner()).toBeNull();
   });
 });
 

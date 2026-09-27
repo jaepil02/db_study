@@ -1,6 +1,7 @@
 // CacheKeyClient — 캐시 계열(cache · lock · rl · sess · auth · biz) 래퍼(ADR-13 · 정본 docs/05_data_stores/05_redis_keyspace.md)
 // ① TTL은 쓰기 메서드의 필수 인자다 — 빠뜨린 호출은 컴파일되지 않는다 ② PERSIST · KEYS · FLUSH를 노출하지 않는다
 // ③ 실패는 짧은 타임아웃(현행 50 ms · 소유 06_pipeline/06) 뒤 조용히 degrade — 결과 없음으로 돌려주고 계수한다
+//    lock:biz:writer 연산만 긴 타임아웃(LOCK_CALL_TIMEOUT_MS) — 갱신 실패는 소비 중단이라 응답 지연을 상실로 읽지 않는다
 // 지터 ±20%는 cache 접두의 단건 키에만 자동으로 건다 — 락 · rl · auth에 붙이면 만료가 소유자 작업보다 먼저 온다.
 // ④ 공개 메서드는 용도 이름과 식별자만 받는다 — 키 문자열(접두)은 래퍼가 스스로 만든다(05_redis_keyspace §키 계열별 래퍼 강제 · S3).
 //    호출자가 접두를 쓰면 봉인 접두를 캐시 래퍼로 쓰는 실수가 타입을 통과한다 — 원시 키 메서드는 private이다.
@@ -13,6 +14,8 @@ import { RedisConnections } from './connections';
 
 const CACHE_PREFIXES = ['cache:', 'lock:', 'rl:', 'sess:', 'auth:', 'biz:'] as const;
 export const CACHE_CALL_TIMEOUT_MS = 50;
+/** lock:biz:writer 연산(획득 · 갱신 · 해제) 타임아웃 — 50 ms에 걸린 갱신을 락 상실로 읽으면 소비가 이유 없이 멈춘다(TTL 15초 · 주기 5초 여유) */
+export const LOCK_CALL_TIMEOUT_MS = 500;
 const JITTER = 0.2;
 
 const failures = new Counter({
@@ -54,6 +57,14 @@ if redis.call('GET', KEYS[1]) == ARGV[1] then return redis.call('PEXPIRE', KEYS[
 return 0
 `;
 
+/** 획득 또는 이어 쓰기 — 비었으면 SET PX(1) · 값이 내 토큰이면 PEXPIRE(2 — 앞 호출이 응답만 잃은 획득 · 갱신) · 남이 쥐면 0 */
+const ACQUIRE_OR_RESUME = `
+local v = redis.call('GET', KEYS[1])
+if not v then redis.call('SET', KEYS[1], ARGV[1], 'PX', ARGV[2]) return 1 end
+if v == ARGV[1] then redis.call('PEXPIRE', KEYS[1], ARGV[2]) return 2 end
+return 0
+`;
+
 /** 소유자 검증 해제 — 단순 DEL은 자기 락이 만료된 뒤 남의 락을 지운다 */
 const RELEASE_IF_OWNER = `
 if redis.call('GET', KEYS[1]) == ARGV[1] then return redis.call('DEL', KEYS[1]) end
@@ -68,6 +79,7 @@ export class CacheKeyClient {
     this.redis = conns.command;
     this.redis.defineCommand('releaseIfOwner', { numberOfKeys: 1, lua: RELEASE_IF_OWNER });
     this.redis.defineCommand('renewIfOwner', { numberOfKeys: 1, lua: RENEW_IF_OWNER });
+    this.redis.defineCommand('acquireOrResume', { numberOfKeys: 1, lua: ACQUIRE_OR_RESUME });
   }
 
   /** 지터 없는 쓰기 — 표지 · 결과 키처럼 만료 시각이 계약인 키(TTL 필수) */
@@ -75,10 +87,15 @@ export class CacheKeyClient {
     return (await this.degrade(key, 'set', () => this.redis.set(key, value, 'EX', ttlSeconds))) !== null;
   }
 
-  private async degrade<T>(key: string, op: string, fn: () => Promise<T>): Promise<T | null> {
+  private async degrade<T>(
+    key: string,
+    op: string,
+    fn: () => Promise<T>,
+    timeoutMs = CACHE_CALL_TIMEOUT_MS,
+  ): Promise<T | null> {
     const prefix = prefixOf(key);
     try {
-      return await withTimeout(fn(), CACHE_CALL_TIMEOUT_MS);
+      return await withTimeout(fn(), timeoutMs);
     } catch {
       failures.inc({ prefix, op });
       return null;
@@ -271,24 +288,56 @@ export class CacheKeyClient {
     return this.setExact(`biz:result:${cmdId}`, json, ttlSeconds);
   }
 
-  /** lock:biz:writer — 업무 명령 단일 소비자 선점(SET NX PX · 지터 없음) */
-  acquireBizWriterLock(ttlMs: number): Promise<{ token: string | null; failed: boolean }> {
-    return this.acquireLock('lock:biz:writer', ttlMs);
-  }
-
-  /** 토큰이 같을 때만 만료 연장 — false면 락을 잃었다(소비를 멈춘다) */
-  async renewBizWriterLock(token: string, ttlMs: number): Promise<boolean> {
+  /**
+   * lock:biz:writer — 업무 명령 단일 소비자 선점(지터 없음 · 값 = 워커 인스턴스 토큰 · 타임아웃 LOCK_CALL_TIMEOUT_MS).
+   * acquired: 비어 있어 쥐었다 · resumed: 이미 내 토큰이라 이어 쓴다 · held: 남이 쥐었다 · failed: 호출 실패(타임아웃 · 오류)
+   */
+  async acquireBizWriterLock(
+    token: string,
+    ttlMs: number,
+  ): Promise<'acquired' | 'resumed' | 'held' | 'failed'> {
     const key = 'lock:biz:writer';
-    const r = await this.degrade(key, 'renew', () =>
-      (
-        this.redis as unknown as { renewIfOwner(k: string, t: string, ms: string): Promise<number> }
-      ).renewIfOwner(key, token, String(ttlMs)),
+    const r = await this.degrade(
+      key,
+      'lock',
+      () =>
+        (
+          this.redis as unknown as { acquireOrResume(k: string, t: string, ms: string): Promise<number> }
+        ).acquireOrResume(key, token, String(ttlMs)),
+      LOCK_CALL_TIMEOUT_MS,
     );
-    return r === 1;
+    if (r === null) return 'failed';
+    return r === 1 ? 'acquired' : r === 2 ? 'resumed' : 'held';
   }
 
-  releaseBizWriterLock(token: string): Promise<void> {
-    return this.releaseLock('lock:biz:writer', token);
+  /** 토큰이 같을 때만 만료 연장 — lost(0)면 락을 잃었다 · uncertain(타임아웃 · 오류)은 소유 여부를 모른다(부르는 쪽이 다음 틱에 다시) */
+  async renewBizWriterLock(token: string, ttlMs: number): Promise<'renewed' | 'lost' | 'uncertain'> {
+    const key = 'lock:biz:writer';
+    const r = await this.degrade(
+      key,
+      'renew',
+      () =>
+        (
+          this.redis as unknown as { renewIfOwner(k: string, t: string, ms: string): Promise<number> }
+        ).renewIfOwner(key, token, String(ttlMs)),
+      LOCK_CALL_TIMEOUT_MS,
+    );
+    if (r === null) return 'uncertain';
+    return r === 1 ? 'renewed' : 'lost';
+  }
+
+  async releaseBizWriterLock(token: string): Promise<void> {
+    const key = 'lock:biz:writer';
+    await this.degrade(
+      key,
+      'unlock',
+      () =>
+        (this.redis as unknown as { releaseIfOwner(k: string, t: string): Promise<number> }).releaseIfOwner(
+          key,
+          token,
+        ),
+      LOCK_CALL_TIMEOUT_MS,
+    );
   }
 
   /** cache:flow:subscribed — 흐름 구독 표지 읽기 · failed면 부르는 쪽은 발행하지 않는다 */

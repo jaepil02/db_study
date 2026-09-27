@@ -10,7 +10,8 @@ import type { RunRegistry } from './run-registry';
 
 export const RUN_REGISTRY = Symbol('RunRegistry');
 
-const RunIdParam = z.strictObject({ runId: z.uuid() });
+// runId는 randomUUID(소문자)로 발급한다 — 대문자로 온 같은 값을 404로 보내지 않게 정규화(commands.controller cmdId와 같다)
+const RunIdParam = z.strictObject({ runId: z.uuid().transform((s) => s.toLowerCase()) });
 
 const notFound = () => new ApiError('common.not_found', '실행이 없다 — 옛 실행이거나 api 재기동 전 실행이다');
 

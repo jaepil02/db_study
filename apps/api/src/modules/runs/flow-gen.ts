@@ -28,6 +28,14 @@ export interface FlowSecondResult {
   busyMs: number;
 }
 
+/** 한 초에 한 태그가 받는 점 수의 상한 — ⌈pps ÷ L⌉이 이를 넘으면 ts 간격 ⌊1000 ÷ ⌈pps ÷ L⌉⌋가 0이 되어 (태그 · ts)가 겹친다 */
+export const FLOW_MAX_REPS_PER_TAG = 1000;
+
+/** 활성 태그 L개로 pps를 (태그 · ts) 중복 없이 낼 수 있는가 — prepare가 발행 전에 본다 */
+export function flowTagsSuffice(pps: number, L: number): boolean {
+  return L > 0 && Math.ceil(pps / L) <= FLOW_MAX_REPS_PER_TAG;
+}
+
 /** 점 i의 태그 위치 · ts 오프셋(ms) */
 export function flowPoint(
   i: number,

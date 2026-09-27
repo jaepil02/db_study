@@ -160,6 +160,21 @@ describe('실행 수명 객체 DDL · 동일 쿼리 5종(테이블 이름만 run
     expect(sql).toContain('GRANT EXECUTE ON FUNCTION run_perf_drop() TO app_rw');
   });
 
+  it('PostgreSQL — 마이그레이션 011: 두 함수를 search_path = public, pg_temp로 다시 만든다(본문 · 권한은 010과 같다)', () => {
+    const read = (f: string) =>
+      readFileSync(resolve(__dirname, `../../../infra/postgres/migrations/${f}`), 'utf8');
+    const up = (sql: string) => sql.slice(sql.indexOf('-- Up Migration'));
+    const v10 = up(read('010_run_perf_functions.sql'));
+    const v11 = up(read('011_run_perf_search_path.sql'));
+    expect(v11.match(/CREATE OR REPLACE FUNCTION/g)).toHaveLength(2);
+    expect(v11.match(/SECURITY DEFINER SET search_path = public, pg_temp AS/g)).toHaveLength(2);
+    expect(
+      v11
+        .replaceAll('CREATE OR REPLACE FUNCTION', 'CREATE FUNCTION')
+        .replaceAll('search_path = public, pg_temp', 'search_path = public'),
+    ).toBe(v10);
+  });
+
   it('쿼리 텍스트 — grid.py CH_SQL · PG_PREPARE와 같다(시간대 인자 UTC)', () => {
     expect(chQuerySql('Q1')).toBe(`SELECT ts, value, quality FROM plc.run_perf_raw
 WHERE device_id = {device:UInt32} AND tag_id = {tag:UInt32} AND ts >= {end:DateTime64(3, 'UTC')} - INTERVAL 1 HOUR AND ts < {end:DateTime64(3, 'UTC')}

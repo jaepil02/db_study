@@ -3,6 +3,9 @@
 // 판정 대상은 테이블 8이고 MV는 뺀다 — mv_tag_1d.bucket의 DateTime('Asia/Seoul')은 달력 의미 경계 #1이라 정상이다.
 // ① 파티션 식이 시각 컬럼에 기대는 5는 재구성(인자만 바꾸면 옛 파트의 KST 파티션 ID와 새 파트가 한 파티션에 섞인다 — 확인한 사실 #3)
 // ② 업무 대조 3은 파티션 키가 없어 MODIFY COLUMN 인자만(메타데이터). 저장값(epoch)은 어느 쪽에서도 바뀌지 않는다.
+// 쓰기 정지(⓪ 전제)를 믿지 않고 확인한다 — 시작 전 system.processes에 판정 대상으로 가는 INSERT가 있으면 거부하고,
+// EXCHANGE 직전 원본을 병합 불변 척도로 다시 재 복사 시점 값과 다르면 멈춘다(복사 뒤 들어온 행은 새 테이블에 없다 · 옛 테이블 유지 · 재실행 수렴).
+// 척도 — MergeTree(tag_raw · alarm_eval)는 count() · AggregatingMergeTree(tag_1*)는 countMerge(cnt)(백그라운드 병합이 물리 행을 줄여도 불변).
 
 /** 판정 대상 테이블 8 — 재구성 5는 이 순서로 돈다(tag_1m이 tag_1h · tag_1d보다 먼저 — 둘은 AS tag_1m으로 구조를 물려받는다) */
 export const CH_TZ_REBUILD = ['tag_raw', 'alarm_eval', 'tag_1m', 'tag_1h', 'tag_1d'] as const;
@@ -57,6 +60,26 @@ async function kstColumns(ch: ChTzPort, db: string) {
   );
 }
 
+/** 판정 대상으로 가는 INSERT 정규식 — DB 접두가 있는 문장 · 없는 문장(current_database가 db일 때만) */
+export function insertPatterns(db: string): { qualified: string; bare: string } {
+  const tables = [...CH_TZ_REBUILD, ...CH_TZ_MODIFY].join('|');
+  const head = '(?i)^\\s*INSERT\\s+INTO\\s+(?:TABLE\\s+)?';
+  const tail = `\`?(?:${tables})\`?(?:\\s|\\(|$)`;
+  return { qualified: `${head}\`?${db}\`?\\.${tail}`, bare: `${head}${tail}` };
+}
+
+/** 지금 판정 대상으로 가는 INSERT 수(system.processes 한 시점) */
+async function runningInserts(ch: ChTzPort, db: string): Promise<number> {
+  const re = insertPatterns(db);
+  const r = await ch.rows<{ n: string }>(
+    `SELECT count() AS n FROM system.processes
+      WHERE query_kind = 'Insert'
+        AND (match(query, {qualified:String}) OR (current_database = {db:String} AND match(query, {bare:String})))`,
+    { db, ...re },
+  );
+  return Number(r[0]?.n ?? 0);
+}
+
 async function count(ch: ChTzPort, sql: string): Promise<string> {
   const r = await ch.rows<{ n: string }>(sql);
   return String(r[0]?.n ?? '0');
@@ -95,6 +118,13 @@ export async function convertClickHouseTimezone(
     return result;
   }
 
+  // ⓪ 전제 확인 — 복사 중 원본에 들어온 행은 새 테이블에 없어 EXCHANGE 뒤 사라진다
+  const inserting = await runningInserts(ch, db);
+  if (inserting > 0)
+    throw new Error(
+      `ClickHouse 시간대 전환 — 판정 대상 테이블로 가는 INSERT ${inserting}건이 돌고 있다 · 적재 · 명령 워커를 먼저 멈춘다(api 정지 뒤 다시 migrate)`,
+    );
+
   const rebuild = CH_TZ_REBUILD.filter((t) => judged.has(t));
   if (rebuild.length > 0) {
     // 복사 전에 MV를 내린다 — 원시 복사분이 롤업에 한 번 더 들어가지 않게(롤업은 롤업대로 복사) · ④ DDL 재적용이 입구를 마지막에 연다
@@ -118,7 +148,11 @@ export async function convertClickHouseTimezone(
       ];
       if (a !== b)
         throw new Error(`ClickHouse 시간대 전환 — ${t} 행 수 불일치 ${a} ≠ ${b} · 옛 테이블은 그대로다`);
-      if (t.startsWith('tag_1')) {
+      // 재검사 척도 — 집계 테이블은 복사 뒤에도 백그라운드 병합이 원본 물리 행을 줄이므로 count()로 재면 오탐 중단한다
+      const aggregated = t.startsWith('tag_1');
+      const measure = aggregated ? 'countMerge(cnt)' : 'count()';
+      let base = a;
+      if (aggregated) {
         const [ca, cb] = [
           await count(ch, `SELECT countMerge(cnt) AS n FROM ${db}.${t}`),
           await count(ch, `SELECT countMerge(cnt) AS n FROM ${db}.${tmp}`),
@@ -127,7 +161,14 @@ export async function convertClickHouseTimezone(
           throw new Error(
             `ClickHouse 시간대 전환 — ${t} countMerge 불일치 ${ca} ≠ ${cb} · 옛 테이블은 그대로다`,
           );
+        base = ca;
       }
+      // EXCHANGE 직전 원본 재검사(병합 불변 척도) — 대조 뒤 들어온 행을 새 테이블이 잃지 않게
+      const again = await count(ch, `SELECT ${measure} AS n FROM ${db}.${t}`);
+      if (again !== base)
+        throw new Error(
+          `ClickHouse 시간대 전환 — ${t} 원본 ${measure} 값이 복사 뒤 바뀌었다 ${base} → ${again} · 쓰기가 멈추지 않았다 · 옛 테이블은 그대로다(적재 · 명령 워커를 멈추고 다시 migrate)`,
+        );
       await ch.command(`EXCHANGE TABLES ${db}.${tmp} AND ${db}.${t}`);
       await ch.command(`DROP TABLE ${db}.${tmp} SYNC`);
       result.rebuilt.push(t);
