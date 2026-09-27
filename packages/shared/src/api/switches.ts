@@ -1,14 +1,14 @@
-// 역할 스위치 11 목록 — 채번 · 환경변수 · 기본값 정본 docs/02_features/13_switch_matrix.md
+// 역할 스위치 12 목록 — 채번 · 환경변수 · 기본값 정본 docs/02_features/13_switch_matrix.md
 // 포트 · 구현 이름 정본 docs/04_architecture/02_module_boundaries.md §포트 · 구현 이름 확정 표
 // api(주입 · 노출)와 웹(실험 콘솔 표)이 같은 목록을 쓴다 — 두 벌이 되면 콘솔이 모르는 구현 이름을 "다름"으로 오판한다.
 
-export type SwitchValueKind = 'onoff' | 'ms' | 'writer';
+export type SwitchValueKind = 'onoff' | 'ms' | 'writer' | 'path';
 
 export interface SwitchSpec {
   id: string;
   env: string;
   kind: SwitchValueKind;
-  /** 기본값 — onoff는 on · off, ms는 정수, writer는 ingest · collector */
+  /** 기본값 — onoff는 on · off, ms는 정수, writer는 ingest · collector, path는 stream · direct */
   defaultValue: string | number;
   port: string;
   /** 04_architecture/02 표의 on 구현 열(SW-11은 기본값 ingest 쪽) */
@@ -117,9 +117,18 @@ export const SWITCHES: readonly SwitchSpec[] = [
     onImpl: 'IngestLatestValueWriter',
     offImpl: 'CollectorLatestValueWriter',
   },
+  {
+    id: 'SW-12',
+    env: 'BIZ_WRITE_PATH',
+    kind: 'path',
+    defaultValue: 'stream',
+    port: 'BizWritePort',
+    onImpl: 'StreamBizWriter',
+    offImpl: 'DirectBizWriter',
+  },
 ];
 
-/** 값에서 주입될 구현 이름 — SW-07은 0이면 통과 구현 · SW-11은 ingest가 onImpl 쪽 */
+/** 값에서 주입될 구현 이름 — SW-07은 0이면 통과 구현 · SW-11은 ingest가 onImpl 쪽 · SW-12는 stream이 onImpl 쪽 */
 export function implFor(spec: SwitchSpec, value: string | number): string {
   switch (spec.kind) {
     case 'onoff':
@@ -128,5 +137,7 @@ export function implFor(spec: SwitchSpec, value: string | number): string {
       return Number(value) > 0 ? spec.onImpl : spec.offImpl;
     case 'writer':
       return value === 'ingest' ? spec.onImpl : spec.offImpl;
+    case 'path':
+      return value === 'stream' ? spec.onImpl : spec.offImpl;
   }
 }

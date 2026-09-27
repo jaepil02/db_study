@@ -7,7 +7,7 @@ import { ConfigRejectedError, loadConfig, readMemoryLimitMb, runInfo } from '../
 const base = { WORKER_POOL_SIZE: '2' };
 
 describe('설정 로더 — 기동 시 1회 · 허용값 밖이면 기동 거부', () => {
-  it('기본값 — APP_ROLE all · 스위치 기본값 11(정본 02_features/13)', () => {
+  it('기본값 — APP_ROLE all · 스위치 기본값 12(정본 02_features/13)', () => {
     const c = loadConfig(base);
     expect(c.appRole).toBe('all');
     expect(c.switches).toEqual({
@@ -22,6 +22,7 @@ describe('설정 로더 — 기동 시 1회 · 허용값 밖이면 기동 거부
       'SW-09': 'off',
       'SW-10': 'off',
       'SW-11': 'ingest',
+      'SW-12': 'stream',
     });
     expect(c.memoryProfile).toBeNull();
     expect(c.capacityTier).toBeNull();

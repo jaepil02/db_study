@@ -15,7 +15,7 @@ export type AppRole = (typeof APP_ROLES)[number];
 
 const onOff = (def: 'on' | 'off') => z.enum(['on', 'off']).default(def);
 
-/** 스위치 11 — ID · 환경변수 · 기본값(정본 02_features/13) */
+/** 스위치 12 — ID · 환경변수 · 기본값(정본 02_features/13) */
 const SWITCH_ENV = {
   'SW-01': ['REDIS_STREAM_BUFFER', onOff('on')],
   'SW-02': ['REDIS_LATEST_CACHE', onOff('on')],
@@ -28,6 +28,7 @@ const SWITCH_ENV = {
   'SW-09': ['CONTROL_TABLE_ENABLED', onOff('off')],
   'SW-10': ['COLLECTOR_DEADBAND', onOff('off')],
   'SW-11': ['LATEST_VALUE_WRITER', z.enum(['ingest', 'collector']).default('ingest')],
+  'SW-12': ['BIZ_WRITE_PATH', z.enum(['stream', 'direct']).default('stream')],
 } as const;
 export type SwitchId = keyof typeof SWITCH_ENV;
 export type SwitchValues = { [K in SwitchId]: z.infer<(typeof SWITCH_ENV)[K][1]> };
