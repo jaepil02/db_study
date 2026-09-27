@@ -8,7 +8,8 @@
     "start": "next start -H 127.0.0.1 -p 3001",
     "typecheck": "tsc --noEmit",
     "test": "vitest run && pnpm run test:tz",
-    "test:tz": "TZ=Asia/Seoul vitest run test/time.test.ts && TZ=UTC vitest run test/time.test.ts && TZ=America/New_York vitest run test/time.test.ts"
+    "test:tz": "TZ=Asia/Seoul vitest run test/time.test.ts && TZ=UTC vitest run test/time.test.ts && TZ=America/New_York vitest run test/time.test.ts",
+    "e2e": "playwright test"
   },
   "dependencies": {
     "@db-study/shared": "workspace:*",
@@ -23,6 +24,7 @@
     "zustand": "5.0.15"
   },
   "devDependencies": {
+    "@playwright/test": "1.63.0",
     "@tailwindcss/postcss": "4.3.3",
     "@types/react": "19.3.0",
     "@types/react-dom": "19.3.0",

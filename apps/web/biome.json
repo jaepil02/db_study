@@ -3,7 +3,15 @@
   "root": false,
   "extends": "//",
   "files": {
-    "includes": ["**", "!.next", "!next-env.d.ts"]
+    "includes": [
+      "**",
+      "!.next",
+      "!next-env.d.ts",
+      "!e2e/.results",
+      "!e2e/.report",
+      "!test-results",
+      "!playwright-report"
+    ]
   },
   "css": {
     "parser": {
