@@ -69,6 +69,11 @@ test('구독 중 · 10초 안에 배치 요약 · 다른 탭의 규칙 PATCH가 
   await expect(bizRow).toBeVisible({ timeout: 10_000 });
   await expect(bizRow).toContainText('ok');
   await expect(bizRow).toContainText('biz-writer');
+  // 시각 칸 — KST(밀리초) · DB UTC 저장 전환 뒤에도 표시는 KST 벽시계여야 한다(지금과 1분 안)
+  const at = ((await bizRow.getByRole('cell').first().textContent()) ?? '').trim();
+  expect(at).toMatch(/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\.\d{3} KST$/);
+  const atMs = Date.parse(`${at.replace(' KST', '').replace(' ', 'T')}+09:00`);
+  expect(Math.abs(atMs - Date.now())).toBeLessThan(60_000);
   await bizRow.scrollIntoViewIfNeeded();
   await shot(page, info, 'flow-biz-patch');
 });
