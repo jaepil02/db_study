@@ -1,6 +1,6 @@
-import { redirect } from 'next/navigation';
+import { RealtimeIndex } from '../../components/realtime/realtime-index';
 
-// S2 — 설비 선택기가 없어(이후 단계) 수직 슬라이스 설비 1로 보낸다
-export default function RealtimeIndex() {
-  redirect('/realtime/1');
+// DSH-REALTIME 진입(설비가 경로에 없음) — 정본 docs/08_screen/03_realtime_dashboard.md §진입
+export default function RealtimeIndexPage() {
+  return <RealtimeIndex />;
 }

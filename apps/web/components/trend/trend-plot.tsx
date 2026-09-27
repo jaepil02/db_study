@@ -5,6 +5,7 @@
 // 받은 점을 다시 줄이지 않는다(클라이언트 재축소 금지).
 import { useEffect, useRef } from 'react';
 import type uPlot from 'uplot';
+import { kstTimeAxis } from '../../lib/uplot-kst';
 
 export const COLORS = [
   '#2563eb',
@@ -75,6 +76,7 @@ export function TrendPlot({ series, dim }: { series: PlotSeries[]; dim: boolean 
           ms: 1,
           tzDate: (ts) => UPlot.tzDate(new Date(ts), 'Asia/Seoul'),
           scales: { x: { time: true } },
+          axes: [kstTimeAxis(), {}],
           series: opts,
           bands,
           legend: { show: true, live: true },

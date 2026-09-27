@@ -3,9 +3,10 @@
 // 사용(도구 컨테이너 11-12 · 앱 비경유 — 오케스트레이터 scripts/lab/s5/oltp/oltp.sh가 run --rm --no-deps로 부른다):
 //   node dist/oltp-lab.js probe                               판별 대상 4(plc 밖 탐침 DB에서 · 끝에 지운다) + 서버 버전 · 설정
 //   node dist/oltp-lab.js fill --scale 10000 [--seed 42] [--in-progress 0.5] [--stores both|clickhouse]
+//   node dist/oltp-lab.js verify --scale 10000 [--seed 42] [--in-progress 0.5]   채움 대조(쓰지 않는다 · 러너 adopt — 복원 스냅샷 = 지금 행 벡터?)
 //   node dist/oltp-lab.js settle [--max-sec 120] [--interval-sec 2]          ClickHouse 대조 테이블 머지 수렴 대기
 //   node dist/oltp-lab.js exp40 --variant pg|ch_alter_async|ch_alter_sync|ch_lwu|ch_rmt --scale N --rep 0..2 [--n 100]
-//        [--poll-interval-ms 5] [--poll-max 2000] [--converge both|skip] [--settle-max-sec 120] [--r2-repeat 5] [--budget-sec 510]
+//        [--poll-interval-ms 5] [--poll-max 2000] [--converge both|skip] [--settle-max-sec 120] [--r2-repeat 5] [--read-warmup 1] [--budget-sec 510]
 //   node dist/oltp-lab.js exp41 --variant pg|ch_g8192|ch_g256 --scale N --rep r --concurrency 1|8|32 [--queries 2000] [--warmup 2000]
 //   node dist/oltp-lab.js exp42 --variant pg|ch_lwu --scale N --rep r [--inject 20] [--pairs 20]
 //   node dist/oltp-lab.js exp43 --variant pg|ch_mt|ch_rmt --scale N --rep r [--k 8] [--converge both|skip] [--final-repeat 10]
@@ -30,6 +31,7 @@ import {
 import { runExp41 } from './modules/datagen/oltp-lab/oltp-point';
 import { oltpChClient, oltpPgClient, oltpPgPool } from './modules/datagen/oltp-lab/oltp-stores';
 import { runExp40 } from './modules/datagen/oltp-lab/oltp-update';
+import { verifyFill } from './modules/datagen/oltp-lab/oltp-verify';
 
 const RUNNERS: Record<RunArgs['action'], (ctx: Ctx) => Promise<RunResult>> = {
   exp40: runExp40,
@@ -131,6 +133,19 @@ async function main() {
         }
       } else line({ kind: 'settle', db: a.chDb, ...(await chSettle(ch, a.chDb, a.maxSec, a.intervalSec)) });
     } finally {
+      await ch.close();
+    }
+    return;
+  }
+  if (a.action === 'verify') {
+    const ch = oltpChClient({ url: chUrl, database: a.chDb, maxConnections: 2 });
+    const pg = await oltpPgClient({ url: pgUrl, schema: a.pgSchema, synchronousCommit: 'off' });
+    try {
+      const r = await verifyFill(a, pg, ch);
+      line({ kind: 'verify', scale: a.scale, seed: a.seed, inProgress: a.inProgress, ...r, ...info });
+      if (!r.match) process.exitCode = 2;
+    } finally {
+      await pg.end();
       await ch.close();
     }
     return;

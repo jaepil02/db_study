@@ -30,6 +30,7 @@ import {
   rangeOf,
   resultBadges,
   seriesColumns,
+  shownResult,
   staleTimeFor,
   type TrendParams,
 } from '../../lib/trend';
@@ -140,8 +141,26 @@ export function TrendAnalysis() {
     retry: retryOn503,
   });
 
+  // 오류 중 이전 결과 유지(08_screen/04 상태 4행 오류 — "503 중에는 이전 결과를 유지하고 띠만 띄운다").
+  // 재시도가 끝나 오류가 되면 placeholderData가 빠져 data가 비므로, 마지막 성공 결과를 그 조건(run)과 짝지어 들고 흐리게 그린다.
+  // 유지는 503(retryOn503 대상)일 때만 · 표지 줄은 유지 중인 결과를 낸 옛 조건으로 그린다(lib/trend shownResult)
+  const lastGood = useRef<{ data: TimeseriesQueryBody; run: Run } | null>(null);
+  if (mainQ.data && !mainQ.isPlaceholderData && run) lastGood.current = { data: mainQ.data, run };
+  const view = shownResult(
+    {
+      data: mainQ.data,
+      isPlaceholderData: mainQ.isPlaceholderData,
+      isError: mainQ.isError,
+      is503: retryOn503(0, mainQ.error),
+    },
+    run,
+    lastGood.current,
+  );
+  const shown = view?.data;
+  const keptOnError = view?.keptOnError ?? false;
+
   const plotSeries = useMemo<PlotSeries[]>(() => {
-    const d = mainQ.data;
+    const d = shown;
     if (!d) return [];
     return d.series.map((s) => {
       const c = seriesColumns(d.meta.columns, s.points);
@@ -153,7 +172,7 @@ export function TrendAnalysis() {
         progress: pc ? { x: pc.x, y: pc.y } : null,
       };
     });
-  }, [mainQ.data, progQ.data]);
+  }, [shown, progQ.data]);
 
   const rangeMs = run ? run.toMs - run.fromMs : 0;
   const [exporting, setExporting] = useState<{ bytes: number; done?: string; warn?: string } | null>(null);
@@ -304,11 +323,16 @@ export function TrendAnalysis() {
       </Card>
       <Card>
         <CardHeader>
-          <ResultLine run={run} data={mainQ.data} fetching={mainQ.isFetching} />
+          <ResultLine run={view?.run ?? run} data={shown} fetching={mainQ.isFetching} />
         </CardHeader>
         <CardContent>
           <div ref={plotBox}>
-            {err ? <Band>{errorText(err)}</Band> : null}
+            {err ? (
+              <Band>
+                {errorText(err)}
+                {keptOnError ? ' — 이전 결과를 흐리게 유지한다' : ''}
+              </Band>
+            ) : null}
             {progQ.isError ? (
               <Band tone="warning">
                 진행 버킷 조회 실패 — 확정 과거 선은 그대로 · {errorText(progQ.error)}
@@ -318,16 +342,19 @@ export function TrendAnalysis() {
               <p className="py-16 text-center text-sm text-slate-500">태그를 고른다</p>
             ) : mainQ.isPending ? (
               <div className="h-80 animate-pulse rounded bg-slate-100" />
-            ) : mainQ.data && mainQ.data.meta.pointCount === 0 && !(progQ.data?.meta.pointCount ?? 0) ? (
+            ) : shown && shown.meta.pointCount === 0 && !(progQ.data?.meta.pointCount ?? 0) ? (
               <p className="py-16 text-center text-sm text-slate-500">
                 이 구간에 측정값이 없다 — 태그의 첫 측정 이후인지 확인한다
               </p>
             ) : (
-              <TrendPlot series={plotSeries} dim={mainQ.isPlaceholderData || mainQ.isFetching} />
+              <TrendPlot
+                series={plotSeries}
+                dim={mainQ.isPlaceholderData || mainQ.isFetching || keptOnError}
+              />
             )}
-            {mainQ.data ? (
+            {shown ? (
               <div className="mt-2 flex flex-wrap gap-3 text-xs text-slate-600">
-                {mainQ.data.series.map((s) => (
+                {shown.series.map((s) => (
                   <span key={s.tagId}>
                     {s.tagName ?? `tag ${s.tagId}`}
                     {s.unit ? `(${s.unit})` : ''}

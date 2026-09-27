@@ -30,9 +30,29 @@ export type Store = 'postgresql' | 'clickhouse';
 export interface RunInfo {
   commitHash: string;
   memoryProfile: string;
-  memoryLimitMb: number;
+  /** null = 도구 컨테이너 경로의 상한 없음 — memoryLimitSource가 함께 있을 때만(10_observability/04 §조건 칸) */
+  memoryLimitMb: number | null;
+  memoryLimitSource?: string;
   capacityTier: string;
 }
+
+/**
+ * 메모리 상한 칸 — 수이면 그대로, null이면 memoryLimitSource가 비지 않은 문자열일 때만 충족.
+ * 그 밖(api health 경로의 null · 출처 없는 null · 다른 형)은 누락 → undefined
+ */
+export function memoryLimitOf(
+  run: Record<string, unknown>,
+): Pick<RunInfo, 'memoryLimitMb' | 'memoryLimitSource'> | undefined {
+  const { memoryLimitMb, memoryLimitSource } = run;
+  if (isNum(memoryLimitMb)) return { memoryLimitMb };
+  if (memoryLimitMb === null && typeof memoryLimitSource === 'string' && memoryLimitSource.trim() !== '')
+    return { memoryLimitMb: null, memoryLimitSource };
+  return undefined;
+}
+
+/** 툴팁의 상한 문구 — null이면 memoryLimitSource 문구(08_screen/07 §대조군 역전 지점 계약 4요소) */
+export const memoryLimitText = (run: RunInfo): string =>
+  run.memoryLimitMb === null ? (run.memoryLimitSource ?? '') : `${run.memoryLimitMb} MB`;
 
 /** 점마다 붙는 4요소 — 툴팁에 싣는다(08_screen/07 §대조군 역전 지점 계약 "4요소") */
 export interface RecordRef {
@@ -154,17 +174,18 @@ function validate(v: unknown): Block | null {
   };
 }
 
-/** 규칙 4 — run 네 필드와 switches 11키가 전부 null이 아니다(배열 값은 원소마다) */
+/** 규칙 4 — run 네 필드와 switches 11키가 전부 null이 아니다(배열 값은 원소마다 · memoryLimitMb는 memoryLimitOf 예외) */
 function conditionsComplete(b: Block): RunInfo | null {
-  const { commitHash, memoryProfile, memoryLimitMb, capacityTier } = b.run;
+  const { commitHash, memoryProfile, capacityTier } = b.run;
   if (typeof commitHash !== 'string' || typeof memoryProfile !== 'string') return null;
-  if (!isNum(memoryLimitMb) || typeof capacityTier !== 'string') return null;
+  const limit = memoryLimitOf(b.run);
+  if (limit === undefined || typeof capacityTier !== 'string') return null;
   for (const id of SWITCH_IDS) {
     const sv = b.switches[id];
     if (sv === null || sv === undefined) return null;
     if (Array.isArray(sv) && sv.some((x) => x === null || x === undefined)) return null;
   }
-  return { commitHash, memoryProfile, memoryLimitMb, capacityTier };
+  return { commitHash, memoryProfile, ...limit, capacityTier };
 }
 
 function toMs(v: number, unit: unknown): number | null {

@@ -262,6 +262,11 @@ class RestartDetectedTest(unittest.TestCase):
         self.assertFalse(rec.restart_detected(a, b))
         self.assertIsNone(rec.restart_detected({}, b))
 
+    def test_prom_client_gauge_named_total_is_not_restart(self) -> None:
+        a = parse_text(self.t, 'a', 'nodejs_active_resources_total 19\ning_control_copy_rows_total 100\n')
+        b = parse_text(self.t, 'b', 'nodejs_active_resources_total 16\ning_control_copy_rows_total 200\n')   # EXP-45 반복 1 100k 오판
+        self.assertFalse(rec.restart_detected(a, b))
+
 
 def worker_text(ins: list[float], cp: list[float], rows: float, cprows: float, fails: float) -> str:
     return (hist_text('insert_duration', ins) + hist_text('ing_control_copy_seconds', cp)

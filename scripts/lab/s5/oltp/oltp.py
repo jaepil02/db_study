@@ -34,6 +34,9 @@ EXP40_BUDGET_SEC = CALL_LIMIT_SEC - CONTAINER_OVERHEAD_SEC   # 실행기 --budge
 LAB_DBS = ('lab_oltp_g256', 'lab_oltp_probe')   # 실행 범위 실험 DB — 스냅샷 전 부재 확인(05_data_stores/10 §그래뉼 변형 판정 ②)
 SPREAD_LIMIT = float(os.environ.get('SPREAD_LIMIT', '0.2'))    # 편차 폐기 기준(2계층 · 04_experiment_protocol 현행 참고 20%)
 TOOL_CPU_SATURATED = float(os.environ.get('TOOL_CPU_SATURATED', '0.9'))   # 도구 CPU 포화 창 문턱(공정성 규칙 10 · 2계층)
+# 이벤트 루프 사용률(EXP-41 측정 창 · 실행기 detail.eventLoop) 문턱 후보 — 기록만 한다. 포화 창 제외에 쓰는 것은 공정성 규칙 10 개정이라
+# 리드 문서 판정 전에는 summarize가 쓰지 않는다(리드 판정 2026-09-27 · 도구 포화 (a)안). 요약에 후보 초과 반복을 세어 둔다.
+ELU_CANDIDATE = float(os.environ.get('ELU_CANDIDATE', '0.9'))
 
 EXPS = {
     'exp40': {'id': 'EXP-40', 'variants': ('pg', 'ch_alter_async', 'ch_alter_sync', 'ch_lwu', 'ch_rmt')},
@@ -50,17 +53,32 @@ RATES_44 = (50, 200, 500)
 # ch_rmt의 plain 판독은 옛 버전이 머지로 사라질 때까지 폴링하므로 상한을 짧게 둔다(상한 안 미관측으로 센다).
 # EXP-40은 폴링 최악(N × 상한 × (간격 + 왕복))이 호출 한도를 넘을 수 있어 실행기 총 예산(--budget-sec)이 자른다(M3).
 # --converge both — 한 호출 안에서 after_wait(자연 대기) · after_force(강제) 두 라벨(M1 · 두 번 부르지 않는다).
+# 표본 수(기록 040 · 041 폐기 뒤 · 2026-09-27) — R2 5회는 p95가 사실상 최댓값이고 p50이 3번째 값이라 반복 사이 편차가 표본 잡음이었다
+# (같은 호출의 R1 100건은 클라이언트 − 서버 차가 반복 사이 ±3% · R2 5회는 ±20%) → R2 50회 + 판독 단계마다 R2 예열 1회(--read-warmup ·
+# 역방향 측정 조건 캐시 행 "웜 — 예열 1회 뒤 반복"). 갱신 N 100 → 300(서브 ms p95의 꼬리 표본 5 → 15). 용량 검산(실행기 targetIds —
+# 반복 조각 repSpan = floor(span ÷ 3) ≥ N · span = floor(IN_PROGRESS ÷ 슬롯 4)): 10^4 실측 IN_PROGRESS 4,915 → span 1,228 → repSpan 409 ≥ 300
+# (10^5 · 10^6은 10배 · 100배). ch_rmt는 plain 판독의 상한 안 미관측 폴링이 건당 약 2.6초라 N 50 그대로(쓰기 129초 · 300이면 예산 초과) —
+# 반복 r의 대상은 N과 무관한 같은 조각의 앞부분이라 ch_rmt 50건은 다른 변형 300건의 앞 50건과 같다(공정성 규칙 1).
+R2_REPEAT_40 = 50
+READ_WARMUP_40 = 1
 RUN_DEFAULTS: dict[tuple[str, str | None], list[str]] = {
-    ('exp40', None): ['--n', '100', '--poll-interval-ms', '5', '--poll-max', '2000', '--converge', 'both', '--settle-max-sec', '120',
-                      '--budget-sec', str(EXP40_BUDGET_SEC)],
+    ('exp40', None): ['--n', '300', '--poll-interval-ms', '5', '--poll-max', '2000', '--converge', 'both', '--settle-max-sec', '120',
+                      '--r2-repeat', str(R2_REPEAT_40), '--read-warmup', str(READ_WARMUP_40), '--budget-sec', str(EXP40_BUDGET_SEC)],
     ('exp40', 'ch_rmt'): ['--n', '50', '--poll-interval-ms', '5', '--poll-max', '200', '--converge', 'both', '--settle-max-sec', '120',
-                          '--budget-sec', str(EXP40_BUDGET_SEC)],
+                          '--r2-repeat', str(R2_REPEAT_40), '--read-warmup', str(READ_WARMUP_40), '--budget-sec', str(EXP40_BUDGET_SEC)],
     ('exp41', None): ['--queries', '2000', '--warmup', '2000', '--explain-sample', '20'],
     ('exp42', None): ['--inject', '20', '--pairs', '20'],
     ('exp43', None): ['--k', '8', '--converge', 'both', '--settle-max-sec', '120', '--final-repeat', '10'],
     # 커넥션 수 · 동시 요청 상한은 두 저장소 같은 값(공정성 규칙 1 · W1 검수 판정)
     ('exp44', None): ['--duration', '60', '--concurrency', '16', '--inflight', '64'],
     ('exp43', 'ch_mt_dedup'): ['--dedup-window', '100'],
+}
+# EXP-41 동시성별 조회 수(2026-09-27) — PostgreSQL c8 · c32는 약 2만 조회/초라 2,000건 측정 창이 약 90 ms였다(기록 041 원시 qps) —
+# 한 번의 GC · 스케줄러 멈춤이 p95를 움직인다. c8 · c32는 2만 건(창 약 1초 · ClickHouse c8 2,000건 창과 같은 자릿수) · 예열은 같은 순서
+# 한 바퀴 전부. 두 저장소 같은 값(공정성 규칙 1 — 같은 대상 순서 · 같은 동시성) — 변형이 아니라 동시성이 고른다. c1은 편차 초과가 없어 그대로.
+EXP41_BY_CONCURRENCY: dict[int, list[str]] = {
+    8: ['--queries', '20000', '--warmup', '20000'],
+    32: ['--queries', '20000', '--warmup', '20000'],
 }
 # ClickHouse 대조 테이블 상태를 바꾸는 실행 — 다음 exp40 · exp41 ClickHouse 변형은 reset clickhouse 뒤에만(공정성 규칙 9)
 CH_MUTATING = {'exp40', 'exp42', 'exp43'}
@@ -75,6 +93,13 @@ CH_RECORDED_SETTINGS = (
     'insert_deduplicate', 'insert_deduplication_token', 'max_threads', 'use_query_condition_cache', 'use_uncompressed_cache',
 )
 CAPACITY_TIER_NA = '해당 없음'   # 역방향은 용량 티어 축 밖(업무 규모 단계가 축) — 판독기 계약은 문자열
+# 04 §조건 칸 도구 컨테이너 경로 불릿(2026-09-27) — oltp-lab에는 compose 메모리 상한이 없어 cgroup memory.max가 max · run.memoryLimitMb null
+MEMORY_LIMIT_SOURCE = 'cgroup max — oltp-lab 서비스에 compose 상한 없음'
+# 채움 스냅샷을 다른 커밋에서 다시 쓸 수 있는가(adopt) — 스키마 · 채움 경로(DDL · 마이그레이션 · fill · 테이블 이름)가 스냅샷 커밋 뒤
+# 바뀌지 않았을 때만. 행 벡터(oltp-rows.ts)는 경로가 아니라 내용으로 본다 — 복원 뒤 실행기 verify가 지금 코드의 기대 집합 md5 ·
+# 상태 분포 · 표본 행 전 컬럼과 세 테이블을 대조한다(대상 창만 바뀐 oltp-rows.ts 개정이 스냅샷 재사용을 막지 않게 · 2026-09-27).
+FILL_INPUTS = ('apps/api/src/modules/datagen/oltp-lab/oltp-fill.ts', 'apps/api/src/modules/datagen/oltp-lab/oltp-context.ts',
+               'infra/clickhouse/ddl', 'infra/postgres/migrations')
 CH_NEEDS_CLEAN = {'exp40', 'exp41'}
 
 OLTP_DIR = Path(os.environ.get('OLTP_DIR', 'snapshots/lab-s5-oltp'))
@@ -187,6 +212,19 @@ def guard_clean_schema() -> None:
         die(f'plc 대조 테이블에 중복 제거 윈도우 설정이 남아 있다: {drift} — ALTER TABLE plc.<t> RESET SETTING non_replicated_deduplication_window 뒤 다시')
 
 
+def with_memory_source(run_: dict | None) -> dict | None:
+    """04 §조건 칸(2026-09-27) — 도구 컨테이너 경로의 memoryLimitMb null은 선택 키 run.memoryLimitSource가 있으면 4요소 충족.
+    값은 바꾸지 않는다(null 그대로 · 저장소 상한 3,584 같은 다른 값으로 채우지 않는다) · null이 아니면 붙이지 않는다."""
+    if not isinstance(run_, dict) or 'memoryLimitMb' not in run_ or run_['memoryLimitMb'] is not None:
+        return run_   # 키가 없는 run(옛 원시 · 다른 모양)에는 붙이지 않는다 — 재지 않은 것과 상한 없음을 섞지 않게
+    return {**run_, 'memoryLimitSource': MEMORY_LIMIT_SOURCE}
+
+
+def with_run_source(line: dict) -> dict:
+    """실행기 줄(probe · fill · detail)의 run에 memoryLimitSource — run이 없는 줄은 그대로."""
+    return {**line, 'run': with_memory_source(line['run'])} if 'run' in line else line
+
+
 def parse_scale(s: str) -> int:
     try:
         v = int(s.replace('_', ''))
@@ -242,9 +280,14 @@ def executor(args: list[str], timeout: int = CALL_LIMIT_SEC) -> tuple[list[dict]
     return lines, p.returncode, wall
 
 
-def run_args(exp: str, variant: str, extra: list[str]) -> list[str]:
-    """변형 기본 인자 + 호출자 인자(뒤가 이긴다 — 실행기는 같은 이름의 첫 값을 읽으므로 호출자 인자를 앞에 둔다)."""
+def run_args(exp: str, variant: str, extra: list[str], conc: int | None = None) -> list[str]:
+    """변형 기본 인자 + 호출자 인자(뒤가 이긴다 — 실행기는 같은 이름의 첫 값을 읽으므로 호출자 인자를 앞에 둔다).
+    EXP-41은 동시성별 조회 수가 변형 기본 인자 앞에 선다(두 저장소 같은 값)."""
     base = RUN_DEFAULTS.get((exp, variant)) or RUN_DEFAULTS.get((exp, None), [])
+    if exp == 'exp41' and conc in EXP41_BY_CONCURRENCY:
+        over = EXP41_BY_CONCURRENCY[conc]
+        names = set(over[::2])
+        base = over + [x for i in range(0, len(base), 2) if base[i] not in names for x in base[i:i + 2]]
     given = {extra[i] for i in range(0, len(extra), 2) if extra[i].startswith('--')}
     kept: list[str] = []
     for i in range(0, len(base), 2):
@@ -287,12 +330,12 @@ def cmd_init(args: list[str]) -> None:
     probe = next((x for x in lines if x.get('kind') == 'probe'), None)
     st = {'createdAt': now_iso(), 'seed': seed, 'inProgress': inprog, 'git': git_head(), 'env': env, 'resourcesBad': bad,
           'probe': probe['probe'] if probe else None,
-          'run': {**(probe.get('run') or {}), 'capacityTier': CAPACITY_TIER_NA} if probe else None,
+          'run': with_memory_source({**(probe.get('run') or {}), 'capacityTier': CAPACITY_TIER_NA}) if probe else None,
           'switches': probe.get('switches') if probe else None, 'scales': {}, 'runs': {}}
     save_state(st)
     emit({'kind': 'init', 'env': env, 'resourcesBad': bad, 'git': st['git'], 'wallSec': round(wall, 1)})
     if probe:
-        emit({**probe, 'kind': 'probe'})
+        emit(with_run_source({**probe, 'kind': 'probe'}))
     print(json.dumps({'probe': st['probe'], 'resourcesBad': bad}, ensure_ascii=False, indent=1))
 
 
@@ -309,7 +352,7 @@ def cmd_fill(args: list[str]) -> None:
     out = lines[-1]
     s.update({'filled': rc == 0 and out.get('match'), 'fillAt': now_iso(), 'chDirty': False, 'pgDirty': False})
     save_state(st)
-    emit({**out, 'kind': 'fill', 'wallSec': round(wall, 1)})
+    emit(with_run_source({**out, 'kind': 'fill', 'wallSec': round(wall, 1)}))
     print(json.dumps({k2: out.get(k2) for k2 in ('match', 'set', 'status', 'pgCopyMs', 'chInsertMs')}, ensure_ascii=False))
     if not s['filled']:
         die('두 저장소 (order_id · order_no) 집합 또는 상태 분포가 어긋났다 — 그 단계는 무효(빈 볼륨에서 다시)')
@@ -381,6 +424,63 @@ def cmd_reset(args: list[str]) -> None:
     print(json.dumps({'restored': name, 'settle': sl[-1].get('converged')}, ensure_ascii=False))
 
 
+def snapshot_commit(name: str) -> str:
+    """task snapshot manifest의 git_commit — 없으면 멈춘다."""
+    mf = Path('snapshots') / name / 'manifest.txt'
+    if not mf.exists():
+        die(f'{mf} 가 없다 — 스냅샷 이름을 확인한다')
+    kv = dict(ln.split('=', 1) for ln in mf.read_text().splitlines() if '=' in ln)
+    return kv.get('git_commit') or die(f'{mf}에 git_commit이 없다')
+
+
+def fill_inputs_changed(commit: str) -> list[str]:
+    """스냅샷 커밋 이후 채움 결과를 정하는 경로(FILL_INPUTS) 중 바뀐 파일 — 커밋 차 + 작업 트리 미커밋 변경."""
+    changed = run(['git', 'diff', '--name-only', commit, '--', *FILL_INPUTS]).stdout.split()
+    return sorted(set(changed))
+
+
+def cmd_adopt(args: list[str]) -> None:
+    """adopt <규모> <스냅샷> — 다른 실행(앞 기록)이 만든 채움 스냅샷을 이 실행의 채움으로 쓴다(재측정 · 리드 전용 · 컨테이너 재기동).
+    스키마 · 채움 경로(FILL_INPUTS)가 스냅샷 커밋 뒤 바뀌었으면 복원 전에 거부한다 — 바뀌었으면 빈 볼륨에서 fill · snapshot을 다시 한다.
+    복원 뒤 실행기 verify(지금 코드의 기대 집합 md5 · 행 수 · 상태 분포 · 표본 행 전 컬럼 — 세 테이블)가 맞아야 채움으로 삼고
+    VACUUM ANALYZE · settle로 시작 상태를 맞춘다."""
+    st = load_state()
+    if len(args) < 2:
+        die('adopt <규모> <스냅샷 이름>')
+    k, name = parse_scale(args[0]), args[1]
+    s = st['scales'].setdefault(str(k), {})
+    if s.get('filled') and os.environ.get('FORCE') != '1':
+        die(f'규모 {k}은 이미 채움이 있다({s.get("snapshot")}) — 다시 하려면 FORCE=1')
+    commit = snapshot_commit(name)
+    changed = fill_inputs_changed(commit)
+    if changed:
+        die(f'스냅샷 {name}(커밋 {commit}) 뒤 채움 경로가 바뀌었다: {changed} — 빈 볼륨에서 fill {k} · snapshot {k}을 다시 한다')
+    # 복원 전에 이 규모를 "채움 없음 · 두 저장소 더러움"으로 저장한다 — 복원 · verify가 도중에 멈춰도 state가 이미 바뀐 DB를 채움으로 믿지 않게
+    s.update({'filled': False, 'chDirty': True, 'pgDirty': True, 'chDirtyBy': f'adopt {name}', 'pgDirtyBy': f'adopt {name}',
+              'adoptPending': name})
+    save_state(st)
+    run(['task', 'restore', f'NAME={name}'], timeout=CALL_LIMIT_SEC)
+    guard_clean_schema()
+    vl, _, _ = executor(['verify', '--scale', str(k), '--seed', str(st['seed']), '--in-progress', str(st['inProgress'])])
+    fp = next((x for x in vl if x.get('kind') == 'verify'), {'match': False})
+    if not fp.get('match'):
+        emit({'kind': 'adopt', 'scale': k, 'snapshot': name, 'snapshotCommit': commit, 'verify': fp, 'ok': False})
+        die(f'스냅샷 {name} 복원 뒤 두 저장소 집합 · 행 수 · 상태 분포가 어긋났다 — 그 스냅샷은 쓰지 않는다')
+    vac = pg_vacuum_analyze()
+    lines, _, wall = executor(['settle', '--max-sec', '240'])
+    out = lines[-1]
+    s.update({'filled': True, 'snapshot': name, 'adoptedFrom': {'snapshot': name, 'commit': commit}, 'fillAt': now_iso(),
+              'settledAt': now_iso(), 'chDirty': False, 'pgDirty': False})
+    for x in ('adoptPending', 'chDirtyBy', 'pgDirtyBy'):
+        s.pop(x, None)
+    save_state(st)
+    emit({'kind': 'adopt', 'scale': k, 'snapshot': name, 'snapshotCommit': commit, 'fillInputs': list(FILL_INPUTS),
+          'verify': with_run_source(fp), 'ok': True, 'pgVacuumAnalyzeSec': vac, 'settle': out, 'wallSec': round(wall, 1)})
+    print(json.dumps({'adopted': name, 'snapshotCommit': commit, 'match': True, 'settle': out.get('converged')}, ensure_ascii=False))
+    if not out.get('converged'):
+        die(f'ClickHouse 활성 파트가 상한 안에 수렴하지 않았다 — settle {k}을 다시')
+
+
 def pg_state() -> dict:
     """PostgreSQL 누적 상태(죽은 튜플 · 산 튜플 · WAL 누적) — PostgreSQL 변형 반복 사이 상태를 원시에(L1 · 공정성 규칙 9)."""
     rows = pgq("""SELECT relname, n_live_tup, n_dead_tup, n_tup_upd, autovacuum_count FROM pg_stat_user_tables
@@ -429,7 +529,7 @@ def cmd_run(args: list[str]) -> None:
     if st['runs'].get(key, {}).get('done') and os.environ.get('FORCE') != '1':
         die(f'{key} 은 이미 했다 — 다시 하려면 FORCE=1(원시에 두 번 남는다 — collect는 마지막 실행을 쓴다)')
     full = run_args(exp, variant, ['--variant', variant, '--scale', str(k), '--rep', str(rep), '--seed', str(st['seed']),
-                                   '--in-progress', str(st['inProgress'])] + extra)
+                                   '--in-progress', str(st['inProgress'])] + extra, conc)
     # 예산 검산(M3) — 실행기 예산 + 기동 여유가 호출 한도 안인가를 부르기 전에 확인하고 원시에 남긴다
     budget_check = None
     if exp == 'exp40':
@@ -451,8 +551,8 @@ def cmd_run(args: list[str]) -> None:
     run_id = det.get('runId')
     for m in measures:
         emit({**m, 'kind': 'measure', 'key': key})
-    emit({**det, 'kind': 'detail', 'key': key, 'wallSec': round(wall, 1), 'git': git_head(),
-          'pgDirty': pg_dirty, 'budgetCheck': budget_check})
+    emit(with_run_source({**det, 'kind': 'detail', 'key': key, 'wallSec': round(wall, 1), 'git': git_head(),
+                          'pgDirty': pg_dirty, 'budgetCheck': budget_check}))
     if ch and exp in CH_MUTATING:
         s['chDirty'] = True
         s['chDirtyBy'] = key
@@ -464,6 +564,9 @@ def cmd_run(args: list[str]) -> None:
     save_state(st)
     for m in measures:
         print(f"{m['metric']:<32} {str(m.get('read') or ''):<28} {m.get('value')} {m.get('unit')}")
+    el = (det.get('detail') or {}).get('eventLoop')
+    if isinstance(el, dict):
+        print(f"event_loop_utilization(기록만)            {el.get('utilization')}")
     print(f'— {key} · {len(measures)}줄 · {wall:.1f}초')
 
 
@@ -519,23 +622,41 @@ def summarize(measures: list[dict]) -> list[dict]:
     return rows
 
 
+def event_loop_rows(lines: list[dict]) -> list[dict]:
+    """EXP-41 detail 줄 → 반복별 측정 창 이벤트 루프 사용률(같은 key는 마지막 실행) — 판정에 쓰지 않는 기록(ELU_CANDIDATE는 후보 표시만)."""
+    last: dict[str, dict] = {}
+    for d in lines:
+        if d.get('kind') == 'detail' and d.get('exp') == 'EXP-41':
+            last[d.get('key') or str(len(last))] = d
+    rows = []
+    for d in sorted(last.values(), key=lambda x: (str(x.get('variant')), x.get('scale') or 0, x.get('concurrency') or 0, x.get('rep') or 0)):
+        el = (d.get('detail') or {}).get('eventLoop')
+        u = el.get('utilization') if isinstance(el, dict) else None
+        rows.append({'variant': d.get('variant'), 'scale': d.get('scale'), 'concurrency': d.get('concurrency'), 'rep': d.get('rep'),
+                     'utilization': u, 'aboveCandidate': u is not None and u >= ELU_CANDIDATE})
+    return rows
+
+
 def cmd_collect(_args: list[str]) -> None:
     """원시 → 기록용 요약(reverse 블록 행 · 3회 중앙값 · 편차) — OLTP_DIR/oltp-summary.json."""
     src = out_path()
     if not src.exists():
         die(f'{src} 가 없다')
-    measures = [json.loads(ln) for ln in src.read_text().splitlines() if ln.strip()]
-    measures = [m for m in measures if m.get('kind') == 'measure']
+    raw = [json.loads(ln) for ln in src.read_text().splitlines() if ln.strip()]
+    measures = [m for m in raw if m.get('kind') == 'measure']
+    elu = event_loop_rows(raw)
     rows = summarize(measures)
     incomplete = [r for r in rows if any(v is None for v in r['values'])]
     exceeded = [r for r in rows if r.get('spreadExceeded')]
     st = json.loads(STATE.read_text()) if STATE.exists() else {}
-    run_info = {**(st.get('run') or {}), 'capacityTier': CAPACITY_TIER_NA}
+    run_info = with_memory_source({**(st.get('run') or {}), 'capacityTier': CAPACITY_TIER_NA})
     out = {'generatedAt': now_iso(), 'run': run_info, 'switches': st.get('switches'),
            'conditions': {'capacityTier': CAPACITY_TIER_NA, 'seed': st.get('seed'), 'inProgress': st.get('inProgress'),
                           'env': st.get('env'), 'probe': st.get('probe')},
            'spreadLimit': SPREAD_LIMIT, 'toolCpuSaturated': TOOL_CPU_SATURATED,
-           'reverse': rows, 'incomplete': len(incomplete), 'spreadExceeded': len(exceeded)}
+           'reverse': rows, 'incomplete': len(incomplete), 'spreadExceeded': len(exceeded),
+           'toolEventLoop': {'candidate': ELU_CANDIDATE, 'appliedToJudgement': False, 'rows': elu,
+                             'aboveCandidate': sum(1 for r in elu if r['aboveCandidate'])}}
     p = OLTP_DIR / 'oltp-summary.json'
     OLTP_DIR.mkdir(parents=True, exist_ok=True)
     p.write_text(json.dumps(out, ensure_ascii=False, indent=1))
@@ -543,7 +664,8 @@ def cmd_collect(_args: list[str]) -> None:
         flag = ' ⚠편차' if r.get('spreadExceeded') else ''
         print(f"{r['exp']} {r['variant']:<15} {r['scale']:>8} c{r['concurrency']} r{r['rate']} {str(r['read'] or ''):<26} "
               f"{r['metric']:<32} {r['values']} → {r['median'] if not r.get('structural') else '(구조 · 3회 전부)'}{flag}")
-    print(f'— {len(rows)}행 · 반복 미완 {len(incomplete)} · 편차 초과 {len(exceeded)} → {p}')
+    print(f'— {len(rows)}행 · 반복 미완 {len(incomplete)} · 편차 초과 {len(exceeded)} · '
+          f'EXP-41 이벤트 루프 ≥ {ELU_CANDIDATE}(기록만) {out["toolEventLoop"]["aboveCandidate"]}/{len(elu)} → {p}')
 
 
 def cmd_status(_args: list[str]) -> None:
@@ -554,7 +676,7 @@ def cmd_status(_args: list[str]) -> None:
                       'labDbsPresent': lab_dbs_present(), 'dedupWindowDrift': dedup_window_drift()}, ensure_ascii=False, indent=1))
 
 
-COMMANDS = {'init': cmd_init, 'fill': cmd_fill, 'settle': cmd_settle, 'snapshot': cmd_snapshot, 'reset': cmd_reset,
+COMMANDS = {'init': cmd_init, 'fill': cmd_fill, 'settle': cmd_settle, 'snapshot': cmd_snapshot, 'adopt': cmd_adopt, 'reset': cmd_reset,
             'run': cmd_run, 'collect': cmd_collect, 'status': cmd_status}
 
 if __name__ == '__main__':

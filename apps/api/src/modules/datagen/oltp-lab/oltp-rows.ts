@@ -90,7 +90,10 @@ export function permute(seed: number, m: number): (j: number) => number {
 }
 
 /**
- * 반복 rep의 대상 n개 — IN_PROGRESS를 흩은 순서에서 슬롯 창 [slot·span, (slot+1)·span)의 rep번째 조각.
+ * 반복 rep의 대상 n개 — IN_PROGRESS를 흩은 순서에서 슬롯 창 [slot·span, (slot+1)·span)을 반복 3개의 고정 폭 조각(floor(span/3))으로
+ * 나눈 rep번째 조각의 앞 n개. 조각 폭이 N과 무관해 N이 다른 변형(EXP-40 ch_rmt 50 · 나머지 300)도 반복 r의 대상이 같은 집합의
+ * 앞부분이다(공정성 규칙 1 · 기록 040 뒤 리드 판정 2026-09-27 — 옛 창 rep·n은 N마다 시작점이 달랐다).
+ * EXP-42 · 43 대상도 이 창을 쓰므로 바뀐다 — 기록 042 · 043은 옛 창으로 측정된 원시라 영향 없다(그 원시 detail.targets가 쓴 집합을 담는다).
  * 종결에서 나가는 전이가 없어 반복마다 겹치지 않는 집합을 쓴다(01_postgresql_schema §허용 전이).
  */
 export function targetIds(
@@ -101,12 +104,13 @@ export function targetIds(
   n: number,
 ): number[] {
   const span = Math.floor(ids.length / SLOT_COUNT);
-  if (3 * n > span)
+  const repSpan = Math.floor(span / 3);
+  if (n > repSpan)
     throw new Error(
-      `대상 부족 — IN_PROGRESS ${ids.length}행 · 슬롯 폭 ${span} < 3 × N ${n}(N을 줄이거나 규모를 키운다)`,
+      `대상 부족 — IN_PROGRESS ${ids.length}행 · 슬롯 폭 ${span} · 반복 조각 ${repSpan} < N ${n}(N을 줄이거나 규모를 키운다)`,
     );
   const p = permute(seed, ids.length);
-  const lo = slot * span + rep * n;
+  const lo = slot * span + rep * repSpan;
   return Array.from({ length: n }, (_, j) => ids[p(lo + j)] as number);
 }
 

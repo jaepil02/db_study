@@ -6,6 +6,7 @@
 // 머지 뒤 판독은 한 호출 안에서 두 라벨 — 자연 대기 뒤 after_wait · 강제 뒤 after_force(강제 문장 · 걸린 시간을 detail에 · M1).
 // 총 시간 예산(--budget-sec) — 쓰기 · 폴링이 머지 뒤 판독 몫을 남기고 멈춘다. 못 한 건 · 잘린 폴링은 값 없이 budget_exhausted로 센다(M3).
 // RMT 새 버전의 나머지 컬럼은 채움 행 벡터에서 안다 — 앞 조회를 더하지 않는다(공정성 규칙 7).
+// R1 · R2 판독 단계마다 측정 전 R2 예열(--read-warmup · 기본 1)을 두 저장소에 같게 돌리고 버린다(역방향 측정 조건 캐시 행).
 import type { ClickHouseClient } from '@clickhouse/client';
 import {
   type Ctx,
@@ -232,6 +233,7 @@ async function chReads(
     const fin = r.final ? ' FINAL' : '';
     const c1 = logComment(ctx, `${phase}:${r.name}:r1`);
     const c2 = logComment(ctx, `${phase}:${r.name}:r2`);
+    const r2Sql = `SELECT status, count() AS n FROM ${table}${fin} GROUP BY status ORDER BY status`;
     const t0 = await chNow(aux);
     const lat1: number[] = [];
     for (const id of ids) {
@@ -244,19 +246,16 @@ async function chReads(
       );
       lat1.push(now() - s);
     }
+    // R2 예열 — 측정 전 readWarmup번 돌리고 버린다(웜 · 역방향 측정 조건 캐시 행) · PostgreSQL과 같은 자리(R1 뒤 · R2 앞)
+    //   다른 log_comment라 서버 시간(c2)에 섞이지 않는다
+    const cw = logComment(ctx, `${phase}:${r.name}:r2warm`);
+    for (let k = 0; k < ctx.args.readWarmup; k++)
+      await chRows(aux, r2Sql, {}, { ...r.settings, log_comment: cw });
     const lat2: number[] = [];
     let statusCounts: unknown = null;
     for (let k = 0; k < ctx.args.r2Repeat; k++) {
       const s = now();
-      statusCounts = await chRows(
-        aux,
-        `SELECT status, count() AS n FROM ${table}${fin} GROUP BY status ORDER BY status`,
-        {},
-        {
-          ...r.settings,
-          log_comment: c2,
-        },
-      );
+      statusCounts = await chRows(aux, r2Sql, {}, { ...r.settings, log_comment: c2 });
       lat2.push(now() - s);
     }
     const s1 = await chServerTime(aux, c1, t0);
@@ -518,6 +517,8 @@ export async function runExp40(ctx: Ctx): Promise<RunResult> {
         await r.query(PG_R1_SQL, [id]);
         lat1.push(now() - s);
       }
+      // R2 예열 — ClickHouse 판독과 같은 횟수 · 같은 자리(chReads · 공정성 규칙 1)
+      for (let k = 0; k < a.readWarmup; k++) await r.query(PG_R2_SQL);
       const lat2: number[] = [];
       let statusCounts: unknown = null;
       for (let k = 0; k < a.r2Repeat; k++) {
@@ -663,6 +664,8 @@ export async function runExp40(ctx: Ctx): Promise<RunResult> {
   }
   detail.keepAlive = KEEP_ALIVE_DETAIL;
   detail.poll = { intervalMs: a.pollIntervalMs, max: a.pollMax, readers: 'independent' };
+  // 판독 표본 — R1은 대상 N건 · R2는 반복 수 · 예열은 판독 단계 · 판독기마다 측정 전 R2 횟수(측정에서 뺀다)
+  detail.reads = { r1Samples: ids.length, r2Repeat: a.r2Repeat, r2Warmup: a.readWarmup };
   // 예산 검산 — 폴링 바닥(왕복 제외) = N × 상한 × 간격 · 판독기마다 독립이라 곱하지 않는다
   detail.budget = {
     budgetSec: a.budgetSec,

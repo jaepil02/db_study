@@ -71,6 +71,13 @@ export function histQuantile(w: MeasureWindow, name: string, q: number, f: Filte
   return null;
 }
 
+/** prom-client 기본 지표 중 이름이 _total로 끝나는 게이지 — 누적 계열 판정에서 뺀다(EXP-45 반복 1 100k 오판 · scripts/lab/s5/load/_rec.py와 같은 목록) */
+const GAUGES_NAMED_TOTAL = new Set([
+  'nodejs_active_resources_total',
+  'nodejs_active_handles_total',
+  'nodejs_active_requests_total',
+]);
+
 /** 재기동 감지 — 누적 계열(_total · _bucket · _count · _sum)이 하나라도 줄었다 */
 export function restartDetected(w: MeasureWindow): boolean {
   const key = (s: MetricSample) =>
@@ -79,7 +86,7 @@ export function restartDetected(w: MeasureWindow): boolean {
       .join(',')}}`;
   const start = new Map(w.start.samples.map((s) => [key(s), s.value]));
   for (const s of w.end.samples) {
-    if (!/_(total|bucket|count|sum)$/.test(s.name)) continue;
+    if (!/_(total|bucket|count|sum)$/.test(s.name) || GAUGES_NAMED_TOTAL.has(s.name)) continue;
     const prev = start.get(key(s));
     if (prev !== undefined && s.value < prev) return true;
   }

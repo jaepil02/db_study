@@ -31,6 +31,8 @@ export const DEFAULTS = {
   pollMax: 2000,
   /** 갱신 뒤 조회 R1(점조회 대상 N개) · R2(상태별 건수) 반복 수 */
   r2Repeat: 5,
+  /** EXP-40 R2 예열 횟수 — 판독 단계 · 판독기마다 측정 전 R2를 이만큼 돌리고 버린다(역방향 측정 조건 캐시 행 "웜 — 예열 1회 뒤 반복") */
+  readWarmup40: 1,
   /** 머지 수렴 대기 상한(초) · 표본 간격 */
   settleMaxSec: 120,
   settleIntervalSec: 2,
@@ -69,6 +71,13 @@ export interface FillArgs extends ConnOpts {
   /** both — 빈 업무 테이블 전제 · clickhouse — 대조 테이블만 비우고 다시 채운다(변형 사이 초기화) */
   stores: 'both' | 'clickhouse';
 }
+/** 채움 대조(쓰지 않는다) — 복원한 채움 스냅샷이 지금 코드의 행 벡터와 같은가(러너 adopt) */
+export interface VerifyArgs extends ConnOpts {
+  action: 'verify';
+  scale: number;
+  seed: number;
+  inProgress: number;
+}
 export interface ProbeArgs extends ConnOpts {
   action: 'probe';
 }
@@ -105,6 +114,8 @@ export interface RunArgs extends ConnOpts {
   budgetSec: number;
   settleMaxSec: number;
   r2Repeat: number;
+  /** EXP-40 R2 예열 횟수(측정에서 뺀다 · 서버 시간은 다른 log_comment라 섞이지 않는다) — 0이면 예열 없음 */
+  readWarmup: number;
   finalRepeat: number;
   explainSample: number;
   /** EXP-42 ClickHouse 동시 UPDATE 일관성 팔 */
@@ -113,7 +124,7 @@ export interface RunArgs extends ConnOpts {
   /** EXP-44 동시 요청 상한(넘치면 누락) — 두 저장소 같은 값 · 기본 커넥션 수 × 4 */
   inflight: number;
 }
-export type OltpArgs = FillArgs | ProbeArgs | SettleArgs | RunArgs;
+export type OltpArgs = FillArgs | VerifyArgs | ProbeArgs | SettleArgs | RunArgs;
 
 function arg(argv: readonly string[], name: string): string | null {
   const i = argv.indexOf(`--${name}`);
@@ -174,6 +185,14 @@ export function parseOltpArgs(argv: readonly string[]): OltpArgs {
       maxSec: intArg(argv, 'max-sec', DEFAULTS.settleMaxSec, 1, 540),
       intervalSec: intArg(argv, 'interval-sec', DEFAULTS.settleIntervalSec, 1, 60),
     };
+  if (action === 'verify')
+    return {
+      action,
+      ...conn,
+      scale: scaleArg(argv, smoke),
+      seed: intArg(argv, 'seed', DEFAULTS.seed, 0, 2 ** 31 - 1),
+      inProgress: ratioArg(argv, 'in-progress', DEFAULTS.inProgress),
+    };
   if (action === 'fill') {
     const stores = arg(argv, 'stores') ?? 'both';
     if (stores !== 'both' && stores !== 'clickhouse')
@@ -188,7 +207,7 @@ export function parseOltpArgs(argv: readonly string[]): OltpArgs {
     };
   }
   if (!(EXPS as readonly string[]).includes(action ?? ''))
-    throw new Error(`하위 동작 ${String(action)} — probe · fill · settle · ${EXPS.join(' · ')}`);
+    throw new Error(`하위 동작 ${String(action)} — probe · fill · verify · settle · ${EXPS.join(' · ')}`);
   const exp = action as Exp;
   const variant = arg(argv, 'variant');
   const allowed = VARIANTS[exp] as readonly string[];
@@ -224,6 +243,7 @@ export function parseOltpArgs(argv: readonly string[]): OltpArgs {
     settleMaxSec: intArg(argv, 'settle-max-sec', DEFAULTS.settleMaxSec, 1, 540),
     budgetSec: intArg(argv, 'budget-sec', DEFAULTS.budgetSec40, 30, 3600),
     r2Repeat: intArg(argv, 'r2-repeat', DEFAULTS.r2Repeat, 1, 1000),
+    readWarmup: intArg(argv, 'read-warmup', DEFAULTS.readWarmup40, 0, 100),
     finalRepeat: intArg(argv, 'final-repeat', DEFAULTS.finalRepeat, 1, 1000),
     explainSample: intArg(argv, 'explain-sample', DEFAULTS.explainSample, 0, 1000),
     updateParallelMode: upm,

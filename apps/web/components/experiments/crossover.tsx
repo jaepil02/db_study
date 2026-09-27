@@ -11,6 +11,7 @@ import {
   type Crossover,
   findCrossover,
   formatRows,
+  memoryLimitText,
   QUERY_LABELS,
   type ReadResult,
   type SeriesPoint,
@@ -51,7 +52,7 @@ function conditionLines(p: {
     .map(([k, v]) => `${k}=${Array.isArray(v) ? v.join('/') : String(v)}`);
   return [
     `기록 ${esc(p.record)} · 커밋 ${esc(p.run.commitHash)}`,
-    `프로파일 ${esc(p.run.memoryProfile)} · ${p.run.memoryLimitMb} MB · 티어 ${esc(p.run.capacityTier)}`,
+    `프로파일 ${esc(p.run.memoryProfile)} · ${esc(memoryLimitText(p.run))} · 티어 ${esc(p.run.capacityTier)}`,
     esc(sw.slice(0, 6).join(' · ')),
     esc(sw.slice(6).join(' · ')),
   ].join('<br/>');

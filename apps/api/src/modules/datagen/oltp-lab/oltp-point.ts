@@ -1,9 +1,11 @@
 // EXP-41 PK 점조회 — 동시성 c의 작업자가 같은 order_id 순서를 나눠 조회 · 예열 1회(같은 순서의 앞 warmup개) 뒤 측정(웜)
 // 서버 쪽 — ClickHouse query_log read_rows(조회당) · PostgreSQL EXPLAIN (ANALYZE, BUFFERS) 표본의 읽은 블록 · 도구 CPU(process.cpuUsage)
+//   · 측정 창 이벤트 루프 사용률(detail.eventLoop — 기록만 · 판정 미적용)
 // ch_g256 — plc 밖 실험 DB에 같은 DDL을 granularity 256으로 만들고 같은 행을 INSERT SELECT로 채운 뒤 끝에 지운다(시작 전 부재 확인)
 //   05_data_stores/10 §그래뉼 변형 판정 ② — 문 해시를 원시에 남긴다.
 import { createHash } from 'node:crypto';
 import { availableParallelism } from 'node:os';
+import { performance } from 'node:perf_hooks';
 import type { ClickHouseClient } from '@clickhouse/client';
 import {
   type Ctx,
@@ -105,6 +107,24 @@ async function g256Create(ch: ClickHouseClient, src: string): Promise<Record<str
   };
 }
 
+/**
+ * 측정 창의 이벤트 루프 사용률(perf_hooks eventLoopUtilization) — 도구 CPU(프로세스 전 스레드 ÷ CPU 2)는 Node 메인 스레드 포화를 가린다
+ * (기록 041 PostgreSQL c8 · c32 — 도구 CPU 0.75~0.84인데 qps가 c8 · c32 같은 약 2.2만에서 멈췄다). 기록만 한다 — 포화 창 제외에 쓰는
+ * 문턱은 공정성 규칙 10 개정 사항이라 리드 판정 전에는 판정에 쓰지 않는다(리드 판정 2026-09-27 · 도구 포화 (a)안).
+ */
+export function eventLoopOf(start: ReturnType<typeof performance.eventLoopUtilization>): {
+  utilization: number;
+  activeMs: number;
+  idleMs: number;
+} {
+  const d = performance.eventLoopUtilization(start);
+  return {
+    utilization: Math.round(d.utilization * 1000) / 1000,
+    activeMs: Math.round(d.active),
+    idleMs: Math.round(d.idle),
+  };
+}
+
 export async function runExp41(ctx: Ctx): Promise<RunResult> {
   const a = ctx.args;
   const c = a.concurrency;
@@ -122,10 +142,12 @@ export async function runExp41(ctx: Ctx): Promise<RunResult> {
     await runConcurrent(a.warmup, c, async (k) => void (await pg.query(PG_R1_SQL, [idOf(k)])));
     const st0 = await pgStmtStat(aux, PG_R1_SQL);
     const cpuM = process.cpuUsage();
+    const eluM = performance.eventLoopUtilization();
     const t = now();
     lat = await runConcurrent(a.queries, c, async (k) => void (await pg.query(PG_R1_SQL, [idOf(k)])));
     wall = now() - t;
     detail.cpuMeasured = process.cpuUsage(cpuM);
+    detail.eventLoop = eventLoopOf(eluM);
     const st1 = await pgStmtStat(aux, PG_R1_SQL);
     // 읽은 블록 — EXPLAIN (ANALYZE, BUFFERS) 표본(측정 창 밖 · 같은 대상 분포)
     const blocks: number[] = [];
@@ -179,6 +201,7 @@ export async function runExp41(ctx: Ctx): Promise<RunResult> {
       );
       const t0 = await chNow(aux);
       const cpuM = process.cpuUsage();
+      const eluM = performance.eventLoopUtilization();
       const t = now();
       lat = await runConcurrent(
         a.queries,
@@ -187,6 +210,7 @@ export async function runExp41(ctx: Ctx): Promise<RunResult> {
       );
       wall = now() - t;
       detail.cpuMeasured = process.cpuUsage(cpuM);
+      detail.eventLoop = eventLoopOf(eluM);
       const server = await chServerTime(aux, mc, t0);
       const explain = await chRows<{ explain: string }>(aux, `EXPLAIN indexes = 1 ${q(0)}`);
       detail.server = server;

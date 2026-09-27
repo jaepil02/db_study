@@ -3,7 +3,7 @@
 // 키의 뜻 정본 05_data_stores/10_olap_vs_rdb_control.md §EXP 연결 · 기계 판독 블록 제안 · §스트리밍 동시 적재 — EXP-45.
 // 순수 함수만 둔다 — 파일 읽기는 BFF 라우트(app/bff/measurements)가 한다. 역전 지점 판독(lib/measurements)과 규칙 1~5 · 7은 같고,
 // 규칙 6의 자리(어느 기록의 어느 필드를 쓰는가)만 다르다 — reverse는 EXP-40~44를 인용한 기록, streamSteps는 EXP-45를 인용한 기록.
-import { formatRows, jsonFences, type RunInfo, SCHEMA_V1, type Store } from './measurements';
+import { formatRows, jsonFences, memoryLimitOf, type RunInfo, SCHEMA_V1, type Store } from './measurements';
 
 export const REVERSE_EXPS = ['EXP-40', 'EXP-41', 'EXP-42', 'EXP-43', 'EXP-44'] as const;
 export const STREAM_EXP = 'EXP-45';
@@ -152,17 +152,18 @@ function validate(v: unknown): Block | null {
   };
 }
 
-/** 규칙 4 — run 네 필드와 switches 11키가 전부 null이 아니다(배열 값은 원소마다) */
+/** 규칙 4 — run 네 필드와 switches 11키가 전부 null이 아니다(배열 값은 원소마다 · memoryLimitMb는 memoryLimitOf 예외) */
 function conditionsComplete(b: Block): RunInfo | null {
-  const { commitHash, memoryProfile, memoryLimitMb, capacityTier } = b.run;
+  const { commitHash, memoryProfile, capacityTier } = b.run;
   if (typeof commitHash !== 'string' || typeof memoryProfile !== 'string') return null;
-  if (!isNum(memoryLimitMb) || typeof capacityTier !== 'string') return null;
+  const limit = memoryLimitOf(b.run);
+  if (limit === undefined || typeof capacityTier !== 'string') return null;
   for (const id of SWITCH_IDS) {
     const sv = b.switches[id];
     if (sv === null || sv === undefined) return null;
     if (Array.isArray(sv) && sv.some((x) => x === null || x === undefined)) return null;
   }
-  return { commitHash, memoryProfile, memoryLimitMb, capacityTier };
+  return { commitHash, memoryProfile, ...limit, capacityTier };
 }
 
 const numOrNull = (v: unknown): number | null => (isNum(v) ? v : null);

@@ -764,12 +764,17 @@ def bucket_view(a, b, name, **want):
             'p95S': bucket_quantile(a, b, name, 0.95, **want), 'basis': 'bucket-diff'}
 
 
+GAUGES_NAMED_TOTAL = frozenset({'nodejs_active_resources_total', 'nodejs_active_handles_total', 'nodejs_active_requests_total'})
+
+
 def restart_detected(a, b):
-    """재기동 감지 — 누적 계열(_total · _bucket · _count · _sum)이 하나라도 줄었다(compare.ts restartDetected)"""
+    """재기동 감지 — 누적 계열(_total · _bucket · _count · _sum)이 하나라도 줄었다(compare.ts restartDetected)
+    prom-client 기본 지표 중 이름이 _total로 끝나는 게이지(GAUGES_NAMED_TOTAL)는 뺀다 — 기록 EXP-45 반복 1 100k 계단에서
+    worker nodejs_active_resources_total 19 → 16이 재기동으로 오판됐다(컨테이너 가동 시간은 연속)"""
     if not a or not b:
         return None
     for (n, l), v in b.items():
-        if not re.search(r'_(total|bucket|count|sum)$', n):
+        if not re.search(r'_(total|bucket|count|sum)$', n) or n in GAUGES_NAMED_TOTAL:
             continue
         prev = a.get((n, l))
         if prev is not None and v < prev:

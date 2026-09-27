@@ -139,7 +139,10 @@ tasks:
       - 'COMMIT_HASH={{.CLEAN_HASH}} {{.COMPOSE_P}} run --rm --no-deps -e SEED_USER_PASSWORD api node dist/db/seed.js {{.CLI_ARGS}}'
 
   up:
-    desc: '전 구성 기동 — 저장소 → migrate → (SEED가 있으면 seed) → api healthy · 사용: task up [PROFILE=load] [SEED="--slice s2"]'
+    desc: '전 구성 기동 — 저장소 → migrate → (SEED가 있으면 seed) → api healthy · 사용: task up [PROFILE=load] [CONTROL=1] [SEED="--slice s2"]'
+    # 명령줄 변수(task up CONTROL=1)는 전역 vars 평가에 들어가지 않는다(Task 3.53 실측 — 전역 COMPOSE_P에 control 파일이 빠졌다) — 작업 수준에서 다시 만든다
+    vars:
+      COMPOSE_P: '{{.COMPOSE}} -f infra/compose/compose.{{.PROFILE}}.yml{{if .CONTROL}} -f infra/compose/compose.control.yml{{end}}'
     cmds:
       - '{{.COMPOSE_P}} up -d postgres clickhouse redis'
       - task: wait-healthy

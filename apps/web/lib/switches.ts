@@ -128,3 +128,30 @@ export function recordConditionBlock(health: HealthBody): string {
     '| 게이트 | ? |',
   ].join('\n');
 }
+
+/**
+ * DSH-REALTIME 구성 배지 — 이 화면의 표시를 바꾸는 스위치 5(SW-02 · 06 · 07 · 11 · 01)가 기본값이 아니면 띄운다
+ * (정본 08_screen/03 §스위치 영향 — 문구도 그 표의 구성 배지 문구 열). 도입 전(impl null) · health에 없는 스위치는 띄우지 않는다.
+ */
+const DASHBOARD_BADGES: readonly { id: string; text: (value: string | number) => string }[] = [
+  { id: 'SW-02', text: () => '최신값을 ClickHouse에서 읽는 실험 구성' },
+  { id: 'SW-06', text: () => '팬아웃 직접 호출 구성' },
+  {
+    id: 'SW-07',
+    // 표의 문구는 0(스로틀 없음) 한 행이다 — 0이 아닌 다른 창 값은 값을 그대로 보인다
+    text: (v) =>
+      Number(v) === 0 ? '스로틀 없음 — 프레임 폭증 실험' : `WS 스로틀 창 ${v} ms — 기본값과 다름`,
+  },
+  { id: 'SW-11', text: () => '최신값을 수집 직후 쓰는 구성' },
+  { id: 'SW-01', text: () => 'Stream 경계 없음 — 실험 전용' },
+];
+
+export function dashboardConfigBadges(switches: SwitchStates): { id: string; text: string }[] {
+  const rows = buildSwitchRows(switches);
+  const out: { id: string; text: string }[] = [];
+  for (const b of DASHBOARD_BADGES) {
+    const r = rows.find((x) => x.kind === 'present' && x.spec.id === b.id);
+    if (r?.kind === 'present' && !r.sameAsDefault) out.push({ id: b.id, text: b.text(r.value) });
+  }
+  return out;
+}

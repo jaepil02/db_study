@@ -108,6 +108,40 @@ class ArgsTest(unittest.TestCase):
         b = oltp.run_args('exp44', 'pg', ['--rate', '50'])
         self.assertEqual(b[b.index('--duration') + 1], '60')
 
+    def test_exp40_sample_defaults(self) -> None:
+        # 기록 040 폐기 뒤(2026-09-27) — R2 50회 · 예열 1회 · N 300(ch_rmt는 폴링 예산 때문에 N 50 그대로 · R2 · 예열은 같다)
+        a = oltp.run_args('exp40', 'pg', [])
+        self.assertEqual((a[a.index('--n') + 1], a[a.index('--r2-repeat') + 1], a[a.index('--read-warmup') + 1]), ('300', '50', '1'))
+        b = oltp.run_args('exp40', 'ch_rmt', [])
+        self.assertEqual((b[b.index('--n') + 1], b[b.index('--r2-repeat') + 1], b[b.index('--read-warmup') + 1]), ('50', '50', '1'))
+        for v in ('ch_alter_async', 'ch_alter_sync', 'ch_lwu'):   # PostgreSQL과 같은 표본(공정성 규칙 1)
+            c = oltp.run_args('exp40', v, [])
+            self.assertEqual(c[c.index('--n') + 1], '300')
+            self.assertEqual(c[c.index('--r2-repeat') + 1], '50')
+
+    def test_exp41_queries_by_concurrency(self) -> None:
+        # c8 · c32는 2만 건(측정 창 약 1초) · c1은 2,000 그대로 · 두 저장소 같은 값 · 호출자 인자가 이긴다
+        for v in ('pg', 'ch_g8192', 'ch_g256'):
+            for conc, q in ((1, '2000'), (8, '20000'), (32, '20000')):
+                a = oltp.run_args('exp41', v, ['--concurrency', str(conc)], conc)
+                self.assertEqual((a[a.index('--queries') + 1], a[a.index('--warmup') + 1]), (q, q))
+                self.assertEqual(a.count('--queries'), 1)
+                self.assertEqual(a[a.index('--explain-sample') + 1], '20')
+        b = oltp.run_args('exp41', 'pg', ['--concurrency', '8', '--queries', '500'], 8)
+        self.assertEqual(b[b.index('--queries') + 1], '500')
+        self.assertEqual(b.count('--queries'), 1)
+        self.assertEqual(b[b.index('--warmup') + 1], '20000')
+
+    def test_memory_source(self) -> None:
+        r = oltp.with_memory_source({'commitHash': 'abc', 'memoryLimitMb': None})
+        self.assertIsNone(r['memoryLimitMb'])                        # 값은 null 그대로(추정 채움 금지)
+        self.assertIn('cgroup max', r['memoryLimitSource'])
+        self.assertIn('oltp-lab', r['memoryLimitSource'])
+        self.assertNotIn('memoryLimitSource', oltp.with_memory_source({'memoryLimitMb': 2048}))   # 상한이 있으면 붙이지 않는다
+        self.assertIsNone(oltp.with_memory_source(None))
+        self.assertNotIn('memoryLimitSource', oltp.with_memory_source({'commitHash': 'abc'}))   # 키가 없으면 붙이지 않는다(r-oltp3 4)
+        self.assertEqual(oltp.with_run_source({'kind': 'settle'}), {'kind': 'settle'})
+
     def test_parse_scale(self) -> None:
         self.assertEqual(oltp.parse_scale('100_000'), 100_000)
         with self.assertRaises(SystemExit):
@@ -152,6 +186,40 @@ class RunGuardTest(unittest.TestCase):
         with self.assertRaises(SystemExit):
             oltp.cmd_run(['exp40', 'ch_lwu', '10000', '0'])
         oltp.cmd_run(['exp40', 'pg', '10000', '0'])          # PostgreSQL 변형은 ClickHouse 상태와 무관
+
+    def test_detail_run_carries_memory_source(self) -> None:
+        with mock.patch.object(oltp, 'executor', lambda args, timeout=0: (
+                [{'kind': 'detail', 'runId': 'r1', 'run': {'commitHash': 'abc', 'memoryLimitMb': None, 'capacityTier': '해당 없음'}}], 0, 1.0)):
+            oltp.cmd_run(['exp40', 'pg', '10000', '0'])
+        det = [e for e in self.emitted if e.get('kind') == 'detail'][-1]
+        self.assertEqual(det['run']['memoryLimitSource'], oltp.MEMORY_LIMIT_SOURCE)
+        self.assertIsNone(det['run']['memoryLimitMb'])
+
+    def test_collect_run_carries_memory_source(self) -> None:
+        oltp.save_state({**oltp.load_state(), 'run': {'commitHash': 'abc', 'memoryProfile': 'load', 'memoryLimitMb': None}})
+        with mock.patch.dict(os.environ, {'OUT': str(self.dir / 'raw.jsonl')}):
+            (self.dir / 'raw.jsonl').write_text(json.dumps(m('update_latency_p50', 1.0, 0)) + '\n')
+            oltp.cmd_collect([])
+        out = json.loads((self.dir / 'oltp-summary.json').read_text())
+        self.assertEqual(out['run']['memoryLimitSource'], oltp.MEMORY_LIMIT_SOURCE)
+        self.assertEqual(out['run']['capacityTier'], '해당 없음')
+
+    def test_collect_event_loop_recorded_not_judged(self) -> None:
+        kw = {'exp': 'EXP-41', 'op': 'point', 'variant': 'pg', 'store': 'postgresql', 'concurrency': 32}
+        lines = [m('latency_p50', v, i, **kw) for i, v in enumerate([1.0, 1.05, 1.1])]
+        lines += [{'kind': 'detail', 'key': f'exp41:pg:10000:c32:r-:{i}', 'exp': 'EXP-41', 'variant': 'pg', 'scale': 10000,
+                   'concurrency': 32, 'rep': i, 'detail': {'eventLoop': {'utilization': u}}} for i, u in enumerate([0.95, 0.5, 0.97])]
+        with mock.patch.dict(os.environ, {'OUT': str(self.dir / 'raw.jsonl')}):
+            (self.dir / 'raw.jsonl').write_text(''.join(json.dumps(x) + '\n' for x in lines))
+            oltp.cmd_collect([])
+        out = json.loads((self.dir / 'oltp-summary.json').read_text())
+        te = out['toolEventLoop']
+        self.assertFalse(te['appliedToJudgement'])
+        self.assertEqual(te['aboveCandidate'], 2)
+        self.assertEqual([r['utilization'] for r in te['rows']], [0.95, 0.5, 0.97])
+        lat = next(r for r in out['reverse'] if r['metric'] == 'latency_p50')
+        self.assertNotIn('saturatedReps', lat)          # 판정(포화 창 제외)에는 아직 쓰지 않는다
+        self.assertEqual(lat['median'], 1.05)
 
     def test_exp41_concurrency_required_and_passed(self) -> None:
         with self.assertRaises(SystemExit):
@@ -237,6 +305,98 @@ class RunGuardTest(unittest.TestCase):
             oltp.cmd_run(['exp44', 'ch_lwu', '10000', '0', '--rate', '50'])
         with self.assertRaises(SystemExit):
             oltp.cmd_run(['exp44', 'ch_sync', '10000', '0', '--rate', '75'])
+
+
+class AdoptTest(unittest.TestCase):
+    """adopt — 앞 실행의 채움 스냅샷을 재측정의 채움으로(스키마 · 채움 경로 불변 · 복원 뒤 실행기 verify 내용 대조)."""
+
+    FP_OK = {'kind': 'verify', 'match': True, 'run': {'memoryLimitMb': None}}
+
+    def fake_executor(self, args: list[str], timeout: int = 0):
+        self.exec_calls.append(args)
+        if args[0] == 'verify':
+            return [self.fp], (0 if self.fp.get('match') else 2), 1.0
+        return [{'kind': 'settle', 'converged': True}], 0, 1.0
+
+    def setUp(self) -> None:
+        self._tmp = tempfile.TemporaryDirectory(prefix='oltp-adopt-')
+        self.dir = Path(self._tmp.name)
+        self.emitted: list[dict] = []
+        self.ran: list[list[str]] = []
+        self.changed: list[str] = []
+        self.fp = dict(self.FP_OK)
+        self.exec_calls: list[list[str]] = []
+        for p in [mock.patch.object(oltp, 'OLTP_DIR', self.dir), mock.patch.object(oltp, 'STATE', self.dir / 'state.json'),
+                  mock.patch.object(oltp, 'emit', lambda line: self.emitted.append(line)),
+                  mock.patch.object(oltp, 'guard_clean_schema', lambda: None),
+                  mock.patch.object(oltp, 'snapshot_commit', lambda name: '19f8861'),
+                  mock.patch.object(oltp, 'fill_inputs_changed', lambda commit: self.changed),
+                  mock.patch.object(oltp, 'pg_vacuum_analyze', lambda: 0.1),
+                  mock.patch.object(oltp, 'run', lambda cmd, **kw: self.ran.append(cmd)),
+                  mock.patch.object(oltp, 'executor', self.fake_executor)]:
+            p.start()
+            self.addCleanup(p.stop)
+        self.addCleanup(self._tmp.cleanup)
+        oltp.save_state({'seed': 42, 'inProgress': 0.5, 'scales': {}, 'runs': {}})
+
+    def test_adopt_marks_filled(self) -> None:
+        oltp.cmd_adopt(['10000', 'oltp-s10000-19f8861'])
+        s = oltp.load_state()['scales']['10000']
+        self.assertTrue(s['filled'])
+        self.assertEqual(s['snapshot'], 'oltp-s10000-19f8861')        # reset all이 이 스냅샷으로 복원한다
+        self.assertEqual(s['adoptedFrom']['commit'], '19f8861')
+        self.assertEqual(self.ran, [['task', 'restore', 'NAME=oltp-s10000-19f8861']])
+        self.assertEqual(self.exec_calls[0][:3], ['verify', '--scale', '10000'])          # 복원 뒤 내용 대조 → settle
+        self.assertEqual(self.exec_calls[0][self.exec_calls[0].index('--seed') + 1], '42')
+        self.assertEqual(self.exec_calls[1][0], 'settle')
+        self.assertTrue(self.emitted[-1]['ok'])
+        self.assertIn('memoryLimitSource', self.emitted[-1]['verify']['run'])
+
+    def test_adopt_refused_when_fill_inputs_changed(self) -> None:
+        self.changed = ['infra/clickhouse/ddl/009_business_control.sql']
+        with self.assertRaises(SystemExit):
+            oltp.cmd_adopt(['10000', 'oltp-s10000-19f8861'])
+        self.assertEqual(self.ran, [])                                  # 복원 전에 멈춘다
+        self.assertNotIn('10000', {k for k, v in oltp.load_state()['scales'].items() if v.get('filled')})
+
+    def test_adopt_mismatch_not_filled(self) -> None:
+        self.fp = {'kind': 'verify', 'match': False}
+        with self.assertRaises(SystemExit):
+            oltp.cmd_adopt(['10000', 'oltp-s10000-19f8861'])
+        self.assertFalse(self.emitted[-1]['ok'])
+        self.assertEqual([c[0] for c in self.exec_calls], ['verify'])                   # 어긋나면 settle 전에 멈춘다
+        self.assertFalse(oltp.load_state()['scales'].get('10000', {}).get('filled'))
+
+    def test_rows_not_path_guarded(self) -> None:
+        # 행 벡터 파일은 경로가 아니라 verify 내용 대조로 본다(대상 창 개정이 스냅샷 재사용을 막지 않게)
+        self.assertNotIn('apps/api/src/modules/datagen/oltp-lab/oltp-rows.ts', oltp.FILL_INPUTS)
+        self.assertIn('infra/clickhouse/ddl', oltp.FILL_INPUTS)
+
+    def test_force_readopt_mismatch_leaves_state_unfilled(self) -> None:
+        # 채움이 있던 규모를 FORCE로 다시 adopt — 복원은 됐는데 verify가 어긋나면 state가 옛 채움을 믿지 않는다(r-oltp3 2)
+        oltp.save_state({**oltp.load_state(), 'scales': {'10000': {'filled': True, 'snapshot': 'old', 'chDirty': False, 'pgDirty': False}}})
+        self.fp = {'kind': 'verify', 'match': False, 'reasons': ['logs.pgProductionLog']}
+        with mock.patch.dict(os.environ, {'FORCE': '1'}), self.assertRaises(SystemExit):
+            oltp.cmd_adopt(['10000', 'oltp-s10000-19f8861'])
+        s = oltp.load_state()['scales']['10000']
+        self.assertFalse(s['filled'])
+        self.assertTrue(s['chDirty'] and s['pgDirty'])
+        self.assertEqual(s['adoptPending'], 'oltp-s10000-19f8861')
+        self.assertEqual(self.ran, [['task', 'restore', 'NAME=oltp-s10000-19f8861']])
+        with self.assertRaises(SystemExit):                              # 채움 없음이라 run이 막힌다
+            oltp.cmd_run(['exp40', 'pg', '10000', '0'])
+
+    def test_adopt_success_clears_pending(self) -> None:
+        oltp.cmd_adopt(['10000', 'oltp-s10000-19f8861'])
+        s = oltp.load_state()['scales']['10000']
+        self.assertNotIn('adoptPending', s)
+        self.assertFalse(s['chDirty'] or s['pgDirty'])
+
+    def test_adopt_refused_when_already_filled(self) -> None:
+        oltp.save_state({**oltp.load_state(), 'scales': {'10000': {'filled': True, 'snapshot': 'x'}}})
+        with self.assertRaises(SystemExit):
+            oltp.cmd_adopt(['10000', 'oltp-s10000-19f8861'])
+        self.assertEqual(self.ran, [])
 
 
 class ExecutorSalvageTest(unittest.TestCase):

@@ -179,3 +179,26 @@ export function exportFileName(format: 'csv' | 'parquet', fromMs: number, comple
   const stamp = toKstOffsetIso(fromMs).slice(0, 16).replace(/[-:T]/g, '');
   return `timeseries-${stamp}${complete ? '' : '-불완전'}.${format}`;
 }
+
+/**
+ * 차트에 그릴 결과와 그 결과를 낸 조건의 짝 — 08_screen/04 상태 4행 로딩 "이전 결과를 흐리게 유지" · 오류 "503 중에는 이전 결과를 유지".
+ * - 이번 조건의 결과(자리표시 아님) → 그대로
+ * - 재조회 중 자리표시(keepPreviousData) → 마지막 성공 결과와 그 조건(표지 줄이 새 조건과 옛 결과를 섞어 "실제 범위 내림"을 잘못 말하지 않게)
+ * - 오류 → 503(retryOn503 대상)일 때만 마지막 성공 결과를 유지 · 400 · 429 등은 조건이 틀렸거나 막힌 것이라 옛 결과를 새 조건의 답처럼 남기지 않는다
+ */
+export function shownResult<R>(
+  cur: {
+    data: TimeseriesQueryBody | undefined;
+    isPlaceholderData: boolean;
+    isError: boolean;
+    is503: boolean;
+  },
+  run: R | null,
+  lastGood: { data: TimeseriesQueryBody; run: R } | null,
+): { data: TimeseriesQueryBody; run: R; keptOnError: boolean } | null {
+  if (cur.data && !cur.isPlaceholderData)
+    return run === null ? null : { data: cur.data, run, keptOnError: false };
+  if (cur.data && cur.isPlaceholderData) return lastGood ? { ...lastGood, keptOnError: false } : null;
+  if (cur.isError && cur.is503 && lastGood) return { ...lastGood, keptOnError: true };
+  return null;
+}

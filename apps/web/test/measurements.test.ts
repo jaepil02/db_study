@@ -5,6 +5,7 @@ import {
   findCrossover,
   formatRows,
   jsonFences,
+  memoryLimitText,
   readMeasurements,
   type SeriesPoint,
   selectSeries,
@@ -199,6 +200,29 @@ describe('readMeasurements — 판독 규칙', () => {
     ]);
     expect(r.counts.missingConditions).toBe(4);
     expect(new Set(r.points.map((p) => p.record))).toEqual(new Set(['035']));
+  });
+
+  it('규칙 4 — memoryLimitMb는 수 · null + memoryLimitSource면 충족, null 단독은 누락(10_observability/04 §조건 칸 2026-09-27)', () => {
+    const SOURCE = 'cgroup max — datagen-d 서비스에 compose 상한 없음';
+    const read = (run: Record<string, unknown>) =>
+      readMeasurements([{ name: '031-a.md', text: md(block({ run })) }]);
+    const num = read(RUN);
+    expect(num.counts.missingConditions).toBe(0);
+    expect(num.points[0]?.run).toEqual(RUN);
+    expect(memoryLimitText(num.points[0]?.run as ControlPoint['run'])).toBe('4096 MB');
+    const tool = read({ ...RUN, memoryLimitMb: null, memoryLimitSource: SOURCE });
+    expect(tool.counts.missingConditions).toBe(0);
+    expect(tool.points).toHaveLength(2);
+    expect(tool.points[0]?.run).toEqual({ ...RUN, memoryLimitMb: null, memoryLimitSource: SOURCE });
+    expect(memoryLimitText(tool.points[0]?.run as ControlPoint['run'])).toBe(SOURCE);
+    for (const run of [
+      { ...RUN, memoryLimitMb: null },
+      { ...RUN, memoryLimitMb: null, memoryLimitSource: ' ' },
+    ]) {
+      const r = read(run);
+      expect(r.counts.missingConditions).toBe(1);
+      expect(r.points).toHaveLength(0);
+    }
   });
 
   it('규칙 5 — 반복 3회 미만이거나 편차가 기준을 넘으면 뺀다', () => {

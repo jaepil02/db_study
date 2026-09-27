@@ -11,7 +11,7 @@ import {
 } from '../lib/compare';
 import { changedFields, isLoopbackHost } from '../lib/master-api';
 import type { MetricSample } from '../lib/metrics-parser';
-import type { HealthBody } from '../lib/shared';
+import type { HealthBody, TimeseriesQueryBody } from '../lib/shared';
 import {
   decodeParams,
   encodeParams,
@@ -19,8 +19,10 @@ import {
   progressRange,
   resultBadges,
   seriesColumns,
+  shownResult,
   staleTimeFor,
 } from '../lib/trend';
+import { KST_AXIS_LABEL, kstTimeAxis } from '../lib/uplot-kst';
 
 describe('무효화 신호 → 쿼리 키(체인 ⑥)', () => {
   it('신호 키 4종 · 모르는 키는 버린다 · timeseries는 무효화하지 않는다', () => {
@@ -115,6 +117,67 @@ describe('ANL-TREND 조건 · 표지 줄 · 진행 구간', () => {
   });
 });
 
+describe('ANL-TREND 이전 결과 유지 — 503 중에만 · 표지 줄은 옛 조건과 짝', () => {
+  const body = (interval: string) =>
+    ({
+      meta: {
+        interval,
+        pointCount: 1,
+        downsampled: false,
+        cached: false,
+        from: '',
+        to: '',
+        columns: ['ts', 'value'],
+      },
+      series: [],
+    }) as unknown as TimeseriesQueryBody;
+  const oldRun = { id: 'old' };
+  const newRun = { id: 'new' };
+  const last = { data: body('1m'), run: oldRun };
+
+  it('이번 조건의 결과는 이번 조건과 짝', () => {
+    const d = body('raw');
+    expect(
+      shownResult({ data: d, isPlaceholderData: false, isError: false, is503: false }, newRun, last),
+    ).toEqual({
+      data: d,
+      run: newRun,
+      keptOnError: false,
+    });
+  });
+
+  it('재조회 중 자리표시는 옛 결과 · 옛 조건으로 그린다', () => {
+    const v = shownResult(
+      { data: last.data, isPlaceholderData: true, isError: false, is503: false },
+      newRun,
+      last,
+    );
+    expect(v).toEqual({ data: last.data, run: oldRun, keptOnError: false });
+  });
+
+  it('503 오류면 옛 결과를 옛 조건과 함께 유지한다', () => {
+    const v = shownResult(
+      { data: undefined, isPlaceholderData: false, isError: true, is503: true },
+      newRun,
+      last,
+    );
+    expect(v).toEqual({ data: last.data, run: oldRun, keptOnError: true });
+  });
+
+  it('400 · 429 등 503 밖의 오류는 옛 결과를 남기지 않는다', () => {
+    expect(
+      shownResult({ data: undefined, isPlaceholderData: false, isError: true, is503: false }, newRun, last),
+    ).toBeNull();
+  });
+});
+
+describe('uPlot 시각축 — KST 표기(08_screen/01 §시각 표시)', () => {
+  it('x축 이름에 KST를 붙인다', () => {
+    expect(kstTimeAxis()).toEqual({ label: KST_AXIS_LABEL });
+    expect(KST_AXIS_LABEL).toContain('KST');
+  });
+});
+
 describe('ADM-MASTER 도우미', () => {
   it('바뀐 필드만 PATCH · 루프백은 SIMULATED', () => {
     expect(changedFields({ a: 1, b: 'x' }, { a: 1, b: 'y' })).toEqual({ b: 'y' });
@@ -201,5 +264,28 @@ describe('EXP-COMPARE — 창 분위수 · 비교 성립', () => {
     ];
     expect(judgeComparability(A, other).reasons.join()).toContain('커밋 해시');
     expect(deviation([10, 11, 13])).toBeCloseTo(3 / 11);
+  });
+
+  it('재기동 판정은 _total로 끝나는 게이지를 빼고 누적 계열만 본다', () => {
+    const s = (name: string, value: number): MetricSample => ({ name, labels: {}, value });
+    const w = (start: MetricSample[], end: MetricSample[]): MeasureWindow => ({
+      id: 'g',
+      start: { atMs: 0, health: health('RedisPubSubFanout'), samples: start },
+      end: { atMs: 60_000, health: health('RedisPubSubFanout'), samples: end },
+    });
+    // 게이지 nodejs_active_resources_total 19 → 16은 재기동이 아니다(EXP-45 반복 1 오판)
+    const gaugeOnly = w(
+      [s('nodejs_active_resources_total', 19), s('http_requests_total', 100)],
+      [s('nodejs_active_resources_total', 16), s('http_requests_total', 120)],
+    );
+    expect(restartDetected(gaugeOnly)).toBe(false);
+    for (const g of ['nodejs_active_handles_total', 'nodejs_active_requests_total'])
+      expect(restartDetected(w([s(g, 9)], [s(g, 1)]))).toBe(false);
+    // 같은 창에서 누적 계열 http_requests_total이 줄면 게이지와 무관하게 재기동이다
+    const counterDrop = w(
+      [s('nodejs_active_resources_total', 19), s('http_requests_total', 100)],
+      [s('nodejs_active_resources_total', 16), s('http_requests_total', 3)],
+    );
+    expect(restartDetected(counterDrop)).toBe(true);
   });
 });

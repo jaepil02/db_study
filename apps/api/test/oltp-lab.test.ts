@@ -1,8 +1,10 @@
 // 역방향 대조 실행기(EXP-40~44) — 인자 파싱 · 채우기 결정성(같은 시드 = 같은 행) · 대상 집합 · 분위수 · 구조 판정 집계 ·
 // 009 DDL과 그래뉼 변형 DDL의 동형 · 가시성 폴링 · 열린 고리 스케줄러 · 판별(갱신 행 수 응답) · 커넥션 배선 · 머지 뒤 두 라벨 ·
 // 경량 UPDATE 쓰기 · patch 판독 설정 명시 · 시간 예산. 저장소 없이 순수 함수 · 가짜 클라이언트로 확인한다.
+import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { performance } from 'node:perf_hooks';
 import type { ClickHouseClient } from '@clickhouse/client';
 import { describe, expect, it } from 'vitest';
 import { affectedRows, chUnitSettings } from '../src/modules/datagen/oltp-lab/oltp-atomic';
@@ -27,10 +29,11 @@ import {
   type RunArgs,
   VARIANTS,
 } from '../src/modules/datagen/oltp-lab/oltp-options';
-import { pointId, runConcurrent } from '../src/modules/datagen/oltp-lab/oltp-point';
+import { eventLoopOf, pointId, runConcurrent } from '../src/modules/datagen/oltp-lab/oltp-point';
 import {
   chRow,
   inProgressIds,
+  orderNoOf,
   permute,
   pgCopyLine,
   SLOT_COUNT,
@@ -50,6 +53,7 @@ import {
   LWU_WRITE_SETTINGS,
   now,
   PATCH_READ_SETTINGS,
+  pgStmtMean,
 } from '../src/modules/datagen/oltp-lab/oltp-stores';
 import {
   CONVERGE_READS,
@@ -64,6 +68,15 @@ import {
   tailReserveMs,
   writeLoop,
 } from '../src/modules/datagen/oltp-lab/oltp-update';
+import {
+  expectedKey,
+  expectedSetMd5,
+  expectedStatus,
+  judgeVerify,
+  rowKey,
+  sampleIds,
+  type VerifyObserved,
+} from '../src/modules/datagen/oltp-lab/oltp-verify';
 
 const argv = (...a: string[]) => ['node', 'oltp-lab.js', ...a];
 
@@ -129,6 +142,18 @@ describe('인자', () => {
     expect((parseOltpArgs(argv(...c)) as RunArgs).inflight).toBe(64);
     expect((parseOltpArgs(argv(...c, '--inflight', '32')) as RunArgs).inflight).toBe(32);
   });
+  it('pg_stat_statements 평균 — µs 미만 자릿수를 남긴다(기록 041 양자화 편차)', () => {
+    // 2,000호출 · 총 9.1 ms → 4.55 µs — 소수 3자리면 0.005(1 µs 칸)
+    expect(pgStmtMean({ calls: 10, totalMs: 1 }, { calls: 2010, totalMs: 10.1 }).meanMs).toBe(0.00455);
+    expect(pgStmtMean({ calls: 5, totalMs: 1 }, { calls: 5, totalMs: 1 }).meanMs).toBeNull();
+  });
+  it('EXP-40 R2 예열 — 기본 1(웜 · 예열 1회 뒤 반복) · 0 허용 · 범위 밖 거부', () => {
+    const b = ['exp40', '--variant', 'pg', '--scale', '10000'];
+    expect((parseOltpArgs(argv(...b)) as RunArgs).readWarmup).toBe(1);
+    expect((parseOltpArgs(argv(...b, '--read-warmup', '0')) as RunArgs).readWarmup).toBe(0);
+    expect((parseOltpArgs(argv(...b, '--r2-repeat', '50')) as RunArgs).r2Repeat).toBe(50);
+    expect(() => parseOltpArgs(argv(...b, '--read-warmup', '101'))).toThrow(/0~100/);
+  });
 });
 
 describe('채우기 결정성', () => {
@@ -190,6 +215,12 @@ describe('대상 집합', () => {
     expect(new Set(all).size).toBe(all.length);
     for (const id of all) expect(statusOf(42, id, 0.5)).toBe('IN_PROGRESS');
     expect(targetIds(ids, 42, 0, 1, 100)).toEqual(targetIds(ids, 42, 0, 1, 100));
+  });
+  it('반복 r 대상은 N과 무관하게 같은 집합의 앞부분(공정성 규칙 1 — ch_rmt N 50 대 나머지 300)', () => {
+    for (let rep = 0; rep < 3; rep++) {
+      const big = targetIds(ids, 42, 0, rep, 300);
+      expect(targetIds(ids, 42, 0, rep, 50)).toEqual(big.slice(0, 50));
+    }
   });
   it('슬롯 폭보다 큰 N은 거부', () => {
     expect(() => targetIds(ids, 42, 0, 0, Math.ceil(ids.length / SLOT_COUNT / 3) + 1)).toThrow(/대상 부족/);
@@ -592,4 +623,101 @@ describe('EXP-40 시간 예산 · 수렴 기록(M3 · N1 · N6)', () => {
     expect(conv.after_force).toMatchObject({ forceOk: true, converged: true });
     expect(measures.some((m) => m.read === 'after_force' && m.metric === 'patch_parts')).toBe(true);
   }, 30_000);
+});
+
+describe('채움 대조 verify(adopt — 복원 스냅샷 = 지금 행 벡터)', () => {
+  it('기대 집합 md5 — PG string_agg 규칙(id:no를 순서대로 , 연결)과 같은 문자열의 md5', () => {
+    const joined = Array.from({ length: 3 }, (_, k) => `${k + 1}:${orderNoOf(42, k + 1)}`).join(',');
+    expect(expectedSetMd5(42, 3)).toBe(createHash('md5').update(joined).digest('hex'));
+  });
+  it('기대 상태 분포 — 합이 규모 · 이름 오름차순', () => {
+    const st = expectedStatus(42, 10000, 0.5);
+    expect(st.reduce((a, [, n]) => a + n, 0)).toBe(10000);
+    expect(st.map(([s]) => s)).toEqual([...st.map(([s]) => s)].sort());
+  });
+  it('표본 — 1 · scale 포함 · 중복 없음 · 결정적 · 작은 규모는 전부', () => {
+    const s = sampleIds(42, 10000);
+    expect(s).toHaveLength(200);
+    expect(s[0]).toBe(1);
+    expect(s[s.length - 1]).toBe(10000);
+    expect(new Set(s).size).toBe(s.length);
+    expect(sampleIds(42, 10000)).toEqual(s);
+    expect(sampleIds(42, 50)).toHaveLength(50);
+  });
+  it('행 비교 문자열 — ClickHouse 문자열 정수 · 기대 행과 같은 모양', () => {
+    const w = workOrderRow(42, 7, 0.5, [1, 2, 3]);
+    const fromCh = rowKey({
+      id: '7',
+      line: String(w.lineId),
+      no: w.orderNo,
+      prod: w.productCode,
+      qty: String(w.targetQty),
+      ps: String(w.plannedStartMs),
+      pe: String(w.plannedEndMs),
+      st: w.status,
+    });
+    expect(fromCh).toBe(expectedKey(w));
+  });
+  const okObs = (): VerifyObserved => {
+    const st: [string, number][] = [
+      ['IN_PROGRESS', 6],
+      ['PLANNED', 4],
+    ];
+    const c = { md5: 'h', n: 10, total: 10 };
+    return {
+      scale: 10,
+      expectedMd5: 'h',
+      expectedStatus: st,
+      set: { pg: { ...c }, ch: { ...c }, chRmt: { ...c } },
+      status: { pg: st, ch: st, chRmt: st },
+      logs: { pgProductionLog: 0, pgAuditLog: 0, chProductionLogControl: 0 },
+      sample: { n: 10, mismatch: { pg: 0, ch: 0, chRmt: 0 } },
+    };
+  };
+  it('판정 — 모두 맞으면 일치', () => {
+    expect(judgeVerify(okObs())).toEqual({ match: true, reasons: [] });
+  });
+  it('판정 — 실험 로그 테이블이 비지 않으면 거부(PG 실적 · 감사 · CH 실적)', () => {
+    for (const k of ['pgProductionLog', 'pgAuditLog', 'chProductionLogControl'] as const) {
+      const o = okObs();
+      o.logs[k] = 1;
+      expect(judgeVerify(o)).toEqual({ match: false, reasons: [`logs.${k}`] });
+    }
+  });
+  it('판정 — RMT 상태 분포가 기대와 다르면 거부(md5 · 행 수가 같아도)', () => {
+    const o = okObs();
+    o.status.chRmt = [
+      ['COMPLETED', 1],
+      ['IN_PROGRESS', 5],
+      ['PLANNED', 4],
+    ];
+    expect(judgeVerify(o)).toEqual({ match: false, reasons: ['chRmt.status'] });
+  });
+  it('판정 — md5 · 행 수 · 표본 불일치를 항목별로', () => {
+    const o = okObs();
+    o.set.ch.md5 = 'x';
+    o.set.pg.total = 11;
+    o.sample.mismatch.chRmt = 2;
+    expect(judgeVerify(o).reasons).toEqual(['pg.rows', 'ch.md5', 'sample.chRmt']);
+  });
+  it('verify 인자 — fill과 같은 규모 · 시드 · 비율', () => {
+    expect(parseOltpArgs(argv('verify', '--scale', '100000', '--seed', '7'))).toMatchObject({
+      action: 'verify',
+      scale: 100000,
+      seed: 7,
+      inProgress: 0.5,
+    });
+    expect(() => parseOltpArgs(argv('verify'))).toThrow(/--scale/);
+  });
+});
+
+describe('EXP-41 이벤트 루프 사용률(기록만)', () => {
+  it('측정 창 ELU — 0~1 · 활성 · 유휴 ms', async () => {
+    const start = performance.eventLoopUtilization();
+    await new Promise((r) => setTimeout(r, 20));
+    const e = eventLoopOf(start);
+    expect(e.utilization).toBeGreaterThanOrEqual(0);
+    expect(e.utilization).toBeLessThanOrEqual(1);
+    expect(e.idleMs + e.activeMs).toBeGreaterThan(0);
+  });
 });

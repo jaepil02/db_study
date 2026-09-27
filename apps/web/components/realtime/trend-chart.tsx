@@ -6,6 +6,7 @@ import { useEffect, useRef } from 'react';
 import type uPlot from 'uplot';
 import { TREND_WINDOW_MS } from '../../lib/config';
 import { useRealtimeStore } from '../../lib/realtime-store';
+import { kstTimeAxis } from '../../lib/uplot-kst';
 
 const COLORS = ['#2563eb', '#dc2626', '#16a34a', '#d97706', '#7c3aed', '#0891b2', '#db2777', '#4b5563'];
 const HEIGHT = 280;
@@ -50,6 +51,8 @@ export function TrendChart({ tagIds, labels }: TrendChartProps) {
           },
           y: { auto: true },
         },
+        // 08_screen/01 §시각 표시 — 시간대 표기 KST(ANL-TREND · ALM-RULES와 같은 축 이름)
+        axes: [kstTimeAxis(), {}],
         legend: { show: true, live: false },
         cursor: { drag: { x: false, y: false } },
         series: [

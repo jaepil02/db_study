@@ -355,9 +355,13 @@ export async function pgStmtStat(c: Queryable, sql: string): Promise<PgStmtStat>
   return { calls: Number(r.rows[0]?.calls ?? 0), totalMs: Number(r.rows[0]?.t ?? 0) };
 }
 
+/**
+ * 호출당 평균 실행 시간(ms) — 소수 6자리(1 ns)로 둔다. EXP-41 PK 점조회는 4~11 µs라 소수 3자리(1 µs)로 자르면 한 칸이 값의 10~25%이고
+ * 반복 사이 0.004 · 0.005가 편차 기준(20%)을 양자화만으로 넘었다(기록 041 · 2026-09-27). total_exec_time은 double ms라 자릿수가 있다.
+ */
 export function pgStmtMean(a: PgStmtStat, b: PgStmtStat): { calls: number; meanMs: number | null } {
   const calls = b.calls - a.calls;
-  return { calls, meanMs: calls > 0 ? Math.round(((b.totalMs - a.totalMs) / calls) * 1000) / 1000 : null };
+  return { calls, meanMs: calls > 0 ? Math.round(((b.totalMs - a.totalMs) / calls) * 1e6) / 1e6 : null };
 }
 
 /** 쓰기 세션이 끝에 부른다 — 이 백엔드의 대기 통계를 다음 유휴에 흘리게 한다 */

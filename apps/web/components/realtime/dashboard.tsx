@@ -1,17 +1,26 @@
 'use client';
 // DSH-REALTIME — 정본 docs/08_screen/03_realtime_dashboard.md (S2 최소 1페이지: 최신값 표 + uPlot 트렌드 1)
 // 진입 순서: WebSocket 연결 → subscribe → REST 최신값 1회 → 트렌드 과거 채움 1회. 이후 값은 rt 프레임으로만 받는다(폴링 없음).
+// WebSocket이 재연결하지 않는 종료(4403 · 4400 등 — 끊김)로 멈춰 있으면 구독할 연결이 없으므로 진입 · 설비 전환마다 REST 1회만 부른다 — 표가 스켈레톤에 갇히지 않게.
 import { useQuery } from '@tanstack/react-query';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { directUrl, requestJson, retryOn503 } from '../../lib/api';
 import { TIMESERIES_GC_MS, TREND_MAX_TAGS, TREND_WINDOW_MS } from '../../lib/config';
 import { errorCode, errorText } from '../../lib/error-display';
+import { closedBandText, createLatestReadGate, headerCounts } from '../../lib/latest';
+import { writeLastDevice } from '../../lib/realtime-nav';
 import { realtimeSocket, useConnectionStore } from '../../lib/realtime-socket';
 import { useRealtimeStore } from '../../lib/realtime-store';
 import { LatestDeviceResponse, TimeseriesQueryResponse, WS_CLOSE } from '../../lib/shared';
+import { dashboardConfigBadges } from '../../lib/switches';
 import { toKstOffsetIso } from '../../lib/time';
+import { useNow } from '../../lib/use-now';
+import { useShellHealth } from '../shell/experiment-badge';
+import { Badge } from '../ui/badge';
 import { Band } from '../ui/band';
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from '../ui/card';
+import { AlarmBand } from './alarm-band';
+import { DevicePicker } from './device-picker';
 import { LatestTable } from './latest-table';
 import { TrendChart } from './trend-chart';
 
@@ -22,13 +31,17 @@ export function RealtimeDashboard({ deviceId, focusTagId }: { deviceId: number; 
   const wsStatus = useConnectionStore((s) => s.status);
   const order = useRealtimeStore((s) => s.order);
   const meta = useRealtimeStore((s) => s.meta);
+  // 호출 판정 — 쿼리 캐시(isFetched)가 아니라 이 진입의 호출 여부로 가른다(lib/latest createLatestReadGate)
+  const gate = useRef(createLatestReadGate()).current;
 
   // 구독 교체 — 이전 설비 해지 · 새 설비 구독(08_screen/03 §갱신과 값 병합)
   useEffect(() => {
+    gate.enter(deviceId);
     useRealtimeStore.getState().resetDevice(deviceId);
+    writeLastDevice(deviceId);
     realtimeSocket.subscribe(deviceId);
     return () => realtimeSocket.unsubscribe(deviceId);
-  }, [deviceId]);
+  }, [deviceId, gate]);
 
   // 최신값 — staleTime 0 · 주기 재조회 없음. 진입 · 설비 전환 · 재연결(syncEpoch) 세 사건에만 부른다
   const latestQ = useQuery({
@@ -48,9 +61,14 @@ export function RealtimeDashboard({ deviceId, focusTagId }: { deviceId: number; 
   const refetchLatest = latestQ.refetch;
   // biome-ignore lint/correctness/useExhaustiveDependencies: syncEpoch 증가(연결 · 구독 완료) · metaEpoch 증가(태그 메타 신호)가 호출 사건이다
   useEffect(() => {
-    if (useConnectionStore.getState().status !== 'open') return;
-    void refetchLatest();
-  }, [deviceId, syncEpoch, metaEpoch, refetchLatest]);
+    if (gate.onSync(useConnectionStore.getState().status)) void refetchLatest();
+  }, [deviceId, syncEpoch, metaEpoch, refetchLatest, gate]);
+  // 끊김(재연결하지 않는 종료) — 진입 · 설비 전환마다 REST 1회. 재연결 중(백오프)은 연결 뒤 syncEpoch가 부른다.
+  // 열린 뒤 응답 전에 끊겨도 이 진입의 호출은 이미 나갔으므로 다시 부르지 않는다
+  // biome-ignore lint/correctness/useExhaustiveDependencies: 설비 · 끊김 전이가 호출 사건이다
+  useEffect(() => {
+    if (gate.onStatus(wsStatus)) void refetchLatest();
+  }, [deviceId, wsStatus, refetchLatest, gate]);
 
   // 트렌드 태그 — 표에서 고른 태그 최대 8 · 기본은 앞 8개 · 태그 딥링크 진입이면 그 태그 하나
   const [picked, setPicked] = useState<number[] | null>(focusTagId === undefined ? null : [focusTagId]);
@@ -122,12 +140,28 @@ export function RealtimeDashboard({ deviceId, focusTagId }: { deviceId: number; 
   const upstreamDown =
     latestCode === 'realtime.latest_unavailable' || lastCloseCode === WS_CLOSE.upstream_unavailable;
   const loading = !latestQ.isSuccess && !latestQ.isError;
+  const health = useShellHealth().data?.body;
+  const badges = health ? dashboardConfigBadges(health.switches) : [];
   const empty = latestQ.isSuccess && latestQ.data.itemCount === 0 && order.length === 0;
+  const closedText = closedBandText(wsStatus, lastCloseCode, latestQ.isSuccess && !latestQ.isFetching);
 
   return (
     <div className="flex flex-col gap-4">
       <Card>
-        <CardHeader>
+        <CardHeader className="flex flex-col gap-2">
+          <div className="flex flex-wrap items-center gap-3">
+            <DevicePicker deviceId={deviceId} />
+            <HeaderCounts />
+            {badges.map((b) => (
+              <Badge
+                key={b.id}
+                variant="warning"
+                title={`${b.id} 기본값 아님 — 실험 콘솔에서 주입 구현 확인`}
+              >
+                구성 배지: {b.text}
+              </Badge>
+            ))}
+          </div>
           <CardTitle>설비 {deviceId} 최신값</CardTitle>
         </CardHeader>
         <CardContent className="flex flex-col gap-3">
@@ -139,9 +173,10 @@ export function RealtimeDashboard({ deviceId, focusTagId }: { deviceId: number; 
             </Band>
           )}
           {latestErr !== null && !upstreamDown && <Band>{errorText(latestErr)}</Band>}
-          {!latestQ.isFetched && wsStatus !== 'open' && (
-            <Band tone="info">WebSocket 연결 뒤 최신값을 읽는다</Band>
+          {!latestQ.isFetched && wsStatus !== 'open' && wsStatus !== 'closed' && (
+            <Band tone="info">WebSocket 연결 · 구독 뒤 최신값을 읽는다</Band>
           )}
+          {closedText !== null && <Band tone="warning">{closedText}</Band>}
           {empty ? (
             <p className="py-6 text-center text-sm text-slate-500">이 설비는 아직 측정값이 없다</p>
           ) : (
@@ -180,6 +215,36 @@ export function RealtimeDashboard({ deviceId, focusTagId }: { deviceId: number; 
           </CardFooter>
         )}
       </Card>
+
+      <AlarmBand
+        tagsKnown={latestQ.isSuccess || order.length > 0}
+        // 첫 진입의 idle · connecting은 끊김이 아니다 — 08_screen/03 §장애 표의 끊김은 끊긴 뒤 상태(재연결 중 · 닫힘 · 저장소 503)
+        down={wsStatus === 'reconnecting' || wsStatus === 'closed' || upstreamDown}
+      />
     </div>
+  );
+}
+
+/** 머리 숫자 — STALE n/N(서버 · 화면 판정의 합집합 · 표와 같은 판정식) · 통신 이상 m */
+function HeaderCounts() {
+  const order = useRealtimeStore((s) => s.order);
+  const latest = useRealtimeStore((s) => s.latest);
+  const meta = useRealtimeStore((s) => s.meta);
+  const offsetMs = useRealtimeStore((s) => s.offsetMs);
+  const now = useNow(1000);
+  const tags = order.flatMap((id) => {
+    const tag = latest[id];
+    return tag ? [{ tag, staleAfterMs: meta[id]?.staleAfterMs ?? null }] : [];
+  });
+  if (tags.length === 0) return null;
+  const c = headerCounts(tags, now, offsetMs);
+  return (
+    <span className="text-xs tabular-nums text-slate-600" data-panel="header-counts">
+      <span className={c.stale > 0 ? 'font-medium text-amber-700' : ''}>
+        STALE {c.stale}/{c.total}
+      </span>
+      {' · '}
+      <span className={c.bad > 0 ? 'font-medium text-red-700' : ''}>통신 이상 {c.bad}</span>
+    </span>
   );
 }

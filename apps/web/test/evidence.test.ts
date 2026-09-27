@@ -85,6 +85,43 @@ describe('readEvidence — 판독 규칙', () => {
   });
 });
 
+describe('readEvidence — 규칙 4 메모리 상한(10_observability/04 §조건 칸 2026-09-27)', () => {
+  const SOURCE = 'cgroup max — oltp-lab 서비스에 compose 상한 없음';
+  const base = files.find((f) => f.name.startsWith('044'))?.text ?? '';
+  const read = (limit: string) =>
+    readEvidence([
+      { name: '044-oltp-control-insert.md', text: base.replace('"memoryLimitMb": 3584,', limit) },
+    ]);
+
+  it('수 — 그대로 충족', () => {
+    const r = read('"memoryLimitMb": 3584,');
+    expect(r.counts.missingConditions).toBe(0);
+    expect(r.reverse[0]?.run.memoryLimitMb).toBe(3584);
+    expect(r.reverse[0]?.run.memoryLimitSource).toBeUndefined();
+  });
+
+  it('null + memoryLimitSource — 도구 컨테이너 경로의 상한 없음은 충족', () => {
+    const r = read(`"memoryLimitMb": null, "memoryLimitSource": "${SOURCE}",`);
+    expect(r.counts.missingConditions).toBe(0);
+    expect(r.reverse).toHaveLength(12);
+    expect(r.reverse[0]?.run).toEqual({
+      commitHash: 'f1x7ure',
+      memoryProfile: 'control',
+      memoryLimitMb: null,
+      memoryLimitSource: SOURCE,
+      capacityTier: 'n/a',
+    });
+  });
+
+  it('null 단독 · 빈 출처 — 4요소 누락으로 센다', () => {
+    for (const limit of ['"memoryLimitMb": null,', '"memoryLimitMb": null, "memoryLimitSource": "",']) {
+      const r = read(limit);
+      expect(r.counts.missingConditions).toBe(1);
+      expect(r.reverse).toHaveLength(0);
+    }
+  });
+});
+
 describe('요약 — 분포(중앙값)', () => {
   it('median', () => {
     expect(median([3, 1, 2])).toBe(2);

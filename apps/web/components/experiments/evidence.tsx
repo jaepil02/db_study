@@ -25,7 +25,7 @@ import {
   structuralVerdict,
   toSeconds,
 } from '../../lib/evidence';
-import { formatRows, type Store } from '../../lib/measurements';
+import { formatRows, memoryLimitText, type Store } from '../../lib/measurements';
 import { formatKst } from '../../lib/time';
 import { Button, Select } from '../master/field';
 import { Band } from '../ui/band';
@@ -72,7 +72,7 @@ function conditionText(p: EvidenceRef): string[] {
     .map(([k, v]) => `${k}=${Array.isArray(v) ? v.join('/') : String(v)}`);
   return [
     `기록 ${p.record} · 커밋 ${p.run.commitHash}`,
-    `프로파일 ${p.run.memoryProfile} · ${p.run.memoryLimitMb} MB · 티어 ${p.run.capacityTier}`,
+    `프로파일 ${p.run.memoryProfile} · ${memoryLimitText(p.run)} · 티어 ${p.run.capacityTier}`,
     sw.slice(0, 6).join(' · '),
     sw.slice(6).join(' · '),
   ];
@@ -90,6 +90,29 @@ function colorFor(store: Store, i: number): string {
   return s[i % s.length] as string;
 }
 
+/** 막대 계열 색 — 저장소마다 명도 순번(차트와 범례가 같은 배열을 쓴다) */
+function barColors(model: ReturnType<typeof reverseBars>): string[] {
+  const perStore = { postgresql: 0, clickhouse: 0 };
+  return model.series.map((s) => colorFor(s.store, perStore[s.store]++));
+}
+
+/**
+ * 범례 — 차트 밖 HTML로 둔다. ECharts plain 범례는 줄바꿈된 둘째 줄이 고정 grid.top과 세로축 이름 자리에 겹친다
+ * (계열 3개 이상 · 카드 폭이 좁을 때). 줄 수와 무관하게 차트 위에 흐르게 둔다.
+ */
+function ChartLegend({ items }: { items: { label: string; color: string }[] }) {
+  return (
+    <ul className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-slate-600" data-legend>
+      {items.map((it) => (
+        <li key={it.label} className="flex items-center gap-1.5">
+          <span className="inline-block h-2.5 w-4 rounded-sm" style={{ background: it.color }} />
+          {it.label}
+        </li>
+      ))}
+    </ul>
+  );
+}
+
 // ── 분포 막대(EXP-40 · 41 · 43 FINAL 비용 · 44) ──
 
 function barOption(
@@ -97,13 +120,13 @@ function barOption(
   xKind: keyof typeof X_NAME,
   yLog: boolean,
 ): ChartOption {
-  const perStore = { postgresql: 0, clickhouse: 0 };
+  const colors = barColors(model);
   const xLabel = (v: number) =>
     xKind === 'scale' ? `${formatRows(v)}행` : xKind === 'rate' ? `${v} req/s` : `동시성 ${v}`;
   return {
     animation: false,
-    grid: { left: 72, right: 24, top: 56, bottom: 40 },
-    legend: { top: 0, type: 'plain' },
+    grid: { left: 72, right: 24, top: 40, bottom: 40 },
+    legend: { show: false },
     tooltip: {
       trigger: 'item',
       formatter: (params) => {
@@ -126,10 +149,10 @@ function barOption(
       nameGap: 26,
     },
     yAxis: { type: yLog ? 'log' : 'value', name: `중앙값(${model.unit})` },
-    series: model.series.map((s) => ({
+    series: model.series.map((s, i) => ({
       name: s.label,
       type: 'bar' as const,
-      color: colorFor(s.store, perStore[s.store]++),
+      color: colors[i],
       // 중앙값 없는 칸(예: 상한 안 미관측)은 막대를 그리지 않는다 — 0으로 그리면 "비용 0"으로 읽힌다
       data: s.cells.map((r) => (r && r.median !== null && (!yLog || r.median > 0) ? r.median : null)),
     })),
@@ -191,6 +214,9 @@ function ReverseBarCard({ exp, rows }: { exp: ReverseExp; rows: ReverseRow[] }) 
       </div>
       {model && opt && model.series.length > 0 ? (
         <>
+          <ChartLegend
+            items={barColors(model).map((color, i) => ({ label: model.series[i]?.label ?? '', color }))}
+          />
           <EChart option={opt} className="h-72 w-full" />
           {noMedian > 0 ? (
             <p className="text-xs text-amber-700">
@@ -305,6 +331,9 @@ function plotSec(r: StreamRow, yLog: boolean): number | null {
   return sec === null || (yLog && sec <= 0) ? null : sec;
 }
 
+const streamName = (s: ReturnType<typeof streamSeries>[number]) =>
+  `${STORE_LABEL[s.store]}${s.metric ? ` · ${s.metric}` : ''}`;
+
 function streamOption(
   series: ReturnType<typeof streamSeries>,
   judge: Record<Store, StreamJudgement>,
@@ -316,7 +345,7 @@ function streamOption(
   return {
     animation: false,
     grid: { left: 72, right: 24, top: 40, bottom: 48 },
-    legend: { top: 0 },
+    legend: { show: false },
     tooltip: {
       trigger: 'item',
       formatter: (params) => {
@@ -339,7 +368,7 @@ function streamOption(
     series: series.map((s, si) => {
       const j = judge[s.store];
       return {
-        name: `${STORE_LABEL[s.store]}${s.metric ? ` · ${s.metric}` : ''}`,
+        name: streamName(s),
         type: 'line' as const,
         color: SHADES[s.store][0],
         symbolSize: 9,
@@ -411,6 +440,9 @@ function StreamCard({ rows }: { rows: StreamRow[] }) {
         <li>{judgementText('postgresql', judge.postgresql)}</li>
         <li>{judgementText('clickhouse', judge.clickhouse)}</li>
       </ul>
+      <ChartLegend
+        items={series.map((s) => ({ label: streamName(s), color: SHADES[s.store][0] as string }))}
+      />
       <EChart option={opt} className="h-72 w-full" />
       {unplotted > 0 || series.some((s) => s.metric === null) ? (
         <p className="text-xs text-amber-700">

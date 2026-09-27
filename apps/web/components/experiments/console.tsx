@@ -6,8 +6,8 @@ import { useQuery } from '@tanstack/react-query';
 import { useEffect, useRef, useState } from 'react';
 import { ApiError } from '../../lib/api';
 import { CONSOLE_POLL_MS } from '../../lib/config';
+import { fetchHealth, HEALTH_KEY } from '../../lib/health';
 import { type ConsoleSummary, cacheHitRatio, ratePerSecond, sumModes } from '../../lib/metrics-parser';
-import { HealthResponse } from '../../lib/shared';
 import { buildSwitchRows, comboWarnings, countNonDefault } from '../../lib/switches';
 import { formatKst, formatKstIso } from '../../lib/time';
 import { Badge } from '../ui/badge';
@@ -27,18 +27,6 @@ const SWITCH_STEPS: [string, string][] = [
   ['⑤ 측정 · 기록', '측정 창을 EXP-COMPARE에서 잡고 · 기록 조건 블록을 docs/measurements에 붙인다'],
 ];
 
-async function fetchHealth() {
-  let res: Response;
-  try {
-    res = await fetch('/bff/health', { cache: 'no-store' });
-  } catch {
-    throw new ApiError(0, null, 'BFF에 닿지 못했다');
-  }
-  // 200 · 503 모두 같은 본문 — 503은 오류가 아니라 저장소별 상태로 그린다(REQ-OBS-09)
-  if (res.status !== 200 && res.status !== 503) throw new ApiError(res.status, null, `HTTP ${res.status}`);
-  return { httpStatus: res.status, body: HealthResponse.parse(await res.json()) };
-}
-
 async function fetchMetrics(): Promise<{ fetchedAt: number; summary: ConsoleSummary }> {
   let res: Response;
   try {
@@ -55,7 +43,7 @@ export function ExperimentConsole() {
   const [precise, setPrecise] = useState(false);
 
   const healthQ = useQuery({
-    queryKey: ['obs', 'health'],
+    queryKey: HEALTH_KEY,
     queryFn: fetchHealth,
     staleTime: 0,
     enabled: !precise,

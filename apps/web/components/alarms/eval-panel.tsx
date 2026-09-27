@@ -18,6 +18,7 @@ import {
 } from '../../lib/alarms';
 import { ApiError } from '../../lib/api';
 import { errorText } from '../../lib/error-display';
+import { kstTimeAxis } from '../../lib/uplot-kst';
 import { Button, Select } from '../master/field';
 import { Band } from '../ui/band';
 import { useEvaluations } from './queries';
@@ -164,7 +165,7 @@ function EvalChart({
             ratio: { range: [0, 1] },
           },
           axes: [
-            {},
+            kstTimeAxis(),
             { label: '값' },
             {
               scale: 'ratio',

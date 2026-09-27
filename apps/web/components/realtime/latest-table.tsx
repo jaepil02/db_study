@@ -1,6 +1,6 @@
 'use client';
 // 설비 전체 최신값 표 — 정본 docs/08_screen/03_realtime_dashboard.md 요소 표 · 상태 4행
-import { judgeFreshness } from '../../lib/latest';
+import { judgeFreshness, sparkPath } from '../../lib/latest';
 import { useRealtimeStore } from '../../lib/realtime-store';
 import { QUALITY } from '../../lib/shared';
 import { formatAge, formatKst } from '../../lib/time';
@@ -26,6 +26,9 @@ export function LatestTable({ loading, dimmed, selected, maxSelected, onToggle }
   const latest = useRealtimeStore((s) => s.latest);
   const meta = useRealtimeStore((s) => s.meta);
   const offsetMs = useRealtimeStore((s) => s.offsetMs);
+  const buffers = useRealtimeStore((s) => s.buffers);
+  // 버퍼 내용이 바뀌면(프레임 · 과거 채움) 추세 열을 다시 그린다 — 버퍼 참조는 고정이라 seq로 안다
+  useRealtimeStore((s) => s.seq);
   const now = useNow(1000);
 
   const selectedSet = new Set(selected);
@@ -41,6 +44,7 @@ export function LatestTable({ loading, dimmed, selected, maxSelected, onToggle }
           <TableHead>단위</TableHead>
           <TableHead>품질</TableHead>
           <TableHead>측정 시각(KST)</TableHead>
+          <TableHead className="w-20">추세</TableHead>
         </TableRow>
       </TableHeader>
       <TableBody>
@@ -48,7 +52,7 @@ export function LatestTable({ loading, dimmed, selected, maxSelected, onToggle }
           Array.from({ length: SKELETON_ROWS }, (_, i) => (
             // biome-ignore lint/suspicious/noArrayIndexKey: 자리표시 행은 순서 외 식별자가 없다
             <TableRow key={i}>
-              {Array.from({ length: 6 }, (_, j) => (
+              {Array.from({ length: 7 }, (_, j) => (
                 // biome-ignore lint/suspicious/noArrayIndexKey: 자리표시 칸
                 <TableCell key={j}>
                   <div className="h-4 animate-pulse rounded bg-slate-100" />
@@ -105,10 +109,40 @@ export function LatestTable({ loading, dimmed, selected, maxSelected, onToggle }
                   <span className="ml-2 text-xs text-slate-400">값의 나이 {formatAge(freshness.ageMs)}</span>
                 )}
               </TableCell>
+              <TableCell>
+                <Spark
+                  views={buffers.get(tagId)?.views() ?? null}
+                  bad={isBadQuality(v.quality)}
+                  stale={freshness.kind === 'stale'}
+                />
+              </TableCell>
             </TableRow>
           );
         })}
       </TableBody>
     </Table>
+  );
+}
+
+const SPARK_W = 64;
+const SPARK_H = 16;
+
+/** 추세 열 — 링 버퍼 마지막 구간의 작은 선(별도 조회 없음) · 통신 이상이면 ╳ · STALE이면 흐린 선 */
+function Spark({
+  views,
+  bad,
+  stale,
+}: {
+  views: [Float64Array, Float64Array] | null;
+  bad: boolean;
+  stale: boolean;
+}) {
+  if (bad) return <span className="text-red-500">╳</span>;
+  const d = views ? sparkPath(views[0], views[1], SPARK_W, SPARK_H) : null;
+  if (d === null) return <span className="text-slate-300">—</span>;
+  return (
+    <svg width={SPARK_W} height={SPARK_H} className="overflow-visible" aria-hidden="true">
+      <path d={d} fill="none" stroke={stale ? '#cbd5e1' : '#2563eb'} strokeWidth={1.25} />
+    </svg>
   );
 }

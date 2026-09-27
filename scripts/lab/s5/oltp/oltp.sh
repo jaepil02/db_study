@@ -10,6 +10,7 @@
 #   fill <규모>                             10000 · 100000 · 1000000 — 두 저장소 같은 행(채운 뒤 집합 md5 대조)
 #   settle <규모> [최대 초=240]             PostgreSQL VACUUM ANALYZE · ClickHouse 활성 파트 수렴
 #   snapshot <규모> [이름]                  (리드) 실험 DB 부재 확인 → task snapshot — 재기동은 사람이
+#   adopt <규모> <스냅샷>                   (리드 · 재측정) 앞 실행의 채움 스냅샷을 이 실행의 채움으로 — 채움 경로 불변 확인 · 복원 · 집합 대조 · settle
 #   reset <규모> clickhouse|all             clickhouse: 대조 테이블 다시 채우기 + 수렴 · all: 채움 스냅샷 복원(리드) + settle
 #   run <exp40..44> <변형> <규모> <반복 0|1|2> [--concurrency c] [--rate r] [실행기 2계층 인자 …]
 #   collect                                 원시 → oltp-summary.json(reverse 행 · 3회 중앙값 · 편차 · 구조 지표 3회 전부)
@@ -20,7 +21,7 @@ OCOMPOSE="$COMPOSE -f infra/compose/compose.control.yml"
 export OCOMPOSE
 case "${1:-}" in
   # 실행기는 커밋과 같은 이미지(db_study-api:HASH)에서 돈다 — status · collect는 저장소 · 이미지를 쓰지 않는다
-  init|fill|settle|reset|run) require_clean ;;
+  init|fill|settle|adopt|reset|run) require_clean ;;
   *) : ;;
 esac
 exec python3 scripts/lab/s5/oltp/oltp.py "$@"
