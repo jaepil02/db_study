@@ -4,9 +4,12 @@
 // 판정기는 프로세스 안 하나 · 배치를 인계 순서대로 하나씩 판정한다(직렬 — 같은 규칙의 상태 읽기-쓰기 경합이 없다).
 // ⑧은 판정 밖 깊이 1 큐(쓰는 중 1 + 대기 1)가 쓴다 — 판정은 ⑧ 완료를 기다리지 않아 alarm_eval 재시도가 인계 · flusher를 멈추지 않는다.
 // 판정 실패는 flusher로 던지지 않는다 — 적재 XACK를 되돌리지 않는다(REQ-ING-13).
+// 흐름 요약(EXP-FLOW) — 인계 배치는 판정기가 ⑦ 뒤에 낸다(판정 ②~⑦ ms · 확정 열림 · 닫힘) · ⑧ 전수 삽입은 기다리지 않는다.
+// flusher가 표지를 보고 초안(flow)을 실어 보낸 배치만 낸다 — 판정 실패 · 규칙 없음으로 판정하지 않은 배치도 1건을 낸다.
 import { QUALITY } from '@db-study/shared';
+import type { FlowBatchInput } from '../../../common/flow/flow-publisher';
 import type { AlarmFrame } from '../../../common/ports/realtime-fanout.port';
-import { RETRY_BACKOFF_MS } from '../../ingest/flusher';
+import { type FlowBatchSink, flowMs, RETRY_BACKOFF_MS } from '../../ingest/flusher';
 import type { TagRawRow } from '../../ingest/window-buffer';
 import { type AlarmStateName, alarmMetrics as m } from './alarm-eval.metrics';
 import { type AlarmEvalRow, type BatchHalt, type ConfirmPort, type JudgeRow, judgeRule } from './judge';
@@ -19,6 +22,14 @@ export const ALARM_HANDOFF_PORT = Symbol('AlarmHandoffPort');
 export interface AlarmBatch {
   token: string | null;
   rows: readonly TagRawRow[];
+  /** 흐름 요약 초안 — flusher가 표지를 봤을 때만 싣는다(null이면 요약을 내지 않는다) */
+  flow?: FlowBatchInput | null;
+}
+
+/** 한 배치의 확정 열림 · 닫힘(alarm_event 커밋 기준 · 흐름 요약 alarm 필드) */
+export interface JudgeCounts {
+  opened: number;
+  closed: number;
 }
 
 /** flusher → 판정기(직접 호출 — Stream 경계의 유일한 예외 · 04_architecture/02 §경계 예외) */
@@ -44,6 +55,8 @@ export interface AlarmEvaluatorDeps {
   sleep(ms: number): Promise<void>;
   stopping(): boolean;
   log: { warn(msg: string): void; error(msg: string): void };
+  /** 흐름 요약 발행 — 없으면 내지 않는다 */
+  flow?: Pick<FlowBatchSink, 'publishBatch'> | null;
 }
 
 /** 종료 때 ⑧ 큐를 기다리는 상한(ms · 현행 참고 — 수집 종료 드레인 상한과 같은 값) */
@@ -109,10 +122,18 @@ export class AlarmEvaluator implements AlarmHandoffPort {
         const wake = this.slotFreed;
         this.slotFreed = null;
         wake?.();
+        const t0 = performance.now();
+        const counts: JudgeCounts = { opened: 0, closed: 0 };
         try {
-          await this.judgeBatch(b);
+          await this.judgeBatch(b, counts);
         } catch (e) {
           this.d.log.error(`판정 예외 — ${(e as Error).message} · 이 배치 판정을 버린다(적재는 확정됐다)`);
+        }
+        if (b.flow) {
+          // ⑦ 뒤 · ⑧ 전 — judgeBatch는 ⑧ 전수를 큐에 넣고 기다리지 않고 돌아온다
+          b.flow.stages.alarmMs = flowMs(performance.now() - t0);
+          b.flow.alarm = { judgedRows: b.rows.length, ...counts };
+          this.d.flow?.publishBatch(b.flow);
         }
       }
     } finally {
@@ -120,8 +141,8 @@ export class AlarmEvaluator implements AlarmHandoffPort {
     }
   }
 
-  /** ②~⑧ 한 배치 */
-  async judgeBatch(batch: AlarmBatch): Promise<void> {
+  /** ②~⑧ 한 배치 — counts에 확정(커밋) 열림 · 닫힘을 더한다 */
+  async judgeBatch(batch: AlarmBatch, counts: JudgeCounts = { opened: 0, closed: 0 }): Promise<void> {
     const t0 = performance.now();
     const phase = (name: string, ms: number) => m.duration.observe({ phase: name }, ms / 1000);
 
@@ -196,9 +217,11 @@ export class AlarmEvaluator implements AlarmHandoffPort {
         if (!ev.fresh) continue;
         const severity = String(rule.severity);
         if (ev.kind === 'open') {
+          counts.opened++;
           m.opened.inc();
           m.active.inc({ severity });
         } else {
+          counts.closed++;
           m.closed.inc();
           m.active.dec({ severity });
         }

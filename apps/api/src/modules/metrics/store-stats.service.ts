@@ -5,7 +5,7 @@
 // ④ 앱의 기존 저장소 클라이언트를 쓴다 — PostgreSQL 앱 풀 · ClickHouse 앱 HTTP 클라이언트 · Redis 명령 연결(읽기 전용 통계 명령만).
 // ClickHouse 관측 쿼리는 log_comment 'obs'를 달아 ch_query_duration_p95_seconds의 모집단에서 뺀다.
 // OBS-03 키 계열 메모리 표본(redis_prefix_*)은 S6이라 여기에 없다.
-import { STREAM_DLQ } from '@db-study/shared';
+import { BIZ_STREAM, STREAM_DLQ } from '@db-study/shared';
 import {
   Inject,
   Injectable,
@@ -69,6 +69,7 @@ export const STORE_STATS_ROLES: ReadonlySet<AppConfig['appRole']> = new Set(['al
 const STREAMS: ReadonlyArray<readonly [StreamLabel, string]> = [
   ['raw', STREAM_RAW],
   ['dlq', STREAM_DLQ],
+  ['biz', BIZ_STREAM], // 업무 명령 스트림 — 메모리 양 · 트리밍 감시(적체는 biz_stream_lag)
 ];
 
 const OBS_LOG_COMMENT = 'obs';
@@ -278,6 +279,7 @@ export class StoreStatsService implements OnApplicationBootstrap, OnModuleDestro
         fetch: () =>
           q<PgTableRow>(
             `SELECT r.relname AS "table",
+                    sum(s.n_live_tup)::bigint AS live,
                     sum(s.n_dead_tup)::bigint AS dead,
                     sum(s.autovacuum_count)::bigint AS autovac,
                     coalesce(sum(pg_table_size(s.relid)), 0)::bigint AS heap,
@@ -336,7 +338,7 @@ export class StoreStatsService implements OnApplicationBootstrap, OnModuleDestro
         fetch: () =>
           this.chRows<ChPartsRow>(
             `SELECT table, count() AS parts, sum(bytes_on_disk) AS bytes_on_disk,
-                    sum(data_uncompressed_bytes) AS uncompressed
+                    sum(data_uncompressed_bytes) AS uncompressed, sum(rows) AS rows
                FROM system.parts
               WHERE active AND database = currentDatabase() AND table IN {tables:Array(String)}
               GROUP BY table`,

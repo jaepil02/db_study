@@ -133,6 +133,12 @@ export const pgMetrics = {
     labelNames: ['rank', 'queryid'] as const,
     registers: reg,
   }),
+  liveTuples: new Gauge({
+    name: 'pg_table_live_tuples',
+    help: '살아 있는 행(pg_stat_user_tables.n_live_tup · 통계 추정치 · 파티션은 부모로 합산) — 행당 바이트의 분모',
+    labelNames: ['table'] as const,
+    registers: reg,
+  }),
   deadTuples: new Gauge({
     name: 'pg_table_dead_tuples',
     help: '데드 튜플(pg_stat_user_tables · 파티션은 부모로 합산)',
@@ -187,6 +193,12 @@ export const chMetrics = {
   partsBytesOnDisk: new Gauge({
     name: 'ch_parts_bytes_on_disk',
     help: '활성 파트 디스크 크기(system.parts bytes_on_disk)',
+    labelNames: ['table'] as const,
+    registers: reg,
+  }),
+  partsRows: new Gauge({
+    name: 'ch_parts_rows',
+    help: '활성 파트 행 수 합(system.parts rows · active) — 행당 바이트의 분모',
     labelNames: ['table'] as const,
     registers: reg,
   }),

@@ -19,6 +19,8 @@ export interface BatchEntry {
   idMs: number;
   /** 행 배열 완료 시각(api 시계) — fan-in 대기(6c)의 시작점 */
   decodedAt: number;
+  /** XREADGROUP · XAUTOCLAIM 수신 시각(api 시계) — 흐름 요약 stages.streamWaitMs(6a) · decodeMs(6b)의 경계 · 없으면 요약에서 null */
+  receivedAt?: number;
   entry: DecodedEntry;
   /** 원 본문(MessagePack 바이트) — 재시도 소진 시 DLQ에 그대로 싣는다(06_pipeline/12 §DLQ 엔트리) */
   payload?: Buffer;

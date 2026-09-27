@@ -360,6 +360,7 @@ function harness(opts: {
       implName: 'PostgresControlSink',
       copy: async () => {
         calls.push('copy');
+        return true;
       },
       close: async () => {},
     },
@@ -374,6 +375,7 @@ function harness(opts: {
       implName: 'IngestLatestValueWriter',
       write: async () => {
         calls.push('latest');
+        return 0;
       },
     },
     labFault: createLabFault(null),
@@ -582,11 +584,12 @@ describe('대조군 COPY 순서(04_routing §대조군 동시 적재 기전)', (
       2000,
     );
     const before = (await ingestMetrics.controlCopyFailures.get()).values[0]?.value ?? 0;
+    expect(await sink.copy([[1_790_000_000_000, 1, 1, 0.5, 9, 7]], { token: null })).toBe(false);
     const h = harness({ control: sink });
     expect(await new Flusher(h.deps).process(piece(['5300-0', '5300-1']))).toBe('inserted');
     expect(kinds(h.calls)).toEqual(['insert', 'ack', 'latest']);
-    expect((await ingestMetrics.controlCopyFailures.get()).values[0]?.value).toBe(before + 1);
-    const rec = JSON.parse(logs[0] as string);
+    expect((await ingestMetrics.controlCopyFailures.get()).values[0]?.value).toBe(before + 2);
+    const rec = JSON.parse(logs[1] as string);
     expect(rec).toMatchObject({
       event: 'control_copy_failed',
       ts_min: 1_790_000_000_000,

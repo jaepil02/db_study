@@ -1,8 +1,9 @@
 // ALM 판정기 — 기동 역할 all · worker(IngestModule이 import한다 · 04_architecture/02 §APP_ROLE 배정 worker 행)
 // 판정기는 프로세스 안 하나다 — worker 컨테이너 2 이상은 판정 분할 수단 전에는 두지 않는다(06_pipeline/08 §판정 경로 직렬성).
 // 저장소 접근은 래퍼 3종만 — alarm:state는 DurableKeyClient(봉인) · cache:alarmrules는 CacheKeyClient(캐시) · ch:alarm은 SW-06 포트(ADR-13).
-import { Inject, Injectable, Logger, Module, type OnApplicationBootstrap } from '@nestjs/common';
+import { Inject, Injectable, Logger, Module, type OnApplicationBootstrap, Optional } from '@nestjs/common';
 import { ClickHouse } from '../../../common/clickhouse/clickhouse.module';
+import { FlowPublisher } from '../../../common/flow/flow-publisher';
 import { REALTIME_FANOUT_PORT, type RealtimeFanoutPort } from '../../../common/ports/realtime-fanout.port';
 import { Postgres } from '../../../common/postgres/postgres.module';
 import { CacheKeyClient } from '../../../common/redis/cache-key-client';
@@ -30,6 +31,7 @@ export class AlarmEvalService implements AlarmHandoffPort, OnApplicationBootstra
     durable: DurableKeyClient,
     cache: CacheKeyClient,
     @Inject(REALTIME_FANOUT_PORT) fanout: RealtimeFanoutPort,
+    @Optional() @Inject(FlowPublisher) flow: FlowPublisher | null = null,
   ) {
     const warn = (s: string) => this.log.warn(s);
     this.confirm = new PostgresAlarmConfirm(pg.pool, { warn });
@@ -56,6 +58,7 @@ export class AlarmEvalService implements AlarmHandoffPort, OnApplicationBootstra
       sleep: (ms) => new Promise<void>((r) => setTimeout(r, ms)),
       stopping: () => this.stopping,
       log: { warn, error: (s) => this.log.error(s) },
+      flow,
     });
   }
 

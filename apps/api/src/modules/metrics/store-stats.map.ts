@@ -126,7 +126,7 @@ export function flatToMap(reply: unknown): Map<string, unknown> {
 }
 
 /** stream 레이블 값 — 05_data_stores/05의 stream 키 2(raw · dlq) */
-export type StreamLabel = 'raw' | 'dlq';
+export type StreamLabel = 'raw' | 'dlq' | 'biz';
 
 export interface StreamStat {
   stream: StreamLabel;
@@ -274,7 +274,7 @@ export function lastDeliveredOf(reply: unknown, group: string): string | null {
 
 // ─────────────────────────── PostgreSQL ───────────────────────────
 
-/** 고정 기준 PostgreSQL 테이블 15(루트 README) — table 레이블의 닫힌 집합 · 파티션은 부모 이름으로 합산 */
+/** 고정 기준 PostgreSQL 테이블 16(루트 README · biz_command_log — D-04 부분 개정) — table 레이블의 닫힌 집합 · 파티션은 부모 이름으로 합산 */
 export const PG_TABLES = [
   'site',
   'production_line',
@@ -291,6 +291,7 @@ export const PG_TABLES = [
   'production_log',
   'audit_log',
   'plc_tag_raw_control',
+  'biz_command_log',
 ] as const;
 
 export interface PgDatabaseRow {
@@ -357,6 +358,7 @@ export function applyPgTopStatements(rows: readonly { queryid: string; mean_ms: 
 
 export interface PgTableRow {
   table: string;
+  live: string | number;
   dead: string | number;
   autovac: string | number;
   heap: string | number;
@@ -365,6 +367,10 @@ export interface PgTableRow {
 
 export function applyPgTables(rows: readonly PgTableRow[]): void {
   const known = rows.filter((r) => (PG_TABLES as readonly string[]).includes(r.table));
+  replaceGauge(
+    pgMetrics.liveTuples,
+    known.map((r) => [{ table: r.table }, Number(r.live)] as const),
+  );
   replaceGauge(
     pgMetrics.deadTuples,
     known.map((r) => [{ table: r.table }, Number(r.dead)] as const),
@@ -383,6 +389,7 @@ export function applyPgTables(rows: readonly PgTableRow[]): void {
 }
 
 export function clearPgTables(): void {
+  clearMetric(pgMetrics.liveTuples);
   clearMetric(pgMetrics.deadTuples);
   clearMetric(pgMetrics.autovacuum);
   clearMetric(pgMetrics.relationSize);
@@ -429,6 +436,7 @@ export interface ChPartsRow {
   parts: string | number;
   bytes_on_disk: string | number;
   uncompressed: string | number;
+  rows: string | number;
 }
 
 export function applyChParts(rows: readonly ChPartsRow[]): void {
@@ -442,6 +450,10 @@ export function applyChParts(rows: readonly ChPartsRow[]): void {
     k.map((r) => [{ table: r.table }, Number(r.bytes_on_disk)] as const),
   );
   replaceGauge(
+    chMetrics.partsRows,
+    k.map((r) => [{ table: r.table }, Number(r.rows)] as const),
+  );
+  replaceGauge(
     chMetrics.partsUncompressed,
     k.map((r) => [{ table: r.table }, Number(r.uncompressed)] as const),
   );
@@ -451,6 +463,7 @@ export function clearChParts(): void {
   clearMetric(chMetrics.activeParts);
   clearMetric(chMetrics.partsBytesOnDisk);
   clearMetric(chMetrics.partsUncompressed);
+  clearMetric(chMetrics.partsRows);
 }
 
 export function applyChPartLog(

@@ -3,17 +3,37 @@
 // ④ ch:rt 수신(SW-06 on) 또는 프로세스 안 버스(SW-06 off) · ch:cacheinv 즉시 중계(RLT-09 · 병합 없음 · 전 연결)
 // ⑤ 스로틀(SW-07 FrameThrottlePort) ⑥ JSON ping 30초 · pong 3회 미수신 4408 · 송신 대기량 한도 초과 4413. 인증(②)은 S7 ②.
 // alarm(S7 ① · RLT-08) — ch:alarm(SW-06 on) 또는 프로세스 안 버스 'alarm'(SW-06 off)을 병합 없이 즉시 전 연결에 중계한다(구독과 무관).
+// flow(EXP-FLOW · 07_api/11 §흐름 이벤트) — subscribe_flow 연결에만 ch:flow 요약을 연결마다 250 ms 창으로 병합해 보낸다(배치 8 · 업무 20 ·
+// 넘친 수 dropped · totals는 (source · role)마다 창 안 마지막 값). 인스턴스의 첫 흐름 구독자에서 SUBSCRIBE ch:flow · 표지 갱신 시작,
+// 마지막 해지 · 종료에서 UNSUBSCRIBE · 갱신 중단(표지는 TTL로 만료 — 지우지 않는다). 송신 대기량 한도는 rt와 같은 send()를 쓴다.
 // Nest 어댑터의 {event, data} 메시지 모양을 쓰지 않는다 — 계약은 type 봉투다(메시지를 연결 단위로 직접 받는다).
 import type { IncomingMessage } from 'node:http';
-import { WS_CLOSE, WsClientMessage, type WsServerMessageBody } from '@db-study/shared';
-import { Inject, type OnModuleDestroy } from '@nestjs/common';
+import {
+  FLOW_CHANNEL,
+  FLOW_MARKER_REFRESH_MS,
+  FLOW_MARKER_TTL_S,
+  FLOW_MAX_BATCHES,
+  FLOW_MAX_BIZ,
+  FLOW_WINDOW_MS,
+  type FlowBatchSummaryBody,
+  type FlowBizSummaryBody,
+  FlowChannelMessage,
+  type FlowFrameBody,
+  type FlowTotalsEntryBody,
+  WS_CLOSE,
+  WsClientMessage,
+  type WsServerMessageBody,
+} from '@db-study/shared';
+import { Inject, type OnModuleDestroy, Optional } from '@nestjs/common';
 import { type OnGatewayConnection, WebSocketGateway } from '@nestjs/websockets';
 import type Redis from 'ioredis';
 import { Counter, Gauge, Histogram } from 'prom-client';
 import type { WebSocket } from 'ws';
+import { flowSource } from '../../common/flow/flow-publisher';
 import { isAllowedHost, isAllowedOrigin } from '../../common/http/surface-defense';
 import { appRegistry } from '../../common/metrics/registry';
 import { type AlarmFrame, directBus, takeStamp } from '../../common/ports/realtime-fanout.port';
+import { CacheKeyClient } from '../../common/redis/cache-key-client';
 import { RedisConnections } from '../../common/redis/connections';
 import type { LatestTuple } from '../../common/redis/durable-key-client';
 import { MasterReadService } from '../master/master-read.service';
@@ -66,12 +86,65 @@ const subscriberDisconnects = new Counter({
   registers: reg,
 });
 
+/** 연결 하나의 흐름 창 — 창 안 최신 배치 · 업무 요약 · 넘친 수 · (source · role)별 마지막 누적 */
+export interface FlowWindow {
+  batches: FlowBatchSummaryBody[];
+  biz: FlowBizSummaryBody[];
+  dropped: { batches: number; biz: number };
+  totals: Map<string, FlowTotalsEntryBody>;
+}
+
+export function emptyFlowWindow(): FlowWindow {
+  return { batches: [], biz: [], dropped: { batches: 0, biz: 0 }, totals: new Map() };
+}
+
+/** 요약 1건을 창에 넣는다 — 상한을 넘으면 가장 오래된 것을 버리고 dropped를 센다 · totals는 마지막 값으로 덮는다 */
+export function offerFlow(w: FlowWindow, msg: ReturnType<typeof FlowChannelMessage.parse>): void {
+  const { startedAt, totals, ...summary } = msg;
+  if (summary.event === 'batch') {
+    w.batches.push(summary as FlowBatchSummaryBody);
+    if (w.batches.length > FLOW_MAX_BATCHES) {
+      w.batches.shift();
+      w.dropped.batches++;
+    }
+  } else {
+    w.biz.push(summary as FlowBizSummaryBody);
+    if (w.biz.length > FLOW_MAX_BIZ) {
+      w.biz.shift();
+      w.dropped.biz++;
+    }
+  }
+  w.totals.set(`${msg.source}\u0000${msg.role}`, {
+    source: msg.source,
+    role: msg.role,
+    startedAt,
+    ...totals,
+  } as FlowTotalsEntryBody);
+}
+
+/** 창 끝 — 요약이 없으면 null(보내지 않는다) · 배치는 seq 오름차순 · 창을 비운다 */
+export function drainFlow(w: FlowWindow, windowEnd: number): FlowFrameBody | null {
+  if (w.batches.length === 0 && w.biz.length === 0) return null;
+  const frame: FlowFrameBody = {
+    type: 'flow',
+    windowEnd,
+    batches: [...w.batches].sort((a, b) => a.seq - b.seq),
+    biz: w.biz,
+    dropped: w.dropped,
+    totals: [...w.totals.values()],
+  };
+  Object.assign(w, emptyFlowWindow());
+  return frame;
+}
+
 interface Conn {
   ws: WebSocket;
   devices: Set<number>;
   /** 창 안 병합 — 설비 → 태그 → ts 최대 튜플(스로틀 포트가 다룬다) */
   pending: Pending;
   missedPongs: number;
+  /** 흐름 구독 중이면 창(null이면 구독 안 함) */
+  flow: FlowWindow | null;
   /** 메시지 직렬 처리 — subscribe가 존재 확인을 기다리는 사이 온 unsubscribe가 먼저 끝나 구독이 되살아나지 않게 */
   chain: Promise<void>;
 }
@@ -95,11 +168,17 @@ export class RealtimeGateway implements OnGatewayConnection, OnModuleDestroy {
   private readonly onDirect = (deviceId: number, tuples: LatestTuple[]) =>
     this.deliver(deviceId, tuples, 'direct');
   private readonly onDirectAlarm = (frame: AlarmFrame) => this.broadcastAlarm(frame);
+  /** 흐름 구독 연결 — 0 → 1에서 채널 구독 · 표지 갱신 · 창 타이머를 열고 1 → 0에서 닫는다 */
+  private readonly flowConns = new Set<Conn>();
+  private flowTimer: NodeJS.Timeout | null = null;
+  private markerTimer: NodeJS.Timeout | null = null;
+  private readonly markerOwner = flowSource('gateway');
 
   constructor(
     redis: RedisConnections,
     private readonly master: MasterReadService,
     @Inject(FRAME_THROTTLE_PORT) private readonly throttle: FrameThrottlePort,
+    @Optional() @Inject(CacheKeyClient) private readonly cache: CacheKeyClient | null = null,
   ) {
     this.subscriber = redis.subscriberConnection();
     this.subscriber.on('message', (channel: string, message: string) => this.onChannel(channel, message));
@@ -124,6 +203,7 @@ export class RealtimeGateway implements OnGatewayConnection, OnModuleDestroy {
       devices: new Set(),
       pending: new Map(),
       missedPongs: 0,
+      flow: null,
       chain: Promise.resolve(),
     };
     // Origin 검증 — 브라우저 WebSocket API는 핸드셰이크 HTTP 상태를 스크립트에 주지 않아 업그레이드 뒤 4403으로 닫는다
@@ -189,6 +269,25 @@ export class RealtimeGateway implements OnGatewayConnection, OnModuleDestroy {
       case 'pong':
         conn.missedPongs = 0;
         return;
+      case 'subscribe_flow':
+        await this.joinFlow(conn);
+        // 구독 확인 — 즉시 빈 flow 프레임 1회(배치가 드문 시간에도 구독 성립과 발행 없음을 가른다)
+        this.send(
+          conn,
+          {
+            type: 'flow',
+            windowEnd: Date.now(),
+            batches: [],
+            biz: [],
+            dropped: { batches: 0, biz: 0 },
+            totals: [],
+          },
+          'flow',
+        );
+        return;
+      case 'unsubscribe_flow':
+        await this.leaveFlow(conn);
+        return;
       case 'auth':
         // 인증은 S7 — 그 전에는 받지 않는 메시지다
         this.close(conn, WS_CLOSE.invalid_message, 'invalid_message');
@@ -222,7 +321,64 @@ export class RealtimeGateway implements OnGatewayConnection, OnModuleDestroy {
     }
   }
 
+  private async joinFlow(conn: Conn) {
+    if (conn.flow || !this.conns.has(conn)) return;
+    conn.flow = emptyFlowWindow();
+    this.flowConns.add(conn);
+    if (this.flowConns.size !== 1) return;
+    this.flowTimer = setInterval(() => this.flushFlow(), FLOW_WINDOW_MS);
+    this.refreshMarker();
+    this.markerTimer = setInterval(() => this.refreshMarker(), FLOW_MARKER_REFRESH_MS);
+    await this.subscriber.subscribe(FLOW_CHANNEL).catch(() => undefined);
+  }
+
+  private async leaveFlow(conn: Conn) {
+    conn.flow = null;
+    if (!this.flowConns.delete(conn) || this.flowConns.size > 0) return;
+    this.stopFlow();
+    await this.subscriber.unsubscribe(FLOW_CHANNEL).catch(() => undefined);
+  }
+
+  /** 창 타이머 · 표지 갱신을 멈춘다 — 표지는 지우지 않고 TTL로 만료시킨다(다른 인스턴스의 구독자가 있을 수 있다) */
+  private stopFlow() {
+    if (this.flowTimer) clearInterval(this.flowTimer);
+    if (this.markerTimer) clearInterval(this.markerTimer);
+    this.flowTimer = null;
+    this.markerTimer = null;
+  }
+
+  /** 표지 갱신 — 실패는 삼킨다(TTL 안에 다음 갱신이 다시 쓴다 · 끝내 없으면 발행자가 발행하지 않는다) */
+  private refreshMarker() {
+    void this.cache?.setFlowSubscribed(this.markerOwner, FLOW_MARKER_TTL_S).catch(() => false);
+  }
+
+  private onFlow(message: string) {
+    if (this.flowConns.size === 0) return;
+    let msg: ReturnType<typeof FlowChannelMessage.parse>;
+    try {
+      const r = FlowChannelMessage.safeParse(JSON.parse(message));
+      if (!r.success) return;
+      msg = r.data;
+    } catch {
+      return;
+    }
+    for (const c of this.flowConns) if (c.flow) offerFlow(c.flow, msg);
+  }
+
+  /** 창 끝(250 ms) — 연결마다 flow 프레임 1회 · 요약이 없는 창은 보내지 않는다 */
+  private flushFlow() {
+    const now = Date.now();
+    for (const c of this.flowConns) {
+      const frame = c.flow ? drainFlow(c.flow, now) : null;
+      if (frame) this.send(c, frame, 'flow');
+    }
+  }
+
   private onChannel(channel: string, message: string) {
+    if (channel === FLOW_CHANNEL) {
+      this.onFlow(message);
+      return;
+    }
     if (channel === 'ch:cacheinv') {
       let keys: string[];
       try {
@@ -294,7 +450,7 @@ export class RealtimeGateway implements OnGatewayConnection, OnModuleDestroy {
     }
   }
 
-  private send(c: Conn, msg: WsServerMessageBody, channel: 'rt' | 'control' | 'cacheinv' | 'alarm') {
+  private send(c: Conn, msg: WsServerMessageBody, channel: 'rt' | 'control' | 'cacheinv' | 'alarm' | 'flow') {
     if (c.ws.readyState !== c.ws.OPEN) return;
     // 느린 브라우저 — 송신 대기량이 한도를 넘으면 그 소켓만 4413(Redis 출력 버퍼 절단 4503과 다른 사건)
     if (c.ws.bufferedAmount > WS_SEND_BUFFER_LIMIT_BYTES) {
@@ -319,6 +475,7 @@ export class RealtimeGateway implements OnGatewayConnection, OnModuleDestroy {
     if (!this.conns.delete(c)) return;
     connections.set(this.conns.size);
     for (const d of [...c.devices]) void this.leave(c, d);
+    if (c.flow) void this.leaveFlow(c);
   }
 
   onModuleDestroy() {
@@ -326,6 +483,7 @@ export class RealtimeGateway implements OnGatewayConnection, OnModuleDestroy {
     directBus.off('alarm', this.onDirectAlarm);
     if (this.flushTimer) clearInterval(this.flushTimer);
     clearInterval(this.pingTimer);
+    this.stopFlow();
     for (const c of this.conns) this.close(c, WS_CLOSE.going_away, 'going_away');
   }
 }

@@ -18,6 +18,7 @@ import {
 } from '@nestjs/common';
 import type Redis from 'ioredis';
 import { ClickHouse } from '../../common/clickhouse/clickhouse.module';
+import { FlowPublisher } from '../../common/flow/flow-publisher';
 import { RedisConnections } from '../../common/redis/connections';
 import { type DlqItem, DurableKeyClient, type StreamRecord } from '../../common/redis/durable-key-client';
 import type { DecodeResult } from '../../common/workers/tasks';
@@ -166,6 +167,8 @@ export class IngestService implements OnApplicationBootstrap, BeforeApplicationS
   private reclaiming: Promise<void> | null = null;
   private reclaimTurn = 0;
   private lastLag = 0;
+  /** 흐름 요약 stream 필드 — 1초 lag 폴링의 직전 값(요약을 위해 Redis를 읽지 않는다) · 길이를 모르면 null */
+  private lastStream: { length: number; lag: number | null } | null = null;
   private pausedSince: number | null = null;
   /** 경계 막힘(readGate probe)에서 읽는 컨슈머 이름 — 하나만 읽어 보유 초과를 유계로 둔다 */
   private probe: string | null = null;
@@ -180,6 +183,7 @@ export class IngestService implements OnApplicationBootstrap, BeforeApplicationS
     @Inject(CONTROL_TABLE_SINK_PORT) private readonly control: ControlTableSinkPort,
     @Inject(LATEST_VALUE_WRITE_PORT) latest: LatestValueWritePort,
     @Optional() @Inject(ALARM_HANDOFF_PORT) private readonly alarm: AlarmHandoffPort | null = null,
+    @Optional() @Inject(FlowPublisher) flow: FlowPublisher | null = null,
   ) {
     this.params = INGEST_BATCH_PLANS[cfg.ingestBatchPlan];
     const names = consumerNames(this.params.consumers);
@@ -219,6 +223,8 @@ export class IngestService implements OnApplicationBootstrap, BeforeApplicationS
       sleep,
       stopping: () => this.stopping,
       log: { warn: (s) => this.log.warn(s), error: (s) => this.log.error(s) },
+      flow,
+      streamStat: () => this.lastStream,
     });
   }
 
@@ -410,7 +416,7 @@ export class IngestService implements OnApplicationBootstrap, BeforeApplicationS
       if (d?.ok) {
         if (d.negativeDt > 0) m.negativeDt.inc(d.negativeDt);
         this.held.add(r.id);
-        add({ id: r.id, idMs, decodedAt, entry: d, payload: r.payload });
+        add({ id: r.id, idMs, decodedAt, receivedAt, entry: d, payload: r.payload });
       } else {
         advance(idMs);
         undecodable.push({ payload: r.payload, originId: r.id, reason: 'undecodable', batchToken: null });
@@ -581,8 +587,10 @@ export class IngestService implements OnApplicationBootstrap, BeforeApplicationS
   /** consumer_lag = lag + pending(01_metrics §컨슈머 랙 판정) · lag가 비면 직전 값 유지 + unknown 1 */
   private async pollLag(): Promise<void> {
     try {
-      const b = await this.durable.groupBacklog(STREAM_RAW, GROUP_INGEST);
+      // XINFO GROUPS + XLEN 한 왕복 — 길이는 흐름 요약 stream 필드의 직전 계측 값(요약을 위해 따로 읽지 않는다)
+      const { backlog: b, length } = await this.durable.groupBacklogWithLength(STREAM_RAW, GROUP_INGEST);
       if (!b) return;
+      this.lastStream = { length, lag: b.lag };
       m.groupPending.set(b.pending);
       if (b.lag === null) {
         m.lagUnknown.set(1);

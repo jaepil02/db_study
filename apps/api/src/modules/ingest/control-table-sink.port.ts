@@ -31,14 +31,16 @@ export interface ControlBatchInfo {
 
 export interface ControlTableSinkPort {
   readonly implName: 'PostgresControlSink' | 'NoopControlSink';
-  /** 한 번만 시도한다 · 던지지 않는다 — 실패는 계수 + 구간 로그로 남기고 XACK는 계속된다(REQ-ING-15) */
-  copy(rows: readonly TagRawRow[], info: ControlBatchInfo): Promise<void>;
+  /** 한 번만 시도한다 · 던지지 않는다 — 실패는 계수 + 구간 로그로 남기고 false(흐름 요약 controlCopy.ok) · XACK는 계속된다(REQ-ING-15) */
+  copy(rows: readonly TagRawRow[], info: ControlBatchInfo): Promise<boolean>;
   close(): Promise<void>;
 }
 
 export class NoopControlSink implements ControlTableSinkPort {
   readonly implName = 'NoopControlSink' as const;
-  async copy(): Promise<void> {}
+  async copy(): Promise<boolean> {
+    return true;
+  }
   async close(): Promise<void> {}
 }
 
@@ -73,8 +75,8 @@ export class PostgresControlSink implements ControlTableSinkPort {
     private readonly timeoutMs: number,
   ) {}
 
-  async copy(rows: readonly TagRawRow[], info: ControlBatchInfo): Promise<void> {
-    if (rows.length === 0) return;
+  async copy(rows: readonly TagRawRow[], info: ControlBatchInfo): Promise<boolean> {
+    if (rows.length === 0) return true;
     const t0 = performance.now();
     let timer: NodeJS.Timeout | undefined;
     const attempt = this.copyOnce(rows);
@@ -87,6 +89,7 @@ export class PostgresControlSink implements ControlTableSinkPort {
       ]);
       m.controlCopyRows.inc(rows.length);
       m.controlCopySeconds.observe((performance.now() - t0) / 1000);
+      return true;
     } catch (e) {
       attempt.catch(() => {}); // 타임아웃 뒤 늦게 끝나는 시도의 거절을 삼킨다 — 커넥션은 아래에서 버린다
       this.discard();
@@ -108,6 +111,7 @@ export class PostgresControlSink implements ControlTableSinkPort {
           error: (e as Error).message,
         }),
       );
+      return false;
     } finally {
       clearTimeout(timer);
     }

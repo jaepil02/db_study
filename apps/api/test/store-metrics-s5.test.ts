@@ -122,9 +122,11 @@ describe('수집 결과 → 게이지 매핑 — Redis', () => {
     applyStreamStats([
       { stream: 'raw', length: 3, entriesAdded: 103 },
       { stream: 'dlq', length: 0, entriesAdded: null },
+      { stream: 'biz', length: 7, entriesAdded: 9 },
     ]);
     expect(await sampleOf(redisMetrics.streamLength, { stream: 'raw' })).toBe(3);
     expect(await sampleOf(redisMetrics.streamLength, { stream: 'dlq' })).toBe(0);
+    expect(await sampleOf(redisMetrics.streamLength, { stream: 'biz' })).toBe(7);
     expect(await sampleOf(redisMetrics.entriesAdded, { stream: 'raw' })).toBe(103);
     expect(await sampleOf(redisMetrics.entriesAdded, { stream: 'dlq' })).toBeUndefined();
   });
@@ -160,11 +162,12 @@ describe('수집 결과 → 게이지 매핑 — PostgreSQL', () => {
     for (const v of vs) expect(Object.keys(v.labels).sort()).toEqual(['queryid', 'rank']);
   });
 
-  it('테이블 — 고정 기준 15 밖(pgmigrations 등)은 싣지 않는다 · heap · index 두 kind', async () => {
+  it('테이블 — 고정 기준 16 밖(pgmigrations 등)은 싣지 않는다 · heap · index 두 kind', async () => {
     applyPgTables([
-      { table: 'plc_tag_raw_control', dead: '10', autovac: '2', heap: '8192', idx: '4096' },
-      { table: 'pgmigrations', dead: 1, autovac: 1, heap: 1, idx: 1 },
+      { table: 'plc_tag_raw_control', live: '5000', dead: '10', autovac: '2', heap: '8192', idx: '4096' },
+      { table: 'pgmigrations', live: 1, dead: 1, autovac: 1, heap: 1, idx: 1 },
     ]);
+    expect(await sampleOf(pgMetrics.liveTuples, { table: 'plc_tag_raw_control' })).toBe(5000);
     expect(await sampleOf(pgMetrics.deadTuples, { table: 'plc_tag_raw_control' })).toBe(10);
     expect(await sampleOf(pgMetrics.autovacuum, { table: 'plc_tag_raw_control' })).toBe(2);
     expect(await sampleOf(pgMetrics.relationSize, { table: 'plc_tag_raw_control', kind: 'heap' })).toBe(8192);
@@ -172,6 +175,7 @@ describe('수집 결과 → 게이지 매핑 — PostgreSQL', () => {
       4096,
     );
     expect(await sampleOf(pgMetrics.deadTuples, { table: 'pgmigrations' })).toBeUndefined();
+    expect(await sampleOf(pgMetrics.liveTuples, { table: 'pgmigrations' })).toBeUndefined();
   });
 });
 
@@ -189,12 +193,14 @@ describe('수집 결과 → 게이지 매핑 — ClickHouse', () => {
     expect(await sampleOf(chMetrics.insertedRows)).toBe(23_390_228);
 
     applyChParts([
-      { table: 'tag_raw', parts: '3', bytes_on_disk: '1000', uncompressed: '4000' },
-      { table: '.inner_id.x', parts: 1, bytes_on_disk: 1, uncompressed: 1 },
+      { table: 'tag_raw', parts: '3', bytes_on_disk: '1000', uncompressed: '4000', rows: '120000' },
+      { table: '.inner_id.x', parts: 1, bytes_on_disk: 1, uncompressed: 1, rows: 1 },
     ]);
     expect(await sampleOf(chMetrics.activeParts, { table: 'tag_raw' })).toBe(3);
     expect(await sampleOf(chMetrics.partsBytesOnDisk, { table: 'tag_raw' })).toBe(1000);
     expect(await sampleOf(chMetrics.partsUncompressed, { table: 'tag_raw' })).toBe(4000);
+    expect(await sampleOf(chMetrics.partsRows, { table: 'tag_raw' })).toBe(120_000);
+    expect(await sampleOf(chMetrics.partsRows, { table: '.inner_id.x' })).toBeUndefined();
     expect(await values(chMetrics.activeParts)).toHaveLength(1);
 
     applyChPartLog([{ table: 'tag_1m', new_parts: '12', merge_bytes: '49517208' }]);

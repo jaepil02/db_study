@@ -11,8 +11,8 @@ export const LATEST_VALUE_WRITE_PORT = Symbol('LatestValueWritePort');
 
 export interface LatestValueWritePort {
   readonly implName: 'IngestLatestValueWriter';
-  /** 확정된(XACK된) 배치의 엔트리 — 실패는 삼키고 로그로 남긴다(적재는 이미 확정됐다) */
-  write(entries: readonly BatchEntry[]): Promise<void>;
+  /** 확정된(XACK된) 배치의 엔트리 — 받아들인 필드 수 합(흐름 요약 latestWrites) · 실패는 삼키고 로그로 남긴다(적재는 이미 확정됐다) */
+  write(entries: readonly BatchEntry[]): Promise<number>;
 }
 
 /** 설비별 · 태그별 가장 새 ts의 튜플 — 한 배치 안에서 먼저 접는다(조건부 쓰기 스크립트 인자를 줄인다) */
@@ -43,16 +43,19 @@ export class IngestLatestValueWriter implements LatestValueWritePort {
     private readonly warn: (msg: string) => void,
   ) {}
 
-  async write(entries: readonly BatchEntry[]): Promise<void> {
+  async write(entries: readonly BatchEntry[]): Promise<number> {
+    let total = 0;
     for (const [deviceId, tags] of latestByDevice(entries)) {
       try {
         const accepted = await this.durable.writeLatestIfNewer(deviceId, [...tags.values()]);
         m.latestUpdates.inc({ writer: 'ingest' }, accepted.length);
+        total += accepted.length;
         await this.fanout.publishRt(deviceId, accepted);
       } catch (e) {
         // 최신값만 멈춘다 — 적재는 이미 확정됐다(06_pipeline/02 §발행 · 적체 조회 표의 rt:latest 행과 같은 결)
         this.warn(`rt:latest 쓰기 실패 — 설비 ${deviceId} · ${(e as Error).message}`);
       }
     }
+    return total;
   }
 }
