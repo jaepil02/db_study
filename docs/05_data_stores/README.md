@@ -2,6 +2,7 @@
 
 > **대상**: db_study의 저장소 세 종 — PostgreSQL 업무 테이블 · ClickHouse 시계열 테이블과 롤업 · Redis 키 공간과 메모리 · 저장소 간 정합성 · 수명 주기 · 마이그레이션 · PostgreSQL 대조군
 > **작성일**: 2026-09-23
+> **개정일**: 2026-09-27 — W6 반영 — 한계 등재 22 → **23**행(정본 02 #23 · ClickHouse 업무 대조 CHECK는 INSERT 경로만 · 기록 043)
 > **개정일**: 2026-09-26 — W3 반영 — 한계 등재 19 → **22**행(정본 02 #20~#22)
 > **개정일**: 2026-09-26 — 목적 적합성 실증 W1 — 고정 기준 축약 ClickHouse 테이블 5 → **8**(목적지 5 + 업무 대조 계측물 3) · 객체 **12** 검산 · 파일 목차 03 · 10 행에 업무 대조 테이블 · 역방향 대조 · 스트리밍 동시 적재
 > **원천**: [../README.md](../README.md)(테이블 · 객체 · 영역 접두 수) · [../04_architecture/04_storage_split.md](../04_architecture/04_storage_split.md)(분기 정책) · 원본 architecture.md §6~§8 · §10.1 · §12 · 원본 tech_stack.md §5 · 원본 data_flow.md §10 · §13 · 원본 implementation_plan.md §2.3 · §7.5(커밋 ff66a37) · docs_plan 학습 목표 1(대조군 설계)
@@ -34,7 +35,7 @@
 
 | 항목 | 기준 |
 |------|------|
-| PostgreSQL | 업무 **14** + 대조군 **1** = **15** 테이블(부모 테이블 기준 — 도구 관리 테이블 · 자식 파티션 제외) · FK 15 · UNIQUE 8 · 결합 CHECK 8 · 인덱스 9 · 한계 등재 22행 |
+| PostgreSQL | 업무 **14** + 대조군 **1** = **15** 테이블(부모 테이블 기준 — 도구 관리 테이블 · 자식 파티션 제외) · FK 15 · UNIQUE 8 · 결합 CHECK 8 · 인덱스 9 · 한계 등재 23행 |
 | ClickHouse | 테이블 **8**(목적지 5 + 업무 대조 계측물 3) · MV **3** · Dictionary **1** · 검산: 8 + 3 + 1 = **12** |
 | Redis | 단일 인스턴스 · volatile-lru · 영역 접두 **9**(봉인 3 + 캐시 5 + 채널 1 · sess는 예약) · 활성 키 패턴 **18** · 봉인 표 통제 칸 **26** |
 | 보존 · TTL · MAXLEN | 2계층 조정값 — 보존 정본 [08_retention_lifecycle.md](./08_retention_lifecycle.md) · 키별 TTL 정본 [05_redis_keyspace.md](./05_redis_keyspace.md) · MAXLEN과 메모리 정본 [06_redis_memory.md](./06_redis_memory.md) |

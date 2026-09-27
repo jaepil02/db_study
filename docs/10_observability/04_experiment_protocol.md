@@ -1,7 +1,9 @@
 # 실험 프로토콜
 
-> **대상**: ★ 실험 규칙 정본 — 실험 한 번의 절차 · 3회 중앙값과 편차 폐기 기준 · 구조 판정과 분포 판정 · 스냅샷과 복원 · 캐시 키 초기화 · 기준선 · 회복 관측 · 조건 칸(4요소 + 부가 조건) · 조건 분리 강제 · **측정 기록 템플릿(docs/measurements/NNN-{slug}.md)** · **기계 판독 블록 형식(EXP-COMPARE BFF가 읽는다)** · 기록 상태와 정정 · 결과를 정본 문서에 올리는 절차
+> **대상**: ★ 실험 규칙 정본 — 실험 한 번의 절차 · 3회 중앙값과 편차 폐기 기준 · 구조 판정과 분포 판정 · 역전 구간 우열 3/3 구조 판정 · 스냅샷과 복원 · 캐시 키 초기화 · 기준선 · 회복 관측 · 조건 칸(4요소 + 부가 조건) · 조건 분리 강제 · **측정 기록 템플릿(docs/measurements/NNN-{slug}.md)** · **기계 판독 블록 형식(EXP-COMPARE BFF가 읽는다)** · 기록 상태와 정정 · 결과를 정본 문서에 올리는 절차
 > **작성일**: 2026-09-24
+> **개정일**: 2026-09-27 — W6 리드 요청(x-web4 제안 · 기록 053) — 기계 판독 블록 선택 필드 structuralRanges 신설(대조 기록 선택 · 지수 표기 10^k · 역전 구간 (a, b] · 역전 없음은 winner · range · 우열 미정 점 undetermined · from · to 선택) · BFF 판독 보조 문장(규칙 3 · 5 미적용 · 규칙 4 적용 · 번호가 가장 큰 기록 하나) — 필드 행 11 → **12** · 판독 규칙 7로 measurement/v1 유지
+> **개정일**: 2026-09-27 — W6 종합(규약 · 한계 · 계측 · 기록 048~054) — §구조 판정과 분포 판정에 §역전 구간 — 우열 3/3 구조 판정 신설(반복별 부호 규칙 · 동률 점 서버 µs 규칙 · 편차 폐기 면제의 적용 · serverTimeAsymmetry 한계 — 리드 판정 1 · 2) · §실험 한 번의 절차에 격자 2차 적재 · 정밀화 절차 사실 불릿(리드 판정 5) · §기록 상태와 정정의 discarded 정본 인용 칸을 구조 사실 · 결정적 값 인용으로 명확화(비 쿼리 축 바이트 포함 · 삽입 처리량 제외) · §미확인 등재에 검토 과제 2(콜드 반복 방식 · 서버 µs 값의 절대 차 하한) · 격자 러너 보강 1행 — 판정 · 상태 · 필드 행 수와 schema measurement/v1 불변
 > **개정일**: 2026-09-27 — 목적 적합성 W5 리드 판정 — §조건 칸에 도구 컨테이너 경로의 memoryLimitMb null 조항(선택 키 run.memoryLimitSource가 있으면 4요소 충족 · 추정 채움 금지 유지) — 칸 수 · schema measurement/v1 불변(판독 규칙 7)
 > **개정일**: 2026-09-26 — 마지막 검수 반영 — streamSteps values null 자리(계단 없음 · 무효 반복) · median 조건을 값이 있는 반복 3 미만으로(러너 as-built)
 > **개정일**: 2026-09-26 — W3 재검수 반영(EXP-45 null 규칙 N1) — 기계 판독 블록 streamSteps 행의 failures · valid 규칙을 러너(scripts/lab/s5/load/_rec.py exp45-stream-steps) · 판독기(apps/web/lib/evidence.ts) · 08_screen/07 §실증 요약 패널 판독 행과 같은 문장으로 — failures 무효 계단 null → **반복 자리 단위 null** · **행 valid:false = 그 저장소 유효 반복 0** — 필드 행 수 · schema measurement/v1 불변
@@ -38,6 +40,7 @@
 - **⑤ 판정 창은 기록 칸이다.** 창 시작 · 끝 시각(UTC ISO)을 기록에 적는다 — 창 밖의 워밍업 구간을 섞으면 p95가 기동 직후 JIT · 캐시 비움 비용을 잰다.
 - **⑧은 반복마다 한다.** 반복 사이에 복원하지 않으면 두 번째 반복이 첫 반복의 파트 · TTL 진행 위에서 돌아 세 값이 같은 조건이 아니다.
 - 대조군 격자(EXP-01~05)는 예외다 — 단계가 앞 단계에 누적되므로 반복은 **쿼리 축에서** 하고(쿼리 3회 · 콜드 반복 사이 컨테이너 재기동) 적재는 단계당 1회다.
+- **격자 2차의 적재 · 정밀화 절차 사실(W6 리드 판정 5 · 기록 048~053).** 적재는 미래 방향 누적이다 — 시작 S = KST 자정 − 50,020초로 고정하고 점 p의 데이터를 [S, S + D_p)로 채우며 쿼리 {end} = S + D_p다. 교차 구간 (10^a, 10^(a+1)]은 적응형 로그 이분 2회로 좁힌다(m1 = 10^(a+1/2) · m2 = 역전이 든 반쪽의 로그 중점 10^(a+1/4) 또는 10^(a+3/4)). 가장 오래된 일 파티션의 머리 만료는 S + 7일이고 적재 시간 예산의 끝이다([06_experiment_catalog.md](./06_experiment_catalog.md) §대조 실험 조정값). 데이터 끝을 고정하고 과거로 채운 1차(기록 035~039 · discarded)는 파티션 물리 순서가 시간과 어긋나 PostgreSQL이 BRIN 대신 Seq Scan을 골랐다(기록 039 · 구조 사실) — 방향은 설계 정본 [../05_data_stores/10_olap_vs_rdb_control.md](../05_data_stores/10_olap_vs_rdb_control.md) §역전 지점 탐색 설계가 갖는다.
 
 ## 반복과 폐기
 
@@ -66,6 +69,22 @@ AC의 합격선은 두 종류다([../03_requirements/14_acceptance_criteria.md](
 
 - 검산: 판정 = **3**
 - **A형 — "3회 중앙값"이 무손실에도 걸린다고 읽으면 결함이 숨는다.** 통념은 모든 수치에 3회 중앙값을 쓴다는 것이다. 부정 — 무손실 차가 0 · 0 · 3이면 중앙값은 0이지만 3건 유실이 실재한다. 진짜 축은 구조 판정에 분포가 없다는 것이다. 대체 경로 — 구조 판정은 반복 전부의 성립을 요구하고 불성립 반복을 기록에 남긴다.
+
+### 역전 구간 — 우열 3/3 구조 판정
+
+대조 격자(EXP-01~05)의 역전 구간은 쿼리 시간의 크기가 아니라 **반복마다의 우열 부호**로 정한다(W6 리드 판정 1 · 2 · 기록 053). 부호는 반복마다 하나씩 나오는 구조값이라 위 표의 구조 판정 규칙(3회 전부 성립 · 편차 폐기 적용 안 함)이 그대로 걸린다.
+
+| 규칙 | 내용 | 어기면 |
+|------|------|------|
+| 반복별 부호 | 반복 하나의 우열은 그 반복의 pair(같은 점 · 쿼리 · 캐시에서 ClickHouse 대 PostgreSQL 변형)로 정한다 — pair가 동률(tieWithinResolution — ClickHouse client 중앙값 < 10 ms이고 두 저장소 client 중앙값 차 < 1 ms)이면 **서버 µs 중앙값**, 아니면 **client 중앙값**의 부호 | 점 단위 동률로 정하면 한 반복의 동률이 세 반복 전부의 부호 원천을 바꾼다 · 동률 pair를 client로 가르면 ClickHouse client 1 ms 해상도 안의 차를 부호로 읽는다 |
+| 우열 성립 | 반복 3회의 부호가 모두 같은 점만 우열을 갖는다 · 갈린 점은 **우열 미정** | 점 중앙값 하나로 정하면 반복 사이에 뒤집힌 점이 끝점이 되어 구간이 실제보다 좁게 적힌다 |
+| 구간 끝점 | 우열이 정해진 점만 행 수 순서로 이어 앞선 쪽이 바뀐 이웃 두 점 사이를 (아래 점, 위 점]으로 적는다 · 바뀌지 않으면 "관측 범위 안 역전 없음"과 범위 · 우세 쪽을 적는다 | 우열 미정 점이 끝점이 된다 |
+| PostgreSQL 쪽 | 더 빠른 변형으로 판정하고(기록 053에서는 Q1~Q3이 I2 · Q4 · Q5는 I1 · I2 모두 ClickHouse에 뒤진다) 변형별 판정을 함께 싣는다 | I1 대비 구간과 I2 대비 구간이 한 구간으로 섞인다 |
+| 편차 폐기와의 관계 | 부호 판정에는 편차 폐기를 적용하지 않는다(§구조 판정과 분포 판정 표의 면제) — 기록이 편차 초과로 discarded여도 우열 3/3 구간은 구조 사실로 인용하고, 크기 수치(ms · 배수)는 인용하지 않는다(§기록 상태와 정정) | 서브 ms 값의 흔들림(아래 한계)이 역전 방향이 서 있는 구간까지 지운다 |
+
+- 검산: 규칙 = **5**
+- **동률 점의 서버 µs 판정은 PostgreSQL 쪽으로 기운다(serverTimeAsymmetry · 기록 053).** PostgreSQL 서버 값(pg_stat_statements total_exec_time)은 실행만 재고 계획 시간을 뺀다(track_planning off · 준비된 문장의 custom plan 계획도 빠진다). ClickHouse 서버 값(query_log 시작 ~ 끝 µs)은 파싱 · 분석 · 계획 · 결과 전송을 넣는다. 두 서버 값은 같은 구간이 아니므로 동률 점 판정을 인용할 때는 **client만으로 판정한 구간을 병기한다** — 기록 053에서 client 부호만 쓰면 콜드 Q1 · Q2 · Q3의 구간이 달라지고(재기동 직후 첫 실행의 계획 비용이 PostgreSQL client에만 잡힌다) 웜 구간은 같다. 구간 값은 [../05_data_stores/10_olap_vs_rdb_control.md](../05_data_stores/10_olap_vs_rdb_control.md) §결과(쿼리별 역전 구간 — 구조 판정)가 인용한다. 같은 구간을 재는 계획 시간 병기는 §미확인 · 미설계 등재의 러너 보강이다.
+- **B형 — 폐기 기록에서 구간이 서는 것은 폐기 규칙의 우회가 아니다.** 결론 — 편차 폐기는 크기의 대표값을 지키는 규칙이고 부호는 크기가 아니다. 반대 시나리오 — 부호에도 편차 폐기를 걸면 격자 2차 기록(048~053)은 점마다 서브 ms · 콜드 칸 몇 개가 기준을 넘어 전부 discarded이므로, 3회 모두 같은 방향으로 선 역전 구간을 영영 적을 수 없다. 파생 지침 — 구간을 올리는 문장은 "우열 3/3 구조 판정 · 기록 NNN · discarded"를 밝히고, 중앙값 기준 구간은 그 기록의 참고로만 둔다.
 
 ## 초기 상태 — 스냅샷 · 복원 · 캐시 초기화 · 기준선
 
@@ -210,11 +229,13 @@ AC의 합격선은 두 종류다([../03_requirements/14_acceptance_criteria.md](
 | results | 예(빈 배열 허용) | metric · arm · unit · values · median | 스위치 비교 기록 |
 | points | 대조 기록만 | query · rows · stage · store · index · cache · unit · values · median · resultMatch | 역전 지점 선 차트 |
 | axes | 대조 기록만 | axis(storage_bytes · compression_ratio · insert_rows_per_sec · write_amplification · index_bytes) · store · index · rows · value · unit | 비교 축 막대 |
+| structuralRanges | 대조 기록 선택(EXP-01~05) | 행마다 query · cache · pgVariant · crossover · undetermined 필수 — crossover는 역전 구간 ["10^a", "10^b"] 또는 null · **crossover가 null일 때만** winner(postgresql · clickhouse)와 range(["10^a", "10^b"]) · undetermined는 우열 미정 점의 지수 표기 문자열 배열(빈 배열 허용) · from · to(역전 방향 — 역전 전 앞선 저장소 → 역전 뒤 앞선 저장소)는 선택 | EXP-COMPARE 구조 판정 역전 구간 표 |
 | reverse | 역방향 기록만(EXP-40~44) | exp · op · store · variant · scale · concurrency · rate · read · metric · unit · values · median · structural(구조 지표만 true) | 역방향 대조 해석 · 판독기는 structural true면 중앙값이 아니라 3회 전부를 본다 |
 | streamSteps | EXP-45만 | pps · store · metric(insert_duration_seconds_p50 · _p95 · control_copy_seconds_p50 · _p95) · unit · values(반복 번호 순 · 계단 없음 · 그 저장소 무효 반복 자리 null) · median(값이 있는 반복 3 미만이면 null) · failures · valid(선택 — false면 판정 제외 계단) — failures는 반복 자리 단위(재기동 · 포화 반복 자리는 null) · 행 valid:false = 그 저장소 유효 반복 0(PostgreSQL은 실패 ≥ 1 반복도 유효 반복으로 센다 — 행 수가 어긋나도 실패는 사실이다) | 계단별 두 싱크 시간 · 판정 점 |
 
-- 검산: 필드 행 = **11** — 필수 7 + 대조 기록 선택 2 + 역방향 · 스트리밍 선택 2
-- **reverse · streamSteps를 더해도 schema는 measurement/v1이다(판정).** 판독 규칙 7이 모르는 필드를 무시하므로 필드 추가는 v1 판독기를 깨지 않는다 — 뜻을 바꾸거나 없앨 때만 v2로 올린다. points · axes는 판독 규칙 6에 따라 EXP-01~05 전용이라 역방향 · 스트리밍 값을 싣지 않는다. 키의 뜻과 형식 예시의 정본은 [../05_data_stores/10_olap_vs_rdb_control.md](../05_data_stores/10_olap_vs_rdb_control.md) §EXP 연결 · 기계 판독 블록 제안이다.
+- 검산: 필드 행 = **12** — 필수 7 + 대조 기록 선택 3 + 역방향 · 스트리밍 선택 2
+- **structuralRanges의 행 수 표기는 지수 문자열 "10^k"로 고정한다(k는 소수 허용 — 예: "10^7.25").** crossover는 반개구간 (a, b]이다 — a는 앞선 쪽이 바뀌기 전의 마지막 점, b는 바뀐 뒤의 첫 점이며 둘 다 우열이 정해진 점이다 — 사이의 우열 미정 점은 undetermined에 든다(§역전 구간 규칙). 역전이 없으면 crossover null에 winner와 range를 싣고, range는 우열이 정해진 점들의 관측 범위라 양 끝이 그 판정에 든다. 값은 반복별 부호의 우열 3/3 구조 판정(§역전 구간)이고 크기 수치를 싣지 않는다. 방향은 선택 필드 from · to가 갖는다 — 기록 053은 structuralRanges 행에 방향이 없고 crossovers 필드에만 있으므로, 판독기는 방향이 없어도 행을 받는다.
+- **reverse · streamSteps를 더해도 schema는 measurement/v1이다(판정).** 판독 규칙 7이 모르는 필드를 무시하므로 필드 추가는 v1 판독기를 깨지 않는다 — 뜻을 바꾸거나 없앨 때만 v2로 올린다. points · axes · structuralRanges는 판독 규칙 6에 따라 EXP-01~05 전용이라 역방향 · 스트리밍 값을 싣지 않는다. 키의 뜻과 형식 예시의 정본은 [../05_data_stores/10_olap_vs_rdb_control.md](../05_data_stores/10_olap_vs_rdb_control.md) §EXP 연결 · 기계 판독 블록 제안이다(structuralRanges는 이 절이 정본).
 - **비교 기록의 대상 스위치만 배열이다(S2 판정 · 기록 013).** 한 기록이 두 팔을 담으므로 대상 스위치의 값은 하나가 아니다 — 스칼라 하나를 적으면 다른 팔의 조건이 블록에서 사라지고, 두 기록으로 쪼개면 같은 복원 · 같은 반복 순서로 교대한 팔이 다른 기록이 되어 비교 성립 판정(나머지 10종 동일)을 블록 둘에 걸쳐 해야 한다. 판독기는 배열 값을 "이 스위치가 비교 대상"으로 읽고 BFF 규칙 4의 null 검사는 원소마다 한다. · axes의 axis 값 **5** + 쿼리 시간(points) 1 = 비교 축 **6**([../05_data_stores/10_olap_vs_rdb_control.md](../05_data_stores/10_olap_vs_rdb_control.md) §비교 축 6)
 
 ### BFF 판독 규칙
@@ -230,6 +251,7 @@ AC의 합격선은 두 종류다([../03_requirements/14_acceptance_criteria.md](
 | 7 | 모르는 필드는 무시한다 · 필드를 없애거나 뜻을 바꾸면 schema를 measurement/v2로 올린다 | v1 판독기가 새 기록을 조용히 잘못 읽는다 |
 
 - 검산: 규칙 = **7**
+- **structuralRanges는 구조 판정이라 규칙 3의 valid 조건 · 규칙 5(편차)를 적용하지 않는다.** 규칙 3은 status 조건(valid)만 적용하지 않는다 — superseded(status superseded 또는 다른 valid 기록의 supersedes 대상)는 원천에서 뺀다. 규칙 4(4요소 — memoryLimitMb null은 memoryLimitSource로 충족)는 적용하고, exp에 EXP-01~05가 있고 structuralRanges 배열을 가진 판독 가능 기록 가운데 **기록 번호가 가장 큰 하나만** 쓴다(여러 기록의 구간을 섞지 않는다). 형식이 어긋난 행은 빼고 센다 — 표시 계약은 [../08_screen/07_experiment_console.md](../08_screen/07_experiment_console.md) §대조군 역전 지점이다.
 - **판독 불가 · 4요소 누락은 세어 보인다.** 조용히 빼면 역전 지점이 측정 누락 위에 그려진다([../08_screen/07_experiment_console.md](../08_screen/07_experiment_console.md) §대조군 역전 지점).
 - BFF는 읽기만 한다 — 기록을 만들거나 고치는 경로는 화면에 없다. 기록의 정본성은 파일이 커밋 해시와 함께 git에 남는 데서 온다.
 
@@ -238,11 +260,12 @@ AC의 합격선은 두 종류다([../03_requirements/14_acceptance_criteria.md](
 | 상태 | 뜻 | 파일 | 정본 인용 |
 |------|------|------|------|
 | valid | 3회 · 편차 이내 · 4요소 완비 · 조건 분리 준수 | 그대로 | 가능 |
-| discarded | 편차 초과 · 조건 위반 · 생성기 포화 | 그대로 남긴다 | 불가 |
+| discarded | 편차 초과 · 조건 위반 · 생성기 포화 | 그대로 남긴다 | **크기 수치 불가** · 구조 사실과 결정적 값만 가능(아래 불릿) |
 | superseded | 뒤 기록이 supersedes로 가리킨 기록 | **고치지 않는다** — 뒤 기록이 정정한다 | 불가 · 뒤 기록을 인용 |
 
 - 검산: 상태 = **3**
 - **구조 사실 판별 기록(api 부재 단계)** — health가 없는 단계(S0)의 판별 · 회귀 기록은 run의 티어 · switches를 null로 두고 status valid로 쓴다. 4요소가 비었으므로 수치는 인용하지 않고, 정본에는 구조 사실(동작 여부 · 1계층 개수 · 설정 채택 근거)만 올린다. BFF 규칙 4는 그대로 적용해 "4요소 누락"으로 센다. 기계 판독 블록 conditions에 recordKind structural-discrimination을 적는다.
+- **폐기 기록의 인용 규칙(W6 리드 판정 · 기록 047 · 048~053).** discarded 기록에서 정본 문장에 올릴 수 있는 것은 두 종류다. ① **구조 사실** — 우열 3/3(§역전 구간) · 인덱스 선택 · 계획 노드 · 읽은 행 · 블록 수 · 결과 일치 · 원자성 · 제약 판정처럼 3회 전부 같은 값으로 성립한 판정. ② **결정적 값** — 반복 대상이 아닌 단계당 1회 측정 · 채움 1회의 산출이다 — 비 쿼리 축의 저장 바이트 · 압축률 · 인덱스 바이트 · WAL 바이트와 행 · 파트 수. 결정적 값을 올릴 때는 "결정적 값 · 기록 NNN · discarded"를 밝힌다. **ms · 배수 · 처리량 같은 크기 수치는 참고로도 정본 문장에 넣지 않고 기록 번호만 가리킨다** — 삽입 처리량(행/s)은 비 쿼리 축이지만 시간을 재는 값이라 이 금지에 든다(쿼리 시간과 같은 실행 분산을 탄다). 이 규칙은 정본 문장의 인용 범위이고 BFF 판독 규칙 3은 바뀌지 않는다 — 화면은 discarded 기록을 그대로 뺀다.
 - **기록은 사후에 고치지 않는다**(REQ-TEC-11). 잘못 적은 기록은 새 번호의 정정 기록을 쓰고 supersedes로 옛 번호를 가리킨다 — 옛 파일의 status를 바꾸지 않아도 BFF 규칙 3이 옛 기록을 뺀다.
 
 ## 결과를 정본 문서에 올리는 절차
@@ -258,6 +281,7 @@ AC의 합격선은 두 종류다([../03_requirements/14_acceptance_criteria.md](
 ⑥ 기록 쪽 표시    기록의 "정본 반영" 절에는 반영 시점에 적어 둔 계획만 있다 — 반영 사실은 정본 문서의 개정일 줄이 갖는다
 ```
 
+- **①의 예외는 discarded 기록의 구조 사실 · 결정적 값이다(§기록 상태와 정정).** ③의 형식은 "구조 사실(기록 NNN · discarded · 우열 3/3)" 또는 "값(결정적 값 · 기록 NNN · discarded · 4요소)"이다.
 - **③에서 4요소 중 스위치는 변경분만 적는다.** 전수는 기록 번호가 가리키는 블록에 있다 — 정본 문서 본문이 11종을 반복하지 않는다.
 - **목표 대비 판정은 ③ 뒤에 한다.** 원본 목표를 합격선으로 쓰지 않고 첫 실측을 기준선으로 삼는다([../03_requirements/13_nonfunctional.md](../03_requirements/13_nonfunctional.md)) — 기준선 확정과 목표 확정은 다른 변경 단위다.
 - **as-built 승격은 이 절차의 끝이다.** 한 문서의 미확인 행이 전부 기록 인용으로 바뀌면 그 문서의 성격을 as-built로 올린다(루트 README 성격 줄).
@@ -281,6 +305,9 @@ AC의 합격선은 두 종류다([../03_requirements/14_acceptance_criteria.md](
 | 편차 20%가 이 머신에 맞는가 | 미확인 — 폐기 기록 비율로 판단 | 첫 10기록 뒤 이 문서 |
 | 콜드 상태 근사의 오차 | 3계층 미확인 — 페이지 캐시를 비울 수 없다 | [07_measurement_limits.md](./07_measurement_limits.md) |
 | 기록 작성 도구(블록 생성 스크립트) | 미설계 — 코드 착수 항목 | [../09_tech_stack/05_tooling_devops.md](../09_tech_stack/05_tooling_devops.md) |
+| 콜드 반복 방식 | **검토 과제(W6)** — 격자 콜드는 반복마다 컨테이너 재기동 직후 1회 실행이라 편차 초과의 다수가 콜드 칸이고 그중 다수가 첫 반복이다(기록 053 — 초과 39 중 콜드 21 · 그중 반복 1이 가장 큰 칸 16) · 콜드 표본 수 · 재기동 단위 · 첫 반복 처리를 측정 전에 정한다 | 이 문서 §반복과 폐기 · [07_measurement_limits.md](./07_measurement_limits.md) §공정성 · 측정 한계 |
+| 서버 µs 값의 절대 차 하한 | **검토 과제(W6)** — 편차 기준은 상대값(20%)이라 수십 µs 서버 값은 µs 단위 흔들림으로 기준을 넘는다(기록 048 · 053의 수십 µs 서버 기준 초과 칸) · 상대 기준에 절대 차 하한을 둘지와 그 값은 측정 전에 정한다(측정을 본 뒤 기준을 바꾸지 않는다) | 이 문서 §조정값 — 조회 계약 |
+| 격자 러너 보강 | 미설계(W6 등재 · 기록 053 정본 반영) — ⓪ pg_stats ts 상관 채취 ① PostgreSQL 계획 시간 병기(track_planning 또는 계획 계측 — 동률 점 서버 비교를 같은 구간으로) ② match가 점당 두 번 도는 경로 확인 ③ restore 줄에 대상 정밀화 점 필드 | 러너 scripts/lab/s5/grid — 코드 착수 항목 |
 
 ## 관련 문서
 

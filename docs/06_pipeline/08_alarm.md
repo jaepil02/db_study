@@ -2,6 +2,7 @@
 
 > **대상**: F-06 판정 흐름의 기전 정본 — 확정 배치 인계 · **판정을 flusher 흐름에서 기다리는가 판정(직렬 판정기 · 인계 깊이 1)** · 규칙 조회 · 배치 단위 상태 조회(ADR-11) · 행 평가 순서 · 조건 평가와 **RATE_OF_CHANGE 경계** · 디바운스 전이와 세 쓰기의 순서 · 부분 실패(PostgreSQL이 진실) · **배치 단위 halt · 판정 경로 statement_timeout** · **⑥ 1회 재시도와 잔여** · **ACK 시 alarm:state 갱신 주체 · CLEARING 중 ACK 전이** · alarm_eval 재시도 · 격리 · **⑧ 쓰기 분리(깊이 1 큐)** · **비활성 태그 규칙** · 판정 경로 직렬성 · 규칙 시드
 > **작성일**: 2026-09-24
+> **개정일**: 2026-09-27 — W6 EXP-33 실측 반영(기록 054) — 미확인 "판정 구간 ≤ 플러시 주기 관계의 실측" **닫힘 — 성립** — 기전 · 전이 수 불변
 > **개정일**: 2026-09-26 — 마지막 확인 반영 — 종료 중 백오프 시도 조건(비우기 상한 안에 끝날 때만)
 > **개정일**: 2026-09-26 — 러너 재검수 반영 — 종료 중 재시도 서술 정밀화(실패 뒤 재시도 없음 · 진행 중 백오프의 시도 1회는 나감)
 > **개정일**: 2026-09-26 — 마지막 검수 반영 — 확인 조회 실패 뒤 동결은 확정 지점에 닿는 규칙만 · queue_full 조건(대기 칸 가득 참 — 재시도 중이 대표) · 종료 중 삽입 실패는 retry_exhausted · shutdown은 비우기 상한 초과분만
@@ -247,7 +248,7 @@ CLEARING 중 확인의 전이다. 상태도에 CLEARING → ACKED 전이가 없�
 | 항목 | 상태 | 확정 자리 |
 |------|------|------|
 | 판정 구간 A1~A6 · 알람 통지 지연 | 신설 · 3계층 미확인 — 확정 전 임의 값 고정 금지 | [../04_architecture/05_latency_budget.md](../04_architecture/05_latency_budget.md) · 실측 |
-| 판정 구간 ≤ 플러시 주기 관계의 실측 | 1계층 관계 — 값 미확인 | S7 · 인계 대기 히스토그램 |
+| 판정 구간 ≤ 플러시 주기 관계의 실측 | **닫힘 — 성립**(기록 054 · 05b237a · 부하 실험 · M · 스위치 기본값 · 모드 B SPIKE 10,000 pps · 규칙 41) — 판정 구간 ≤ 1초 비율 1.0 × 3 · 판정 구간 p50 6.726 ms · 창 안 전 배치 ≤ 15 ms · 인계 대기 표본 전부 첫 칸 · PostgreSQL 정지 · alarm_eval 보류 중에도 적재 · 인계가 멈추지 않았다 | [../04_architecture/05_latency_budget.md](../04_architecture/05_latency_budget.md) §알람 판정 구간 — 신설 · 기록 054 |
 | 판정 경로 statement_timeout 값 | **신설(W3 코드 검수 M3)** — 2계층 현행 참고 1초 · 소유 이 문서 · 판정 구간 실측으로 재검토 | 이 문서 §배치 단위 halt와 statement_timeout · S7 |
 | worker 다중화 시 판정 분할 수단 | 미설계 — 확장 단계 | [../04_architecture/08_scaling_roadmap.md](../04_architecture/08_scaling_roadmap.md) |
 | 비활성 태그의 열린 이벤트를 닫는 수단 | 닫힘 — 두지 않는다(W5 판정 — 알람 강제 해제 표면 없음) · 잔여는 한계 등재 #17 | [../07_api/README.md](../07_api/README.md) · [../05_data_stores/02_postgresql_constraints.md](../05_data_stores/02_postgresql_constraints.md) |

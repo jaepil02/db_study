@@ -2,6 +2,7 @@
 
 > **대상**: ClickHouse 객체 12(테이블 8 · MV 3 · Dictionary 1)의 목록과 원시 · 판정 테이블 tag_raw · alarm_eval DDL · **업무 대조 테이블 3(역방향 대조 계측물)** DDL · 코덱 · 파티션 · 정렬 키(ADR-15) · 중복 제거(ADR-14) · 시각 컬럼 시간대 표기 통일 · dict_tag DDL · 품질 코드 컬럼 판정 · 서버 설정 계약
 > **작성일**: 2026-09-24
+> **개정일**: 2026-09-27 — W6 결과 반영 — 업무 대조 보장 표 값 검사 · 경합 판정 칸의 판별 대상 → **CHECK는 INSERT 경로만(기록 043)** · **갱신 행 수 응답 없음(기록 042)** · 미확인 판별 둘 닫힘 · 보장 수 불변
 > **개정일**: 2026-09-26 — W1 재검수 반영 — 보장 표 유일성 · MergeTree 칸 "재삽입은 윈도우 N + 토큰일 때만 버린다" → **윈도우 N일 때 버린다(토큰이 없으면 블록 내용 해시 · 있으면 토큰 기준)**(공식 문서 삽입 재시도 중복 제거 대조)
 > **개정일**: 2026-09-26 — W1 검수 반영 — 중복 제거 윈도우 불릿 "두지 않는다" → **DDL은 0 · EXP-43 ⓓ 윈도우 N + 토큰 변형만 실행 범위에서 MODIFY SETTING으로 켜고 0으로 복원** · 보장 표 다문장 원자성 칸에 뺀 이유와 실패 시나리오 · 갱신 가시성 칸 경량 UPDATE는 Beta(정본 10_olap_vs_rdb_control) · RMT가 order_no 중복을 합치지 않는 구조 사실
 > **개정일**: 2026-09-26 — 목적 적합성 실증 W1 — §업무 대조 테이블 신설(work_order_control · work_order_control_rmt · production_log_control · DDL 순번 009 · 역방향 대조 EXP-40~44) — 객체 9 → **12** · 테이블 5 → **8** · CH에 없는 것(UNIQUE · FK · 다문장 트랜잭션)과 있는 것(CHECK CONSTRAINT) 등재 · 그래뉼 256 변형은 테이블을 늘리지 않는다(실행 범위 변형 테이블 판정 · 정본 10_olap_vs_rdb_control)
@@ -292,9 +293,9 @@ ClickHouse가 업무 보장 중 무엇을 줄 수 있고 없는지의 등재다.
 |------|------|------|------|------|
 | 유일성 | UNIQUE · PK — 커밋 전 거절 | 없음 — 같은 키 행이 그대로 쌓인다 · 같은 블록의 재삽입은 윈도우 N일 때 버린다(토큰이 없으면 블록 내용 해시 · 있으면 토큰 기준 — 공식 문서 삽입 재시도 중복 제거 · ⓓ 변형) | 정렬 키(order_id) 단위 · **머지 뒤에만** 합친다 · 조회 때 FINAL이 합친다 — **order_no는 정렬 키가 아니라 서로 다른 order_id의 order_no 중복은 머지 뒤에도 남는다**(엔진 정의 · 실측으로 확인) | EXP-43 ⓐ · ⓓ |
 | 참조 무결성 | FK — 커밋 전 거절 | 없음 | 없음 | EXP-43 ⓑ |
-| 값 검사 | CHECK — 커밋 전 거절 | CONSTRAINT CHECK — INSERT 때 행마다 거절 · UPDATE 경로 검사는 판별 대상 | 상동 | EXP-43 ⓒ |
-| 다문장 원자성 | 트랜잭션 | 문장 단위 · 다문장 트랜잭션 없음 — 실험 기능이라 기본 꺼짐 · 버전 종속이므로 켜지 않는다. 켜고 잰 부분 반영 0은 운영 경로에 쓸 수 없는 보장이라, 그것을 근거로 업무 쓰기를 옮기면 버전 갱신 하나로 보장이 사라진다([10_olap_vs_rdb_control.md](./10_olap_vs_rdb_control.md) §원리 대응) | 상동 | EXP-42 |
-| 경합 판정 | 조건부 UPDATE의 갱신 행 수 · 행 잠금 | 갱신 행 수 응답 여부는 판별 대상 | 해당 없음 — 갱신이 삽입이다 | EXP-42 |
+| 값 검사 | CHECK — 커밋 전 거절(INSERT · UPDATE 두 경로) | CONSTRAINT CHECK — **INSERT 경로만 검사** · 경량 UPDATE · ALTER UPDATE(mutations_sync 1)는 위반 값을 오류 없이 받아 되읽힌다(3종 × 3규모 × 3회 · 기록 043 · valid · 26.8.10.6) | INSERT 경로만(UPDATE 경로 없음) | EXP-43 ⓒ |
+| 다문장 원자성 | 트랜잭션 | 문장 단위 · 다문장 트랜잭션 없음 — 실험 기능이라 기본 꺼짐 · 버전 종속이므로 켜지 않는다. 켜고 잰 부분 반영 0은 운영 경로에 쓸 수 없는 보장이라, 그것을 근거로 업무 쓰기를 옮기면 버전 갱신 하나로 보장이 사라진다([10_olap_vs_rdb_control.md](./10_olap_vs_rdb_control.md) §역방향 대조 — 업무 워크로드 · 원리 대응) | 상동 | EXP-42 |
+| 경합 판정 | 조건부 UPDATE의 갱신 행 수 · 행 잠금 | **갱신 행 수를 응답하지 않는다**(경량 · ALTER 모두 written_rows 0 · 기록 042 · valid) | 해당 없음 — 갱신이 삽입이다 | EXP-42 |
 | 갱신 가시성 | 커밋 | 경량 UPDATE는 apply_patch_parts 1(기본)에서 조회에 적용(문서 · **Beta** — 정본 [10_olap_vs_rdb_control.md](./10_olap_vs_rdb_control.md) §역방향 대조) · ALTER UPDATE는 mutations_sync · apply_mutations_on_fly에 따른다 | FINAL 조회 즉시 · 비 FINAL은 머지 뒤 | EXP-40 |
 
 - 검산: 보장 = **6** · ClickHouse가 구조로 갖지 않는 것 = 유일성(MergeTree) · 참조 무결성 · 다문장 원자성 = **3**
@@ -308,7 +309,7 @@ ClickHouse가 업무 보장 중 무엇을 줄 수 있고 없는지의 등재다.
 | 압축률(프로파일별) · 코덱 대안 효과 | 3계층 미확인 — 확정 전 임의 값 고정 금지. 원본 예상치 혼합 8~15배 · RANDOM_WALK 2~4배 | [../03_requirements/13_nonfunctional.md](../03_requirements/13_nonfunctional.md) REQ-NFR-14 |
 | 서버 timezone 설정 | **W6 판정 — Asia/Seoul** · 스키마는 의존하지 않는다 — 수동 쿼리 · 시스템 테이블 표시에만 영향 | [../09_tech_stack/03_data_infra.md](../09_tech_stack/03_data_infra.md) |
 | index_granularity 4096 실험 | 원본 실험 후보 — **W6 미채번**(카탈로그에 없다 · 필요해지면 말미 채번 — 다음 번호는 [../10_observability/06_experiment_catalog.md](../10_observability/06_experiment_catalog.md) §분류와 검산) | [../10_observability/06_experiment_catalog.md](../10_observability/06_experiment_catalog.md) |
-| 업무 대조 테이블의 판별 둘 — UPDATE가 갱신 행 수를 응답하는가 · CHECK CONSTRAINT가 UPDATE 경로에도 검사되는가 | 판별 대상 — EXP-42 · EXP-43 실행기 첫 실행이 원시에 남긴다 | [10_olap_vs_rdb_control.md](./10_olap_vs_rdb_control.md) |
+| 업무 대조 테이블의 판별 둘 — UPDATE가 갱신 행 수를 응답하는가 · CHECK CONSTRAINT가 UPDATE 경로에도 검사되는가 | **닫힘(W6)** — 응답하지 않는다(기록 042) · UPDATE 경로는 검사하지 않는다(기록 043 · 둘 다 valid · 19f8861 · 부하 실험 · 티어 해당 없음 · 스위치 기본값 · 26.8.10.6) | [10_olap_vs_rdb_control.md](./10_olap_vs_rdb_control.md) |
 | 업무 대조 테이블의 갱신 · 조회 · 삽입 비용 | 3계층 미확인 — 확정 전 임의 값 고정 금지 | EXP-40~44 · [10_olap_vs_rdb_control.md](./10_olap_vs_rdb_control.md) |
 | 대량 태그 시 Dictionary 레이아웃 전환 | 원본 "수만 행을 넘으면 LIFETIME 확대 또는 CACHE 레이아웃" — 비활성 포함 적재로 행 수가 단조 증가한다 | [07_cross_store_consistency.md](./07_cross_store_consistency.md) |
 

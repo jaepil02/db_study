@@ -1,7 +1,8 @@
 # 측정 한계
 
-> **대상**: 이 머신에서 잴 수 없게 된 것의 전수 — 로컬 한계 · cpuset으로 되살린 원칙과 남은 한계 · WSL2 mirrored 네트워킹의 영향 · 흐름별 병목과 측정이 가르지 못하는 경우 · 관측 스택 간섭 · 측정 도구 자체의 한계 등재 · 수치 해석 규칙
+> **대상**: 이 머신에서 잴 수 없게 된 것의 전수 — 로컬 한계 · cpuset으로 되살린 원칙과 남은 한계 · WSL2 mirrored 네트워킹의 영향 · 흐름별 병목과 측정이 가르지 못하는 경우 · 관측 스택 간섭 · 측정 도구 자체의 한계 등재 · **공정성 · 측정 한계(실측에서 드러난 것)** · 수치 해석 규칙
 > **작성일**: 2026-09-24
+> **개정일**: 2026-09-27 — W6 종합(한계 · 기록 045 · 046 · 048~054) — §공정성 · 측정 한계 신설(ClickHouse 서버 로그 수준 trace · 상대 편차 기준 대 서브 ms · 콜드 1회 실행 · 격자 적재 방향 어긋남과 해소 · EXP-45 배치 행 상한 · serverTimeAsymmetry · 린트 범위 밖 기록 — 6행) · §미확인 등재 2행(trace 로그 부하 크기 · 콜드 반복 방식과 절대 차 하한)
 > **개정일**: 2026-09-24 — 측정 머신 전환 · S0 구현 반영 — 부하 생성기 격리 서술을 현행 배치(vCPU 14 · 부하 도구 11-12 · 관측 13)로 갱신
 > **원천**: 원본 tech_stack.md §8 · §9 · §10.6(커밋 ff66a37) · 원본 data_flow.md §15 · §16(커밋 ff66a37) · 원본 implementation_plan.md §2.1 · §2.4 · §2.5(커밋 ff66a37) · 원본 architecture.md §14 · §19(커밋 ff66a37) · D-10 · ADR-20 · ADR-25 · REQ-TEC-11 · 12 · 13 · [../04_architecture/03_execution_topology.md](../04_architecture/03_execution_topology.md) §cpuset 배치 · [../06_pipeline/01_flow_inventory.md](../06_pipeline/01_flow_inventory.md) §흐름별 병목 후보 · [../03_requirements/13_nonfunctional.md](../03_requirements/13_nonfunctional.md) §로컬 측정 한계와 해석
 
@@ -113,6 +114,22 @@
 - 검산: 등재 = **8**
 - **#5 · #8은 설계가 고른 한계다.** 저장소를 늘리거나(무효 구간 테이블) 브라우저 계측을 서버로 보내는(수신 비콘) 대안은 측정 대상을 바꾸는 비용이 한계보다 크다고 판정했다 — 판정 근거는 [02_instrumentation.md](./02_instrumentation.md) §구간 기록 · §확인(ACK) 신호 부재의 계측.
 
+## 공정성 · 측정 한계
+
+실측(W6 · 기록 045 · 046 · 048~054)에서 드러난 한계다. 설계 단계의 한계 표와 달리 각 행은 **그 한계가 드러난 기록**을 갖는다. 크기 수치는 인용 규칙([04_experiment_protocol.md](./04_experiment_protocol.md) §기록 상태와 정정)을 따른다 — discarded 기록은 번호만 가리킨다.
+
+| 한계 | 드러난 기록 | 걸리는 측정 | 그래서 수치를 이렇게 읽는다 | 상태 |
+|------|------|------|------|------|
+| ClickHouse 서버 로그 수준이 이미지 기본 trace다 — config.d에 logger 설정이 없어 text_log가 10분에 약 470만 줄 규모로 쌓인다(리드 확인 · 기록 조건 칸) | 046 · 048~054(조건 칸) · 046에서 EXP-41 동시성 32가 서버 메모리 한도 초과(MEMORY_LIMIT_EXCEEDED)로 실패해 조회 · 예열 수를 줄이고 호출 전 로그 비움을 더한 뒤 실패 0 | **모든 ClickHouse 측정** — 쿼리 · 삽입 · 점조회 · alarm_eval 삽입(판정 구간 A5) | 로그 쓰기 부하는 ClickHouse 값의 일부로 적고 측정 중 설정을 바꾸지 않는다 — 로그 수준이 다른 기록끼리는 조건 차로 비교 불성립 · ClickHouse 대 PostgreSQL 크기 비교의 해석 절에 이 행을 인용한다(PostgreSQL · Redis 쪽에는 같은 크기의 로그 부하가 없다) | 부하 크기 3계층 미확인 |
+| 상대 편차 기준(현행 참고 20%) 대 이 머신의 서브 ms 값 · 콜드 1회 실행 분산 | 048~053 전부 discarded · 047 discarded(서브 ms p95) | 격자 쿼리 축 · 역방향 서브 ms 분위수 | 초과의 다수는 콜드 칸(재기동 직후 1회 · 첫 반복)이다 · 서버 µs 기준 칸의 일부는 수십 µs 값의 흔들림이다(기록 048 · 053) — 서버 기준 초과도 대부분 client로 재도 넘는다(053) · 크기 수치는 폐기하고 우열 방향은 구조 판정으로 읽는다([04_experiment_protocol.md](./04_experiment_protocol.md) §역전 구간) · 기준 자체를 사후에 완화하지 않는다 | 검토 과제 2 — 콜드 반복 방식 · 절대 차 하한([04_experiment_protocol.md](./04_experiment_protocol.md) §미확인 · 미설계 등재) |
+| 격자 적재 방향이 설계 문장("시스템이 실제로 쌓이는 순서 그대로")과 어긋났다 — 1차는 데이터 끝을 고정하고 과거로 채웠다 | 035~039 discarded(039 — 5단계 파티션 ts 상관 0.027(결정적 값 · 기록 039 · discarded) · PostgreSQL Seq Scan) | 격자 PostgreSQL I1(BRIN) 계획 · 그 위 역전 판정 | 1차 기록은 계획 노드 · 상관 같은 구조 사실로만 읽는다 · 2차(048~053)는 미래 방향 누적으로 어긋남을 없앴다(ts 상관 0.99999 — 리드 실측 · 원시 없음) · 설계 문장의 정본은 [../05_data_stores/10_olap_vs_rdb_control.md](../05_data_stores/10_olap_vs_rdb_control.md) §역전 지점 탐색 설계 | **해소(2차)** |
+| EXP-45 배치 안 A의 배치 행 상한 50,000 | 045 valid | EXP-45 50,000 · 100,000 pps 계단 | 두 계단은 같은 50,000행 배치이고 100,000 pps는 초당 배치 수만 두 배다 — 배치당 싱크 시간은 pps를 따라 오르지 않으므로 "COPY가 플러시 주기를 넘는 pps"의 교차를 배치 시간으로는 관측할 수 없다 · "관측 범위 안 없음"으로 적고 100,000 pps 너머를 외삽하지 않는다 | 교차 판정은 컨슈머 점유(초당 배치 수 × 두 싱크 시간) 쪽 가설로 미확인 |
+| 서버 시간 비대칭(serverTimeAsymmetry) — PostgreSQL pg_stat_statements total_exec_time은 실행만(계획 제외 · custom plan 계획도 빠진다) · ClickHouse query_log는 파싱 · 분석 · 계획 · 결과 전송 포함 | 048~053(원시 serverTimeAsymmetry) | 격자 동률 점 우열 · 서버 µs 기준 편차 판정 | 서버 µs 비교는 PostgreSQL 쪽으로 기운다 — 동률 점 판정을 인용할 때 client만으로 판정한 구간을 병기한다([04_experiment_protocol.md](./04_experiment_protocol.md) §역전 구간) | 계획 시간 병기는 러너 보강(미설계) |
+| docs_lint는 docs/measurements를 검사하지 않는다 | 해당 없음 — 린트 범위 정본 [../CLAUDE.md](../CLAUDE.md) §구조 | 기록 파일의 수치 · 형식 · 블록 | 린트 오류 0은 설계 문서의 형식 보증이지 기록 검증이 아니다 — 기록 수치는 원시 · 블록과 대조 스크립트로 검증하고, BFF 판독 규칙은 블록 모양만 거른다 | 기록 검증 도구 미설계([04_experiment_protocol.md](./04_experiment_protocol.md) §미확인 · 미설계 등재) |
+
+- 검산: 한계 = **6** · 해소 1 · 남은 한계 5
+- **B형 — ClickHouse 로그 수준을 측정 중에 바꾸지 않은 것은 방치가 아니다.** 결론 — 공정성 한계를 조건으로 고정하고 기록 조건 칸에 적었다. 반대 시나리오 — 격자 도중에 로그 수준을 낮추면 같은 격자의 앞 단계와 뒤 단계가 다른 조건이 되어 역전 판정이 로그 부하 변화와 섞인다. 파생 지침 — 로그 수준을 바꾸려면 새 조건으로 격자 전체를 다시 재고, 부하 크기는 로그 수준만 바꾼 별도 기록이 잰다(§미확인 · 미설계 등재).
+
 ## 수치 해석 규칙
 
 기록의 해석 절이 지킬 규칙이다.
@@ -135,6 +152,8 @@
 | 메모리 표본 추정 오차 | 3계층 미확인 | EXP-39 |
 | 모드 A 생성기 동거 비용 | 3계층 미확인 — gen_worker_utilization으로 기록 | EXP-23(모드 A) |
 | datagen 프로세스 CPU 집합의 확정 | 잠정 — k6 집합 공유 | [../04_architecture/03_execution_topology.md](../04_architecture/03_execution_topology.md) |
+| ClickHouse trace 로그 부하의 크기 | 3계층 미확인(W6 등재) — 모든 ClickHouse 값에 들어 있다 | 로그 수준만 바꾼 별도 기록 |
+| 콜드 반복 방식 · 서버 µs 값의 절대 차 하한 | 검토 과제(W6 등재) | [04_experiment_protocol.md](./04_experiment_protocol.md) §미확인 · 미설계 등재 |
 
 ## 관련 문서
 
