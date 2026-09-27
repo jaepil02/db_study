@@ -73,8 +73,12 @@ eval_tsv() { # $1=규칙 목록(쉼표) $2=시작 ms $3=끝 ms — rule_id · ts
   chq "SELECT rule_id, toUnixTimestamp64Milli(ts), breached FROM plc.alarm_eval WHERE rule_id IN ($1)
        AND ts >= fromUnixTimestamp64Milli(toInt64($2)) AND ts < fromUnixTimestamp64Milli(toInt64($3)) ORDER BY rule_id, ts FORMAT TSV"
 }
-judged_rules() { # $1=규칙 목록 — 이 반복 규칙 중 판정된 수(POST 시작 뒤 행만 — 스냅샷에 남은 옛 행을 세지 않는다)
-  chq "SELECT uniqExact(rule_id) FROM plc.alarm_eval WHERE rule_id IN ($1) AND ts >= fromUnixTimestamp64Milli(toInt64($(kv_get rulesPostStartMs)))"
+require_floor() { # 판정 하한을 EVAL_FLOOR에 — 핫픽스 전 코드로 load한 상태(kv 없음)는 이어 쓰지 않는다(검수 r-exp33b 조건)
+  EVAL_FLOOR=$(kv_get evalFloorMs)
+  [ -n "$EVAL_FLOOR" ] || { echo "evalFloorMs 없음 — 핫픽스 전 load 상태다 · 이 반복은 reset · start부터" >&2; exit 1; }
+}
+judged_rules() { # $1=규칙 목록 — 이 반복 규칙 중 판정된 수(판정 하한 evalFloorMs = POST 시작 − 60초 뒤 행만 — 스냅샷에 남은 옛 행을 세지 않는다)
+  chq "SELECT uniqExact(rule_id) FROM plc.alarm_eval WHERE rule_id IN ($1) AND ts >= fromUnixTimestamp64Milli(toInt64($EVAL_FLOOR))"
 }
 # ch:alarm 구독(포그라운드 자식 · 호출 안에서 거둔다) — 줄 = 수신 epoch ms + 프레임 JSON. 컨테이너 안 redis-cli는 timeout으로 스스로 끝난다
 SUB_PID=''
@@ -219,6 +223,9 @@ for r in json.load(open(sys.argv[1])):
 PY
   : > "$ST/rules.resp"
   kv_set rulesPostStartMs "$(ms_now)"
+  # 판정 셈 하한 — alarm_eval.ts는 판정한 배치의 데이터 시각이라 POST 직후 첫 판정 행이 POST 시각보다 앞선다(rep 1 실측 −663 ms)
+  #   스냅샷에 남은 옛 행은 복원 전 과거(일 단위)라 60초 여유를 둬도 섞이지 않는다
+  kv_set evalFloorMs "$(( $(kv_get rulesPostStartMs) - 60000 ))"
   while read -r tier body; do
     resp=$(apiq -w '\n%{http_code}' -X POST "$API/api/v1/alarms/rules" -d "$body")
     code=$(printf '%s' "$resp" | tail -1)
@@ -236,15 +243,18 @@ for ln in open(sys.argv[2]):
 json.dump(out, open(sys.argv[3], 'w'))
 PY
   N=$(python3 -c 'import json,sys; print(len(json.load(open(sys.argv[1]))))' "$ST/rules.json")
-  # 대상 rule_id의 POST 전 alarm_eval 행 — 0이 아니면 경고(원시에 남고 판정 셈은 POST 시작 뒤 행만 읽는다)
-  PRE=$(chq "SELECT count() FROM plc.alarm_eval WHERE rule_id IN ($(rule_ids | tr ' ' ,)) AND ts < fromUnixTimestamp64Milli(toInt64($(kv_get rulesPostStartMs)))")
+  require_floor
+  # 대상 rule_id의 판정 하한 전 alarm_eval 행 — 0이 아니면 경고(원시에 남고 판정 셈은 하한 뒤 행만 읽는다)
+  PRE=$(chq "SELECT count() FROM plc.alarm_eval WHERE rule_id IN ($(rule_ids | tr ' ' ,)) AND ts < fromUnixTimestamp64Milli(toInt64($EVAL_FLOOR))")
   kv_set preexistingEvalRows "$PRE"
-  [ "$PRE" = 0 ] || echo "경고: 대상 rule_id의 POST 전 alarm_eval 행 $PRE개 — 셈에서 뺀다" >&2
+  [ "$PRE" = 0 ] || echo "경고: 대상 rule_id의 판정 하한(POST − 60초) 전 alarm_eval 행 ${PRE}개 — 셈에서 뺀다" >&2
   kv_set rulesCreatedMs "$(ms_now)"
   # 판정 시작 — 상태 키 수 = 규칙 수(판정된 규칙마다 1)까지 · 상한 60초
   K=0
   for _ in $(seq 1 60); do K=$(state_keys); [ "$K" -ge "$N" ] && break; sleep 1; done
-  echo "── 규칙 $N개 POST · 상태 키 $K · 예열 ${WARM_S:-60}초"
+  # 하한 여유의 실측 근거 — 대상 규칙 첫 판정 행 ts − POST 시작(음수면 POST 앞 데이터 시각 · rep 1 실측 −663 ms)
+  kv_set evalLeadMs "$(chq "SELECT toInt64(minOrNull(toUnixTimestamp64Milli(ts))) - $(kv_get rulesPostStartMs) FROM plc.alarm_eval WHERE rule_id IN ($(rule_ids | tr ' ' ,)) AND ts >= fromUnixTimestamp64Milli(toInt64($EVAL_FLOOR))")"
+  echo "── 규칙 ${N}개 POST · 상태 키 $K · 예열 ${WARM_S:-60}초"
   sleep "${WARM_S:-60}"
   echo "── 예열 끝 — window <반복>"
   ;;
@@ -252,6 +262,7 @@ window)
   REP=${2:?반복 번호}
   exp33_resume "$REP"
   [ -f "$ST/rules.json" ] || { echo "규칙이 없다 — load 먼저" >&2; exit 1; }
+  require_floor
   WIN=${3:-$(py_param winS)}
   SD="$ST/window"; rm -rf "$SD"; mkdir -p "$SD"
   meta_set winS "$WIN"
@@ -264,7 +275,7 @@ window)
   sleep 8
   W0=$(meta_get winStartMs "$SD"); W1=$(meta_get winEndMs "$SD")
   IDS=$(rule_ids | tr ' ' ,)
-  P0=$(kv_get rulesPostStartMs)
+  P0=$EVAL_FLOOR
   E0=$(( W0 - 60000 )); [ "$E0" -ge "$P0" ] || E0=$P0
   eval_tsv "$IDS" "$E0" "$W1" > "$SD/eval.tsv"
   judged_rules "$IDS" > "$SD/judged-rules"
@@ -394,7 +405,7 @@ fault-ch)
   REC_S=${4:-45}
   exp33_resume "$REP"
   [ -f "$ST/rules.json" ] || { echo "규칙이 없다 — load 먼저" >&2; exit 1; }
-  [ "$(chq "SELECT count() FROM system.tables WHERE database = 'plc' AND name = '$HOLD_TABLE'")" = 0 ] || { echo "plc.$HOLD_TABLE이 이미 있다 — 앞 호출의 보류가 남았다(ch_restore 대상)" >&2; exit 1; }
+  [ "$(chq "SELECT count() FROM system.tables WHERE database = 'plc' AND name = '$HOLD_TABLE'")" = 0 ] || { echo "plc.${HOLD_TABLE}이 이미 있다 — 앞 호출의 보류가 남았다(ch_restore 대상)" >&2; exit 1; }
   SD="$ST/fault-ch"; rm -rf "$SD"; mkdir -p "$SD"
   meta_set mode rename; meta_set holdS "$HOLD_S"; meta_set recoverS "$REC_S"
   sub_start "$SD/frames" $(( HOLD_S + REC_S + 60 ))
@@ -452,13 +463,14 @@ stop)
   S=$(drain_wait 120)
   kv_set drainS "$S"
   sleep 8
+  require_floor
   SD="$ST/final"; rm -rf "$SD"; mkdir -p "$SD"
   IDS=$(rule_ids | tr ' ' ,)
   state_keys > "$SD/keys"
   states_dump "$SD/states" $(rule_ids)
   judged_rules "$IDS" > "$SD/judged-rules"
   events_csv "$IDS" > "$SD/events.csv"
-  C0=$(kv_get rulesPostStartMs)
+  C0=$EVAL_FLOOR
   eval_tsv "$IDS" "$C0" "$(( $(ms_now) + 60000 ))" > "$SD/eval.tsv"
   pgq "SELECT count(*) FROM audit_log WHERE target_table = 'alarm_rule' AND action = 'INSERT'" > "$SD/audit-rule-inserts"
   docker logs "$WK_NAME" 2>&1 | grep alarm_eval_gap > "$SD/gap.log" || true

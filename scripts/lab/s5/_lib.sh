@@ -305,7 +305,7 @@ rep_head() { # $1=스냅샷 $2=구성 a|b
   # Soak 컨테이너(k6 soak · 표본)가 남아 있으면 다음 실험의 api에 붙는다 — 경고하고 거둔다(검수 #2)
   local c
   for c in db_study-k6-soak "$SOAK_NAME"; do
-    if docker inspect "$c" >/dev/null 2>&1; then echo "경고: 앞 실험의 $c가 남아 있었다 — 거둔다" >&2; docker rm -f "$c" >/dev/null 2>&1 || true; fi
+    if docker inspect "$c" >/dev/null 2>&1; then echo "경고: 앞 실험의 ${c}가 남아 있었다 — 거둔다" >&2; docker rm -f "$c" >/dev/null 2>&1 || true; fi
   done
   restore_snap "$1"
   kv_set snapshot "$1"

@@ -689,9 +689,13 @@ def final_view(d, rules):
     pre = R.num(R.rd(os.path.join(d, 'kv', 'preexistingEvalRows')))
     return {
         'rulesCreated': len(rules), 'ruleSeedRowsBefore': R.num(R.rd(os.path.join(d, 'rules-before'))),
-        # 규칙 POST 전 ts의 alarm_eval 행(대상 rule_id) — 판정 셈은 POST 시작 시각 이후 행만 읽어 이 행을 뺀다 · 0이 아니면 경고
+        # 판정 하한(evalFloorMs = POST 시작 − 60초 · alarm_eval.ts는 배치 데이터 시각이라 첫 판정 행이 POST보다 앞선다) 전 ts의
+        # alarm_eval 행(대상 rule_id) — 판정 셈은 하한 뒤 행만 읽어 이 행을 뺀다 · 0이 아니면 경고
+        'evalFloorMs': R.num(R.rd(os.path.join(d, 'kv', 'evalFloorMs'))),
+        # 하한 여유의 실측 근거 — 대상 규칙 첫 판정 행 ts − POST 시작(ms · 음수면 POST 앞 데이터 시각)
+        'evalLeadMs': R.num(R.rd(os.path.join(d, 'kv', 'evalLeadMs'))),
         'preexistingEvalRows': pre,
-        'preexistingWarning': None if not pre else f'대상 rule_id의 POST 전 alarm_eval 행 {int(pre)}개 — 스냅샷에 판정 전수가 남아 있다(셈에서 뺐다)',
+        'preexistingWarning': None if not pre else f'대상 rule_id의 판정 하한 전 alarm_eval 행 {int(pre)}개 — 스냅샷에 판정 전수가 남아 있다(셈에서 뺐다)',
         'baselineCounts': base or None, 'auditRuleInserts': audit, 'auditRuleInsertsDiff': audit_diff,
         'rulesViaSurface': None if audit_diff is None else audit_diff == len(rules),
         'completeness': comp, 'eventsByPhase': by_phase(events, spans),
