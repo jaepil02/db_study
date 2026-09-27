@@ -9,6 +9,7 @@ import { curveOption } from '../components/experiments/perf/options';
 import { LiveResultTable } from '../components/experiments/perf/panels';
 import { FlowProgressBar, FlowResultTable } from '../components/runs/flow-run';
 import { RunPanelView, type RunPanelViewProps } from '../components/runs/run-panel';
+import { nextFailedAt, panelNow, tickOn } from '../components/runs/use-run';
 import { ApiError } from '../lib/api';
 import {
   currentRunQueryOptions,
@@ -170,6 +171,46 @@ describe('경과 시간 형식 — 진행 중 1초 · 종결 0.1초 버림 · 1�
 });
 
 // ── 종결 띠 문구 ──
+
+describe('경과 기준 시각 — 폴링 실패 중 멈춤(M1) · 다른 종류 틱 없음(L7)', () => {
+  it('처음 실패한 순간에 고정 · 실패가 이어져도(errorUpdatedAt이 바뀌어도) 그대로 · 성공하면 지운다', () => {
+    const snap = { run: perfRun(), receivedAt: 10_000 };
+    let clock = 12_300;
+    const read = () => clock;
+    // 정상 — 틱을 따라간다
+    let failedAt = nextFailedAt(null, false, read);
+    expect(panelNow(snap, failedAt, 11_000)).toBe(11_000);
+    // 처음 실패 — 그 순간(12,300)에 멈춘다
+    failedAt = nextFailedAt(failedAt, true, read);
+    expect(failedAt).toBe(12_300);
+    expect(panelNow(snap, failedAt, 12_000)).toBe(12_300);
+    // 1초 재시도가 5번 더 실패 — 기준 시각은 그대로
+    for (let i = 0; i < 5; i++) {
+      clock += 1000;
+      failedAt = nextFailedAt(failedAt, true, read);
+    }
+    expect(panelNow(snap, failedAt, 12_000)).toBe(12_300);
+    expect(liveElapsedMs(snap.run.elapsedMs ?? 0, snap.receivedAt, panelNow(snap, failedAt, 12_000))).toBe(
+      41_250 + 2_300,
+    );
+    // 성공 — 새 응답 기준으로 다시 틱
+    failedAt = nextFailedAt(failedAt, false, read);
+    expect(failedAt).toBeNull();
+    const fresh = { run: perfRun({ elapsedMs: 48_000 }), receivedAt: 17_300 };
+    expect(panelNow(fresh, failedAt, 17_000)).toBe(17_300);
+    expect(panelNow(fresh, failedAt, 18_300)).toBe(18_300);
+  });
+
+  it('1초 틱 — 이 화면 종류의 진행 중 실행만 · 폴링 실패 중이면 없다', () => {
+    expect(tickOn(perfRun(), 'perf', false)).toBe(true);
+    expect(tickOn(perfRun({ status: 'stopping' }), 'perf', false)).toBe(true);
+    expect(tickOn(perfRun(), 'flow', false)).toBe(false);
+    expect(tickOn(flowRun(), 'perf', false)).toBe(false);
+    expect(tickOn(perfRun(), 'perf', true)).toBe(false);
+    expect(tickOn(perfRun({ status: 'completed' }), 'perf', false)).toBe(false);
+    expect(tickOn(null, 'perf', false)).toBe(false);
+  });
+});
 
 describe('상태 칩과 종결 띠', () => {
   it('완료 — 총 소요 · 종료 KST', () => {
@@ -751,7 +792,7 @@ describe('perf 라이브 계열 · 결과 표', () => {
     expect(liveSeries(null, 'Q2')).toEqual({ ch: [], pg: [] });
   });
 
-  it('곡선 — 라이브 계열 2는 마름모(◇ CH · ◆ PG I2) · 실선 · 범례 "라이브 실행(시연값)"', () => {
+  it('곡선 — 라이브 계열 2는 마름모(◇ CH · ◆ PG I2) · 실선 · 범례 머리에 정본 라이브 표지 문구', () => {
     const opt = curveOption({
       lines: [],
       i2Range: undefined,
@@ -762,13 +803,17 @@ describe('perf 라이브 계열 · 결과 표', () => {
     }) as unknown as {
       series: { id: string; symbol?: string; lineStyle?: { type: string } }[];
       legend: { data: string[] };
+      graphic?: { style: { text: string } }[];
     };
     const ch = opt.series.find((s) => s.id === 'live-ch');
     const pg = opt.series.find((s) => s.id === 'live-pg');
     expect(ch?.symbol).toBe('emptyDiamond');
     expect(pg?.symbol).toBe('diamond');
     expect(ch?.lineStyle?.type).toBe('solid');
-    expect(opt.legend.data.filter((d) => d.includes('라이브 실행(시연값)'))).toHaveLength(2);
+    expect(opt.legend.data.filter((d) => d.includes('(시연값)'))).toHaveLength(2);
+    expect(opt.graphic?.map((g) => g.style.text)).toEqual([
+      '라이브 실행 — 앱 경유 · 시연값 · 기록 정본 아님',
+    ]);
     // 라이브가 없으면 계열도 범례도 없다
     const none = curveOption({
       lines: [],
@@ -778,8 +823,10 @@ describe('perf 라이브 계열 · 결과 표', () => {
       yLog: true,
     }) as unknown as {
       series: { id: string }[];
+      graphic?: unknown;
     };
     expect(none.series.some((s) => s.id.startsWith('live-'))).toBe(false);
+    expect(none.graphic).toBeUndefined();
   });
 
   it('결과 표 — 규모 행 · 배수 소수 1자리 · 결과 불일치 · 적재 · 저장 · 라이브 표지', () => {

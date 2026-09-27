@@ -632,7 +632,8 @@ function CreateForm({ kind, onClose }: { kind: 'site' | 'line' | 'device'; onClo
           <Button disabled={w.locked} onClick={submit}>
             {submitLabel(w.state, '등록')}
           </Button>
-          <Button variant="outline" onClick={onClose}>
+          {/* 적용 대기 중에는 닫지 않는다 — 결말(무효화 · 신선 창 재조회)을 이 폼이 붙어 있는 동안 본다 · 떠나도 scope 상태는 남아 다시 열면 잠금 · 띠가 보인다 */}
+          <Button variant="outline" disabled={w.locked} onClick={onClose}>
             닫기
           </Button>
         </div>

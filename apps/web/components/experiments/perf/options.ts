@@ -112,10 +112,13 @@ export interface CurveInput {
   live?: { ch: LivePoint[]; pg: LivePoint[] };
 }
 
-/** 라이브 계열 이름 — 범례 "라이브 실행(시연값)" · 기록 계열과 모양(마름모 · 실선 · 막대 없음)으로 가른다 */
+/** 라이브 표지 고정 문구(08_evidence_screens EXP-PERF §표시 계약 라이브 표지) — 곡선 범례 머리 한 줄로 곡선 옆에 보인다 */
+export const LIVE_NOTE = '라이브 실행 — 앱 경유 · 시연값 · 기록 정본 아님';
+
+/** 라이브 계열 이름 — 기록 계열과 모양(마름모 · 실선 · 막대 없음)으로 가른다 · 전체 표지는 범례 머리 한 줄(LIVE_NOTE) */
 export const LIVE_LABEL = {
-  ch: '라이브 ClickHouse ◇ — 라이브 실행(시연값)',
-  pg: '라이브 PostgreSQL I2 ◆ — 라이브 실행(시연값)',
+  ch: '라이브 ClickHouse ◇(시연값)',
+  pg: '라이브 PostgreSQL I2 ◆(시연값)',
 } as const;
 
 /** 라이브 점 툴팁 — 3회 값 · 결과 행 수 일치 */
@@ -124,7 +127,7 @@ export function liveTooltip(side: 'ch' | 'pg', p: LivePoint): string {
     `<b>${side === 'ch' ? '라이브 ClickHouse' : '라이브 PostgreSQL I2'}</b> · ${esc(expLabel(p.exponent))} = ${p.rows.toLocaleString('ko-KR')}행`,
     `중앙값 ${fmtMs(p.median)} ms · 3회 ${p.values.map(fmtMs).join(' · ')} ms`,
     `결과 행 ${p.resultRows ?? '—'} · ${p.resultMatch === null ? '결과 대조 없음' : p.resultMatch ? '결과 일치' : '결과 불일치'}`,
-    '라이브 실행 — 앱 경유 · 시연값 · 기록 정본 아님',
+    LIVE_NOTE,
   ].join('<br/>');
 }
 
@@ -264,9 +267,22 @@ export function curveOption(input: CurveInput): ChartOption {
   for (const k of liveSides) series.push(liveLine(k, livePts[k]) as NonNullable<ChartOption['series']>);
   const option = {
     animation: false,
-    grid: { left: 64, right: 24, top: liveSides.length > 0 ? 64 : 48, bottom: 52 },
+    grid: { left: 64, right: 24, top: liveSides.length > 0 ? 84 : 48, bottom: 52 },
+    // 라이브 계열이 있으면 범례 머리 한 줄에 정본 고정 문구 — 범례가 줄바꿈돼도 곡선 바로 위에 남는다
+    ...(liveSides.length > 0
+      ? {
+          graphic: [
+            {
+              type: 'text',
+              left: 'center',
+              top: 0,
+              style: { text: LIVE_NOTE, fontSize: 12, fontWeight: 'bold', fill: '#b45309' },
+            },
+          ],
+        }
+      : {}),
     legend: {
-      top: 0,
+      top: liveSides.length > 0 ? 20 : 0,
       data: [...lines.map((l) => LINE_LABEL[l.key]), ...liveSides.map((k) => LIVE_LABEL[k])],
     },
     tooltip: { trigger: 'item' },

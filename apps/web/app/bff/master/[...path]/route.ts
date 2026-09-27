@@ -37,7 +37,10 @@ function relay(res: Response, body: string): Response {
 }
 
 const notFound = () =>
-  Response.json({ error: { code: 'common.not_found', message: 'BFF 중계 대상이 아니다' } }, { status: 404 });
+  Response.json(
+    { error: { code: 'common.not_found', message: 'BFF 중계 대상이 아니다' } },
+    { status: 404, headers: NO_STORE },
+  );
 
 export async function GET(req: Request, ctx: Ctx): Promise<Response> {
   const t = await target(ctx, req);

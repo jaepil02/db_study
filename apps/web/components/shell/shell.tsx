@@ -103,7 +103,8 @@ export function Shell({ children }: { children: ReactNode }) {
             <WsIndicator />
           </div>
         </header>
-        <main data-shell="content-body" className="min-h-0 flex-1 overflow-y-auto">
+        {/* relative — 본문 안 absolute 요소(sr-only legend 등)의 포함 블록을 본문에 가둔다 · 없으면 초기 포함 블록 기준으로 놓여 문서 높이를 키운다(본문만 스크롤 위반) */}
+        <main data-shell="content-body" className="relative min-h-0 flex-1 overflow-y-auto">
           <div className="mx-auto max-w-[1600px] p-5">{children}</div>
         </main>
       </div>

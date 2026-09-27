@@ -323,10 +323,230 @@ describe('대기 중 재마운트', () => {
       },
     });
     await vi.waitFor(() => expect(writerState('test:leave').phase).toBe('pending'));
-    off3(); // 화면을 떠났다
+    off3(); // 화면을 떠났다 — 조회만 멈추고 대기 상태 · 키는 남긴다
     await run;
     expect(done).not.toHaveBeenCalled();
-    expect(writerState('test:leave')).toEqual({ phase: 'idle' });
+    expect(writerState('test:leave')).toEqual({ phase: 'pending', cmdId: CMD });
+  });
+});
+
+describe('이탈 → 복귀(M2)', () => {
+  it('떠나면 조회만 멈추고 · 돌아오면 같은 키로 조회를 이어 결말을 반영한다 · 잠금 유지', async () => {
+    const scope = 'test:return';
+    const calls: { url: string; init?: RequestInit }[] = [];
+    let phase: 'send' | 'hang' | 'answer' = 'send';
+    const f = async (url: string, init?: RequestInit): Promise<Response> => {
+      calls.push({ url, init });
+      if (phase === 'send') {
+        phase = 'hang';
+        return json(202, { cmdId: CMD, status: 'pending' });
+      }
+      if (phase === 'hang')
+        return new Promise<Response>((_, rej) =>
+          init?.signal?.addEventListener('abort', () => rej(new Error('aborted'))),
+        );
+      return json(200, { cmdId: CMD, status: 'applied', httpStatus: 201, result: { siteId: 3 } });
+    };
+    const via = vi.fn();
+    const done: WriteOutcome[] = [];
+    const off1 = subscribeWriter(scope, () => {}, 10);
+    const run = startWrite(scope, req, (o) => void done.push(o), {
+      deps: { fetch: f, sleep: noSleep },
+      onViaCommand: via,
+    });
+    await vi.waitFor(() => expect(writerState(scope)).toEqual({ phase: 'pending', cmdId: CMD }));
+    const key = (calls[0]?.init?.headers as Record<string, string> | undefined)?.['idempotency-key'];
+    phase = 'hang';
+    off1(); // 폼 닫기 · 화면 이탈
+    await run; // 조회가 끊겨 쓰기 함수는 돌아온다
+    expect(writerState(scope)).toEqual({ phase: 'pending', cmdId: CMD }); // 잠금 유지
+    expect(done).toEqual([]);
+
+    // 다시 연다 — pending이면 조회를 이어 건다
+    phase = 'answer';
+    const off2 = subscribeWriter(scope, () => {}, 10);
+    await vi.waitFor(() => expect(done).toHaveLength(1));
+    expect(done[0]).toEqual({ kind: 'applied', status: 201, body: { siteId: 3 }, viaCommand: true });
+    expect(via).toHaveBeenCalledTimes(1); // 신선 창 재조회 표지(x-bff-fresh)가 열린다
+    expect(writerState(scope)).toEqual({ phase: 'idle' });
+    expect(calls.slice(1).every((c) => c.url === `/bff/commands/${CMD}`)).toBe(true);
+    expect(key).toBeTruthy();
+    off2();
+  });
+
+  it('돌아왔을 때 유효 창을 넘었으면 stale — 같은 키로 다시 보내기', async () => {
+    const scope = 'test:return-stale';
+    let t = 0;
+    const sent: string[] = [];
+    let first = true;
+    const f = async (url: string, init?: RequestInit): Promise<Response> => {
+      if (!url.startsWith('/bff/commands/')) {
+        sent.push((init?.headers as Record<string, string> | undefined)?.['idempotency-key'] ?? '');
+        if (first) {
+          first = false;
+          return json(202, { cmdId: CMD, status: 'pending' });
+        }
+        return json(201, { ok: true });
+      }
+      return new Promise<Response>((_, rej) =>
+        init?.signal?.addEventListener('abort', () => rej(new Error('aborted'))),
+      );
+    };
+    const deps = { fetch: f, sleep: noSleep, now: () => t };
+    const off1 = subscribeWriter(scope, () => {}, 10);
+    const done = vi.fn();
+    const run = startWrite(scope, req, done, { deps });
+    await vi.waitFor(() => expect(writerState(scope).phase).toBe('pending'));
+    off1();
+    await run;
+    t = COMMAND_VALID_MS + 1;
+    const off2 = subscribeWriter(scope, () => {}, 10);
+    await vi.waitFor(() => expect(writerState(scope)).toEqual({ phase: 'stale', cmdId: CMD }));
+    expect(commandNotice(writerState(scope))?.retry).toBe('같은 명령으로 다시 보내기');
+    // 같은 명령으로 다시 보내기 — 같은 키
+    await startWrite(scope, req, done, { deps });
+    expect(sent).toHaveLength(2);
+    expect(sent[1]).toBe(sent[0]);
+    expect(writerState(scope)).toEqual({ phase: 'idle' });
+    off2();
+  });
+});
+
+describe('명령 조회 응답 해석 실패 · 4xx(M3 · L4)', () => {
+  it('해석 실패(JSON · 모양)는 결말이 아니다 — 다음 주기에 다시 묻는다', async () => {
+    const a = fakeFetch(
+      json(202, { cmdId: CMD, status: 'pending' }),
+      new Response('<html>', { status: 200 }),
+      json(200, { cmdId: CMD, status: 'bogus' }),
+      json(200, { cmdId: CMD, status: 'applied', httpStatus: 200, result: { ok: 1 } }),
+    );
+    const o = await runBizWrite(req, CMD, { fetch: a.f, sleep: noSleep });
+    expect(o).toEqual({ kind: 'applied', status: 200, body: { ok: 1 }, viaCommand: true });
+    expect(a.calls).toHaveLength(4);
+  });
+
+  it('해석 실패가 유효 창을 넘도록 이어지면 stale', async () => {
+    let t = 0;
+    const f = async (url: string) => {
+      if (!url.startsWith('/bff/commands/')) return json(202, { cmdId: CMD, status: 'pending' });
+      t += 100_000;
+      return new Response('not json', { status: 200 });
+    };
+    const o = await runBizWrite(req, CMD, { fetch: f, sleep: noSleep, now: () => t });
+    expect(o).toEqual({ kind: 'stale', cmdId: CMD });
+  });
+
+  it('202 · 2xx 본문 해석 실패는 retryable(같은 키로 다시 보내면 첫 판정)', async () => {
+    const a = fakeFetch(new Response('{', { status: 202 }));
+    const o = await runBizWrite(req, CMD, { fetch: a.f, sleep: noSleep });
+    expect(o.kind).toBe('retryable');
+  });
+
+  it('명령 조회 400은 결말(오류 표시 · 키 버림) · 429는 다시 묻는다', async () => {
+    const a = fakeFetch(
+      json(202, { cmdId: CMD, status: 'pending' }),
+      json(429, envelope('common.rate_limited')),
+      json(400, envelope('common.validation_failed')),
+    );
+    const o = await runBizWrite(req, CMD, { fetch: a.f, sleep: noSleep });
+    expect(o.kind).toBe('rejected');
+    expect(o.kind === 'rejected' && o.error.status).toBe(400);
+    expect(keyAfter({ key: CMD, fingerprint: 'x' }, o)).toBeNull();
+  });
+
+  it('startWrite는 던지지 않고 잠금이 반드시 풀린다 — 결말 콜백이 던져도', async () => {
+    const a = fakeFetch(json(201, { tagId: 1 }));
+    const off = subscribeWriter('test:throw', () => {}, 10);
+    const err = vi.spyOn(console, 'error').mockImplementation(() => {});
+    await expect(
+      startWrite(
+        'test:throw',
+        req,
+        () => {
+          throw new Error('화면 콜백 실패');
+        },
+        { deps: { fetch: a.f } },
+      ),
+    ).resolves.toBeUndefined();
+    expect(writerState('test:throw')).toEqual({ phase: 'idle' });
+    err.mockRestore();
+    off();
+  });
+
+  it('sleep이 던져도(예상 밖) 잠금이 풀리고 rejection이 새지 않는다', async () => {
+    const a = fakeFetch(json(202, { cmdId: CMD, status: 'pending' }));
+    const off = subscribeWriter('test:boom', () => {}, 10);
+    await startWrite('test:boom', req, () => {}, {
+      deps: {
+        fetch: a.f,
+        sleep: async () => {
+          throw new Error('boom');
+        },
+      },
+    });
+    // 대기 잠금이 풀리고 같은 키 재전송으로 넘어간다
+    expect(writerState('test:boom')).toEqual({ phase: 'stale', cmdId: CMD });
+    off();
+  });
+});
+
+describe('앞 쓰기의 늦은 응답(M4)', () => {
+  it('재시도가 앞 쓰기를 끊는다 — 앞 요청의 늦은 202가 새 상태를 덮지 않는다', async () => {
+    const scope = 'test:late';
+    let lateAnswer: (r: Response) => void = () => {};
+    const signals: (AbortSignal | undefined)[] = [];
+    let n = 0;
+    const f = async (_url: string, init?: RequestInit): Promise<Response> => {
+      signals.push(init?.signal ?? undefined);
+      n++;
+      if (n === 1) return new Promise<Response>((r) => (lateAnswer = r)); // signal을 무시하는 느린 응답
+      return json(201, { tagId: 9 });
+    };
+    const off = subscribeWriter(scope, () => {}, 10);
+    const done1 = vi.fn();
+    const done2 = vi.fn();
+    const first = startWrite(scope, req, done1, { deps: { fetch: f, sleep: noSleep } });
+    await vi.waitFor(() => expect(n).toBe(1));
+    await startWrite(scope, req, done2, { deps: { fetch: f, sleep: noSleep } });
+    expect(writerState(scope)).toEqual({ phase: 'idle' });
+    expect(signals[0]?.aborted).toBe(true); // sendBizWrite에 signal이 닿았다
+    lateAnswer(json(202, { cmdId: CMD, status: 'pending' }));
+    await first;
+    expect(writerState(scope)).toEqual({ phase: 'idle' });
+    expect(done1).not.toHaveBeenCalled();
+    expect(done2).toHaveBeenCalledTimes(1);
+    off();
+  });
+});
+
+describe('503 재시도 버튼 백오프(L3)', () => {
+  it('연속 실패마다 1 · 2 · 4초 뒤 켜진다 · 결말이 나면 다시 1초부터', async () => {
+    const scope = 'test:backoff';
+    const t = 1_000_000;
+    const off = subscribeWriter(scope, () => {}, 10);
+    const deps = (r: Response) => ({ fetch: fakeFetch(r).f, now: () => t });
+    const at = () => {
+      const s = writerState(scope);
+      return s.phase === 'retryable' ? s.retryAt : undefined;
+    };
+    await startWrite(scope, req, () => {}, {
+      deps: deps(json(503, envelope('common.postgres_unavailable'))),
+    });
+    expect(at()).toBe(t + 1000);
+    await startWrite(scope, req, () => {}, {
+      deps: deps(json(503, envelope('common.postgres_unavailable'))),
+    });
+    expect(at()).toBe(t + 2000);
+    await startWrite(scope, req, () => {}, {
+      deps: deps(json(503, envelope('common.postgres_unavailable'))),
+    });
+    expect(at()).toBe(t + 4000);
+    await startWrite(scope, req, () => {}, { deps: deps(json(201, {})) });
+    await startWrite(scope, req, () => {}, {
+      deps: deps(json(503, envelope('common.postgres_unavailable'))),
+    });
+    expect(at()).toBe(t + 1000);
+    off();
   });
 });
 
@@ -376,6 +596,13 @@ describe('BFF 쓰기 중계', () => {
     expect(r2.status).toBe(202);
     expect(r2.headers.get('idempotency-key')).toBe(CMD);
     expect(revalidateTag).not.toHaveBeenCalled();
+  });
+
+  it('마스터 — 중계 대상이 아니면 404 no-store(L2)', async () => {
+    const route = await import('../app/bff/master/[...path]/route');
+    const r = await route.GET(new Request('http://web/bff/master/nope'), ctx(['nope']));
+    expect(r.status).toBe(404);
+    expect(r.headers.get('cache-control')).toBe('no-store');
   });
 
   it('알람 — 확인 요청의 키를 싣고 되싣는다', async () => {
