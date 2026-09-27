@@ -24,6 +24,10 @@ const PATHS: Record<Name, string[]> = {
   experiment: ['M10 2v7.31', 'M14 9.3V2', 'M8.5 2h7', 'M14 9.3a6.5 6.5 0 1 1-4 0', 'M5.52 16h12.96'],
   console: ['M4 17 10 11 4 5', 'M12 19h8'],
   compare: ['M12 20V10', 'M18 20V4', 'M6 20v-4'],
+  // 규모별 성능 — 축 위 두 곡선
+  perf: ['M3 3v18h18', 'M7 16c3-1 5-4 7-9', 'M7 18c4 0 8-2 11-8'],
+  // 분산 흐름 — 한 점에서 갈라지는 갈래(Lucide split 모양)
+  flow: ['M16 3h5v5', 'M8 3H3v5', 'M12 22v-8.3a4 4 0 0 0-1.172-2.872L3 3', 'm15 9 6-6'],
   chevronDown: ['m6 9 6 6 6-6'],
   panelClose: ['M3 3h18v18H3z', 'M9 3v18', 'm16 15-3-3 3-3'],
   panelOpen: ['M3 3h18v18H3z', 'M9 3v18', 'm14 9 3 3-3 3'],

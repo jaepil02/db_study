@@ -1,6 +1,6 @@
 // 공통 셸 내비게이션 트리 — 정본 docs/08_screen/01_standards.md §요청 경로와 공통 셸(레이아웃)
-// 섹션(1depth) + 화면(2depth) 트리다. 섹션 4 · 화면 7 — 항목이 하나뿐인 섹션(관리)은 헤더 없이 최상위 행(flat)으로 낸다.
-// 화면 7 = 08_screen 인벤토리 10 − AUTH-LOGIN(메뉴 아님) − ADM-WORKORDER · ADM-AUDIT(S7 도입 시 관리 섹션에 더하고 flat을 푼다).
+// 섹션(1depth) + 화면(2depth) 트리다. 섹션 4 · 화면 9 — 항목이 하나뿐인 섹션(관리)은 헤더 없이 최상위 행(flat)으로 낸다.
+// 화면 9 = 08_screen 인벤토리 12 − AUTH-LOGIN(메뉴 아님) − ADM-WORKORDER · ADM-AUDIT(S7 도입 시 관리 섹션에 더하고 flat을 푼다).
 // 현재 화면은 경로의 가장 긴 접두로 고른다(/alarms/rules/3 → 알람 규칙 · /realtime/tag/5 → 실시간 대시보드).
 
 export type NavIcon =
@@ -13,7 +13,9 @@ export type NavIcon =
   | 'master'
   | 'experiment'
   | 'console'
-  | 'compare';
+  | 'compare'
+  | 'perf'
+  | 'flow';
 export type NavItem = { href: string; label: string; code: string; icon: NavIcon };
 export type NavSection = {
   id: string;
@@ -56,6 +58,8 @@ export const NAV: readonly NavSection[] = [
     items: [
       { href: '/experiments', label: '실험 콘솔', code: 'EXP-CONSOLE', icon: 'console' },
       { href: '/experiments/compare', label: '실험 비교', code: 'EXP-COMPARE', icon: 'compare' },
+      { href: '/experiments/perf', label: '규모별 성능 비교', code: 'EXP-PERF', icon: 'perf' },
+      { href: '/experiments/flow', label: '분산 처리 모니터링', code: 'EXP-FLOW', icon: 'flow' },
     ],
   },
 ];

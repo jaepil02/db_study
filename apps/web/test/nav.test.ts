@@ -9,12 +9,12 @@ import {
   setExpanded,
 } from '../lib/nav';
 
-describe('내비 트리 — 섹션 4 · 화면 7', () => {
-  it('섹션 4 · 화면 7 · flat은 항목 하나뿐인 섹션만', () => {
+describe('내비 트리 — 섹션 4 · 화면 9', () => {
+  it('섹션 4 · 화면 9 · flat은 항목 하나뿐인 섹션만', () => {
     expect(NAV).toHaveLength(4);
-    expect(NAV.flatMap((s) => s.items)).toHaveLength(7);
+    expect(NAV.flatMap((s) => s.items)).toHaveLength(9);
     for (const s of NAV) if (s.flat) expect(s.items).toHaveLength(1);
-    expect(new Set(NAV.flatMap((s) => s.items.map((i) => i.code))).size).toBe(7);
+    expect(new Set(NAV.flatMap((s) => s.items.map((i) => i.code))).size).toBe(9);
   });
 });
 

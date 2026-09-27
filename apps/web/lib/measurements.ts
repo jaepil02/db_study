@@ -23,7 +23,7 @@ export const AXIS_LABELS: Record<string, string> = {
   index_bytes: '인덱스 크기',
 };
 const SWITCH_IDS = Array.from({ length: 11 }, (_, i) => `SW-${String(i + 1).padStart(2, '0')}`);
-const RECORD_FILE = /^(\d{3})-[a-z0-9]+(?:-[a-z0-9]+)*\.md$/;
+export const RECORD_FILE = /^(\d{3})-[a-z0-9]+(?:-[a-z0-9]+)*\.md$/;
 
 export type Store = 'postgresql' | 'clickhouse';
 
@@ -145,7 +145,7 @@ export interface StructuralSource extends RecordRef {
   invalidRanges: number;
 }
 
-interface Block {
+export interface Block {
   record: string;
   exp: string[];
   status: string;
@@ -172,7 +172,7 @@ export function jsonFences(text: string): string[] {
 }
 
 /** schema가 measurement/v1인 블록만 센다 — 정확히 1개가 아니면 null(규칙 2) */
-function pickBlock(text: string): unknown | null {
+export function pickBlock(text: string): unknown | null {
   const found: unknown[] = [];
   for (const body of jsonFences(text)) {
     try {
@@ -186,7 +186,7 @@ function pickBlock(text: string): unknown | null {
 }
 
 /** 필수 필드 형식(표 §기계 판독 블록) — 어기면 판독 불가. 모르는 필드는 무시한다(규칙 7) */
-function validate(v: unknown): Block | null {
+export function validate(v: unknown): Block | null {
   if (!isObj(v)) return null;
   const { record, exp, status, supersedes, run, switches, repeat, points, axes } = v;
   if (typeof record !== 'string' || !/^\d{3}$/.test(record)) return null;
@@ -218,7 +218,7 @@ function validate(v: unknown): Block | null {
 }
 
 /** 규칙 4 — run 네 필드와 switches 11키가 전부 null이 아니다(배열 값은 원소마다 · memoryLimitMb는 memoryLimitOf 예외) */
-function conditionsComplete(b: Block): RunInfo | null {
+export function conditionsComplete(b: Block): RunInfo | null {
   const { commitHash, memoryProfile, capacityTier } = b.run;
   if (typeof commitHash !== 'string' || typeof memoryProfile !== 'string') return null;
   const limit = memoryLimitOf(b.run);
