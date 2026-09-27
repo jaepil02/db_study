@@ -2,6 +2,7 @@
 
 > **대상**: ★ 실험 규칙 정본 — 실험 한 번의 절차 · 3회 중앙값과 편차 폐기 기준 · 구조 판정과 분포 판정 · 스냅샷과 복원 · 캐시 키 초기화 · 기준선 · 회복 관측 · 조건 칸(4요소 + 부가 조건) · 조건 분리 강제 · **측정 기록 템플릿(docs/measurements/NNN-{slug}.md)** · **기계 판독 블록 형식(EXP-COMPARE BFF가 읽는다)** · 기록 상태와 정정 · 결과를 정본 문서에 올리는 절차
 > **작성일**: 2026-09-24
+> **개정일**: 2026-09-27 — 목적 적합성 W5 리드 판정 — §조건 칸에 도구 컨테이너 경로의 memoryLimitMb null 조항(선택 키 run.memoryLimitSource가 있으면 4요소 충족 · 추정 채움 금지 유지) — 칸 수 · schema measurement/v1 불변(판독 규칙 7)
 > **개정일**: 2026-09-26 — 마지막 검수 반영 — streamSteps values null 자리(계단 없음 · 무효 반복) · median 조건을 값이 있는 반복 3 미만으로(러너 as-built)
 > **개정일**: 2026-09-26 — W3 재검수 반영(EXP-45 null 규칙 N1) — 기계 판독 블록 streamSteps 행의 failures · valid 규칙을 러너(scripts/lab/s5/load/_rec.py exp45-stream-steps) · 판독기(apps/web/lib/evidence.ts) · 08_screen/07 §실증 요약 패널 판독 행과 같은 문장으로 — failures 무효 계단 null → **반복 자리 단위 null** · **행 valid:false = 그 저장소 유효 반복 0** — 필드 행 수 · schema measurement/v1 불변
 > **개정일**: 2026-09-26 — W3 코드 검수 반영(r-web-lab M2 · M4 · L1 · L2) — 기계 판독 블록 conditions 행에 EXP-45 키 4(flushWindowSeconds · copyTimeoutSeconds · batchPlan · controlCopySyncCommit) · streamSteps 행에 지표 이름 규약 · values · median · failures의 빈 값 규칙 · 선택 키 valid — 필드 행 수 · schema measurement/v1 불변(판독 규칙 7)
@@ -107,6 +108,7 @@ AC의 합격선은 두 종류다([../03_requirements/14_acceptance_criteria.md](
 - 환경변수 이름(MEMORY_PROFILE — load · dev · mid · CAPACITY_TIER · 빌드 인자 COMMIT_HASH · WORKER_POOL_SIZE · SIM_FAULT_PLAN)의 정본은 [../09_tech_stack/04_local_environment.md](../09_tech_stack/04_local_environment.md)다. health run의 memoryProfile 값은 MEMORY_PROFILE 값 그대로다.
 - **스위치는 기계 판독 블록에서 11종 전부를 적는다.** 사람이 읽는 조건 표는 "바꾼 것만 명시 · 나머지 기본값"을 허용하지만(REQ-TEC-10), 기본값 자체가 바뀌면(스위치 기본값 변경 절차) 옛 기록의 "기본값"이 다른 조건을 가리킨다 — 블록은 값 전부를 싣는다.
 - **health 값이 null이면 그 기록은 4요소가 빠진 기록이다.** 추정값으로 채우지 않는다 — null은 인용 불가 표지이고 BFF가 그 점을 그리지 않는다.
+- **도구 컨테이너 경로의 memoryLimitMb null은 누락이 아니다(목적 적합성 W5 리드 판정 · 2026-09-27).** 측정 경로에 앱이 끼지 않는 실험(모드 D 격자 EXP-01~05 · EXP-35 · 역방향 EXP-40~44)은 api health가 없고 도구 컨테이너(datagen-d · oltp-lab)가 health와 같은 모양의 run을 낸다. 이 컨테이너에는 compose 메모리 상한이 없어 cgroup memory.max가 max이고 run의 memoryLimitMb가 null이다 — 이 null은 재지 못한 값이 아니라 상한이 없다는 사실값이다. 이 경우 블록 run에 선택 키 memoryLimitSource(문자열 — 예: cgroup max — datagen-d 서비스에 compose 상한 없음)를 함께 싣고, BFF는 memoryLimitSource가 공백이 아닌 문자열인 null을 4요소 충족으로 본다(빈 문자열 · 공백만이면 누락). 대조 저장소 상한(3,584 MB) 같은 다른 값으로 채우지 않는다 — 그 값은 저장소 컨테이너의 상한이지 측정 프로세스의 상한이 아니며, 저장소 자원은 conditions가 싣는다. api health 경로의 null은 위 불릿대로 누락이다.
 
 ## 조건 분리 강제
 
