@@ -23,6 +23,7 @@ import {
   rowsTooltip,
   type Verdict,
 } from '../../../lib/perf';
+import type { LivePoint } from '../../../lib/runs';
 import type { ChartOption } from '../echart';
 
 use([CustomChart, HeatmapChart, MarkAreaComponent, VisualMapPiecewiseComponent]);
@@ -107,6 +108,44 @@ export interface CurveInput {
   undetermined: { exponent: number; pgVariant: string }[];
   records: PerfRecord[];
   yLog: boolean;
+  /** 라이브 계열 2(CH · PG I2 · 시연값) — 콜드면 화면이 넘기지 않는다(라이브 실행은 웜만) */
+  live?: { ch: LivePoint[]; pg: LivePoint[] };
+}
+
+/** 라이브 계열 이름 — 범례 "라이브 실행(시연값)" · 기록 계열과 모양(마름모 · 실선 · 막대 없음)으로 가른다 */
+export const LIVE_LABEL = {
+  ch: '라이브 ClickHouse ◇ — 라이브 실행(시연값)',
+  pg: '라이브 PostgreSQL I2 ◆ — 라이브 실행(시연값)',
+} as const;
+
+/** 라이브 점 툴팁 — 3회 값 · 결과 행 수 일치 */
+export function liveTooltip(side: 'ch' | 'pg', p: LivePoint): string {
+  return [
+    `<b>${side === 'ch' ? '라이브 ClickHouse' : '라이브 PostgreSQL I2'}</b> · ${esc(expLabel(p.exponent))} = ${p.rows.toLocaleString('ko-KR')}행`,
+    `중앙값 ${fmtMs(p.median)} ms · 3회 ${p.values.map(fmtMs).join(' · ')} ms`,
+    `결과 행 ${p.resultRows ?? '—'} · ${p.resultMatch === null ? '결과 대조 없음' : p.resultMatch ? '결과 일치' : '결과 불일치'}`,
+    '라이브 실행 — 앱 경유 · 시연값 · 기록 정본 아님',
+  ].join('<br/>');
+}
+
+function liveLine(side: 'ch' | 'pg', pts: LivePoint[]) {
+  return {
+    id: `live-${side}`,
+    name: LIVE_LABEL[side],
+    type: 'line' as const,
+    color: STORE_COLOR[side === 'ch' ? 'clickhouse' : 'postgresql'],
+    symbol: side === 'ch' ? 'emptyDiamond' : 'diamond',
+    symbolSize: 11,
+    lineStyle: { type: 'solid' as const, width: 1.5 },
+    z: 5,
+    data: pts.map((p) => [p.rows, p.median]),
+    tooltip: {
+      formatter: (params: { dataIndex?: number }) => {
+        const p = params.dataIndex === undefined ? undefined : pts[params.dataIndex];
+        return p ? liveTooltip(side, p) : '';
+      },
+    },
+  };
 }
 
 /** 규모 곡선 — 가로 행 수 로그 · 세로 ms 로그(기본) · 선 3 · 반복 최소~최대 막대 · 역전 음영 · 미정 표지 */
@@ -114,7 +153,15 @@ export function curveOption(input: CurveInput): ChartOption {
   const { lines, i2Range, undetermined, records, yLog } = input;
   // 로그 축이면 0 이하 점은 그리지 않는다(P6 — 계수 줄이 센다)
   const drawable = (p: PerfPoint) => !yLog || p.median > 0;
-  const allRows = lines.flatMap((l) => l.points.map((p) => p.rows));
+  const livePts = {
+    ch: (input.live?.ch ?? []).filter((p) => !yLog || p.median > 0),
+    pg: (input.live?.pg ?? []).filter((p) => !yLog || p.median > 0),
+  };
+  const allRows = [
+    ...lines.flatMap((l) => l.points.map((p) => p.rows)),
+    ...livePts.ch.map((p) => p.rows),
+    ...livePts.pg.map((p) => p.rows),
+  ];
   const minRows = allRows.length > 0 ? 10 ** Math.floor(Math.log10(Math.min(...allRows))) : 1e5;
   const maxRows = allRows.length > 0 ? 10 ** Math.ceil(Math.log10(Math.max(...allRows))) : 1e9;
   const recOf = (r: string) => records.find((x) => x.record === r);
@@ -213,10 +260,15 @@ export function curveOption(input: CurveInput): ChartOption {
     };
     series.push(bars);
   }
+  const liveSides = (['ch', 'pg'] as const).filter((k) => livePts[k].length > 0);
+  for (const k of liveSides) series.push(liveLine(k, livePts[k]) as NonNullable<ChartOption['series']>);
   const option = {
     animation: false,
-    grid: { left: 64, right: 24, top: 48, bottom: 52 },
-    legend: { top: 0, data: lines.map((l) => LINE_LABEL[l.key]) },
+    grid: { left: 64, right: 24, top: liveSides.length > 0 ? 64 : 48, bottom: 52 },
+    legend: {
+      top: 0,
+      data: [...lines.map((l) => LINE_LABEL[l.key]), ...liveSides.map((k) => LIVE_LABEL[k])],
+    },
     tooltip: { trigger: 'item' },
     xAxis: {
       type: 'log',

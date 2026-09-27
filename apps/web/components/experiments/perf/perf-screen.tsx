@@ -2,7 +2,7 @@
 // EXP-PERF — 규모별 성능 비교. 정본 docs/08_screen/08_evidence_screens.md §EXP-PERF(기록 판독 요소 9 · 표시 계약 8 · 상태 4행 · 판독 P1~P6).
 // 원천은 BFF 기록 읽기(/bff/measurements?view=perf — docs/measurements 읽기 전용)다. api 표면이 아니고 폴링하지 않는다(진입 · 새로고침 때만).
 // 곡선 · 히트맵의 ms · 배수는 discarded 기록의 참고값이고, 역전 음영 · 결론 카드 · 히트맵 색은 structuralRanges · 점 단위 3/3 우열(정본)만 쓴다.
-// 실행 패널(GEN-11)은 이번 범위가 아니다 — 툴바 아래 자리만 둔다.
+// 실행 패널(GEN-11)은 툴바 아래 — 라이브 실행(앱 경유 · 시연값)은 곡선에 라이브 계열 2로만 겹치고 음영 · 결론 카드 · 히트맵에 들어가지 않는다.
 import { useQuery } from '@tanstack/react-query';
 import { useEffect, useMemo, useState } from 'react';
 import { TIMESERIES_GC_MS } from '../../../lib/config';
@@ -17,9 +17,12 @@ import {
   type PgVariant,
   undeterminedMarks,
 } from '../../../lib/perf';
+import { liveSeries, panelRun } from '../../../lib/runs';
 import { formatKst } from '../../../lib/time';
 import { cn } from '../../../lib/utils';
 import { Button, Select } from '../../master/field';
+import { RunPanel } from '../../runs/run-panel';
+import { useCurrentRun } from '../../runs/use-run';
 import { Band } from '../../ui/band';
 import { Card, CardContent, CardHeader, CardTitle } from '../../ui/card';
 import { EChart } from '../echart';
@@ -31,6 +34,7 @@ import {
   CountsLine,
   curveHeadline,
   EMPTY_SOURCE,
+  LiveResultTable,
   NO_STAGE,
   OBSERVATION_NOTE,
   PrincipleTable,
@@ -112,11 +116,16 @@ export function PerfScreen({ initialQuery, initialCache }: { initialQuery: strin
   }, [query, cache]);
 
   const lines = useMemo(() => curveLines(d?.points ?? [], query, cache), [d, query, cache]);
+  // 라이브 계열 — 이 화면 종류의 실행 결과만 · 툴바 캐시가 콜드면 숨긴다(라이브 실행은 웜만)
+  const liveRun = panelRun(useCurrentRun().data, 'perf');
+  const liveAll = useMemo(() => liveSeries(liveRun, query), [liveRun, query]);
+  const hasLive = liveAll.ch.length + liveAll.pg.length > 0;
+  const live = cache === 'warm' ? liveAll : undefined;
   const i2Range = useMemo(() => (d ? findRange(d.ranges, query, cache, 'I2') : undefined), [d, query, cache]);
   const undetermined = useMemo(() => (d ? undeterminedMarks(d, query, cache) : []), [d, query, cache]);
   const curveOpt = useMemo(
-    () => curveOption({ lines, i2Range, undetermined, records: d?.records ?? [], yLog }),
-    [lines, i2Range, undetermined, d, yLog],
+    () => curveOption({ lines, i2Range, undetermined, records: d?.records ?? [], yLog, live }),
+    [lines, i2Range, undetermined, d, yLog, live],
   );
   const heat = useMemo(
     () => heatCells(d ?? { points: [], verdicts: [] }, cache, variant),
@@ -140,7 +149,7 @@ export function PerfScreen({ initialQuery, initialCache }: { initialQuery: strin
       }`
     : '없음';
   const hasSource = !!d?.source;
-  const hasPoints = lines.some((l) => l.points.length > 0);
+  const hasPoints = lines.some((l) => l.points.length > 0) || (live !== undefined && hasLive);
   const dim = q.isFetching && d ? 'opacity-60 transition-opacity' : '';
 
   return (
@@ -172,7 +181,12 @@ export function PerfScreen({ initialQuery, initialCache }: { initialQuery: strin
           새로고침
         </Button>
       </div>
-      {/* RUN_PANEL_SLOT perf */}
+      <RunPanel
+        type="perf"
+        result={(run) =>
+          run.result && 'scales' in run.result ? <LiveResultTable result={run.result.scales} /> : null
+        }
+      />
 
       {/* 참고값 배지 — discarded 점이 하나라도 그려지면 한 자리(곡선 · 히트맵 · 결론 카드 전체에 걸린다) */}
       {d && d.discardedRecords.length > 0 ? (
@@ -202,6 +216,9 @@ export function PerfScreen({ initialQuery, initialCache }: { initialQuery: strin
                 {curveHeadline(i2Range)}
               </p>
             ) : null}
+            {hasLive && cache !== 'warm' ? (
+              <p className="text-xs text-slate-500">라이브 실행은 웜만 — 라이브 계열을 숨겼다</p>
+            ) : null}
           </CardHeader>
           <CardContent>
             {!d ? (
@@ -218,6 +235,9 @@ export function PerfScreen({ initialQuery, initialCache }: { initialQuery: strin
             <p className="mt-1 text-xs text-slate-500">
               점 = client 중앙값(참고값) · 회색 점선 = discarded 기록 · 속이 빈 점 = 결과 불일치 · 음영 = 역전
               구간(I2 · 구조 판정 · 정본) · ? = 우열 미정 · Q5x(조건 없는 count)는 싣지 않는다
+              {live && hasLive
+                ? ' · 마름모(◇ CH · ◆ PG I2) = 라이브 실행(시연값 · 앱 경유 · 기록 정본 아님)'
+                : ''}
             </p>
           </CardContent>
         </Card>

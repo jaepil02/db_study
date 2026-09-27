@@ -92,3 +92,6 @@ export function gunzip(input: Uint8Array): BytesResult {
 export function reduce(task: ReduceTask): ReduceResult {
   return reduceSeries(task);
 }
+
+/** 라이브 flow 발행 한 초 — 점 생성 · 엔트리 인코딩(06_pipeline/10 §흐름 시연 실행 · 생성은 worker_threads에서) */
+export { buildFlowSecond as flowSecond } from '../../modules/runs/flow-gen';

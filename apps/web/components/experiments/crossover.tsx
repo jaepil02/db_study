@@ -3,6 +3,7 @@
 // 원천은 BFF 기록 읽기(/bff/measurements — docs/measurements 읽기 전용)다. api 표면이 아니고, 이 화면은 폴링하지 않는다(진입 · 새로고침 때만).
 // 화면 수치는 기록의 3회 중앙값을 그릴 뿐이다 — 역전 지점의 정본은 기록 파일이다.
 import { useQuery } from '@tanstack/react-query';
+import Link from 'next/link';
 import { useMemo, useState } from 'react';
 import {
   AXIS_LABELS,
@@ -286,6 +287,13 @@ export function CrossoverPanel() {
           <Button variant="outline" onClick={() => q.refetch()} disabled={q.isFetching}>
             새로고침
           </Button>
+          {/* EXP-PERF 진입 — 진입 파라미터 q · cache로 같은 쿼리 · 캐시의 곡선 · 결론 카드가 열린다(08_screen/08 §EXP-PERF 진입) */}
+          <Link
+            href={`/experiments/perf?${new URLSearchParams({ q: query, cache }).toString()}`}
+            className="text-sky-700 underline"
+          >
+            규모별 자세히
+          </Link>
         </div>
       </CardHeader>
       <CardContent className="flex flex-col gap-3 text-sm">

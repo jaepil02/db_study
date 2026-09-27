@@ -23,6 +23,7 @@ import { MasterApiModule } from './modules/master/master-api.module';
 import { MetricsModule } from './modules/metrics/metrics.module';
 import { PlcSimModule } from './modules/plc-sim/plc-sim.module';
 import { RealtimeModule } from './modules/realtime/realtime.module';
+import { RunsModule } from './modules/runs/runs.module';
 import { TimeseriesModule } from './modules/timeseries/timeseries.module';
 
 type Imports = NonNullable<DynamicModule['imports']>;
@@ -43,6 +44,7 @@ const ROLE_MODULES: Record<AppRole, Imports> = {
     AlarmApiModule,
     BizWriteModule,
     BizWorkerModule,
+    RunsModule,
   ],
   api: [
     MasterModule,
@@ -53,6 +55,8 @@ const ROLE_MODULES: Record<AppRole, Imports> = {
     DatagenModeCModule,
     AlarmApiModule,
     BizWriteModule,
+    // 라이브 실행 제어(EXP-PERF · EXP-FLOW) — api 역할 · 실행 상태는 인스턴스 메모리(07_api/09 §라이브 실행 제어)
+    RunsModule,
   ],
   // 업무 명령 적용(grp:biz-writer · lock:biz:writer 단일 소비자)은 워커 역할 — 06_pipeline/07 §적용 단계
   worker: [IngestModule, MetricsModule, BizWorkerModule],

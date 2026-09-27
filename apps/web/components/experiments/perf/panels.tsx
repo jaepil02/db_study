@@ -5,6 +5,7 @@ import {
   compactNodes,
   expLabel,
   findRange,
+  PERF_QUERIES,
   type PerfCounts,
   type PerfRange,
   type PerfView,
@@ -15,6 +16,9 @@ import {
   type StageExclusion,
   undeterminedMarks,
 } from '../../../lib/perf';
+import { formatBytes, LIVE_MARK } from '../../../lib/runs';
+import type { PerfScaleResultBody } from '../../../lib/shared';
+import { fmtMs } from './options';
 
 const TH = 'border-b border-slate-200 px-2 py-1 font-medium whitespace-nowrap';
 const TD = 'border-b border-slate-100 px-2 py-1 whitespace-nowrap tabular-nums';
@@ -393,5 +397,74 @@ export function CountsLine({
       {c.invalidStructural} · 그리지 않은 점 {undrawnCount(c, yLog)}
       {c.duplicatePoints > 0 ? ` · 뒤 기록이 덮은 중복 점 ${c.duplicatePoints}` : ''} · {OBSERVATION_NOTE}
     </p>
+  );
+}
+
+/**
+ * 라이브 결과 표(GEN-11) — result.scales[] 행 × Q1~Q5 칸(CH · PG I2 중앙값 · 빠른 쪽 · 배수 PG ÷ CH 소수 1자리 · 결과 불일치)
+ * · 규모 행 끝에 적재 시간 · 저장 바이트 · 머리에 라이브 표지(08_screen/08 §EXP-PERF §요소 라이브 결과 표 행).
+ * 앱 경유 시연값이라 결론 카드 · 역전 음영 · 히트맵에 넣지 않는다(§표시 계약 라이브 표지).
+ */
+export function LiveResultTable({ result }: { result: PerfScaleResultBody[] }) {
+  const scales = [...result].sort((a, b) => a.exponent - b.exponent);
+  const cell = (s: PerfScaleResultBody, q: string) => {
+    const c = s.queries.find((x) => x.q === q);
+    if (!c) return <span className="text-slate-400">—</span>;
+    const win = c.winner === 'ch' ? 'CH' : c.winner === 'pg' ? 'PG' : null;
+    return (
+      <span className="flex flex-col">
+        <span>
+          CH {c.ch.median === null ? '—' : fmtMs(c.ch.median)} · PG{' '}
+          {c.pg.median === null ? '—' : fmtMs(c.pg.median)} ms
+        </span>
+        <span className="text-slate-500">
+          {win ? `${win} 빠름` : '—'} · {c.ratio === null ? '—' : `${c.ratio.toFixed(1)}×`}
+          {c.resultMatch === false ? <span className="text-red-700"> · 결과 불일치</span> : null}
+        </span>
+      </span>
+    );
+  };
+  const ms = (v: number | null) => (v === null ? '—' : `${Math.round(v).toLocaleString('ko-KR')} ms`);
+  const bytes = (v: number | null) => (v === null ? '—' : formatBytes(v));
+  return (
+    <div className="flex flex-col gap-1">
+      <p className="text-xs text-slate-500">{LIVE_MARK} · 칸 = 중앙값(웜 3회) · 배수 PG ÷ CH · PG는 I2</p>
+      <div className="overflow-x-auto">
+        <table className="text-xs">
+          <thead>
+            <tr className="text-left">
+              <th className={TH}>규모</th>
+              {PERF_QUERIES.map((q) => (
+                <th key={q} className={TH}>
+                  {q}
+                </th>
+              ))}
+              <th className={TH}>적재 CH · PG</th>
+              <th className={TH}>저장 CH · PG</th>
+            </tr>
+          </thead>
+          <tbody>
+            {scales.map((s) => (
+              <tr key={s.exponent} className="align-top">
+                <td className={TD}>
+                  {expLabel(s.exponent)} · {s.rows.toLocaleString('ko-KR')}행
+                </td>
+                {PERF_QUERIES.map((q) => (
+                  <td key={q} className={TD}>
+                    {cell(s, q)}
+                  </td>
+                ))}
+                <td className={TD}>
+                  {ms(s.fillMs.ch)} · {ms(s.fillMs.pg)}
+                </td>
+                <td className={TD}>
+                  {bytes(s.storageBytes.ch)} · {bytes(s.storageBytes.pg)}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
   );
 }

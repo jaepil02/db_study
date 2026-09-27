@@ -2,6 +2,7 @@
 // EXP-FLOW — 분산 처리 모니터링 · 정본 docs/08_screen/08_evidence_screens.md §EXP-FLOW
 // 진입이 곧 subscribe_flow이고 이탈이 unsubscribe_flow다 — 셸의 WebSocket 연결 하나를 그대로 쓴다(재연결 재구독은 lib/realtime-socket.ts).
 // 관찰 보조 — 기록 정본 아님. flow 프레임은 캐시 층이 없다(Pub/Sub · 링 버퍼 20). 저장소 누적은 BFF 흐름 보기 5초 폴링.
+// 실행 패널(GEN-12)은 머리 아래 — flow 실행 중에는 흐름도 머리에 "라이브 flow 실행 중 — pps N · 업무 N/초"(표시 계약 실행 발행 원천).
 import { useQuery } from '@tanstack/react-query';
 import { useEffect, useRef, useState } from 'react';
 import { ApiError } from '../../../lib/api';
@@ -24,9 +25,13 @@ import {
   sourcePps,
 } from '../../../lib/flow';
 import { realtimeSocket, useConnectionStore } from '../../../lib/realtime-socket';
+import { isActive, panelRun } from '../../../lib/runs';
 import { formatAge } from '../../../lib/time';
 import { useNow } from '../../../lib/use-now';
 import { cn } from '../../../lib/utils';
+import { FlowProgressBar, FlowResultTable } from '../../runs/flow-run';
+import { RunPanel } from '../../runs/run-panel';
+import { useCurrentRun } from '../../runs/use-run';
 import { useShellHealth } from '../../shell/experiment-badge';
 import { Band } from '../../ui/band';
 import { Card, CardContent, CardHeader, CardTitle } from '../../ui/card';
@@ -129,6 +134,8 @@ export function FlowScreen() {
   const ackOverdue = sub === 'requesting' && requestedAt !== null && now - requestedAt >= FLOW_ACK_WAIT_MS;
   const hasBatch = state.timeline.some((e) => e.kind === 'batch');
   const skeleton = state.lastFrameAt === null;
+  const flowRun = panelRun(useCurrentRun().data, 'flow');
+  const liveFlow = flowRun && isActive(flowRun.status) ? flowRun.params : null;
 
   return (
     <div className="flex flex-col gap-4">
@@ -170,11 +177,21 @@ export function FlowScreen() {
         </span>
       </div>
 
-      {/* RUN_PANEL_SLOT flow */}
+      <RunPanel
+        type="flow"
+        progress={(run, receivedAt, at) => <FlowProgressBar run={run} receivedAt={receivedAt} now={at} />}
+        result={(run) => <FlowResultTable run={run} />}
+      />
 
       <Card>
         <CardHeader>
           <CardTitle>흐름도 — 점 하나가 요약 하나 · 머묾 비율이 실제 단계 ms 비율</CardTitle>
+          {liveFlow ? (
+            <p data-testid="flow-live-run" className="text-xs font-medium text-sky-800">
+              라이브 flow 실행 중 — pps {(liveFlow.pps ?? 0).toLocaleString('ko-KR')} · 업무{' '}
+              {liveFlow.bizPerSec ?? 0}/초
+            </p>
+          ) : null}
         </CardHeader>
         <CardContent className="flex flex-col gap-2">
           {sub === 'disconnected' && (

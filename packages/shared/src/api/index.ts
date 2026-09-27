@@ -6,6 +6,7 @@ export * from './flow';
 export * from './health';
 export * from './master';
 export * from './realtime';
+export * from './runs';
 export * from './switches';
 export * from './timeseries';
 export * from './websocket';
