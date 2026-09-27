@@ -2,6 +2,7 @@
 
 > **대상**: 스키마 적용의 저장소 간 순서 · PostgreSQL 순번 마이그레이션 · ClickHouse DDL 순번 · 도구 관리 테이블 · 시드(사이트 · 라인 · 설비 · 접속 설정 · 태그 · 계정 · 역할) · 스키마 변경 절차 · 스냅샷과의 관계
 > **작성일**: 2026-09-24
+> **개정일**: 2026-09-28 — 코드 검수 반영(r-code-api M1 · L1) — §DB 시간대 전환 ③에 **쓰기 정지 확인**(system.processes INSERT · 판정 대상이 남았을 때만) · **EXCHANGE 직전 원본 재검사**(집계 테이블은 countMerge) · PostgreSQL 순번 **011 run_perf 함수 search_path pg_temp 끝 명시** · 이후 변경 대역 011~ → **012~**
 > **개정일**: 2026-09-28 — 운영 전환 실측 반영 — ClickHouse 복사 설정에 **optimize_on_insert 0** 추가(집계 테이블 삽입 시 미리 합침으로 행 수 대조가 멈춘 사건)
 > **개정일**: 2026-09-28 — 구현 반영(i-utc 실측 · 리드 채택) — 기존 볼륨 경로 ②에 **pgmigrations.run_on 보정 단계**(KST 벽시계 행 → UTC 벽시계 · 재구성 볼륨만) · 불릿 신설 — 순서 검사 영구 실패 방지
 > **개정일**: 2026-09-28 — 리드 판정 — PostgreSQL 순번 **010 실행 수명 객체 함수**(010_run_perf_functions.sql · SECURITY DEFINER 2) · 이후 변경 대역 010~ → **011~**
@@ -61,10 +62,11 @@
 | 007 | 대조군 plc_tag_raw_control · 일 파티션 · BRIN | [10_olap_vs_rdb_control.md](./10_olap_vs_rdb_control.md) | 원시 SQL |
 | **008** | **biz_command_log · UNIQUE(cmd_id) · 추가 전용 REVOKE**(제안 파일명 008_biz_command_log.sql) — 업무 쓰기 Redis 경유 | [01_postgresql_schema.md](./01_postgresql_schema.md) §biz_command_log 설계 · [02_postgresql_constraints.md](./02_postgresql_constraints.md) | 원시 SQL — 권한 |
 | **009** | **alarm_event 월 · 대조군 일 파티션 UTC 경계 재구성**(제안 파일명 009_utc_partition_boundaries.sql · 경계가 이미 UTC면 건너뛴다) — ADR-27 | §DB 시간대 전환 · [02_postgresql_constraints.md](./02_postgresql_constraints.md) · [10_olap_vs_rdb_control.md](./10_olap_vs_rdb_control.md) | 원시 SQL — pg_partman 호출 · 파티션 분리 |
-| **010** | **실행 수명 객체 함수 run_perf_create(p_from, p_to) · run_perf_drop()**(제안 파일명 010_run_perf_functions.sql · app_owner 소유 SECURITY DEFINER · search_path 고정 · EXECUTE는 app_rw만) — 라이브 실행 perf | [10_olap_vs_rdb_control.md](./10_olap_vs_rdb_control.md) §실행 수명 객체 | 원시 SQL — 함수 · 권한 |
-| 011~ | 이후 변경 — 말미 채번 · 재배치 금지 | 변경한 문서 | 해당 없음 |
+| **010** | **실행 수명 객체 함수 run_perf_create(p_from, p_to) · run_perf_drop()**(제안 파일명 010_run_perf_functions.sql · app_owner 소유 SECURITY DEFINER · search_path public(011에서 public, pg_temp) · EXECUTE는 app_rw만) — 라이브 실행 perf | [10_olap_vs_rdb_control.md](./10_olap_vs_rdb_control.md) §실행 수명 객체 | 원시 SQL — 함수 · 권한 |
+| **011** | **run_perf_create · run_perf_drop search_path에 pg_temp 끝 명시**(011_run_perf_search_path.sql · CREATE OR REPLACE · 본문 · 권한 010과 같음 — 010은 적용된 순번이라 고치지 않는다) | [10_olap_vs_rdb_control.md](./10_olap_vs_rdb_control.md) §실행 수명 객체 | 원시 SQL — 함수 |
+| 012~ | 이후 변경 — 말미 채번 · 재배치 금지 | 변경한 문서 | 해당 없음 |
 
-- 검산: 초기 대역 = 001~007 = **7** · 초기 테이블 = MST 6 + AUT 3 + ALM 2 + WRK 3 + 대조군 1 = **15** · 008이 1을 더해 현행 테이블 = 15 + 1 = **16** · 009는 테이블을 더하지 않는다(파티션 재구성 — 부모 테이블 수 불변) · 010은 함수 2만 만든다(실행 수명 객체는 실행이 함수로 만들고 지운다 — 고정 기준 밖)
+- 검산: 초기 대역 = 001~007 = **7** · 초기 테이블 = MST 6 + AUT 3 + ALM 2 + WRK 3 + 대조군 1 = **15** · 008이 1을 더해 현행 테이블 = 15 + 1 = **16** · 009는 테이블을 더하지 않는다(파티션 재구성 — 부모 테이블 수 불변) · 010은 함수 2만 만든다(실행 수명 객체는 실행이 함수로 만들고 지운다 — 고정 기준 밖) · 011은 함수 2를 다시 만든다(객체 수 불변)
 - **009는 008 뒤에만 적용한다.** node-pg-migrate 순서 검사(checkOrder)는 적용된 순번보다 앞선 미적용 순번을 거부한다 — 008 구현 전에 009를 적용한 볼륨에 008을 더하면 migrate가 멈춘다(§S3 적용 범위의 순서 검사와 같은 기전). 두 순번은 같은 구현 웨이브에서 008 → 009로 넣는다.
 - **008은 초기 대역에 끼우지 않고 말미에 둔다.** 기존 볼륨(001~007 적용 · 스냅샷)에 migrate를 다시 돌리면 008만 적용되어 원장 테이블이 생긴다 — 005(WRK)에 넣으면 이미 적용된 순번의 내용이 바뀌어 같은 순번의 두 스키마가 생긴다. 008은 업무 테이블 어느 것도 참조하지 않는다(FK 없음).
 - **도구가 무엇이든 원시 SQL 마이그레이션을 쓸 수 있어야 한다.** 파티션 · 트리거 · 권한 · 확장 · BRIN은 ORM 모델 선언으로 표현되지 않는다 — 원본 후보(Prisma Migrate · node-pg-migrate) 중 이 제약으로 **node-pg-migrate**를 골랐다(W6 판정 · [../09_tech_stack/05_tooling_devops.md](../09_tech_stack/05_tooling_devops.md) §마이그레이션 도구 판정).
@@ -278,15 +280,17 @@ ADR-27(DB 처리 시간대 UTC · 저장 운영 경계 UTC · 달력 의미 경�
                      → 옛 자식 행 재삽입(alarm_event는 OVERRIDING SYSTEM VALUE) → 행 수 대조 → 옛 자식 DROP
                      → 재구성을 했을 때만 pgmigrations.run_on 보정(이 트랜잭션이 넣지 않은 행을 KST 벽시계 → UTC 벽시계로)
 ③ ClickHouse 전환  판정 대상 테이블 8마다 카탈로그(system.columns) 판정 — MV 제외:
+                     쓰기 정지 확인 — 판정 대상이 남았을 때만 system.processes에 판정 대상 테이블 8로 가는 INSERT가 있으면 거부
                      파티션 식이 시각 컬럼에 기대는 5(tag_raw · alarm_eval · tag_1m · tag_1h · tag_1d)
                        MV 3 DROP(입구 mv_tag_1m 먼저) → UTC 정의로 새 테이블(tag_1m을 tag_1h · tag_1d보다 먼저)
                        → INSERT SELECT(insert_deduplicate 0 · deduplicate_insert_select disable · **optimize_on_insert 0** · 컬럼 목록에 ingested_at 명시)
-                       → 행 수 · countMerge 대조 → EXCHANGE TABLES → 옛 테이블 DROP
+                       → 행 수 · countMerge 대조 → 원본 재검사(tag_raw · alarm_eval count() · 집계 tag_1* countMerge(cnt) — 복사 시점 값과 다르면 중단) → EXCHANGE TABLES → 옛 테이블 DROP
                      파티션 식이 기대지 않는 3(업무 대조) — MODIFY COLUMN 인자만(메타데이터)
 ④ ClickHouse DDL   전 파일 재적용 — MV 3이 위에서 아래로 다시 선다(IF NOT EXISTS)
 ⑤ api 기동
 ```
 
+- **쓰기 정지를 두 번 확인한다(코드 검수 M1).** ⓪ 전제를 믿지 않고 ③ 시작 때 system.processes에서 판정 대상 테이블 8로 가는 INSERT(query_kind Insert)를 찾아 있으면 "적재 · 명령 워커를 먼저 멈춘다"로 거부한다(판정 대상에 'Asia/Seoul'이 남았을 때만 — 이미 UTC면 확인하지 않는다). 한 시점의 확인은 짧은 배치 INSERT를 놓칠 수 있으므로 EXCHANGE 직전 원본 재검사가 뒤를 받친다(일반 MergeTree는 count() · 집계 tag_1*은 병합으로 행 수가 줄어 오탐하므로 병합 불변인 countMerge(cnt)) — 복사 뒤 들어온 행은 새 테이블에 없어 EXCHANGE 뒤 사라지므로, 재count가 복사 시점 값과 다르면 옛 테이블을 그대로 둔 채 중단한다(재실행 수렴).
 - **③을 DDL 재적용보다 앞에 둔다.** MV가 없는 상태에서 복사해야 원시 복사분이 롤업에 한 번 더 들어가지 않고(롤업은 롤업대로 복사한다), ④가 연쇄 입구를 마지막에 연다(§저장소 간 적용 순서 ⑥).
 - **INSERT SELECT에 중복 제거 해제 두 설정을 준다.** 대상 테이블에 비복제 중복 제거 윈도우가 있어 같은 내용 블록이 오류 없이 버려질 수 있다 — 설정 근거는 [04_clickhouse_rollup.md](./04_clickhouse_rollup.md) §백필 절차 ④와 같다.
 - **pgmigrations.run_on을 UTC 벽시계로 옮긴다(구현 i-utc 실측 · 리드 채택).** run_on은 시간대 없는 timestamp(세션 벽시계)이고 순서 검사(checkOrder)는 ORDER BY run_on, id다 — KST로 기록된 옛 행 뒤 9시간 안에 UTC 세션이 009 행을 쓰면 009가 앞에 놓여 이후 모든 migrate가 "preceding already run migration"으로 영구히 실패한다(임시 컨테이너 재현). 009는 재구성을 한 경우(= KST 시대 볼륨)에만 같은 트랜잭션이 넣지 않은 행의 run_on을 9시간 당긴다 — 빈 볼륨 · 이미 UTC면 손대지 않는다.

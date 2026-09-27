@@ -2,6 +2,7 @@
 
 > **대상**: Redis 단일 인스턴스의 영역 접두 10 · 키 패턴 전수 · 값 모양 · TTL 조회 계약 · 네이밍 · 계열별 실패 전략 · Pub/Sub 채널 5 · **봉인 표** · 키 계열별 래퍼 강제(ADR-13) · 키 인계 판정 — Redis 키 패턴 채번 정본
 > **작성일**: 2026-09-24
+> **개정일**: 2026-09-28 — 코드 검수 반영(r-code-api H1 · M2) — stream:biz:cmd 소비 XAUTOCLAIM → **PEL 재읽기(ID 0)** · lock:biz:writer 락 연산 호출 상한 500 ms · 갱신 결과 소유자 아님 · 불확실 구분 · 획득 이어 쓰기 — 키 패턴 수 · 칸 수 불변
 > **개정일**: 2026-09-28 — 웨이브 1 검수 반영(B-M7 · B-H4 · B-M4) — **lock:biz:writer** 신설(업무 명령 단일 소비자 강제 · 캐시 계열 lock · SET NX PX · 현행 참고 TTL 15초 · 갱신 5초 · 토큰 확인 해제 · 실패 시 소비 중단 · 대기) — lock 활성 2 → **3** · 활성 키 패턴 23 → **24** · 역봉인 칸 13 → **14** · 통제 칸 31 → **32** · 실패 전략 11 → **12**행 · biz:result 값에 **actor**(명령 조회 요청자 대조) · stream:biz:cmd 쓰기 실패의 원인 구분 "계수가 가른다" → **Redis 불가 = unavailable · PostgreSQL 불가 = failed** — 영역 접두 · 봉인 칸 · 래퍼 접두 배정 불변
 > **개정일**: 2026-09-28 — 503 코드 판정 정정(리드 · d-biz-b — HTTP 규약 "대응이 같으면 한 코드") — Redis 불가 업무 쓰기 코드 common.command_bus_unavailable → **common.postgres_unavailable/503 재사용**(PostgreSQL 불가와 한 코드 · 원인은 biz_commands_total{result=unavailable} · 표면 정본 07_api/01)
 > **개정일**: 2026-09-28 — 흐름 구독 표지 키 등재(리드 판정 — rt:flow:subscribed는 봉인 접두의 TTL 금지와 어긋나 **cache:flow:subscribed**로) — 캐시 계열 · CacheKeyClient · TTL 15초 · 지터 없음 · 실패는 degrade(발행 안 함) — cache 활성 7 → **8** · 활성 키 패턴 22 → **23** · 역봉인 칸 12 → **13** · 통제 칸 30 → **31** · Redis 불가 업무 쓰기 코드 common.command_bus_unavailable
@@ -48,7 +49,7 @@ TTL을 붙이지 않는다. 사라지면 복구할 수 없거나(stream · alarm
 | stream:plc:raw | Stream · 컨슈머 그룹 grp:ingest | 엔트리 1 = 스캔 사이클 1 — MessagePack 컬럼 배열(v · d · s · t0 · tg · dt · va · q) | XADD MAXLEN ~ (근사 트리밍) | COL · GEN 모드 B · C | ING(XREADGROUP · XACK · XAUTOCLAIM) |
 | stream:plc:dlq | Stream | 엔트리 1 = **실패한 원 엔트리 1** + 원 엔트리 ID + 오류 사유 + **원 배치 토큰**(재시도 소진 사유만 · W4) | XADD MAXLEN ~ | ING(재시도 소진 · 해독 불가) | 사람의 DLQ 재처리 절차 — 재처리 전용 컨슈머 그룹 **grp:dlq**(W4 · [../06_pipeline/11_backpressure_failure.md](../06_pipeline/11_backpressure_failure.md) §DLQ 재처리) |
 | rt:latest:{device_id} | Hash | 필드 tag_id · 값 "ts,value,quality"(ts는 epoch ms 10진) | 태그 수만큼 · **필드 조건부 쓰기(새 ts ≥ 저장 ts · W4)** | SW-11 쓰기 주체(ingest 기본 · collector) — LatestValueWritePort(ADR-10 잠정 · S6 최종) · RLT-04 워밍 · 기동 복원 | RLT · TSQ-08 진행 구간 |
-| **stream:biz:cmd** | Stream · 컨슈머 그룹 **grp:biz-writer**(소비자 1) | 엔트리 1 = 업무 명령 1 — cmdId · kind · payload(JSON) · actor · requestedAt | XADD MAXLEN ~ — **관계: 명령 유효 창 동안의 최대 업무 쓰기 수 이상**(값 · 메모리는 [06_redis_memory.md](./06_redis_memory.md)) | api 업무 쓰기 표면(SW-12 stream) | 명령 워커(XREADGROUP · XACK · XAUTOCLAIM) — **lock:biz:writer를 쥔 워커 하나만** |
+| **stream:biz:cmd** | Stream · 컨슈머 그룹 **grp:biz-writer**(소비자 1) | 엔트리 1 = 업무 명령 1 — cmdId · kind · payload(JSON) · actor · requestedAt | XADD MAXLEN ~ — **관계: 명령 유효 창 동안의 최대 업무 쓰기 수 이상**(값 · 메모리는 [06_redis_memory.md](./06_redis_memory.md)) | api 업무 쓰기 표면(SW-12 stream) | 명령 워커(XREADGROUP · XACK · PEL 재읽기 ID 0 — XAUTOCLAIM 없음) — **lock:biz:writer를 쥔 워커 하나만** |
 | alarm:state:{rule_id} | Hash | state · first_breach_ts · breach_count · event_id · **first_clear_ts · last_value · last_ts** | 규칙 수만큼 | ALM-03 판정기 하나 — **확인 표면은 쓰지 않는다**(W4 · state 값 NORMAL · PENDING · ACTIVE · CLEARING) | ALM-03 |
 
 - **DLQ 엔트리를 원 엔트리 단위로 둔다(판정).** 원본은 "실패 배치 + 오류 사유"(원본 architecture.md §8.1)라 배치 통째(최대 수만 행)가 엔트리 하나가 될 수 있었다 — 그러면 DLQ MAXLEN이 엔트리 수로는 작아도 메모리로는 Stream 본체를 넘는다. 원 엔트리 단위면 크기가 본 Stream 엔트리와 같아 메모리 산정([06_redis_memory.md](./06_redis_memory.md))이 닫히고, 재처리가 원 엔트리 ID로 추적된다.
@@ -73,13 +74,13 @@ TTL 없이 만들지 않는다. 사라져도 원천(PostgreSQL · ClickHouse)에
 | **cache:flow:subscribed** | String | 표지 값(게이트웨이 인스턴스 식별) | **TTL만** — 흐름 구독 연결이 0이 되면 갱신을 멈춰 만료된다 | WebSocket 게이트웨이 쓰기(5초마다 갱신) · 흐름 요약 발행자(Ingest 워커 · 판정기 · 명령 워커) 읽기(최대 5초 간격) | **신설**(EXP-FLOW · 정본 [../07_api/11_websocket.md](../07_api/11_websocket.md) §흐름 이벤트) — 원천은 게이트웨이의 구독 연결 수 · 없으면 발행하지 않는다 |
 | **lock:rebuild:q:{sha1}** | String | 소유자 토큰(UUID) · SET NX PX | 소유자 검증 Lua로 해제 | TSQ-05 | 조회 캐시 재구성 락 |
 | **lock:rebuild:rt:{device_id}** | String | 상동 | 상동 | RLT-04 | 최신값 빈 키 복원 락 |
-| **lock:biz:writer** | String | 소유자 토큰(워커 인스턴스 UUID) · SET NX PX | 쥔 워커가 주기 갱신(토큰 확인) · 종료 시 토큰 확인 해제 · 죽으면 TTL 만료 | 명령 워커 — 쥔 동안만 grp:biz-writer를 소비 · 못 쥔 워커는 대기 · 재시도 | **신설** — 업무 명령 단일 소비자 강제 락(기전 [../06_pipeline/07_business_crud.md](../06_pipeline/07_business_crud.md) §적용 단계) |
+| **lock:biz:writer** | String | 소유자 토큰(워커 인스턴스 UUID) · 획득 스크립트(비었으면 SET PX · 값이 내 토큰이면 PEXPIRE) | 쥔 워커가 주기 갱신(토큰 확인) · 종료 시 토큰 확인 해제 · 죽으면 TTL 만료 | 명령 워커 — 쥔 동안만 grp:biz-writer를 소비 · 못 쥔 워커는 대기 · 재시도 | **신설** — 업무 명령 단일 소비자 강제 락(기전 [../06_pipeline/07_business_crud.md](../06_pipeline/07_business_crud.md) §적용 단계) |
 | **rl:{class}:{user_id}:{unix_minute}** | String | INCR 계수 | 분 창 만료 | AUT-06 | class = 한도 등급 |
 | **biz:result:{cmdId}** | String | 명령 결과 JSON — status(APPLIED · REJECTED · EXPIRED · 또는 PostgreSQL 불가) · **actor(요청자 user_id · 인증 전 NULL — 명령 조회의 요청자 대조)** · HTTP 상태 · 본문 또는 오류 코드 | **TTL만** — 원장(biz_command_log)이 원천 | 명령 워커 쓰기 · api 응답 · 명령 조회 읽기 | **신설** — cmdId는 UUID 문자열 · 미스면 원장을 읽고 **다시 채우지 않는다** |
 | auth:refresh:{refresh_token_id} | String | user_id | 로그아웃 시 DEL | AUT-01~03 | rt: 접두 금지(원본 개명) · **refresh_token_id = 토큰의 암호학적 요약값 — 원문을 키에 쓰지 않는다**(12_security/01) |
 
 - **목록 캐시를 Hash 하나에 모으는 이유** — 목록 조회는 범위 · 필터 조합마다 결과가 달라 키가 여럿 생기는데, 쓰기 한 건이 그 전부를 무효화해야 한다. 키를 흩으면 무효화에 패턴 검색(KEYS)이 필요하고 KEYS는 금지다. Hash 하나면 DEL 한 번이 조합 전부를 지운다. 만료는 EXPIRE NX로 **첫 채움 시점 기준**이라 어떤 조합도 TTL보다 오래 낡지 않는다.
-- **lock:biz:writer가 업무 명령의 단일 소비자를 강제한다(리드 판정).** 소비자 이름 고정(biz-writer-1)만으로는 막지 못한다 — 워커 둘이 같은 이름으로 XREADGROUP하면 Redis는 둘을 한 소비자로 보고 두 프로세스가 서로 다른 명령을 동시에 적용해 순서 보존이 깨진다. 락을 쥔 워커만 소비하고, 쥔 워커가 죽으면 TTL 뒤 다른 워커가 이어받아 PEL부터 소진한다. 쥔 워커의 소비가 TTL보다 오래 멈추면 락이 넘어가 두 워커가 잠시 겹칠 수 있다 — 갱신 주기를 TTL의 3분의 1로 두는 이유이며 겹친 명령의 이중 적용은 원장 UNIQUE가 막는다.
+- **lock:biz:writer가 업무 명령의 단일 소비자를 강제한다(리드 판정).** 소비자 이름 고정(biz-writer-1)만으로는 막지 못한다 — 워커 둘이 같은 이름으로 XREADGROUP하면 Redis는 둘을 한 소비자로 보고 두 프로세스가 서로 다른 명령을 동시에 적용해 순서 보존이 깨진다. 락을 쥔 워커만 소비하고, 쥔 워커가 죽으면 TTL 뒤 다른 워커가 이어받아 PEL부터 소진한다. 쥔 워커의 소비가 TTL보다 오래 멈추면 락이 넘어가 두 워커가 잠시 겹칠 수 있다 — 갱신 주기를 TTL의 3분의 1로 두는 이유이며 겹친 명령의 이중 적용은 원장 UNIQUE가 막는다. 락 연산(획득 · 갱신 · 해제)의 호출 상한은 500 ms다(캐시 50 ms와 별개). 갱신 결과는 소유자 아님(0) = 즉시 소비 중단 · 불확실(시간 초과 · 오류) = 락 유지 · 소비 계속 · 다음 주기 재시도(마지막 확인 — 호출을 보낸 시각 — 뒤 다음 주기 전에 TTL이 지날 수 있으면 지금 중단 · 명령 처리 루프도 확인 뒤 TTL이 지나면 중단)이고, 획득은 값이 내 토큰이면 이어 쓴다(획득 · 이어 쓰기 한 스크립트).
 - **lock:rebuild를 두 하위 공간으로 가른다.** 원본은 조회 캐시 락(쿼리 해시)과 최신값 복원 락(설비)을 같은 lock:rebuild:{…}에 두었다 — 식별자 공간이 겹치면 우연히 같은 문자열을 가진 두 락이 서로를 막는다(REQ-RLT-05 · REQ-TSQ-12).
 - auth:refresh는 캐시 계열이지만 원천 DB가 없다. 축출되면 해당 사용자는 재로그인이다 — 수집 적체가 로그아웃으로 번지는 경로이며 그 차단이 MAXLEN 산정의 이유다([06_redis_memory.md](./06_redis_memory.md) · [../02_features/01_auth.md](../02_features/01_auth.md)).
 
@@ -153,7 +154,7 @@ TTL은 2계층 조정값이다. 본문에 값을 박지 않고 **키 모양 · �
 | alarm:state | 판정 중단 — 명시적 실패 | 없음 | 판정 지연 | REQ-ALM-07 |
 | cache:* | 짧은 타임아웃 뒤 **조용히 degrade** — 원천 직접 조회 · cache:flow:subscribed는 읽기 실패를 "표지 없음"으로 보고 흐름 요약을 내지 않는다(측정 오염 쪽으로 안전) | 현행 50 ms · [../06_pipeline/06_timeseries_read.md](../06_pipeline/06_timeseries_read.md) | 캐시 히트율 · 지연 상승 | 원본 architecture.md §17 degrade 원칙 |
 | lock:rebuild:* | 락 없이 원천 조회 — 스탬피드를 감수한다 | 상동 | 원천 동시 쿼리 수 | 캐시 실패가 요청 실패가 되지 않게 |
-| lock:biz:writer | **소비 중단 · 대기** — 락 없이 소비하지 않는다 · 재시도 주기마다 다시 쥔다 | 상동 | biz_stream_lag 상승 · 대기 상한 202 | 락 없는 소비는 단일 소비자 강제를 깨 적용 순서가 뒤집힌다 — 스탬피드 감수와 반대 판정 |
+| lock:biz:writer | **소비 중단 · 대기** — 락 없이 소비하지 않는다 · 재시도 주기마다 다시 쥔다 · 갱신 결과가 불확실(시간 초과 · 오류)이면 락 유지 · 소비 계속(마지막 확인 뒤 다음 주기 전에 TTL이 지날 수 있으면 중단 — 불릿 "lock:biz:writer가 업무 명령의 단일 소비자를 강제한다") | 상동 | biz_stream_lag 상승 · 대기 상한 202 | 락 없는 소비는 단일 소비자 강제를 깨 적용 순서가 뒤집힌다 — 스탬피드 감수와 반대 판정 |
 | rl:* | **통과** — 계수 없이 요청을 받는다 | 상동 | 레이트 리밋 통과 계수 | W2b 판정 [../03_requirements/02_auth.md](../03_requirements/02_auth.md) |
 | biz:result | 쓰기 실패는 삼키고 계수 — api는 대기 상한 뒤 202 · 읽기 실패 · 미스는 원장 조회로 **degrade** | 상동 | 202 비율 · 명령 조회의 원장 조회 수 | 원장이 원천이다 |
 | auth:refresh | **거절** — 우회할 원천이 없다 | 상동 | auth.token_store_unavailable/503(로그인 · 갱신 · 로그아웃) | REQ-AUT-14 |
