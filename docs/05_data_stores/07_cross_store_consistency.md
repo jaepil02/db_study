@@ -2,9 +2,10 @@
 
 > **대상**: PostgreSQL · ClickHouse · Redis 사이의 정합 원칙 — 두 DB를 트랜잭션으로 묶지 않는 원칙(ADR-16) · 교차 저장소 참조 전수 · Dictionary · tag_id 불변과 태그 생애 · 논리 삭제 · 스케일 변경 · 즉시 반영 · 비활성 태그 이름 판정 · 불일치 시 진실
 > **작성일**: 2026-09-24
+> **개정일**: 2026-09-28 — DB 시각 UTC(ADR-27) — 시간 정렬 행 달력 경계 Asia/Seoul 단일 → **DB 처리 · 파티션 경계 UTC 단일 · 달력 의미 경계만 KST 명시** — 문제 수 불변
 > **개정일**: 2026-09-24 — W7 검수 반영 — 미확인 2행 닫힘(비활성 태그 규칙 · 적재 행 조합 검증)
 > **개정일**: 2026-09-24 — W6 실험 채번 반영 — EXP 번호 반영(정본 10_observability/01 · 06)
-> **원천**: 원본 architecture.md §5 · §7.4 · §12 · §17(커밋 ff66a37) · 원본 data_flow.md §5 · §7 · §7.1 · §8.2 · §12.2(커밋 ff66a37) · 원본 implementation_plan.md §7.2 · §7.4(커밋 ff66a37) · 웨이브 인계 W3 05_data_stores/07 · 01 행(dict_tag WHERE is_active) · ADR-10 · ADR-12 · ADR-16 · [../README.md](../README.md) 전역 불변식 불변 사실 기록 · 저장소 책임 단일화
+> **원천**: ADR-27(사용자 요구 2026-09-28) · 원본 architecture.md §5 · §7.4 · §12 · §17(커밋 ff66a37) · 원본 data_flow.md §5 · §7 · §7.1 · §8.2 · §12.2(커밋 ff66a37) · 원본 implementation_plan.md §7.2 · §7.4(커밋 ff66a37) · 웨이브 인계 W3 05_data_stores/07 · 01 행(dict_tag WHERE is_active) · ADR-10 · ADR-12 · ADR-16 · [../README.md](../README.md) 전역 불변식 불변 사실 기록 · 저장소 책임 단일화
 
 **두 DB를 트랜잭션으로 묶지 않는다.** 대신 시계열을 **불변 사실 기록**으로 두고, 해석에 필요한 메타는 마스터에서 조회 시점에 붙인다(원본 architecture.md §12 · ADR-16). 이 원칙이 성립하려면 시계열 행이 가리키는 키(tag_id · device_id · rule_id)가 영원히 같은 것을 가리켜야 한다 — 이 문서는 그 키의 생애와, 키를 해석으로 바꾸는 Dictionary의 계약을 고정한다.
 
@@ -22,7 +23,7 @@
 | 태그를 지우면 과거 행의 tag_id가 고아 | **물리 삭제하지 않는다** — is_active 논리 삭제 | app_rw에 DELETE 권한 없음([02_postgresql_constraints.md](./02_postgresql_constraints.md)) | 물리 삭제 — dictGet이 빈 문자열을 붙여 과거 구간이 "이름 없는 태그"가 된다 |
 | tag_id 재사용 | 시퀀스로만 발급 · 재사용 금지 | IDENTITY ALWAYS — 애플리케이션이 번호를 지정할 수 없다 | 수동 번호 — 재사용된 번호가 과거 행에 다른 태그 이름을 붙인다 |
 | 스케일 계수가 바뀌면 과거 값의 뜻이 바뀐다 | **새 tag_id 발급** · 이전 태그 비활성 · tag_master_history 기록 | 가드 트리거(scale · offset_value 갱신 거부) | 같은 tag_id의 scale 수정 — 저장된 공학 단위 값이 새 식과 섞여 추이가 조용히 꺾인다 |
-| 마스터와 시계열의 시간 정렬 | 저장은 epoch · 달력 경계는 Asia/Seoul 단일 | timestamptz · 시간대 명시 컬럼 | 컬럼마다 다른 시간대 — 같은 순간이 저장소마다 다른 날짜로 잘린다 |
+| 마스터와 시계열의 시간 정렬 | 저장은 epoch · DB 처리 · 파티션 경계는 UTC 단일 · 달력 의미 경계(tag_1d 하루)만 KST 명시(ADR-27) | timestamptz · 시간대 명시 컬럼(UTC) · DB 기본 timezone UTC | 컬럼마다 다른 시간대 — 같은 순간이 저장소마다 다른 날짜로 잘린다 |
 | 마스터를 고쳐도 조회에 최대 10분 옛 이름 | 커밋 직후 SYSTEM RELOAD DICTIONARY | 무효화 체인(ADR-12) | LIFETIME 대기 — 관리자가 저장 직후 트렌드 화면에서 옛 이름을 본다 |
 
 - 검산: 문제 = **6**(원본 §12 표 행과 같다)

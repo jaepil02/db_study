@@ -2,12 +2,13 @@
 
 > **대상**: 측정값 하나가 계층을 지나며 바뀌는 모양의 정본 — 단계별 스키마(와이어 → 디코딩 → Stream 엔트리 → ClickHouse 행 → API 응답) · 스키마 버전 필드 v · t0 · dt 규칙 · 최신값 Hash 값 · Pub/Sub 페이로드 · 스풀 프레임 · DLQ 엔트리 · 계약 변경 규칙 · 발행자 공통 계약
 > **작성일**: 2026-09-24
+> **개정일**: 2026-09-28 — DB 시각 UTC(ADR-27) — 4단계 ClickHouse 행 ts · ingested_at DateTime64(3, 'Asia/Seoul') → **'UTC'**(적재는 epoch 정수 그대로) — 컬럼 수 불변
 > **개정일**: 2026-09-25 — S3 구현 반영 — va 값 자리 규칙 채움(BAD_COMM 0 · 비유한 BAD_RANGE의 대체 값)
 > **개정일**: 2026-09-24 — S2 구현 반영 — Stream 엔트리 필드 이름 **p**(msgpack 바이트 하나) 판정 · S2 해독 불가 처리(DLQ 전 XACK · 로그)
 > **개정일**: 2026-09-24 — S1 실측 반영(EXP-21 기록 006 · 410a146 · EXP-39 기록 007~009 · 019e54d) — 계약 v1의 코드 자리 등재(packages/shared) · §와이어 표현 신설(va 정수 int · 실수 float64 · s · t0 int64) · 엔트리 크기 미확인 → **7,051 B(태그 500 · RANDOM_WALK)** — 객체 배열 대비 크기 비는 미확인 유지
 > **개정일**: 2026-09-24 — W7 검수 반영 — 미확인 2행 닫힘(모드 C 본문 · 응답 시각 형식과 WebSocket 프레임)
 > **개정일**: 2026-09-24 — W6 실험 채번 반영 — 메트릭 이름 반영(정본 10_observability/01 · 06)
-> **원천**: 원본 data_flow.md §14 · §14.1 · §14.2 · §15(커밋 ff66a37) · 원본 architecture.md §9.3(커밋 ff66a37) · docs_plan.md 파일 목차(06_pipeline/12) · ADR-01 · ADR-04 · ADR-14 · ADR-15 · REQ-GLB-01 · 02 · 21 · REQ-COL-09 · REQ-GEN-07 · REQ-ING-01 · 05 · REQ-TSQ-05 · [../11_glossary/05_units_and_time.md](../11_glossary/05_units_and_time.md) 기준값 + 오프셋 인코딩 · [../05_data_stores/03_clickhouse_schema.md](../05_data_stores/03_clickhouse_schema.md) tag_raw · [../05_data_stores/05_redis_keyspace.md](../05_data_stores/05_redis_keyspace.md) 봉인 계열 값 모양
+> **원천**: ADR-27(사용자 요구 2026-09-28) · 원본 data_flow.md §14 · §14.1 · §14.2 · §15(커밋 ff66a37) · 원본 architecture.md §9.3(커밋 ff66a37) · docs_plan.md 파일 목차(06_pipeline/12) · ADR-01 · ADR-04 · ADR-14 · ADR-15 · REQ-GLB-01 · 02 · 21 · REQ-COL-09 · REQ-GEN-07 · REQ-ING-01 · 05 · REQ-TSQ-05 · [../11_glossary/05_units_and_time.md](../11_glossary/05_units_and_time.md) 기준값 + 오프셋 인코딩 · [../05_data_stores/03_clickhouse_schema.md](../05_data_stores/03_clickhouse_schema.md) tag_raw · [../05_data_stores/05_redis_keyspace.md](../05_data_stores/05_redis_keyspace.md) 봉인 계열 값 모양
 
 모듈 사이의 결합은 **데이터 계약 하나로만** 한다(REQ-GLB-21). Collector와 Ingest는 같은 프로세스에 있어도 서로의 코드를 부르지 않고 Stream 엔트리의 모양으로만 만난다 — 역할 분리(APP_ROLE) 뒤에는 두 모듈이 서로 다른 시점에 배포되어 **두 버전이 공존하는 구간이 반드시 생긴다.** 이 문서가 그 모양과 버전 규칙의 정본이다.
 
@@ -88,13 +89,13 @@
 
 | 컬럼 | 타입 | 출처 | 규칙 |
 |------|------|------|------|
-| ts | DateTime64(3, 'Asia/Seoul') | t0 + dt[i] | **epoch 정수로 보낸다** — 문자열이면 컬럼 시간대로 파싱되어 보낸 쪽과 어긋난다 |
+| ts | DateTime64(3, 'UTC') | t0 + dt[i] | **epoch 정수로 보낸다** — 문자열이면 컬럼 시간대로 파싱되어 보낸 쪽과 어긋난다 |
 | device_id | UInt32 | d | 정렬 키 첫 자리 — 태그의 설비 이동 금지의 이유 |
 | tag_id | UInt32 | tg[i] | 이름은 싣지 않는다(ADR-16) |
 | value | Float64 | va[i] | 무손실 Gorilla 코덱 |
 | quality | UInt8 | q[i] | 7값 한 컬럼(출처 · 건강 겹침 — W3 판정) |
 | scan_seq | UInt64 | s | 엔트리의 모든 행이 같은 값 |
-| ingested_at | DateTime64(3, 'Asia/Seoul') | **서버 DEFAULT now64(3)** | 적재 코드가 보내지 않는다 |
+| ingested_at | DateTime64(3, 'UTC') | **서버 DEFAULT now64(3)** | 적재 코드가 보내지 않는다 |
 
 - 검산: 컬럼 = **7**
 - **ingested_at을 적재 코드가 채우면 E2E에서 Stream 대기와 삽입 구간이 빠진다**(REQ-ING-05 · REQ-GLB-01). E2E = ingested_at − ts를 SQL 한 줄로 재는 것이 이 계약의 핵심이다.

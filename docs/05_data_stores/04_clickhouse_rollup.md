@@ -2,12 +2,13 @@
 
 > **대상**: 롤업 테이블 tag_1m · tag_1h · tag_1d와 MV 3(mv_tag_1m · mv_tag_1h · mv_tag_1d)의 DDL · -State/-Merge 조합자 · bad_cnt 조건식 · 일 경계 시간대 판정 · MV 제약 · 백필 절차 · 정합 검증 · 롤업 객체 도메인 귀속 판정
 > **작성일**: 2026-09-24
+> **개정일**: 2026-09-28 — DB 시각 UTC(ADR-27 · 사용자 요구 2026-09-28) — bucket DateTime('Asia/Seoul') → **DateTime('UTC')** · last_v 상태 인자 → **DateTime64(3, 'UTC')** · mv_tag_1d의 toStartOfDay(bucket, 'Asia/Seoul') 유지 — 인자가 가독성용 → **필수**(bucket이 UTC라 인자가 없으면 UTC 자정으로 자른다) · §일 경계 시간대 판정에 상태 항목(대체됨 → ADR-27 · tag_1d 버킷 KST만 생존 · 원문 보존 · 현행 표 신설) — 대상 수 불변
 > **개정일**: 2026-09-25 — S3 통합 확인 반영 — 백필 ④ 설정에 deduplicate_insert_select 'disable' 병기(26.8에서 insert_deduplicate를 대체 · 앞 설정만 주면 무시)
 > **개정일**: 2026-09-24 — ClickHouse 26.8 LTS 전환(사용자 결정 · 25.x 보안 지원 종료) — 롤업 윈도우 근거에 26.8(기록 004) · 백필 ④의 insert_deduplicate 0 근거를 버전 종속으로 교정(25.8 버림 · 26.8 버리지 않음)
 > **개정일**: 2026-09-24 — S0 실측 반영(EXP-32 · 기록 001) — ADR-14 보강(사용자 결정) — 롤업 3테이블 DDL에 non_replicated_deduplication_window 1000 신설 · MV 제약 #8 대응 미확인 → 한 쌍 설정 · 미확인 표 1행 닫힘 · 백필 ④에 insert_deduplicate 0(롤업 윈도우가 같은 내용 재삽입을 버림 — 실측)
 > **개정일**: 2026-09-24 — 최종 정밀 검수 — 빈 표 칸을 닫힌 어휘 해당 없음으로 채움(표 열 규약) · 롤업 귀속 README 반영 대기 표기 → 반영 완료
 > **개정일**: 2026-09-24 — W7 검수 반영 — 미확인 1행 닫힘(롤업 공백 재계산 절차)
-> **원천**: 원본 architecture.md §7.2 · §11.1 · §15(커밋 ff66a37) · 원본 data_flow.md §6.1 · §10 · §10.1 · §10.2 · §10.3 · §13 · §17(커밋 ff66a37) · docs_plan.md 웨이브 인계 W3 05_data_stores/04 행 · W3 05_data_stores 행(롤업 · MV 도메인 귀속) · ADR-15 · [../11_glossary/03_enums_state_machines.md](../11_glossary/03_enums_state_machines.md) 품질 코드 · [../11_glossary/05_units_and_time.md](../11_glossary/05_units_and_time.md) 버킷 경계
+> **원천**: ADR-27(사용자 요구 2026-09-28) · 원본 architecture.md §7.2 · §11.1 · §15(커밋 ff66a37) · 원본 data_flow.md §6.1 · §10 · §10.1 · §10.2 · §10.3 · §13 · §17(커밋 ff66a37) · docs_plan.md 웨이브 인계 W3 05_data_stores/04 행 · W3 05_data_stores 행(롤업 · MV 도메인 귀속) · ADR-15 · [../11_glossary/03_enums_state_machines.md](../11_glossary/03_enums_state_machines.md) 품질 코드 · [../11_glossary/05_units_and_time.md](../11_glossary/05_units_and_time.md) 버킷 경계
 
 롤업은 **원시 스캔을 피하려고 삽입 시점에 미리 접어 두는 집계**다. tag_raw 삽입이 MV를 발동하고, MV의 타깃 테이블 삽입이 다음 MV를 발동하는 연쇄로 분 → 시간 → 일 롤업이 별도 배치 잡 없이 완성된다(원본 architecture.md §7.2). 원시를 7일만 보관하고도 장기 추이를 볼 수 있는 이유가 이 계층이다.
 
@@ -20,7 +21,7 @@
 | 원시 | tag_raw | 없음 | toYYYYMMDD(ts) | 7일 | raw | 60.5억 행 · 약 25 GB |
 | 분 | tag_1m | toStartOfMinute(ts) | toYYYYMM(bucket) | 90일 | 1m | 12.9억 행 · 약 12 GB |
 | 시간 | tag_1h | toStartOfHour(bucket) | toYYYYMM(bucket) | 730일 | 1h | 1.75억 행 · 약 2 GB |
-| 일 | tag_1d | toStartOfDay(bucket, 'Asia/Seoul') | toYear(bucket) | 무기한 | 1d | 연 730만 행 · 약 0.1 GB |
+| 일 | tag_1d | toStartOfDay(bucket, 'Asia/Seoul') — KST 자정(ADR-27 뒤에도 유지) | toYear(bucket) — UTC 년 | 무기한 | 1d | 연 730만 행 · 약 0.1 GB |
 
 - 검산: 롤업 테이블 = tag_1m · tag_1h · tag_1d = **3** · 원시 포함 계층 **4** = 조회 해상도 4
 - **보존 값은 2계층 조정값이며 정본은 [08_retention_lifecycle.md](./08_retention_lifecycle.md)다.** 규모 열은 원본 예상치(압축 후 행당 4바이트 가정)이며 3계층 미확인이다.
@@ -58,14 +59,14 @@ flowchart LR
 ```sql
 CREATE TABLE IF NOT EXISTS plc.tag_1m
 (
-    bucket    DateTime('Asia/Seoul') CODEC(Delta(4), ZSTD(1)),
+    bucket    DateTime('UTC') CODEC(Delta(4), ZSTD(1)),
     device_id UInt32,
     tag_id    UInt32,
     cnt       AggregateFunction(count),
     avg_v     AggregateFunction(avg, Float64),
     min_v     AggregateFunction(min, Float64),
     max_v     AggregateFunction(max, Float64),
-    last_v    AggregateFunction(argMax, Float64, DateTime64(3, 'Asia/Seoul')),
+    last_v    AggregateFunction(argMax, Float64, DateTime64(3, 'UTC')),
     p95_v     AggregateFunction(quantilesTDigest(0.95), Float64),
     bad_cnt   AggregateFunction(countIf, UInt8)
 )
@@ -92,8 +93,8 @@ FROM plc.tag_raw
 GROUP BY bucket, device_id, tag_id;
 ```
 
-- **last_v 상태 타입에 ts와 같은 시간대를 적는다.** 상태 타입의 인자 타입은 원천 컬럼 타입과 시간대까지 같아야 MV 삽입이 타입 변환 없이 맞물린다 — 원본은 DateTime64(3)로 적어 원천 ts(Asia/Seoul)와 어긋났다.
-- **toStartOfMinute(ts)는 ts의 시간대를 물려받아 DateTime('Asia/Seoul')을 낸다.** 분 경계는 정수 시간 오프셋에서 시간대와 무관하지만, 이 bucket이 월 파티션 · 상위 롤업의 달력 함수 입력이 되므로 시간대가 필요하다.
+- **last_v 상태 타입에 ts와 같은 시간대를 적는다.** 상태 타입의 인자 타입은 원천 컬럼 타입과 시간대까지 같아야 MV 삽입이 타입 변환 없이 맞물린다 — 원본은 DateTime64(3)로 적어 원천 ts(당시 Asia/Seoul)와 어긋났다. 현행 원천 ts가 DateTime64(3, 'UTC')라(ADR-27) 상태 인자도 'UTC'다.
+- **toStartOfMinute(ts)는 ts의 시간대를 물려받아 DateTime('UTC')을 낸다(ADR-27).** 분 경계는 정수 시간 오프셋에서 시간대와 무관하지만, 이 bucket이 월 파티션 · 상위 롤업의 달력 함수 입력이 되므로 시간대를 컬럼에 명시한다 — 월 파티션은 UTC 월(저장 운영 경계)로 잘린다.
 - **TTL 90일은 하한이다.** ttl_only_drop_parts = 1은 파트 전체가 만료돼야 지우므로 월 파티션의 마지막 날이 90일을 넘길 때 그 달 전체가 떨어진다 — 실제 보존은 최대 한 달 더 길다([08_retention_lifecycle.md](./08_retention_lifecycle.md)).
 - **롤업 3테이블에도 중복 제거 윈도우를 둔다(ADR-14 보강 · S0 실측).** 25.8 · 26.8 모두 원시가 토큰으로 중복 제거돼도 종속 MV를 다시 돌린다 — 롤업에 윈도우가 없으면 응답 유실 뒤 같은 토큰 재시도가 세 롤업의 count를 두 배로 만든다(EXP-32 · 기록 001 · 004). 윈도우는 삽입 설정 deduplicate_blocks_in_dependent_materialized_views 1과 한 쌍이며 설정의 정본은 [03_clickhouse_schema.md](./03_clickhouse_schema.md) §서버 설정 계약이다.
 
@@ -138,7 +139,7 @@ GROUP BY bucket, device_id, tag_id;
 ```
 
 - **세 롤업 테이블은 컬럼 구조가 같다(AS plc.tag_1m).** 같은 구조라야 조회 코드가 해상도만 바꿔 같은 -Merge 쿼리를 쓴다. 한 테이블만 컬럼을 더하면 해상도 자동 선택이 컬럼 유무에 따라 깨진다.
-- **mv_tag_1d가 시간대 인자를 명시한다.** bucket이 이미 Asia/Seoul이라 결과는 같지만, 일 경계는 시간대마다 다른 유일한 버킷이라 정의만 읽고 KST 자정임을 알 수 있게 한다 — §일 경계 시간대 판정.
+- **mv_tag_1d의 'Asia/Seoul' 인자는 필수다(ADR-27 뒤).** bucket이 DateTime('UTC')라 인자를 빼면 toStartOfDay가 UTC 자정으로 잘라 일별 막대가 KST 09:00에 시작한다. ADR-27 전에는 bucket이 Asia/Seoul이라 인자가 결과를 바꾸지 않는 가독성 표기였다 — 일괄 치환으로 이 인자를 'UTC'로 바꾸지 않는다(달력 의미 경계 닫힌 목록 #1 · [../11_glossary/05_units_and_time.md](../11_glossary/05_units_and_time.md)). 결과 bucket 값은 UTC 순간(전날 15:00Z)으로 저장되고 화면에서 KST 00:00으로 보인다 — §일 경계 시간대 판정.
 - **tag_1d에는 TTL이 없다.** 무기한 보존이며 삭제는 수동 파티션 DROP뿐이다([08_retention_lifecycle.md](./08_retention_lifecycle.md)).
 
 ## 집계 컬럼과 조합자
@@ -178,7 +179,20 @@ GROUP BY bucket, device_id, tag_id;
 
 ## 일 경계 시간대 판정
 
-웨이브 인계 "일 경계 시간대 · tag_1m · alarm_eval 파티션 시간대"를 닫는다. **판정: 달력 경계(일 · 월 · 년)는 전부 Asia/Seoul이다.** 저장값(epoch)은 바뀌지 않고 "어느 순간에서 버킷 · 파티션이 갈리는가"만 정한다.
+- **상태**: **대체됨 → ADR-27(2026-09-28 · 사용자 요구).** 아래 W3 원문은 보존한다. 살아남은 것 — **tag_1d 버킷 = KST 자정**(달력 의미 경계) · 저장값은 바뀌지 않는다. 죽은 것 — 월 · 년 · 일 파티션의 KST 경계와 "강제 수단은 컬럼 타입 Asia/Seoul". 현행은 아래 현행 표다.
+
+| 대상 | 함수 | 현행 경계(ADR-27) | 종류 |
+|------|------|------|------|
+| tag_1d 버킷 | toStartOfDay(bucket, 'Asia/Seoul') | **KST 자정 — 인자 명시로 유지** | 달력 의미 |
+| tag_1m 월 파티션 | toYYYYMM(bucket) | UTC 월 | 저장 운영 |
+| tag_1h 월 파티션 | toYYYYMM(bucket) | UTC 월 | 저장 운영 |
+| tag_1d 년 파티션 | toYear(bucket) | UTC 년 — KST 1월 1일 버킷(전날 15:00Z)은 전년 파티션에 든다 · TTL이 없어 결과 불변 | 저장 운영 |
+| alarm_eval 일 파티션 | toYYYYMMDD(ts) | UTC 날짜 — tag_raw와 같다 | 저장 운영 |
+| tag_1m · tag_1h 버킷 | toStartOfMinute · toStartOfHour | 무관 | 해당 없음 |
+
+- 검산(현행): 대상 = **6** · 달력 의미 1 + 저장 운영 4 + 무관 1 · 경계 정본 [../11_glossary/05_units_and_time.md](../11_glossary/05_units_and_time.md) §버킷 경계 · 파티션 경계와 시간대
+
+W3 원문 — 웨이브 인계 "일 경계 시간대 · tag_1m · alarm_eval 파티션 시간대"를 닫는다. **판정: 달력 경계(일 · 월 · 년)는 전부 Asia/Seoul이다.** 저장값(epoch)은 바뀌지 않고 "어느 순간에서 버킷 · 파티션이 갈리는가"만 정한다.
 
 | 대상 | 함수 | 원본 기준 시간대 | 판정 | 판정이 없을 때의 실패 |
 |------|------|------|------|------|

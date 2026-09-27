@@ -2,11 +2,12 @@
 
 > **대상**: 데이터 단계별 보존 기간 · 기준 시점 · 삭제 방식 · 삭제 단위 · 실제 삭제 시점 · 복구 가능성 · 파티션 단위 변경 원칙 · 보존 변경 절차 · 대조군 보존 정합 — **보존 조정값의 정본**
 > **작성일**: 2026-09-24
+> **개정일**: 2026-09-28 — DB 시각 UTC(ADR-27 · 사용자 요구 2026-09-28) — 실제 삭제 시점 표 파티션 폭 KST → **UTC**(D + 8일 00:00 KST → **D + 8일 00:00 UTC = 09:00 KST**) · 자정 불릿을 저장 운영 경계 UTC로 · 대조군 정리 기준 KST 일 → **UTC 일** — 보존 값 · 대상 수 불변
 > **개정일**: 2026-09-28 — 업무 쓰기 Redis 경유 개정(사용자 결정 2026-09-27) — 단계 표 **#16 업무 명령 원장**(biz_command_log · 무기한 · 추가 전용 · 정리 주체 없음 — audit_log와 같은 판정) · **#17 업무 명령 버퍼 · 결과**(stream:biz:cmd MAXLEN · biz:result TTL) 신설 — 단계 15 → **17** · Redis 4 → **5** · PostgreSQL 4 → **5** · #11 업무 12 테이블 산식 업무 14 → **15**
 > **개정일**: 2026-09-26 — W1 검수 반영 — 단계 표 #15 업무 대조 계측물(ClickHouse 3 · TTL 없음 · 실험 스냅샷 수명 · 삭제 = 기준 스냅샷 복원 REQ-TEC-08) 신설 — 단계 14 → **15** · ClickHouse 5 → **6** · PostgreSQL 업무 테이블에 넣은 실험 행 규칙 불릿
 > **개정일**: 2026-09-24 — W7 검수 반영 — 미확인 2행 닫힘(대조군 파티션 정리 · DLQ 재처리 전 보존)
 > **개정일**: 2026-09-24 — W6 판정 반영 — TTL 머지 주기(서버 기본값 유지 · 줄이지 않음) · alarm_event 아카이브 위치(snapshots/archive/alarm_event · 파티션당 덤프 1)를 닫는다 · 파티션 삭제 지연은 미확인 유지
-> **원천**: 원본 data_flow.md §10.1 · §13 · §17(커밋 ff66a37) · 원본 architecture.md §5 · §6 · §7.1 · §7.2 · §7.3 · §15 · §17 · §18(커밋 ff66a37) · 원본 tech_stack.md §10.3(커밋 ff66a37) · 사용자 결정 2026-09-27(업무 쓰기 Redis 경유) · [../README.md](../README.md) 고정 기준 조정값(보존의 정본 지정) · ADR-15 · D-05 · D-10
+> **원천**: ADR-27(사용자 요구 2026-09-28) · 원본 data_flow.md §10.1 · §13 · §17(커밋 ff66a37) · 원본 architecture.md §5 · §6 · §7.1 · §7.2 · §7.3 · §15 · §17 · §18(커밋 ff66a37) · 원본 tech_stack.md §10.3(커밋 ff66a37) · 사용자 결정 2026-09-27(업무 쓰기 Redis 경유) · [../README.md](../README.md) 고정 기준 조정값(보존의 정본 지정) · ADR-15 · D-05 · D-10
 
 이 문서는 **보존 기간 값의 정본**이다. 보존은 2계층 조정값이라 다른 문서는 값을 박지 않고 이 문서를 인용한다. Redis 키 TTL의 정본은 [05_redis_keyspace.md](./05_redis_keyspace.md), Stream · DLQ MAXLEN의 정본은 [06_redis_memory.md](./06_redis_memory.md)이며, 이 문서는 그 둘을 단계 목록에 인용만 한다.
 
@@ -81,15 +82,15 @@
 
 | 대상 | 파티션 폭 | 보존 | 실제로 지워지는 때 | 최대 초과 보존 |
 |------|------|------|------|------|
-| tag_raw | 일(KST) | 7일 | 파티션 날짜 D의 마지막 행이 7일을 지난 뒤 = D + 8일 00:00 KST 이후 TTL 머지 | 약 1일 + TTL 머지 주기 |
-| alarm_eval | 일(KST) | 30일 | D + 31일 00:00 KST 이후 | 상동 |
-| tag_1m | 월(KST) | 90일 | 그 달 마지막 버킷 + 90일 이후 | 약 1개월 |
-| tag_1h | 월(KST) | 730일 | 그 달 마지막 버킷 + 730일 이후 | 약 1개월 |
-| alarm_event | 월(KST) | 2년 | 분리 작업 주기에 맞춰 | 약 1개월 + 작업 주기 |
-| 대조군 | 일(KST) | tag_raw와 같다 | 정리 작업 주기에 맞춰 | 작업 주기 |
+| tag_raw | 일(UTC) | 7일 | 파티션 날짜 D의 마지막 행이 7일을 지난 뒤 = D + 8일 00:00 UTC(= 09:00 KST) 이후 TTL 머지 | 약 1일 + TTL 머지 주기 |
+| alarm_eval | 일(UTC) | 30일 | D + 31일 00:00 UTC 이후 | 상동 |
+| tag_1m | 월(UTC) | 90일 | 그 달 마지막 버킷 + 90일 이후 | 약 1개월 |
+| tag_1h | 월(UTC) | 730일 | 그 달 마지막 버킷 + 730일 이후 | 약 1개월 |
+| alarm_event | 월(UTC) | 2년 | 분리 작업 주기에 맞춰 | 약 1개월 + 작업 주기 |
+| 대조군 | 일(UTC) | tag_raw와 같다 | 정리 작업 주기에 맞춰 | 작업 주기 |
 
 - 검산: 대상 = **6**
-- **"자정에 지워진다"를 말할 때 어느 자정인지 밝힌다.** 모든 파티션 경계가 KST라 원시와 롤업 · 판정 전수가 같은 달력으로 잘린다([04_clickhouse_rollup.md](./04_clickhouse_rollup.md) §일 경계 시간대 판정). 서버 시간대에 의존하던 원본 구성에서는 tag_raw는 KST 날짜, tag_1m은 서버 시간대 월로 잘렸다([../11_glossary/05_units_and_time.md](../11_glossary/05_units_and_time.md)).
+- **"자정에 지워진다"를 말할 때 어느 자정인지 밝힌다.** 모든 파티션 경계가 **UTC**라(ADR-27 · 저장 운영 경계) 원시와 롤업 · 판정 전수 · 확정 알람 · 대조군이 같은 달력으로 잘리고, 그 자정은 KST 09:00이다. tag_1d 버킷의 하루(KST 자정)는 달력 의미 경계라 보존과 무관하다(tag_1d는 TTL이 없다 · [../11_glossary/05_units_and_time.md](../11_glossary/05_units_and_time.md) §버킷 경계 · 파티션 경계와 시간대). 서버 시간대에 의존하던 원본 구성에서는 tag_raw는 KST 날짜, tag_1m은 서버 시간대 월로 잘렸고, ADR-27 전에는 전부 KST 달력이었다.
 - **TTL 삭제 검증은 "파티션 자동 DROP 확인"이다**(원본 data_flow.md §17 TTL 삭제). 검증 시점은 보존 + 파티션 폭 + 머지 주기 뒤여야 한다 — 보존 기간 직후에 확인하면 거짓 실패다.
 
 ## 파티션 단위 원칙
@@ -153,7 +154,7 @@
 | 항목 | 상태 | 확정 자리 |
 |------|------|------|
 | TTL 머지 주기 · 파티션 삭제 지연 | **W6 판정** — 머지 주기는 서버 기본값 유지 · 줄이지 않는다 · 파티션 삭제 지연은 3계층 미확인 — 확정 전 임의 값 고정 금지 | [../09_tech_stack/03_data_infra.md](../09_tech_stack/03_data_infra.md) §TTL 머지 주기 |
-| 대조군 파티션 정리 작업의 주기 · 실행 주체 | 닫힘 — GEN 실험 도구가 tag_raw에 실제로 남은 KST 일 파티션 목록 기준으로 DETACH · DROP · 대조 실험 착수 전과 SW-09 on 운전 중 매일 — [../06_pipeline/10_datagen_inject.md](../06_pipeline/10_datagen_inject.md) | [10_olap_vs_rdb_control.md](./10_olap_vs_rdb_control.md) · [../06_pipeline/10_datagen_inject.md](../06_pipeline/10_datagen_inject.md)(W4) |
+| 대조군 파티션 정리 작업의 주기 · 실행 주체 | 닫힘 — GEN 실험 도구가 tag_raw에 실제로 남은 일 파티션 목록(ADR-27 뒤 UTC 일) 기준으로 DETACH · DROP · 대조 실험 착수 전과 SW-09 on 운전 중 매일 — [../06_pipeline/10_datagen_inject.md](../06_pipeline/10_datagen_inject.md) | [10_olap_vs_rdb_control.md](./10_olap_vs_rdb_control.md) · [../06_pipeline/10_datagen_inject.md](../06_pipeline/10_datagen_inject.md)(W4) |
 | 분리된 alarm_event 파티션의 아카이브 위치 · 형식 | **W6 판정** — snapshots/archive/alarm_event/ · 파티션 하나당 덤프 파일 하나 · 파일 이름 = 파티션 이름(월) · Git 제외 | [../09_tech_stack/04_local_environment.md](../09_tech_stack/04_local_environment.md) §스냅샷 · 아카이브 위치 |
 | 티어별 정상 상태 디스크 | 원본 예상치(S 약 1 GB · M 약 39 GB · M+ 약 259 GB) — 3계층 미확인 | [../04_architecture/07_capacity_planning.md](../04_architecture/07_capacity_planning.md) |
 | DLQ 재처리 전 보존 보장 | 닫힘 — 보장하지 않는다(한계 등재 #12 유지) · dlq_count와 DLQ 길이를 대조해 트리밍 전에 재처리하는 운영 절차 — [../06_pipeline/11_backpressure_failure.md](../06_pipeline/11_backpressure_failure.md) | [../06_pipeline/11_backpressure_failure.md](../06_pipeline/11_backpressure_failure.md)(W4) |

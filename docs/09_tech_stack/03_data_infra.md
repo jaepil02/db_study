@@ -2,6 +2,7 @@
 
 > **대상**: 저장소 3종(PostgreSQL · ClickHouse · Redis)의 이미지 · 확장 · 설정 파일의 모양 · ClickHouse 서버 timezone 판정 · pg_partman 미리 만들기 · TTL 머지 주기 · Compose healthcheck와 health 타임아웃의 관계 · **observability 프로파일 구성원 판정(보정 #17)** · **버전 고정표(버전 문자열의 유일한 기재처)**
 > **작성일**: 2026-09-24
+> **개정일**: 2026-09-28 — DB 시각 UTC(ADR-27 · 사용자 요구 2026-09-28) — 서버 timezone 판정 Asia/Seoul → **UTC**(§서버 timezone 판정에 상태 항목 · W6 원문 보존) · postgresql.conf 시간대 timezone · log_timezone → **UTC** · pg_partman 미리 만들기 기준 달력 Asia/Seoul → **UTC**(유지 작업 세션 시간대 = 세트 경계 시간대) · 공식 문서 확인(서버 timezone은 기동 시점에 읽는다 · pg_partman은 유지 작업 클라이언트까지 UTC 요구) — 조정값 · 안 수 불변
 > **개정일**: 2026-09-26 — S7 ① 계정 시드 착수 — 비밀번호 해시 라이브러리(Argon2id) 행 미고정 → **버전 고정** hash-wasm 4.12 — 버전 고정 26 → **27** · 미고정 2 → **1**(행 38 불변)
 > **개정일**: 2026-09-25 — S4 반영 — client-output-buffer-limit pubsub 값 미정 → **32mb 8mb 60**(명시 · 게이트웨이 소켓 한도 1 MiB와 같은 변경 단위 — 07_api/11)
 > **개정일**: 2026-09-25 — S3 착수 반영 — 2행 고정 — pg_partman **5.5**(파생 이미지 db_study-postgres:18.6-partman5.5.0 · 소스 빌드) · pg-copy-streams **7.0** — 버전 고정 24 → **26** · 미고정 4 → **2** · 미확인 닫힘 2(pg_partman 기본값 — 미리 만들기 4 확인 · 워커 주기 3600초 명시 · 설치 경로 — 파생 이미지) · 확장 생성 자리 마이그레이션 001 · 004 → **migrate 관리자 단계**(확장 생성에 superuser 필요) · 등록 004 · 007
@@ -15,7 +16,7 @@
 > **개정일**: 2026-09-24 — 최종 정밀 검수 — §조정값 현행값 → §화면 조정값 현행값(절 이름 교정)
 > **개정일**: 2026-09-24 — W7 보안 판정 반영 — Redis 설정 바인드 · 보호 모드 행에 **requirepass 필수** 명시 · 버전 고정표에 Argon2id 해시 라이브러리 행 추가 35 → **36**(백엔드 12 → **13** · 미고정 10 → **11**)(정본 12_security/01 · 02)
 > **개정일**: 2026-09-24 — W6 실험 채번 반영 — EXP 번호 반영(정본 10_observability/01 · 06)
-> **원천**: 원본 tech_stack.md §2 · §5 · §9 · §10.1 · §10.4 · §12(커밋 ff66a37) · 원본 architecture.md §3 · §7.5 · §13 · §14(커밋 ff66a37) · 원본 implementation_plan.md §2.1 · §9(커밋 ff66a37) · ADR-03 · ADR-05 · ADR-18 · ADR-19 · ADR-20 · docs_plan 실행 계획 보정 #17 · 웨이브 인계 W6 09_tech_stack 행(ClickHouse 서버 timezone · pg_partman 미리 만들기 · TTL 머지 주기 · healthcheck timeout) · [../05_data_stores/01_postgresql_schema.md](../05_data_stores/01_postgresql_schema.md) · [../05_data_stores/03_clickhouse_schema.md](../05_data_stores/03_clickhouse_schema.md) · [../07_api/10_metrics.md](../07_api/10_metrics.md) §저장소 확인과 타임아웃 판정
+> **원천**: ADR-27(사용자 요구 2026-09-28) · 원본 tech_stack.md §2 · §5 · §9 · §10.1 · §10.4 · §12(커밋 ff66a37) · 원본 architecture.md §3 · §7.5 · §13 · §14(커밋 ff66a37) · 원본 implementation_plan.md §2.1 · §9(커밋 ff66a37) · ADR-03 · ADR-05 · ADR-18 · ADR-19 · ADR-20 · docs_plan 실행 계획 보정 #17 · 웨이브 인계 W6 09_tech_stack 행(ClickHouse 서버 timezone · pg_partman 미리 만들기 · TTL 머지 주기 · healthcheck timeout) · [../05_data_stores/01_postgresql_schema.md](../05_data_stores/01_postgresql_schema.md) · [../05_data_stores/03_clickhouse_schema.md](../05_data_stores/03_clickhouse_schema.md) · [../07_api/10_metrics.md](../07_api/10_metrics.md) §저장소 확인과 타임아웃 판정
 
 이 문서는 **정확 버전이 적히는 유일한 자리**다. 다른 문서는 스택을 Next.js · NestJS · PostgreSQL 18 · ClickHouse 26.8 · Redis 8 · Docker Compose로만 적고 이미지 태그 · 라이브러리 메이저는 §버전 고정표를 링크한다. 같은 폴더의 01 · 02 · 05도 버전을 적지 않는다 — 버전이 두 자리에 적히면 착수 시점 재확인이 한 자리만 고친다.
 
@@ -56,7 +57,7 @@ infra/postgres/postgresql.conf
 ├── 접속             max_connections                                                       ← 05_data_stores/02 소유
 ├── WAL · 체크포인트  wal_compression · checkpoint_timeout                                  ← 05_data_stores/01 소유
 ├── 플래너           random_page_cost                                                      ← 05_data_stores/01 소유
-├── 시간대           timezone = Asia/Seoul                                                 ← 05_data_stores/01 소유 · 월 파티션 경계
+├── 시간대           timezone · log_timezone = UTC(ADR-27)                                  ← 05_data_stores/01 소유 · 월 · 일 파티션 경계
 └── pg_partman 워커  대상 DB · 유지 작업 주기                                                ← 이 문서 §pg_partman
 ```
 
@@ -69,11 +70,12 @@ infra/postgres/postgresql.conf
 
 | 조정값 | 조회 계약 | 기준 시점 | 금지된 대체 동작 | 부재 시 | 현행 참고 |
 |------|------|------|------|------|------|
-| 미리 만들기 개수 | 현재 월 이후 N개월의 파티션이 항상 있다 | 유지 작업 실행 시각(Asia/Seoul 달력) | 월초에 사람이 손으로 파티션 생성 | 기본 파티션에 적재되고 그 달 파티션 생성이 충돌한다 | 도구 기본값 4(5.5.0 part_config.premake 확인 · 2026-09-25) |
+| 미리 만들기 개수 | 현재 월 이후 N개월의 파티션이 항상 있다 | 유지 작업 실행 시각(UTC 달력 — 워커 세션 시간대가 세트 경계 시간대와 같아야 한다 · ADR-27) | 월초에 사람이 손으로 파티션 생성 | 기본 파티션에 적재되고 그 달 파티션 생성이 충돌한다 | 도구 기본값 4(5.5.0 part_config.premake 확인 · 2026-09-25) |
 | 유지 작업 주기 | 백그라운드 워커가 주기마다 미리 만들기 · 분리 대상 판정을 돈다 | 워커 기동 시각부터 | 애플리케이션 타이머 · 호스트 cron | 미리 만든 개수가 소진될 때까지 알 수 없다 | 3600초(postgresql.conf pg_partman_bgw.interval에 명시 — 도구 기본값에 기대지 않는다 · 대상 DB plc · 실행 역할 app_owner) |
 
 - 검산: 조정값 = **2**
-- **개수 하한의 산술** — 미리 만든 달 수 × 1개월이 유지 작업 주기보다 길기만 하면 미래 파티션이 비지 않는다. 4개월 대 1시간이라 여유가 크고, 개수를 늘려도 빈 파티션 메타만 는다. **값을 줄이는 방향만 위험하다** — 0이면 매월 1일 00:00 KST 직후 워커가 돌기 전까지의 알람이 기본 파티션으로 간다.
+- **개수 하한의 산술** — 미리 만든 달 수 × 1개월이 유지 작업 주기보다 길기만 하면 미래 파티션이 비지 않는다. 4개월 대 1시간이라 여유가 크고, 개수를 늘려도 빈 파티션 메타만 는다. **값을 줄이는 방향만 위험하다** — 0이면 매월 1일 00:00 UTC(= 09:00 KST) 직후 워커가 돌기 전까지의 알람이 기본 파티션으로 간다.
+- **워커의 세션 시간대가 세트 경계와 다르면 미리 만들기가 틈을 낸다(실측 · pg_partman 5.5.0).** KST 경계 세트를 UTC 세션으로 유지하면 일 세트는 하루 틈이, 월 세트는 30일로 밀린 경계가 생겼다 — 공식 문서도 유지 작업을 부르는 클라이언트까지 UTC로 둘 것을 요구한다. 그래서 설정 파일 timezone과 DB 기본값(관리자 단계)을 **둘 다** UTC로 둔다 · 워커가 어느 쪽을 받는지는 미확인이다([../05_data_stores/09_migrations_seed.md](../05_data_stores/09_migrations_seed.md) §DB 시간대 전환).
 - **시간 압축 생성(모드 B · C)이 과거 ts를 만들면 미리 만들기와 무관하게 기본 파티션으로 간다.** 미리 만들기는 미래 방향만 채운다. 이 경우의 판정 — 기본 파티션이 비어 있지 않으면 이상 신호(05_data_stores/02)다.
 
 ## ClickHouse 설정 파일과 서버 timezone
@@ -85,7 +87,7 @@ infra/clickhouse/
 ├── config.d/
 │   ├── memory.xml         max_server_memory_usage_to_ram_ratio            ← 05_data_stores/03 소유
 │   ├── server.xml         max_concurrent_queries · background_pool_size · merge_tree(parts_to_delay_insert · parts_to_throw_insert · 풀 파생 여유 슬롯 문턱 3) · TTL 머지 주기   ← 05_data_stores/03 · 이 문서 §TTL 머지 주기
-│   ├── timezone.xml       서버 timezone = Asia/Seoul                      ← 이 문서 판정
+│   ├── timezone.xml       서버 timezone = UTC(ADR-27)                     ← 이 문서 판정
 │   └── prometheus.xml     내장 메트릭 엔드포인트 9363
 ├── users.d/
 │   └── profiles.xml       async_insert · max_insert_block_size · materialized_views_ignore_errors · deduplicate_blocks_in_dependent_materialized_views · input_format_read_datetime_number_as_raw_value   ← 05_data_stores/03 소유
@@ -97,7 +99,9 @@ infra/clickhouse/
 
 ### 서버 timezone 판정
 
-인계 "ClickHouse 서버 시간대 설정"을 닫는다(웨이브 인계 W1 · W6 행 · [../03_requirements/01_global_rules.md](../03_requirements/01_global_rules.md) 미확인 등재). **판정 — 서버 timezone을 Asia/Seoul로 명시한다.**
+- **상태**: **대체됨 → ADR-27(2026-09-28 · 사용자 요구 "DB는 UTC · 화면 표시는 KST").** 아래 W6 원문은 보존한다. 살아남은 것 — 서버 timezone을 **명시한다**(①을 버린 근거) · 서버 설정은 스키마에 새지 않는다 · 적재는 epoch 정수(B형). 죽은 것 — ③ Asia/Seoul 채택과 "달력 경계 시간대 Asia/Seoul은 시스템 단일 값". **현행 판정은 ② UTC 명시다** — ②를 버린 두 근거가 뒤집혔다: 대조 쿼리의 일 경계는 PostgreSQL도 UTC가 되어 어긋나지 않고, 시스템 로그 테이블의 표시는 사람이 KST로 읽을 때 toTimeZone(…, 'Asia/Seoul')로 한 번 바꾼다(표시 변환 1회 규칙 — [../11_glossary/05_units_and_time.md](../11_glossary/05_units_and_time.md) §표시 시간대). 서버 timezone은 기동 시점에 읽으므로 교체 뒤 재기동한다(공식 문서 · [../03_requirements/16_official_references.md](../03_requirements/16_official_references.md)).
+
+W6 원문 — 인계 "ClickHouse 서버 시간대 설정"을 닫는다(웨이브 인계 W1 · W6 행 · [../03_requirements/01_global_rules.md](../03_requirements/01_global_rules.md) 미확인 등재). **판정 — 서버 timezone을 Asia/Seoul로 명시한다.**
 
 | 안 | 내용 | 실패 시나리오 | 판정 |
 |------|------|------|------|
@@ -107,8 +111,8 @@ infra/clickhouse/
 
 - 검산: 안 = **3**
 - **서버 timezone은 저장값을 바꾸지 않는다.** 저장은 epoch이고 컬럼 시간대 · 서버 시간대는 표시 · 파싱 · 달력 함수 경계만 바꾼다([../11_glossary/05_units_and_time.md](../11_glossary/05_units_and_time.md)). 그래서 이 판정은 스키마 · 적재 · 보존 어디에도 파급이 없고 **수동 쿼리와 시스템 테이블 표시만** 바꾼다.
-- **달력 경계 시간대 Asia/Seoul은 시스템 단일 값이다** — PostgreSQL DB 기본 timezone · alarm_event 월 파티션 경계 · ClickHouse 컬럼 시간대 · 서버 timezone이 같은 값을 쓴다. 한 자리만 다르면 "같은 날"의 정의가 저장소마다 갈린다.
-- **B형 — 서버 timezone을 Asia/Seoul로 두어도 적재 쪽 시각 해석은 그대로다.** 결론 — 적재는 epoch 정수로 보내 파싱에 시간대가 개입하지 않는다(05_data_stores/03). 반대 시나리오 — 이 판정을 근거로 적재가 문자열 시각을 보내기 시작하면 보내는 쪽 시간대와 컬럼 시간대가 어긋난다. 파생 지침 — 서버 timezone은 사람의 쿼리를 위한 설정이고 적재 계약은 epoch 정수를 유지한다.
+- **DB 처리 시간대 UTC는 시스템 단일 값이다(ADR-27 — W6 원문의 "달력 경계 시간대 Asia/Seoul은 시스템 단일 값"을 대체)** — PostgreSQL DB 기본 timezone · 파티션 경계 · ClickHouse 컬럼 시간대 · 서버 timezone이 같은 값을 쓴다. 한 자리만 다르면 "같은 날"의 정의가 저장소마다 갈린다. KST는 화면 표시와 달력 의미 경계 닫힌 목록에만 남는다.
+- **B형 — 서버 timezone을 무엇으로 두어도 적재 쪽 시각 해석은 그대로다.** 결론 — 적재는 epoch 정수로 보내 파싱에 시간대가 개입하지 않는다(05_data_stores/03). 반대 시나리오 — 이 판정을 근거로 적재가 문자열 시각을 보내기 시작하면 보내는 쪽 시간대와 컬럼 시간대가 어긋난다. 파생 지침 — 서버 timezone은 사람의 쿼리를 위한 설정이고 적재 계약은 epoch 정수를 유지한다.
 
 ### TTL 머지 주기
 

@@ -2,6 +2,7 @@
 
 > **대상**: 설계 문서군이 인용하는 외부 공식 문서 · 릴리스 노트 · 표준의 URL 전수 — 런타임 · 저장소 · 저장소 확장 · 백엔드 라이브러리 · 프론트엔드 · 도구 · 부하 · 관측 · 실행 환경 · 프로토콜 표준 · 보안 참고 · 인용처 · 재확인 규칙
 > **작성일**: 2026-09-24
+> **개정일**: 2026-09-28 — DB 시각 UTC(ADR-27) 근거 등재 — 저장소 행 8(ClickHouse DateTime · ALTER COLUMN · 사용자 정의 파티션 키 · 서버 설정 timezone · 세션 설정 session_timezone · PostgreSQL 18 날짜 · 시각 타입 · 함수 · ALTER DATABASE) · 저장소 확장 행 1(pg_partman 문서) 신설 · 전부 확인일 2026-09-28 — 등재 70 → **79** · 저장소 10 → **18** · 저장소 확장 3 → **4** · 확인 7 → **16** · 미확인 63 불변
 > **개정일**: 2026-09-26 — 마지막 검수 반영 — 부분 확인 항목 수는 표 셀 한 자리에서만 센다(검산 불릿은 셀을 가리킴)
 > **개정일**: 2026-09-26 — 리드 판정 — ClickHouse 문서 행 부분 확인 항목 5 → **6**(비동기 삽입 세션 설정 — context7 대조) — 확인 7 · 미확인 63 · 등재 70 불변
 > **개정일**: 2026-09-26 — W1 재검수 반영 — ClickHouse 문서 행 부분 확인 항목 4 → **5**(삽입 재시도 중복 제거 — 비복제 MergeTree의 non_replicated_deduplication_window · 토큰이 없으면 블록 내용 해시 · 있으면 토큰 기준) — 확인 7 · 미확인 63 · 등재 수 불변
@@ -54,8 +55,16 @@
 | Redis | 릴리스 | [https://github.com/redis/redis/releases](https://github.com/redis/redis/releases) | 8의 현행 부 버전 | [../09_tech_stack/03_data_infra.md](../09_tech_stack/03_data_infra.md) | 2026-09-24 |
 | Redis | 문서 | [https://redis.io/docs/latest/](https://redis.io/docs/latest/) | Streams(컨슈머 그룹 · XPENDING · XAUTOCLAIM · XINFO GROUPS의 lag) · 축출 정책 volatile-lru · Pub/Sub · client-output-buffer-limit 기본값 · Lua 스크립트 | [../05_data_stores/05_redis_keyspace.md](../05_data_stores/05_redis_keyspace.md) · [../05_data_stores/06_redis_memory.md](../05_data_stores/06_redis_memory.md) · [../09_tech_stack/03_data_infra.md](../09_tech_stack/03_data_infra.md) · [../10_observability/01_metrics_catalog.md](../10_observability/01_metrics_catalog.md) | 미확인 |
 | redis 이미지 | 공식 이미지 | [https://hub.docker.com/_/redis](https://hub.docker.com/_/redis) | 8 alpine 태그 · 설정 파일 전달 방식 | [../09_tech_stack/03_data_infra.md](../09_tech_stack/03_data_infra.md) | 2026-09-24 |
+| ClickHouse | DateTime 타입 문서 | [https://clickhouse.com/docs/sql-reference/data-types/datetime](https://clickhouse.com/docs/sql-reference/data-types/datetime) | 시각을 Unix 타임스탬프로 저장 · 시간대는 행이 아니라 컬럼 메타데이터 · 인자 없는 컬럼은 서버 기동 시점의 timezone | [../11_glossary/05_units_and_time.md](../11_glossary/05_units_and_time.md) · [../05_data_stores/03_clickhouse_schema.md](../05_data_stores/03_clickhouse_schema.md) · [../05_data_stores/09_migrations_seed.md](../05_data_stores/09_migrations_seed.md) | 2026-09-28 |
+| ClickHouse | ALTER COLUMN 문서 | [https://clickhouse.com/docs/sql-reference/statements/alter/column](https://clickhouse.com/docs/sql-reference/statements/alter/column) | 기본 키 컬럼 타입 변경은 데이터를 바꾸지 않을 때만 가능(메타데이터만) | [../05_data_stores/09_migrations_seed.md](../05_data_stores/09_migrations_seed.md) · [../05_data_stores/03_clickhouse_schema.md](../05_data_stores/03_clickhouse_schema.md) | 2026-09-28 |
+| ClickHouse | 사용자 정의 파티션 키 문서 | [https://clickhouse.com/docs/engines/table-engines/mergetree-family/custom-partitioning-key](https://clickhouse.com/docs/engines/table-engines/mergetree-family/custom-partitioning-key) | 파트 이름의 파티션 ID · 병합은 파티션 식 값이 같은 파트끼리만 · ALTER로 파티션 키를 바꾸는 서술 없음 | [../05_data_stores/09_migrations_seed.md](../05_data_stores/09_migrations_seed.md) | 2026-09-28 |
+| ClickHouse | 서버 설정(기타) 문서 | [https://clickhouse.com/docs/reference/settings/server-settings/settings/other](https://clickhouse.com/docs/reference/settings/server-settings/settings/other) | timezone — String ↔ DateTime 변환과 인자 없는 날짜 함수의 기본 시간대 | [../09_tech_stack/03_data_infra.md](../09_tech_stack/03_data_infra.md) | 2026-09-28 |
+| ClickHouse | 세션 설정(기타) 문서 | [https://clickhouse.com/docs/reference/settings/session-settings/other](https://clickhouse.com/docs/reference/settings/session-settings/other) | session_timezone — 시간대가 명시되지 않은 값에만 적용 · 서버 timezone을 덮는다 | [../11_glossary/05_units_and_time.md](../11_glossary/05_units_and_time.md) · [../05_data_stores/09_migrations_seed.md](../05_data_stores/09_migrations_seed.md) | 2026-09-28 |
+| PostgreSQL | 18 날짜 · 시각 타입 | [https://www.postgresql.org/docs/18/datatype-datetime.html](https://www.postgresql.org/docs/18/datatype-datetime.html) | timestamptz는 내부 UTC 저장 · 출력 때 현재 TimeZone으로 변환 | [../11_glossary/05_units_and_time.md](../11_glossary/05_units_and_time.md) · [../05_data_stores/09_migrations_seed.md](../05_data_stores/09_migrations_seed.md) | 2026-09-28 |
+| PostgreSQL | 18 날짜 · 시각 함수 | [https://www.postgresql.org/docs/18/functions-datetime.html](https://www.postgresql.org/docs/18/functions-datetime.html) | date_trunc(timestamptz)의 기본 경계는 현재 TimeZone · 시간대 인자로 바꿀 수 있다 | [../05_data_stores/02_postgresql_constraints.md](../05_data_stores/02_postgresql_constraints.md) · [../05_data_stores/09_migrations_seed.md](../05_data_stores/09_migrations_seed.md) | 2026-09-28 |
+| PostgreSQL | 18 ALTER DATABASE | [https://www.postgresql.org/docs/18/sql-alterdatabase.html](https://www.postgresql.org/docs/18/sql-alterdatabase.html) | 세션 기본값 변경은 DB 소유자 · 슈퍼유저만 · 이후 새 세션부터 · DB별 기본값이 postgresql.conf를 덮는다 | [../05_data_stores/09_migrations_seed.md](../05_data_stores/09_migrations_seed.md) | 2026-09-28 |
 
-- 검산: 저장소 = **10**
+- 검산: 저장소 = **18**
 
 ## 저장소 확장
 
@@ -64,8 +73,9 @@
 | pg_partman | 공식 저장소 | [https://github.com/pgpartman/pg_partman](https://github.com/pgpartman/pg_partman) | 부 버전 · 미리 만들기 개수 기본값 · 백그라운드 워커 주기 기본값 | [../09_tech_stack/03_data_infra.md](../09_tech_stack/03_data_infra.md) · [../05_data_stores/02_postgresql_constraints.md](../05_data_stores/02_postgresql_constraints.md) | 미확인 |
 | pg_stat_statements | PostgreSQL 동봉 모듈 문서 | [https://www.postgresql.org/docs/current/pgstatstatements.html](https://www.postgresql.org/docs/current/pgstatstatements.html) | 공유 라이브러리 적재 설정 | [../10_observability/02_instrumentation.md](../10_observability/02_instrumentation.md) | 미확인 |
 | auto_explain | PostgreSQL 동봉 모듈 문서 | [https://www.postgresql.org/docs/current/auto-explain.html](https://www.postgresql.org/docs/current/auto-explain.html) | 계획 로깅 문턱 설정 | [../10_observability/02_instrumentation.md](../10_observability/02_instrumentation.md) | 미확인 |
+| pg_partman | 공식 문서(pg_partman.md) | [https://github.com/pgpartman/pg_partman/blob/master/doc/pg_partman.md](https://github.com/pgpartman/pg_partman/blob/master/doc/pg_partman.md) | DB와 유지 작업 클라이언트를 UTC로 둘 것 · create_partition_time은 주어진 시각으로 자식 생성 · create_parent p_start_partition · infinite_time_partitions 기본 false | [../05_data_stores/09_migrations_seed.md](../05_data_stores/09_migrations_seed.md) · [../05_data_stores/02_postgresql_constraints.md](../05_data_stores/02_postgresql_constraints.md) · [../09_tech_stack/03_data_infra.md](../09_tech_stack/03_data_infra.md) | 2026-09-28 |
 
-- 검산: 저장소 확장 = **3**
+- 검산: 저장소 확장 = **4**
 
 ## 백엔드 라이브러리
 
@@ -164,9 +174,9 @@
 
 ## 검산
 
-- 검산: 등재 = 런타임 4 + 저장소 10 + 저장소 확장 3 + 백엔드 라이브러리 13 + 프론트엔드 10 + 도구 · 부하 · 관측 14 + 실행 환경 2 + 프로토콜 표준 4 + 보안 참고 10 = **70**
+- 검산: 등재 = 런타임 4 + 저장소 18 + 저장소 확장 4 + 백엔드 라이브러리 13 + 프론트엔드 10 + 도구 · 부하 · 관측 14 + 실행 환경 2 + 프로토콜 표준 4 + 보안 참고 10 = **79**
 - **버전 고정표 38행이 모두 이 문서의 행 하나 이상에 닿는다**(Fastify 어댑터는 NestJS 문서 행 · 비밀번호 해시 라이브러리는 라이브러리 미선정이라 Argon2 RFC 9106 행 — 선정 시 그 공식 저장소 행을 더한다) — 고정표의 묶음 행(Zustand · React Hook Form · Tailwind CSS · Biome · Vitest · Supertest · Testcontainers)은 구성요소마다 한 행씩 나눠 등재했다. 해당 없음 행(shadcn/ui)도 복사 절차 확인을 위해 등재한다. pg_stat_statements · auto_explain은 엔진을 따르므로 버전이 아니라 적재 설정을 확인한다.
-- **등재했지만 대부분 확인하지 않았다** — 확인일 열 확인 7(저장소 릴리스 · 이미지 · ClickHouse 보안 정책 — 착수 체크리스트 7번 · 2026-09-24) + 미확인 63 = **70**. 미확인 63에는 부분 확인 1행(ClickHouse 문서 — 그 행 확인일 칸이 적은 역방향 대조 근거 항목만 대조 · 나머지 확인할 것은 미대조)이 들어 있다 — 행 전체를 확인으로 세면 대조하지 않은 기본값 항목(merge_with_ttl_timeout 등)까지 확인된 것으로 읽힌다. 나머지 대조는 각 구성요소를 쓰는 단계의 착수 때 한다.
+- **등재했지만 대부분 확인하지 않았다** — 확인일 열 확인 16(저장소 릴리스 · 이미지 · ClickHouse 보안 정책 7 — 착수 체크리스트 7번 · 2026-09-24 + DB 시간대 전환 근거 9 — ADR-27 · 2026-09-28) + 미확인 63 = **79**. 미확인 63에는 부분 확인 1행(ClickHouse 문서 — 그 행 확인일 칸이 적은 역방향 대조 근거 항목만 대조 · 나머지 확인할 것은 미대조)이 들어 있다 — 행 전체를 확인으로 세면 대조하지 않은 기본값 항목(merge_with_ttl_timeout 등)까지 확인된 것으로 읽힌다. 나머지 대조는 각 구성요소를 쓰는 단계의 착수 때 한다.
 
 ## 재확인 규칙
 

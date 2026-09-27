@@ -2,6 +2,7 @@
 
 > **대상**: ClickHouse 객체 12(테이블 8 · MV 3 · Dictionary 1)의 목록과 원시 · 판정 테이블 tag_raw · alarm_eval DDL · **업무 대조 테이블 3(역방향 대조 계측물)** DDL · 코덱 · 파티션 · 정렬 키(ADR-15) · 중복 제거(ADR-14) · 시각 컬럼 시간대 표기 통일 · dict_tag DDL · 품질 코드 컬럼 판정 · 서버 설정 계약
 > **작성일**: 2026-09-24
+> **개정일**: 2026-09-28 — DB 시각 UTC(ADR-27 · 사용자 요구 2026-09-28) — 시각 컬럼 인자 'Asia/Seoul' → **'UTC'**(tag_raw 2 · alarm_eval 1 · 롤업 bucket 3 · last_v 상태 인자 · 업무 대조 3) · tag_raw · alarm_eval 파티션 KST 날짜 → **UTC 날짜** · 서버 timezone Asia/Seoul → **UTC** · §시각 컬럼 시간대 표기에 상태 항목(W3 판정 대체) · 실행 수명 객체 포인터 한 줄 — 객체 12 · 설정 10 불변
 > **개정일**: 2026-09-27 — W6 결과 반영 — 업무 대조 보장 표 값 검사 · 경합 판정 칸의 판별 대상 → **CHECK는 INSERT 경로만(기록 043)** · **갱신 행 수 응답 없음(기록 042)** · 미확인 판별 둘 닫힘 · 보장 수 불변
 > **개정일**: 2026-09-26 — W1 재검수 반영 — 보장 표 유일성 · MergeTree 칸 "재삽입은 윈도우 N + 토큰일 때만 버린다" → **윈도우 N일 때 버린다(토큰이 없으면 블록 내용 해시 · 있으면 토큰 기준)**(공식 문서 삽입 재시도 중복 제거 대조)
 > **개정일**: 2026-09-26 — W1 검수 반영 — 중복 제거 윈도우 불릿 "두지 않는다" → **DDL은 0 · EXP-43 ⓓ 윈도우 N + 토큰 변형만 실행 범위에서 MODIFY SETTING으로 켜고 0으로 복원** · 보장 표 다문장 원자성 칸에 뺀 이유와 실패 시나리오 · 갱신 가시성 칸 경량 UPDATE는 Beta(정본 10_olap_vs_rdb_control) · RMT가 order_no 중복을 합치지 않는 구조 사실
@@ -14,7 +15,7 @@
 > **개정일**: 2026-09-24 — W6 실험 채번 반영 — 실험 자리 W6 결과 반영(정본 10_observability/01 · 06)
 > **개정일**: 2026-09-24 — W6 판정 반영 — 서버 timezone 미확인 → **Asia/Seoul**(정본 09_tech_stack/03) · 스키마는 여전히 서버 설정에 기대지 않는다 — 설정 수 불변
 > **개정일**: 2026-09-24 — W4 판정 반영 — Dictionary 즉시 반영 단 번호 ③ → **④**(무효화 체인 6단 표기)
-> **원천**: 원본 architecture.md §5 · §7.1 · §7.3 · §7.4 · §7.5 · §12 · §15(커밋 ff66a37) · 원본 tech_stack.md §5.2(커밋 ff66a37) · 원본 data_flow.md §4 · §4.3 · §11.2 · §14.1 · §14.2(커밋 ff66a37) · docs_plan.md 보정 #16 · 웨이브 인계(ingested_at · alarm_eval.ts 시간대 표기 통일) · ADR-03 · ADR-14 · ADR-15 · ADR-16 · [../11_glossary/05_units_and_time.md](../11_glossary/05_units_and_time.md) 시각 의미론 정본 · 목적 적합성 실증 계획 W1(2026-09-26 — 업무 대조 테이블) · ClickHouse 공식 문서 UPDATE 문 · ReplacingMergeTree · 테이블 제약(26.8 · 2026-09-26 context7 대조)
+> **원천**: ADR-27(사용자 요구 2026-09-28) · 원본 architecture.md §5 · §7.1 · §7.3 · §7.4 · §7.5 · §12 · §15(커밋 ff66a37) · 원본 tech_stack.md §5.2(커밋 ff66a37) · 원본 data_flow.md §4 · §4.3 · §11.2 · §14.1 · §14.2(커밋 ff66a37) · docs_plan.md 보정 #16 · 웨이브 인계(ingested_at · alarm_eval.ts 시간대 표기 통일) · ADR-03 · ADR-14 · ADR-15 · ADR-16 · [../11_glossary/05_units_and_time.md](../11_glossary/05_units_and_time.md) 시각 의미론 정본 · 목적 적합성 실증 계획 W1(2026-09-26 — 업무 대조 테이블) · ClickHouse 공식 문서 UPDATE 문 · ReplacingMergeTree · 테이블 제약(26.8 · 2026-09-26 context7 대조)
 
 ClickHouse는 **분기 ①계층(태그 원시값)의 유일한 목적지**이고 ②계층 판정 전수의 목적지다(ADR-03 · D-04). 이 문서는 원시 · 판정 테이블의 모양과 ClickHouse 쪽 공통 규약을 고정한다. 롤업 테이블 tag_1m · tag_1h · tag_1d와 MV 3의 명세는 [04_clickhouse_rollup.md](./04_clickhouse_rollup.md)가, Dictionary가 지키는 교차 저장소 원칙은 [07_cross_store_consistency.md](./07_cross_store_consistency.md)가 갖는다.
 
@@ -40,6 +41,7 @@ ClickHouse는 **분기 ①계층(태그 원시값)의 유일한 목적지**이�
 - 검산: 테이블 8(#1~#5 · #10~#12) + MV 3(#6~#8) + Dictionary 1(#9) = **12** · 테이블 = 목적지 5 + 계측물 3
 - **업무 대조 테이블은 목적지가 아니라 계측물이다.** 업무 데이터의 목적지는 PostgreSQL뿐이며 이 셋은 분기 표에서 대조군 plc_tag_raw_control과 같은 계측물 자리를 받는다([../04_architecture/04_storage_split.md](../04_architecture/04_storage_split.md)). 앱은 이 테이블을 읽지도 쓰지도 않는다 — 쓰는 주체는 도구 컨테이너의 실행기뿐이고 소유 도메인이 없어 도메인 공백(소유 테이블 없음)의 셈에 영향이 없다.
 - **롤업 객체의 소유는 ING로 확정한다(잠정 → 확정).** 판정 근거는 [04_clickhouse_rollup.md](./04_clickhouse_rollup.md) §도메인 귀속 판정이다. GEN은 모드 D로 tag_raw · 롤업에 쓰지만 소유하지 않는다 — 도메인 공백(소유 테이블 없음 6)은 그대로다.
+- **라이브 실행(perf)의 실행 수명 객체 plc.run_perf_raw · run_perf_raw는 이 문서의 객체 수에 세지 않는다 — 모양 · 수명의 정본은 [10_olap_vs_rdb_control.md](./10_olap_vs_rdb_control.md) §실행 수명 객체다.**
 - 모든 객체는 데이터베이스 plc로 한정해 이름을 쓴다(REQ-ING-05 — 한정하지 않은 이름은 default 데이터베이스의 같은 이름 객체에 오류 없이 닿는다).
 
 ## tag_raw — 원시 테이블
@@ -49,13 +51,13 @@ ClickHouse는 **분기 ①계층(태그 원시값)의 유일한 목적지**이�
 ```sql
 CREATE TABLE IF NOT EXISTS plc.tag_raw
 (
-    ts          DateTime64(3, 'Asia/Seoul')                  CODEC(Delta(8), ZSTD(1)),
+    ts          DateTime64(3, 'UTC')                         CODEC(Delta(8), ZSTD(1)),
     device_id   UInt32                                       CODEC(Delta(4), ZSTD(1)),
     tag_id      UInt32                                       CODEC(Delta(4), ZSTD(1)),
     value       Float64                                      CODEC(Gorilla, ZSTD(1)),
     quality     UInt8                                        CODEC(ZSTD(1)),
     scan_seq    UInt64                                       CODEC(Delta(8), ZSTD(1)),
-    ingested_at DateTime64(3, 'Asia/Seoul') DEFAULT now64(3) CODEC(Delta(8), ZSTD(1))
+    ingested_at DateTime64(3, 'UTC') DEFAULT now64(3)        CODEC(Delta(8), ZSTD(1))
 )
 ENGINE = MergeTree
 PARTITION BY toYYYYMMDD(ts)
@@ -66,7 +68,7 @@ SETTINGS index_granularity = 8192,
          ttl_only_drop_parts = 1;
 ```
 
-- **ingested_at에 'Asia/Seoul'을 붙였다.** 원본은 ts에만 시간대 인자를 달아 같은 행의 두 시각이 문자열 출력 · 달력 함수에서 서로 다른 시간대를 따랐다. 저장값(epoch)은 바뀌지 않는다 — §시각 컬럼 시간대 표기.
+- **ts · ingested_at 둘 다 'UTC'를 붙인다(ADR-27).** 원본은 ts에만 시간대 인자를 달아 같은 행의 두 시각이 문자열 출력 · 달력 함수에서 서로 다른 시간대를 따랐다. 저장값(epoch)은 바뀌지 않는다 — §시각 컬럼 시간대 표기.
 - **ttl_only_drop_parts = 1이 "TTL 삭제는 파티션 DROP"을 참으로 만든다.** 이 설정이 없으면 만료 행은 머지 때 행 단위로 다시 쓰여 지워진다 — 원본이 적은 "파티션 DROP으로 즉시 완료"(원본 architecture.md §7.1)는 설정 없이는 성립하지 않는다. 일자 파티션이라 한 파트 안의 행은 같은 날짜여서 파트 전체가 함께 만료된다.
 - **TTL 7일 · 중복 제거 윈도우 1000은 2계층 조정값이다.** 보존 값의 정본은 [08_retention_lifecycle.md](./08_retention_lifecycle.md), 윈도우 · 백오프 합계 계약의 정본은 [../06_pipeline/03_ingest_batch.md](../06_pipeline/03_ingest_batch.md)다.
 - ingested_at을 적재 코드가 보내지 않는다 — 서버 DEFAULT가 채워야 E2E 지연이 Stream 대기 · 삽입 구간을 포함한다(REQ-ING-05).
@@ -76,7 +78,7 @@ SETTINGS index_granularity = 8192,
 | 요소 | 결정 | 근거 | 버린 것의 실패 |
 |------|------|------|------|
 | 형식 | 롱 포맷(태그당 1행) | 설비마다 태그 구성이 다르고 태그 추가가 잦다 | 와이드 포맷 — 태그 추가가 ALTER가 되고 MV · 대조군 DDL이 함께 깨진다(원본 data_flow.md §10.2 ALTER 취약) |
-| PARTITION BY | toYYYYMMDD(ts) — **KST 날짜** | TTL이 파티션 단위로 떨어지고 보존 변경이 파티션 단위로 된다 | 월 — 파티션이 커져 TTL이 한 달 단위로만 떨어진다. 시간 — 파티션 수가 폭증해 삽입 블록이 여러 파티션에 걸친다 |
+| PARTITION BY | toYYYYMMDD(ts) — **UTC 날짜**(ADR-27 · 저장 운영 경계) | TTL이 파티션 단위로 떨어지고 보존 변경이 파티션 단위로 된다 | 월 — 파티션이 커져 TTL이 한 달 단위로만 떨어진다. 시간 — 파티션 수가 폭증해 삽입 블록이 여러 파티션에 걸친다 |
 | ORDER BY | (device_id, tag_id, ts) | 조회는 "특정 설비의 특정 태그를 시간 범위로"다. 카디널리티 낮은 컬럼을 앞에 두어 압축과 희소 인덱스 가지치기를 얻는다 | (ts, …) — 시간 범위 조회는 빨라 보이지만 단일 태그 조회가 모든 태그의 그래뉼을 읽는다 |
 | ORDER BY 변경 | **불가** — 새 테이블 생성 후 이관 | 계약 변경 규칙(원본 data_flow.md §14.2) | ALTER로 흉내 내면 정렬이 다른 파트가 섞여 인덱스가 무의미해진다 |
 | index_granularity | 8192(기본) | 원본 기본값 · 좁은 시간 범위 조회가 많으면 4096이 실험 대상 | 해당 없음 |
@@ -123,19 +125,24 @@ ADR-14의 저장소 쪽 계약이다. 토큰 재료 · 백오프 합계의 기�
 
 ## 시각 컬럼 시간대 표기
 
-docs_plan 보정 #16의 W3 몫 "ingested_at · alarm_eval.ts 시간대 표기 통일"을 닫는다. **판정: ClickHouse의 모든 시각 컬럼에 'Asia/Seoul'을 명시한다.** 시간대 인자는 저장값(epoch)을 바꾸지 않고 ① 문자열 출력 ② 문자열 파싱 ③ 달력 함수 경계만 바꾼다([../11_glossary/05_units_and_time.md](../11_glossary/05_units_and_time.md)).
+- **상태**: **대체됨 → ADR-27(2026-09-28 · 사용자 요구).** 아래 W3 판정 원문(모든 시각 컬럼 'Asia/Seoul')은 보존한다. 살아남은 것 — **모든 시각 컬럼에 인자를 명시한다**(서버 설정이 스키마에 새지 않는다) · 인자는 저장값을 바꾸지 않는다 · 적재는 epoch 정수. 죽은 것 — 인자 값 'Asia/Seoul'과 "달력 경계 시간대는 시스템 단일 값 Asia/Seoul". 현행 인자는 **'UTC'**이고, 화면에 "하루"로 보이는 경계만 함수 인자로 KST를 명시한다([../11_glossary/05_units_and_time.md](../11_glossary/05_units_and_time.md) §달력 의미 경계 — 닫힌 목록).
 
-| 테이블 | 컬럼 | 원본 | 이 문서 | 달력 함수가 쓰는 곳 |
-|------|------|------|------|------|
-| tag_raw | ts | DateTime64(3, 'Asia/Seoul') | 유지 | 파티션 · TTL · mv_tag_1m 버킷 |
-| tag_raw | ingested_at | DateTime64(3) | **DateTime64(3, 'Asia/Seoul')** | E2E 분위수 쿼리의 시간 필터 |
-| alarm_eval | ts | DateTime64(3) | **DateTime64(3, 'Asia/Seoul')** | 파티션 · TTL |
-| tag_1m · tag_1h · tag_1d | bucket | DateTime(인자 없음) | **DateTime('Asia/Seoul')** | 월 · 년 파티션 · 상위 롤업 버킷 — [04_clickhouse_rollup.md](./04_clickhouse_rollup.md) |
+W3 원문 — docs_plan 보정 #16의 W3 몫 "ingested_at · alarm_eval.ts 시간대 표기 통일"을 닫는다. **판정: ClickHouse의 모든 시각 컬럼에 'Asia/Seoul'을 명시한다.** 시간대 인자는 저장값(epoch)을 바꾸지 않고 ① 문자열 출력 ② 문자열 파싱 ③ 달력 함수 경계만 바꾼다([../11_glossary/05_units_and_time.md](../11_glossary/05_units_and_time.md)).
 
-- 검산: 시각 컬럼 = ts · ingested_at · alarm_eval.ts · bucket 3 = **6** · 인자를 새로 단 컬럼 5
-- **시간대를 명시하면 서버 timezone 설정이 스키마에서 빠진다.** 인자 없는 컬럼의 달력 경계는 서버 설정을 따른다 — W6이 서버 timezone을 Asia/Seoul로 판정했지만([../09_tech_stack/03_data_infra.md](../09_tech_stack/03_data_infra.md)) 스키마는 그 값에 기대지 않는다. 서버가 UTC로 기동하면 alarm_eval 파티션이 KST 09:00에 갈리고 tag_1m 월 파티션이 KST 1일 09:00에 넘어간다 — 컬럼에 박으면 서버 설정과 무관해진다.
+현행 표기(ADR-27)다.
+
+| 테이블 | 컬럼 | 원본 | ADR-27 전 | 현행 | 달력 함수가 쓰는 곳 |
+|------|------|------|------|------|------|
+| tag_raw | ts | DateTime64(3, 'Asia/Seoul') | 유지 | **DateTime64(3, 'UTC')** | 파티션 · TTL · mv_tag_1m 버킷 |
+| tag_raw | ingested_at | DateTime64(3) | DateTime64(3, 'Asia/Seoul') | **DateTime64(3, 'UTC')** | E2E 분위수 쿼리의 시간 필터 |
+| alarm_eval | ts | DateTime64(3) | DateTime64(3, 'Asia/Seoul') | **DateTime64(3, 'UTC')** | 파티션 · TTL |
+| tag_1m · tag_1h · tag_1d | bucket | DateTime(인자 없음) | DateTime('Asia/Seoul') | **DateTime('UTC')** | 월 · 년 파티션 · 상위 롤업 버킷 — tag_1d 버킷만 toStartOfDay(bucket, 'Asia/Seoul')로 KST 자정 · [04_clickhouse_rollup.md](./04_clickhouse_rollup.md) |
+| 업무 대조 3 | planned_start · planned_end · recorded_at | 해당 없음 — W1 신설 | DateTime64(3, 'Asia/Seoul') | **DateTime64(3, 'UTC')** | 없음 — 파티션 키 · TTL 없음 |
+
+- 검산: 시각 컬럼 = ts · ingested_at · alarm_eval.ts · bucket 3 · 업무 대조 3 = **9** · 롤업 상태 last_v의 인자 타입도 같은 'UTC'다(04_clickhouse_rollup)
+- **시간대를 명시하면 서버 timezone 설정이 스키마에서 빠진다.** 인자 없는 컬럼의 달력 경계는 서버 설정을 따른다 — ADR-27이 서버 timezone도 UTC로 두지만([../09_tech_stack/03_data_infra.md](../09_tech_stack/03_data_infra.md)) 스키마는 그 값에 기대지 않는다. 컬럼에 박으면 서버 설정과 무관해진다.
 - **적재는 시각을 epoch 정수로 보낸다.** 정수는 정밀도 3에 맞춘 epoch ms로 해석되어 파싱에 시간대가 개입하지 않는다 — **26.8은 사용자 프로파일 input_format_read_datetime_number_as_raw_value 1이 있어야 이 해석이 성립한다**(없으면 초로 읽어 9999-12-31로 포화 · §서버 설정 계약 · 기록 004). 문자열로 보내면 컬럼 시간대로 파싱되어 보내는 쪽 시간대와 어긋난다.
-- **달력 경계 시간대 Asia/Seoul은 시스템 단일 값이다.** PostgreSQL alarm_event 월 파티션 경계 · site.timezone CHECK · tag_1d 하루가 같은 값을 쓴다([02_postgresql_constraints.md](./02_postgresql_constraints.md) · [01_postgresql_schema.md](./01_postgresql_schema.md)).
+- **A형 — "인자만 UTC로 바꾸면 끝난다"가 아니다.** 26.8은 파티션 키 컬럼의 인자만 바꾸는 MODIFY COLUMN을 오류 없이 받지만 옛 파트는 KST 파티션 ID를 그대로 갖고 새 삽입은 UTC 파티션 ID로 가, 같은 파티션 ID에 다른 날짜 집합이 섞인다(실측). 기존 볼륨은 재구성으로 옮긴다 — 절차 정본 [09_migrations_seed.md](./09_migrations_seed.md) §DB 시간대 전환.
 
 ## alarm_eval — 판정 전수 테이블
 
@@ -144,7 +151,7 @@ docs_plan 보정 #16의 W3 몫 "ingested_at · alarm_eval.ts 시간대 표기 �
 ```sql
 CREATE TABLE IF NOT EXISTS plc.alarm_eval
 (
-    ts        DateTime64(3, 'Asia/Seoul') CODEC(Delta(8), ZSTD(1)),
+    ts        DateTime64(3, 'UTC')        CODEC(Delta(8), ZSTD(1)),
     rule_id   UInt32,
     tag_id    UInt32,
     value     Float64                     CODEC(Gorilla, ZSTD(1)),
@@ -207,7 +214,7 @@ LIFETIME(MIN 300 MAX 600);
 
 ## 서버 설정 계약
 
-**이 표의 현행 참고가 값의 정본이다**([../04_architecture/03_execution_topology.md](../04_architecture/03_execution_topology.md) §메모리 프로파일이 ClickHouse 내부 설정의 소유처로 이 문서를 가리킨다). 서버 timezone만 [../09_tech_stack/03_data_infra.md](../09_tech_stack/03_data_infra.md)가 확정하며(W6 판정 — Asia/Seoul), 설정 파일의 모양도 그 문서가 갖는다(원본 architecture.md §7.5 · 부하 실험 프로파일 참고값).
+**이 표의 현행 참고가 값의 정본이다**([../04_architecture/03_execution_topology.md](../04_architecture/03_execution_topology.md) §메모리 프로파일이 ClickHouse 내부 설정의 소유처로 이 문서를 가리킨다). 서버 timezone만 [../09_tech_stack/03_data_infra.md](../09_tech_stack/03_data_infra.md)가 확정하며(ADR-27 — UTC · W6 판정 Asia/Seoul 대체), 설정 파일의 모양도 그 문서가 갖는다(원본 architecture.md §7.5 · 부하 실험 프로파일 참고값).
 
 | 설정 | 현행 참고 | 스키마 쪽 계약 | 어기면 |
 |------|------|------|------|
@@ -220,7 +227,7 @@ LIFETIME(MIN 300 MAX 600);
 | **input_format_read_datetime_number_as_raw_value** | **1(켬)** — S0 실측 | 적재는 ts를 epoch ms 정수로 보낸다(§시각 컬럼 시간대 표기) — 1이면 따옴표 없는 정수를 열 정밀도의 틱(ms)으로 읽는다 | 26.8은 끄면 정수를 초로 읽어 **9999-12-31로 포화시키고 오류가 없다** — date_time_input_format 값과 무관(기록 004) |
 | materialized_views_ignore_errors | 0(끔) | MV 실패를 삽입 오류로 드러낸다(REQ-ING-16) | 켜면 원시는 있고 롤업은 빈 구간이 오류 없이 남는다 |
 | **deduplicate_blocks_in_dependent_materialized_views** | **1(켬)** — ADR-14 보강 · S0 실측 | 롤업 3테이블의 non_replicated_deduplication_window와 한 쌍 · async_insert 1과의 동시 사용은 25.8이 삽입을 Code 344로 거부했고 26.8은 허용한다(S0 실측 · 기록 001 · 004) | 끄면 같은 토큰 재시도마다 종속 MV가 다시 돌아 롤업이 이중 계수된다 · 윈도우만 두어도 같다(EXP-32 · 기록 001) |
-| 서버 timezone | **Asia/Seoul**(W6 판정) | **스키마는 의존하지 않는다** — 모든 시각 컬럼에 시간대 명시 | 해당 없음 |
+| 서버 timezone | **UTC**(ADR-27 — W6 판정 Asia/Seoul 대체) | **스키마는 의존하지 않는다** — 모든 시각 컬럼에 시간대 명시 | 해당 없음 |
 
 - **background_pool_size 8은 병합 풀 파생 설정 3을 함께 낮춰야 기동한다(2026-09-24 S0 확인).** 25.8 · 26.8 모두 슬롯(풀 × 동시성 비율 2 = 16)보다 큰 여유 슬롯 문턱을 설정 오류로 보고 기동을 거부한다(Code 36 · 26.8 재확인 — 기록 005) — 기본값 20 · 25 · 8(뮤테이션 · 파티션 전체 최적화 · 병합 크기 하향 문턱)은 기본 풀 16(슬롯 32) 전제다. 기본값의 슬롯 대비 비율을 옮긴 10 · 12 · 4를 서버 설정 merge_tree 절에 둔다([../09_tech_stack/03_data_infra.md](../09_tech_stack/03_data_infra.md) §ClickHouse 설정 파일과 서버 timezone). 파생값이라 아래 설정 수에 세지 않는다.
 - 검산: 설정 = 원본 6 + 신설 4(materialized_views_ignore_errors · 서버 timezone 의존 부정 · 종속 MV 중복 제거 · 정수 ts 틱 해석) = **10** · 원본 merge_tree.merge_max_block_size(8192 · 기본값)는 스키마 쪽 계약이 없어 뺐다
@@ -236,7 +243,7 @@ LIFETIME(MIN 300 MAX 600);
 | work_order.line_id · production_log.order_id | integer · bigint · FK | UInt32 · UInt64 · 참조 검사 없음 | 값은 같다 · **FK는 옮기지 않는다** — 없는 기능이다 |
 | order_no · product_code | text · order_no UNIQUE | String · 유일 검사 없음 | 값은 같다 · **UNIQUE는 옮기지 않는다** |
 | target_qty · good_qty · defect_qty | integer · CHECK | **Int32** · CONSTRAINT CHECK | 부호 있는 정수로 둔다 — UInt면 음수 입력이 파싱 단계에서 거절되거나 감겨 CHECK 경로를 잴 수 없다 |
-| planned_start · planned_end · recorded_at | timestamptz · CHECK(planned_end > planned_start) | DateTime64(3, 'Asia/Seoul') · CONSTRAINT CHECK | 값은 epoch ms로 채운다 — PostgreSQL μs 정밀도가 ms 값을 정확히 담는다 |
+| planned_start · planned_end · recorded_at | timestamptz · CHECK(planned_end > planned_start) | DateTime64(3, 'UTC') · CONSTRAINT CHECK | 값은 epoch ms로 채운다 — PostgreSQL μs 정밀도가 ms 값을 정확히 담는다 |
 | status | text · DEFAULT 'PLANNED' · CHECK 4값 | **LowCardinality(String)** · CONSTRAINT CHECK 4값 | Enum8이면 값 밖 입력이 타입 변환에서 먼저 거절되어 CHECK 대 CHECK 비교가 되지 않는다 |
 
 - 검산: 컬럼 행 = **6**(work_order 8컬럼 · production_log 5컬럼을 뜻 단위로 묶음)
@@ -252,8 +259,8 @@ CREATE TABLE IF NOT EXISTS plc.work_order_control
     order_no      String,
     product_code  String,
     target_qty    Int32,
-    planned_start DateTime64(3, 'Asia/Seoul'),
-    planned_end   DateTime64(3, 'Asia/Seoul'),
+    planned_start DateTime64(3, 'UTC'),
+    planned_end   DateTime64(3, 'UTC'),
     status        LowCardinality(String),
     CONSTRAINT c_target_qty CHECK target_qty > 0,
     CONSTRAINT c_planned    CHECK planned_end > planned_start,
@@ -272,7 +279,7 @@ CREATE TABLE IF NOT EXISTS plc.production_log_control
 (
     log_id      UInt64,
     order_id    UInt64,
-    recorded_at DateTime64(3, 'Asia/Seoul'),
+    recorded_at DateTime64(3, 'UTC'),
     good_qty    Int32,
     defect_qty  Int32,
     CONSTRAINT c_good   CHECK good_qty >= 0,
@@ -307,7 +314,7 @@ ClickHouse가 업무 보장 중 무엇을 줄 수 있고 없는지의 등재다.
 |------|------|------|
 | 원시 삽입 성공 · MV 실패 뒤 같은 토큰 재시도가 MV를 다시 실행하는가 | **닫힘(S0 실측 · EXP-32 · 기록 001 · 004 — 25.8 · 26.8 같음)** — 다시 실행한다(ⓑ). 대가로 이미 성공한 MV도 다시 돌아 롤업이 이중 계수되므로 ADR-14를 보강했다(§중복 제거 종속 MV 행 · §서버 설정 계약) | [../06_pipeline/09_rollup.md](../06_pipeline/09_rollup.md) |
 | 압축률(프로파일별) · 코덱 대안 효과 | 3계층 미확인 — 확정 전 임의 값 고정 금지. 원본 예상치 혼합 8~15배 · RANDOM_WALK 2~4배 | [../03_requirements/13_nonfunctional.md](../03_requirements/13_nonfunctional.md) REQ-NFR-14 |
-| 서버 timezone 설정 | **W6 판정 — Asia/Seoul** · 스키마는 의존하지 않는다 — 수동 쿼리 · 시스템 테이블 표시에만 영향 | [../09_tech_stack/03_data_infra.md](../09_tech_stack/03_data_infra.md) |
+| 서버 timezone 설정 | **ADR-27 — UTC**(W6 판정 Asia/Seoul 대체) · 스키마는 의존하지 않는다 — 수동 쿼리 · 시스템 테이블 표시에만 영향 | [../09_tech_stack/03_data_infra.md](../09_tech_stack/03_data_infra.md) |
 | index_granularity 4096 실험 | 원본 실험 후보 — **W6 미채번**(카탈로그에 없다 · 필요해지면 말미 채번 — 다음 번호는 [../10_observability/06_experiment_catalog.md](../10_observability/06_experiment_catalog.md) §분류와 검산) | [../10_observability/06_experiment_catalog.md](../10_observability/06_experiment_catalog.md) |
 | 업무 대조 테이블의 판별 둘 — UPDATE가 갱신 행 수를 응답하는가 · CHECK CONSTRAINT가 UPDATE 경로에도 검사되는가 | **닫힘(W6)** — 응답하지 않는다(기록 042) · UPDATE 경로는 검사하지 않는다(기록 043 · 둘 다 valid · 19f8861 · 부하 실험 · 티어 해당 없음 · 스위치 기본값 · 26.8.10.6) | [10_olap_vs_rdb_control.md](./10_olap_vs_rdb_control.md) |
 | 업무 대조 테이블의 갱신 · 조회 · 삽입 비용 | 3계층 미확인 — 확정 전 임의 값 고정 금지 | EXP-40~44 · [10_olap_vs_rdb_control.md](./10_olap_vs_rdb_control.md) |

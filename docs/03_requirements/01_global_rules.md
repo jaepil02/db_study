@@ -2,6 +2,7 @@
 
 > **대상**: db_study 전 도메인이 전제하는 공통 계약 — 시각 의미론 · 비동기 경계 · 전달 보장 · Redis 키 계열 · 저장소 책임과 분기 · 측정과 계측 · 실행 경계 — REQ-GLB-NN 채번 정본
 > **작성일**: 2026-09-24
+> **개정일**: 2026-09-28 — DB 시각 UTC(ADR-27 · 사용자 요구 2026-09-28) — ClickHouse 서버 시간대 Asia/Seoul → **UTC**(W6 판정 대체) · REQ 수 불변
 > **개정일**: 2026-09-28 — 웨이브 1 검수 반영(B-L4) — REQ-GLB-12에 **회원 · 권한 쓰기는 표면이 없다(시드 · 수동 변경뿐 — 명령 경로 대상 표면 없음 · 표면이 생기면 같은 기전)** 한정 — REQ 수 불변
 > **개정일**: 2026-09-27 — D-04 부분 개정 반영(사용자 결정 — 업무 쓰기도 Redis를 거친다 · 동기 응답) — **REQ-GLB-12 개정** — ③ 업무 쓰기 "Stream을 타지 않는다 · API 직접 커밋" → **명령 스트림 stream:biz:cmd 경유 · 워커 PostgreSQL 트랜잭션 · 커밋 뒤 동기 응답 · 명령 ID 멱등 · 소비자 1 직렬** · 위반 실패 · 검증 · 에러 코드 칸 갱신 — REQ 수 불변
 > **개정일**: 2026-09-24 — 최종 정밀 검수 — REQ-GLB-05 한계의 DLQ 재처리 경로 미설계 → 06_pipeline/11 §DLQ 재처리
@@ -24,7 +25,7 @@
 | **REQ-GLB-01** | ts는 측정 시각이고 ingested_at은 적재 시각이다. 파티션 · 정렬 키 · 롤업 버킷 · TTL · 알람 판정 · STALE 판정은 ts로만 하고, E2E 지연은 ingested_at − ts로만 계산한다. ingested_at은 ClickHouse 서버의 DEFAULT가 채우며 적재 코드가 값을 보내지 않는다 | 원본 architecture.md §7.1 · 원본 data_flow.md §15 · 불변식 "시각 의미론" | ingested_at으로 버킷을 자르면 백프레셔로 늦게 들어온 행이 늦은 분에 집계되어 **차트에 가짜 급증**이 생긴다. ts로 지연을 재면 지연이 늘 0이다. 적재 코드가 ingested_at을 채우면 E2E에서 Stream → INSERT 구간이 빠진다 | 백프레셔 재현 중 tag_1m 버킷별 count를 ts 기준 · ingested_at 기준으로 각각 집계해 앞쪽만 평탄한지 조회 · INSERT 문에 ingested_at 컬럼이 없는지 쿼리 로그 조회 | ING-03 · OBS-04 · RLT-03 · ALM-03 | F-01 · F-02 · F-08 | 해당 없음 |
 | **REQ-GLB-02** | 시각은 저장소 안에서 epoch 기준으로 저장하고 적재 경로는 시각을 epoch 숫자로 넘긴다. ClickHouse 컬럼의 시간대 인자는 출력 · 파싱 · 달력 함수 경계만 바꾸며 저장값을 바꾸지 않는다. 표시 시간대 Asia/Seoul 변환은 표시 시점에 한 번만 한다. API 요청의 오프셋 없는 ISO 8601은 거절한다 | 원본 architecture.md §12 · 원본 data_flow.md §17 "시간대 정확성" · docs_plan 보정 #16 · [../11_glossary/05_units_and_time.md](../11_glossary/05_units_and_time.md) | 적재가 문자열 시각을 보내면 ClickHouse 서버 시간대 설정 하나로 **전 행이 9시간 어긋난다.** 서버 · 브라우저가 각각 변환하면 9시간이 두 번 더해진다. 오프셋 없는 from · to를 받으면 같은 요청이 서버 설정에 따라 다른 구간을 조회한다 | toUnixTimestamp64Milli(ts)와 Stream 엔트리 t0 + dt 대조 · 저장 시각과 화면 표시 시각 대조 · 오프셋 없는 from을 넣은 조회 요청 주입 | COL-02 · ING-03 · TSQ-01 · RLT-03 | F-01 · F-02 · F-04 | common.validation_failed/400 |
 
-- **ClickHouse 서버 시간대는 Asia/Seoul이다(W6 판정 · [../09_tech_stack/03_data_infra.md](../09_tech_stack/03_data_infra.md)).** 그래도 판정 근거는 서버 설정이 아니라 컬럼 시간대다 — 모든 시각 컬럼이 시간대를 명시한다([../05_data_stores/03_clickhouse_schema.md](../05_data_stores/03_clickhouse_schema.md)). 서버 설정은 수동 쿼리 · 시스템 테이블 표시에만 영향이 있다.
+- **ClickHouse 서버 시간대는 UTC다(ADR-27 — W6 판정 Asia/Seoul 대체 · [../09_tech_stack/03_data_infra.md](../09_tech_stack/03_data_infra.md)).** DB 처리 시간대 전체(PostgreSQL DB 기본 · 시각 컬럼 인자)가 UTC이고 표시 변환만 Asia/Seoul이다. 그래도 판정 근거는 서버 설정이 아니라 컬럼 시간대다 — 모든 시각 컬럼이 시간대를 명시한다([../05_data_stores/03_clickhouse_schema.md](../05_data_stores/03_clickhouse_schema.md)). 서버 설정은 수동 쿼리 · 시스템 테이블 표시에만 영향이 있다.
 
 ## 요구사항 — 비동기 경계와 전달 보장
 
