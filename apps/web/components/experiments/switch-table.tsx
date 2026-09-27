@@ -1,5 +1,7 @@
 // 스위치 표 — packages/shared SWITCHES를 행으로. health.switches에 있으면 현재 주입 구현과 기본값 비교 · 없으면 "도입 전(단계)"
-import type { SwitchRow } from '../../lib/switches';
+// 행 강조 문구(SW-01 대안 · SW-12 direct · SW-12 stream #10 안내)는 lib/switches의 switchRowNote가 정한다(08_screen/07 §스위치 표시).
+import { type SwitchRow, switchRowNote } from '../../lib/switches';
+import { cn } from '../../lib/utils';
 import { Badge } from '../ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../ui/table';
 
@@ -45,7 +47,7 @@ export function SwitchTable({ rows }: { rows: readonly SwitchRow[] }) {
               </TableRow>
             );
           }
-          const sw01Bypass = r.spec.id === 'SW-01' && r.impl !== r.defaultImpl;
+          const note = switchRowNote(r);
           return (
             <TableRow key={r.spec.id} className={r.sameAsDefault ? undefined : 'bg-amber-50'}>
               <TableCell>{r.spec.id}</TableCell>
@@ -54,9 +56,16 @@ export function SwitchTable({ rows }: { rows: readonly SwitchRow[] }) {
               <TableCell className="font-mono text-xs">
                 {r.impl}
                 {r.spec.kind === 'ms' ? `(${r.value} ms)` : ''}
-                {sw01Bypass && (
-                  <span className="mt-1 block font-sans text-red-600">
-                    실험 전용 · 정상 경로 아님{r.warning ? ` (${r.warning})` : ''}
+                {note && (
+                  <span
+                    className={cn(
+                      'mt-1 block font-sans',
+                      note.tone === 'danger' && 'text-red-600',
+                      note.tone === 'warning' && 'text-amber-700',
+                      note.tone === 'info' && 'text-slate-500',
+                    )}
+                  >
+                    {note.text}
                   </span>
                 )}
               </TableCell>

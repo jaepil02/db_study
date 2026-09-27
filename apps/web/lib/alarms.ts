@@ -2,6 +2,7 @@
 // 응답 파싱 · 탭 → 조회 조건(목록 범위 기본값) · 확인 버튼 판정 · 확인 결과 표시 · 실시간 겹침 정리 · 규칙 폼 검증 · 분석 차트 열.
 // 화면 컴포넌트는 이것을 부르기만 한다. 응답 모양은 packages/shared 알람 스키마 하나로 읽는다(모르는 모양은 던진다 · 모르는 필드는 버린다).
 import { ApiError } from './api';
+import type { WriteRequest } from './commands';
 import {
   ALARM_SEVERITIES,
   AlarmEvalResponse,
@@ -227,6 +228,25 @@ export function ackOutcome(error: unknown): AckOutcome {
       };
   }
 }
+
+// ── 쓰기 요청(업무 쓰기 명령 경로 — 보내기 · 키 · 202 처리는 lib/commands의 useBizWrite) ──
+/** #2 확인 — 본문 없음 · 응답은 이벤트 객체(#1 모양) */
+export const ackRequest = (eventId: number): WriteRequest => ({
+  method: 'POST',
+  url: `/bff/alarms/events/${eventId}/ack`,
+});
+/** #4 규칙 등록 */
+export const createRuleRequest = (body: RuleBody): WriteRequest => ({
+  method: 'POST',
+  url: '/bff/alarms/rules',
+  body,
+});
+/** #5 규칙 수정 — 바뀐 가변 필드만 */
+export const patchRuleRequest = (ruleId: number, body: Partial<RuleBody>): WriteRequest => ({
+  method: 'PATCH',
+  url: `/bff/alarms/rules/${ruleId}`,
+  body,
+});
 
 // ── 실시간 겹침(08_screen/05 §실시간 겹침 — 사건 4) ──
 export interface OverlayItem {

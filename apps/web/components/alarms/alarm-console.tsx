@@ -3,6 +3,7 @@
 // 요소 7: 탭 · 범위 · 심각도 필터 · 이벤트 목록 · 더 보기 · 확인 버튼 · 실시간 겹침 · 태그 링크 · 규칙 링크.
 // 탭은 조회 조건 하나씩(활성 state=ACTIVE · 미확인 acked=false · 이력 범위만) · 쿼리 문자열로 딥링크된다.
 // 확인은 다이얼로그 없이 요청하고 응답 뒤 목록을 다시 읽는다 — 낙관적 갱신을 하지 않는다.
+// 확인은 업무 쓰기 명령 경로다(08_screen/01 §업무 쓰기 응답) — 202면 확인 버튼 잠금 · 명령 조회로 결말 · 다시 보낼 때는 같은 키.
 import Link from 'next/link';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { useEffect, useMemo, useState } from 'react';
@@ -12,6 +13,7 @@ import {
   type AlarmEvent,
   ackButton,
   ackOutcome,
+  ackRequest,
   alarmKeys,
   type ConsoleParams,
   decodeConsoleParams,
@@ -26,15 +28,17 @@ import {
 } from '../../lib/alarms';
 import { useAlarmOverlay } from '../../lib/alarms-store';
 import { ApiError } from '../../lib/api';
+import { settle, submitLabel, useBizWrite } from '../../lib/commands';
 import { errorText } from '../../lib/error-display';
 import { formatKst, formatKstIso } from '../../lib/time';
 import { cn } from '../../lib/utils';
+import { CommandNotice } from '../master/command-notice';
 import { Button, Select } from '../master/field';
 import { Badge } from '../ui/badge';
 import { Band } from '../ui/band';
 import { Card, CardContent, CardHeader, CardTitle } from '../ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../ui/table';
-import { postAck, useAlarmInvalidate, useEventList, useRules } from './queries';
+import { useAlarmInvalidate, useEventList, useRules } from './queries';
 
 const SEVERITY_VARIANT = { 1: 'outline', 2: 'warning', 3: 'danger' } as const;
 
@@ -82,22 +86,26 @@ export function AlarmConsole() {
   }, [nextDue, invalidate]);
 
   // ── 확인 ──
+  // 확인 명령 하나 — 대기 중이면 확인 버튼을 전부 잠근다(워커가 멈추면 다른 확인도 같은 이유로 대기한다)
+  const acker = useBizWrite({ scope: 'alarm:ack' });
   const [acking, setAcking] = useState<number | null>(null);
   const [ackResult, setAckResult] = useState<(AckOutcome & { eventId: number }) | null>(null);
-  const ack = async (eventId: number) => {
-    setAcking(eventId);
-    setAckResult(null);
-    let outcome: AckOutcome;
-    try {
-      await postAck(eventId);
-      outcome = ackOutcome(null);
-    } catch (e) {
-      outcome = ackOutcome(e);
-    }
+  const finishAck = async (eventId: number, error: unknown) => {
+    const outcome = ackOutcome(error);
     // 같은 요청을 재시도하지 않는다 — 200 · 409 · 404는 목록을 다시 읽고(쓴 탭은 서버가 cache:alarmevents를 지웠다) 401 · 403은 제자리
     if (outcome.refetch) await invalidate(alarmKeys.events());
     setAckResult({ ...outcome, eventId });
-    setAcking(null);
+  };
+  const ack = (eventId: number) => {
+    setAcking(eventId);
+    setAckResult(null);
+    void acker.run(ackRequest(eventId), (o) =>
+      settle(
+        o,
+        () => finishAck(eventId, null),
+        (e) => finishAck(eventId, e),
+      ),
+    );
   };
 
   const empty = list.isSuccess && rows.length === 0;
@@ -172,6 +180,7 @@ export function AlarmConsole() {
 
       {pending.length > 0 ? <OverlayLayer items={pending} /> : null}
 
+      <CommandNotice writer={acker} prefix={acking !== null ? `알람 #${acking} 확인` : undefined} />
       {ackResult?.message ? (
         <Band tone={ackResult.tone}>
           알람 #{ackResult.eventId} 확인 — {ackResult.message}
@@ -226,8 +235,9 @@ export function AlarmConsole() {
                     key={r.eventId}
                     row={r}
                     clearNotice={overlay[r.eventId]?.clearedTs ?? null}
-                    busy={acking === r.eventId}
-                    onAck={() => void ack(r.eventId)}
+                    busy={acker.locked}
+                    busyLabel={acking === r.eventId ? submitLabel(acker.state, '확인') : '확인'}
+                    onAck={() => ack(r.eventId)}
                   />
                 ))}
               </TableBody>
@@ -254,11 +264,13 @@ function EventRow({
   row,
   clearNotice,
   busy,
+  busyLabel,
   onAck,
 }: {
   row: AlarmEvent;
   clearNotice: number | null;
   busy: boolean;
+  busyLabel: string;
   onAck: () => void;
 }) {
   const b = ackButton(row);
@@ -309,7 +321,7 @@ function EventRow({
       <TableCell className="whitespace-nowrap text-xs">
         {b.kind === 'enabled' ? (
           <Button disabled={busy} onClick={onAck}>
-            {busy ? '확인 중…' : '확인'}
+            {busyLabel}
           </Button>
         ) : b.kind === 'cleared' ? (
           <Button disabled title="해제된 알람">

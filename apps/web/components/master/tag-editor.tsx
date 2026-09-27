@@ -6,8 +6,9 @@ import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 import { ApiError } from '../../lib/api';
 import { masterKeys } from '../../lib/cache-signal';
+import { settle, submitLabel } from '../../lib/commands';
 import { errorText } from '../../lib/error-display';
-import { bffWrite, changedFields, MODBUS_MAPPING_FIELDS } from '../../lib/master-api';
+import { changedFields, MODBUS_MAPPING_FIELDS, masterWrite } from '../../lib/master-api';
 import {
   DATA_TYPES,
   FUNCTION_CODES,
@@ -16,8 +17,9 @@ import {
   WORD_ORDERS,
 } from '../../lib/shared';
 import { Band } from '../ui/band';
+import { CommandNotice } from './command-notice';
 import { Button, Field, numOrNull, Select, TextInput } from './field';
-import { useLocalInvalidate } from './queries';
+import { useLocalInvalidate, useMasterWrite } from './queries';
 
 type Editable = Pick<
   TagObjectBody,
@@ -54,9 +56,11 @@ export const AFTER_WRITE_NOTE =
 export function TagEditor({ tag, onDone }: { tag: TagObjectBody; onDone: (note: string) => void }) {
   const [form, setForm] = useState<Editable>(() => editableOf(tag));
   const [err, setErr] = useState<ApiError | null>(null);
-  const [busy, setBusy] = useState(false);
   const [reissue, setReissue] = useState(false);
   const invalidate = useLocalInvalidate();
+  // 저장 · 비활성화는 한 폼 — 잠금을 함께 건다(요청 지문이 달라 키는 따로)
+  const w = useMasterWrite(`tag:${tag.tagId}`);
+  const busy = w.locked;
   const set = <K extends keyof Editable>(k: K, v: Editable[K]) => setForm((f) => ({ ...f, [k]: v }));
   const diff = changedFields(editableOf(tag), form);
   const mappingChanged = MODBUS_MAPPING_FIELDS.some((f) => f in diff);
@@ -70,20 +74,21 @@ export function TagEditor({ tag, onDone }: { tag: TagObjectBody; onDone: (note: 
       !window.confirm('이 변경은 같은 tag_id의 값 원천(Modbus 매핑)을 바꾼다 — 저장할까?')
     )
       return;
-    setBusy(true);
     setErr(null);
-    try {
-      await bffWrite('PATCH', `tags/${tag.tagId}`, diff);
-      invalidate(['master', 'tags'], masterKeys.tag(tag.tagId));
-      onDone(AFTER_WRITE_NOTE);
-    } catch (e) {
-      const ae = e instanceof ApiError ? e : new ApiError(0, null, String(e));
-      setErr(ae);
-      // 스케일 409 — 편집 내용을 버리지 않고 발급 다이얼로그를 연다(폼이 변환식을 읽기 전용으로 두므로 딥링크 · 수동 호출에서만 온다)
-      if (ae.code === 'master.scale_change_forbidden') setReissue(true);
-    } finally {
-      setBusy(false);
-    }
+    void w.run(masterWrite('PATCH', `tags/${tag.tagId}`, diff), (o) =>
+      settle(
+        o,
+        () => {
+          invalidate(['master', 'tags'], masterKeys.tag(tag.tagId));
+          onDone(AFTER_WRITE_NOTE);
+        },
+        (ae) => {
+          setErr(ae);
+          // 스케일 409 — 편집 내용을 버리지 않고 발급 다이얼로그를 연다(폼이 변환식을 읽기 전용으로 두므로 딥링크 · 수동 호출에서만 온다)
+          if (ae.code === 'master.scale_change_forbidden') setReissue(true);
+        },
+      ),
+    );
   };
 
   const deactivate = async () => {
@@ -93,22 +98,23 @@ export function TagEditor({ tag, onDone }: { tag: TagObjectBody; onDone: (note: 
       )
     )
       return;
-    setBusy(true);
     setErr(null);
-    try {
-      await bffWrite('POST', `tags/${tag.tagId}/deactivate`, {});
-      invalidate(['master', 'tags'], masterKeys.tag(tag.tagId));
-      onDone(AFTER_WRITE_NOTE);
-    } catch (e) {
-      setErr(e instanceof ApiError ? e : new ApiError(0, null, String(e)));
-    } finally {
-      setBusy(false);
-    }
+    void w.run(masterWrite('POST', `tags/${tag.tagId}/deactivate`, {}), (o) =>
+      settle(
+        o,
+        () => {
+          invalidate(['master', 'tags'], masterKeys.tag(tag.tagId));
+          onDone(AFTER_WRITE_NOTE);
+        },
+        setErr,
+      ),
+    );
   };
 
   const multiWord = !['UINT16', 'INT16', 'BOOL'].includes(form.dataType);
   return (
     <div className="flex flex-col gap-3 rounded border border-slate-200 bg-slate-50 p-3">
+      <CommandNotice writer={w} />
       {err && err.code !== 'common.duplicate_key' ? (
         <Band tone={err.status === 503 ? 'danger' : 'warning'}>{errorText(err)}</Band>
       ) : null}
@@ -213,7 +219,7 @@ export function TagEditor({ tag, onDone }: { tag: TagObjectBody; onDone: (note: 
       ) : null}
       <div className="flex gap-2">
         <Button onClick={save} disabled={busy}>
-          저장
+          {submitLabel(w.state, '저장')}
         </Button>
         {tag.isActive ? (
           <Button variant="danger" onClick={deactivate} disabled={busy}>
@@ -246,33 +252,34 @@ function ReissueDialog({
   const [unit, setUnit] = useState(tag.unit);
   const [reason, setReason] = useState('');
   const [err, setErr] = useState<ApiError | null>(null);
-  const [busy, setBusy] = useState(false);
   const [done, setDone] = useState<{ newTagId: number; oldTagId: number } | null>(null);
+  const w = useMasterWrite(`reissue:${source.tagId}`);
 
-  const submit = async () => {
-    setBusy(true);
+  const submit = () => {
     setErr(null);
-    try {
-      const body = TagReissueResponse.parse(
-        await bffWrite('POST', `tags/${source.tagId}/reissue`, {
-          newTagCode,
-          scale: Number(scale),
-          offsetValue: Number(offset),
-          unit,
-          ...(reason ? { reason } : {}),
-        }),
-      );
-      invalidate(['master', 'tags'], masterKeys.tag(source.tagId));
-      setDone({ newTagId: body.newTag.tagId, oldTagId: body.oldTagId });
-    } catch (e) {
-      const ae = e instanceof ApiError ? e : new ApiError(0, null, String(e));
-      setErr(ae);
-      // 경합으로 방금 비활성이 됐다 — 태그를 다시 읽는다
-      if (ae.code === 'master.reissue_source_inactive')
-        invalidate(masterKeys.tag(source.tagId), ['master', 'tags']);
-    } finally {
-      setBusy(false);
-    }
+    const req = masterWrite('POST', `tags/${source.tagId}/reissue`, {
+      newTagCode,
+      scale: Number(scale),
+      offsetValue: Number(offset),
+      unit,
+      ...(reason ? { reason } : {}),
+    });
+    void w.run(req, (o) =>
+      settle(
+        o,
+        (raw) => {
+          const body = TagReissueResponse.parse(raw);
+          invalidate(['master', 'tags'], masterKeys.tag(source.tagId));
+          setDone({ newTagId: body.newTag.tagId, oldTagId: body.oldTagId });
+        },
+        (ae) => {
+          setErr(ae);
+          // 경합으로 방금 비활성이 됐다 — 태그를 다시 읽는다
+          if (ae.code === 'master.reissue_source_inactive')
+            invalidate(masterKeys.tag(source.tagId), ['master', 'tags']);
+        },
+      ),
+    );
   };
 
   return (
@@ -301,6 +308,7 @@ function ReissueDialog({
         </div>
       ) : (
         <div className="flex flex-col gap-2">
+          <CommandNotice writer={w} />
           {err && err.code !== 'common.duplicate_key' ? <Band tone="warning">{errorText(err)}</Band> : null}
           <div className="grid grid-cols-3 gap-2">
             <Field
@@ -328,8 +336,8 @@ function ReissueDialog({
             <li>알람 규칙은 옮겨지지 않는다 — 새 태그에 규칙을 새로 만든다(ALM-RULES · S7)</li>
           </ul>
           <div className="flex gap-2">
-            <Button onClick={submit} disabled={busy}>
-              발급
+            <Button onClick={submit} disabled={w.locked}>
+              {submitLabel(w.state, '발급')}
             </Button>
             <Button variant="outline" onClick={onClose}>
               닫기

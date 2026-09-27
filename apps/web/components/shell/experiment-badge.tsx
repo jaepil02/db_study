@@ -2,10 +2,11 @@
 // 실험 조건 배지 — 정본 docs/08_screen/01_standards.md §요청 경로와 공통 셸(OBS-06 표시)
 // 셸이 진입 시 BFF 경유 health를 1회 읽고 기본값과 다른 스위치를 센다 · 누르면 EXP-CONSOLE.
 // 주기 재조회를 하지 않는다 — EXP-CONSOLE이 같은 쿼리 키로 폴링하면 그 값을 따라간다.
+// 툴팁에는 셸이 이름을 대는 다른 구현(SW-12 direct)의 문구를 덧붙인다(lib/switches shellBadgeNotes).
 import { useQuery } from '@tanstack/react-query';
 import Link from 'next/link';
 import { fetchHealth, HEALTH_KEY } from '../../lib/health';
-import { buildSwitchRows, countNonDefault } from '../../lib/switches';
+import { buildSwitchRows, countNonDefault, shellBadgeNotes } from '../../lib/switches';
 import { cn } from '../../lib/utils';
 
 export function useShellHealth() {
@@ -23,6 +24,7 @@ export function ExperimentBadge() {
   const q = useShellHealth();
   const health = q.data?.body;
   const n = health ? countNonDefault(buildSwitchRows(health.switches)) : null;
+  const notes = health ? shellBadgeNotes(health.switches) : [];
   const label =
     n === null ? (q.isError ? '실험 조건 ?' : '실험 조건 …') : n === 0 ? '기본 구성' : `실험 조건 ${n}`;
   return (
@@ -34,7 +36,7 @@ export function ExperimentBadge() {
           ? q.isError
             ? 'health를 읽지 못했다 — 실험 콘솔에서 확인한다'
             : 'health 읽는 중'
-          : `기본값과 다른 스위치 ${n} — 누르면 실험 콘솔`
+          : [`기본값과 다른 스위치 ${n} — 누르면 실험 콘솔`, ...notes].join(' · ')
       }
       className={cn(
         'rounded-full border px-3 py-1 text-sm font-medium',

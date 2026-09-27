@@ -34,3 +34,15 @@ export function errorText(error: unknown): string {
 export function errorCode(error: unknown): string | null {
   return error instanceof ApiError ? error.code : null;
 }
+
+/**
+ * 업무 쓰기 요청의 503 띠(08_screen/01 §업무 쓰기 응답 — 명령 경로) — Redis 불가(명령을 싣지 못함) · PostgreSQL 불가 두 원인에
+ * 맞는 한 문구다. 원인을 코드로 가르지 않는다(07_api/01 — 대응이 같아 한 코드). 조회 영역의 503은 errorText("업무 저장소 응답 불가")다.
+ */
+export const WRITE_UNAVAILABLE_TEXT = '업무 쓰기 저장소 응답 불가 — 조회는 된다 · 같은 키로 다시 보내면 안전';
+
+export function writeErrorText(error: unknown): string {
+  if (error instanceof ApiError && error.code === 'common.postgres_unavailable')
+    return `${WRITE_UNAVAILABLE_TEXT} (${error.code}/${error.status})`;
+  return errorText(error);
+}

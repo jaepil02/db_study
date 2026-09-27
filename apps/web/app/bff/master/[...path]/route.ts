@@ -1,9 +1,11 @@
 // BFF — 마스터 표면 중계(08_screen/01 §요청 경로 · 09_tech_stack/01 BFF 역할). 브라우저 /bff/master/{path} → api /api/v1/{path}
 // 조회는 서버 fetch 캐시(revalidate 30초 · 태그) · 접속 설정 조회는 no-store · 쓰기 성공 시 revalidateTag(체인 ⑤단 — ADR-12).
 // 받은 상태 · 본문을 그대로 넘긴다(에러 봉투 포함). 브라우저로는 no-store — 브라우저 층은 TanStack Query staleTime이 맡는다.
+// 쓰기는 Idempotency-Key를 양방향으로 싣는다(07_api/01 §업무 쓰기 경로) · 202(적용 대기)에는 ⑤를 걸지 않는다 — 성공 응답이 아니다.
 import { revalidateTag } from 'next/cache';
 import { NO_STORE, serverApiBase, unreachable } from '../../../../lib/bff';
 import { BFF_REVALIDATE_S } from '../../../../lib/config';
+import { IDEMPOTENCY_HEADER } from '../../../../lib/shared';
 
 /** 중계를 허용하는 첫 경로 조각 — 표면 17의 자원 넷 */
 const COLLECTIONS = new Set(['sites', 'lines', 'devices', 'tags']);
@@ -22,9 +24,15 @@ async function target(ctx: Ctx, req: Request): Promise<{ url: string; collection
 }
 
 function relay(res: Response, body: string): Response {
+  const key = res.headers.get(IDEMPOTENCY_HEADER);
   return new Response(body, {
     status: res.status,
-    headers: { ...NO_STORE, 'content-type': res.headers.get('content-type') ?? 'application/json' },
+    headers: {
+      ...NO_STORE,
+      'content-type': res.headers.get('content-type') ?? 'application/json',
+      // 명령 ID 되싣기 — stream은 202 포함 전 응답에 · direct는 api가 싣지 않아 없다
+      ...(key ? { [IDEMPOTENCY_HEADER]: key } : {}),
+    },
   });
 }
 
@@ -55,22 +63,27 @@ export async function GET(req: Request, ctx: Ctx): Promise<Response> {
   return relay(res, body);
 }
 
+/** 커밋이 끝난 쓰기 응답 — 202(적용 대기 · 만료)는 아니다 */
+const isCommitted = (status: number): boolean => status === 200 || status === 201;
+
 async function write(req: Request, ctx: Ctx): Promise<Response> {
   const t = await target(ctx, req);
   if (!t) return notFound();
+  const key = req.headers.get(IDEMPOTENCY_HEADER);
   let res: Response;
   try {
     res = await fetch(t.url, {
       method: req.method,
       cache: 'no-store',
-      headers: { 'content-type': 'application/json' },
+      headers: { 'content-type': 'application/json', ...(key ? { [IDEMPOTENCY_HEADER]: key } : {}) },
       body: await req.text(),
     });
   } catch {
     return unreachable();
   }
   const body = await res.text();
-  if (res.ok) revalidateTag(tagOf(t.collection)); // ⑤ — 커밋이 끝난 뒤에만
+  // ⑤ — 커밋이 끝난 응답(200 · 201)에만. 202는 결과를 아직 모른다 — 명령 조회로 applied를 본 화면이 신선 창 표지로 재조회한다
+  if (isCommitted(res.status)) revalidateTag(tagOf(t.collection));
   return relay(res, body);
 }
 

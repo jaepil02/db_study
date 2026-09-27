@@ -3,6 +3,7 @@
 // 요소 7: 규칙 목록 · 추가 · 편집 폼 · 비활성화 · 태그 선택기 · 판정 분석 차트 · 빈 버킷 주의 표지 · 원 시계열 보기.
 // 삭제 버튼이 없다(REQ-ALM-01 — 끄는 수단은 사용 해제). 편집 모드에서 태그 · 조건은 읽기 전용이다(불변 — 바꾸려면 새 규칙 등록 후 옛 규칙 끄기).
 // 인증 전(S7 ①)에는 조회 · 쓰기 · 분석 모두 무인증 — 역할로 패널을 숨기지 않는다.
+// 규칙 저장은 업무 쓰기 명령 경로다(08_screen/01 §업무 쓰기 응답) — 202면 폼 입력 유지 · 폼 잠금 · 명령 조회로 결말.
 import Link from 'next/link';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { useState } from 'react';
@@ -13,10 +14,13 @@ import {
   CONDITION_TYPES,
   type ConditionType,
   conditionText,
+  createRuleRequest,
   DEFAULT_EVAL_RANGE,
   EMPTY_RULE_FORM,
   EVAL_RANGES,
   type EvalRangeId,
+  parseAlarmRule,
+  patchRuleRequest,
   RULE_SAVED_NOTE,
   type RuleForm,
   type RuleFormErrors,
@@ -27,7 +31,9 @@ import {
   validateRuleForm,
 } from '../../lib/alarms';
 import { ApiError } from '../../lib/api';
+import { settle, submitLabel, useBizWrite } from '../../lib/commands';
 import { errorText } from '../../lib/error-display';
+import { CommandNotice } from '../master/command-notice';
 import { Button, Field, Select, TextInput } from '../master/field';
 import { useDevices, useSites, useTag, useTags } from '../master/queries';
 import { Badge } from '../ui/badge';
@@ -36,7 +42,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '../ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../ui/table';
 import { SeverityBadge } from './alarm-console';
 import { EvalPanel } from './eval-panel';
-import { createRule, patchRule, useAlarmInvalidate, useRules } from './queries';
+import { useAlarmInvalidate, useRules } from './queries';
 
 export function AlarmRules({ ruleId }: { ruleId: number | null }) {
   const sp = useSearchParams();
@@ -198,11 +204,12 @@ function RuleEditor({ rule, onSaved }: { rule: AlarmRule | null; onSaved: (r: Al
   const [tagActive, setTagActive] = useState<boolean | null>(null);
   const [errors, setErrors] = useState<RuleFormErrors>({});
   const [err, setErr] = useState<ApiError | null>(null);
-  const [busy, setBusy] = useState(false);
+  const w = useBizWrite({ scope: `alarm:rule:${rule?.ruleId ?? 'new'}` });
+  const busy = w.locked;
   const invalidate = useAlarmInvalidate();
   const set = <K extends keyof RuleForm>(k: K, v: RuleForm[K]) => setForm((f) => ({ ...f, [k]: v }));
 
-  const submit = async (override?: Partial<RuleForm>) => {
+  const submit = (override?: Partial<RuleForm>) => {
     const f = { ...form, ...override };
     // 편집은 태그를 바꾸지 않는다 — 태그 활성 판정은 서버가 한다(null)
     const v = validateRuleForm(f, editing ? null : tagActive);
@@ -212,32 +219,34 @@ function RuleEditor({ rule, onSaved }: { rule: AlarmRule | null; onSaved: (r: Al
     }
     setErrors({});
     setErr(null);
-    setBusy(true);
-    try {
-      let saved: AlarmRule;
-      if (rule) {
-        const patch = rulePatchBody(rule, v.body);
-        if (Object.keys(patch).length === 0) {
-          setBusy(false);
-          return;
-        }
-        saved = await patchRule(rule.ruleId, patch);
-      } else saved = await createRule(v.body);
-      // 쓴 탭은 저장 응답으로 즉시 무효화한다 — 다른 탭 · 사용자는 체인 ⑥(cache:alarmrules 신호)
-      await invalidate(alarmKeys.rules());
-      if (override) setForm(f);
-      onSaved(saved);
-    } catch (e) {
-      const ae = e instanceof ApiError ? e : new ApiError(0, null, String(e));
-      setErr(ae);
-      setErrors(serverFieldErrors(ae));
-    } finally {
-      setBusy(false);
-    }
+    let req: ReturnType<typeof createRuleRequest>;
+    if (rule) {
+      const patch = rulePatchBody(rule, v.body);
+      if (Object.keys(patch).length === 0) return;
+      req = patchRuleRequest(rule.ruleId, patch);
+    } else req = createRuleRequest(v.body);
+    void w.run(req, (o) =>
+      settle(
+        o,
+        async (body) => {
+          const saved = parseAlarmRule(body);
+          // 쓴 탭은 저장 응답(202 뒤면 명령 조회 applied)으로 즉시 무효화한다 — 다른 탭 · 사용자는 체인 ⑥(cache:alarmrules 신호)
+          // 규칙은 BFF no-store라 신선 창 표지가 필요 없다
+          await invalidate(alarmKeys.rules());
+          if (override) setForm(f);
+          onSaved(saved);
+        },
+        (ae) => {
+          setErr(ae);
+          setErrors(serverFieldErrors(ae));
+        },
+      ),
+    );
   };
 
   return (
     <div className="flex flex-col gap-3">
+      <CommandNotice writer={w} />
       {err && Object.keys(serverFieldErrors(err)).length === 0 ? (
         <Band tone={err.status === 503 ? 'danger' : 'warning'}>{alarmErrorText(err, errorText)}</Band>
       ) : null}
@@ -318,11 +327,11 @@ function RuleEditor({ rule, onSaved }: { rule: AlarmRule | null; onSaved: (r: Al
         사용
       </label>
       <div className="flex items-center gap-2">
-        <Button disabled={busy} onClick={() => void submit()}>
-          {busy ? '저장 중…' : '저장'}
+        <Button disabled={busy} onClick={() => submit()}>
+          {submitLabel(w.state, '저장')}
         </Button>
         {editing && rule.enabled ? (
-          <Button variant="danger" disabled={busy} onClick={() => void submit({ enabled: false })}>
+          <Button variant="danger" disabled={busy} onClick={() => submit({ enabled: false })}>
             비활성화
           </Button>
         ) : null}

@@ -1,4 +1,4 @@
-// 실험 콘솔 스위치 표 · 조합 경고 — 정본 docs/08_screen/07_experiment_console.md §스위치 11 표시 · §조합 경고
+// 실험 콘솔 스위치 표 · 조합 경고 — 정본 docs/08_screen/07_experiment_console.md §스위치 표시(12) · §조합 경고
 // "현재" 열은 환경변수 문자열이 아니라 health switches.*.impl · value다(REQ-OBS-11).
 import { type HealthBody, implFor, SWITCHES, type SwitchSpec } from './shared';
 
@@ -56,7 +56,10 @@ export interface ComboWarning {
   text: string;
 }
 
-/** 조합 제약 9건 — 화면 판정 조건은 "그 스위치가 대안 구현인가"뿐이다. health에 없거나 impl null(도입 전)인 스위치는 판정하지 않는다 */
+/**
+ * 조합 제약 경고 9건(#1~#9) — 화면 판정 조건은 "그 스위치가 대안 구현인가"뿐이다. health에 없거나 impl null(도입 전)인 스위치는 판정하지 않는다.
+ * #10(SW-12 stream + 워커 역할 없음)은 경고가 아니라 SW-12 행의 안내다 — 조건이 기본값이라 경고로 띄우면 모든 기동에서 떠 다른 경고가 묻힌다(switchRowNote).
+ */
 const COMBO_RULES: readonly { no: number; switchId: string; text: string }[] = [
   {
     no: 1,
@@ -96,9 +99,44 @@ export function comboWarnings(switches: SwitchStates): ComboWarning[] {
   return out;
 }
 
+/** 조합 제약 #10 안내 문구(08_screen/07 §조합 경고 — 역할 구성(APP_ROLE)은 health에 없어 화면이 판정하지 못한다) */
+export const COMBO_10_NOTICE =
+  'stream은 워커 역할이 도는 구성에서만 기동한다 — 업무 쓰기가 전부 202로 끝나면 워커 기동을 확인한다';
+/** SW-12 direct 강조 문구(08_screen/07 §스위치 표시 SW-12 행) */
+export const SW12_DIRECT_NOTE = '업무 쓰기 옛 경로(비교 실험 EXP-46용) — 202 · 명령 멱등 없음';
+/** 공통 셸 실험 조건 배지 툴팁에 붙이는 SW-12 direct 문구(08_screen/01 §요청 경로와 공통 셸) */
+export const SW12_DIRECT_BADGE = '업무 쓰기 옛 경로 — 202 · 명령 멱등 없음';
+
+export interface SwitchRowNote {
+  tone: 'danger' | 'warning' | 'info';
+  text: string;
+}
+
+/**
+ * 스위치 표 행의 강조 문구 — SW-01 대안(빨간 경고) · SW-12 direct(다름 문구) · SW-12 stream(#10 안내).
+ * 도입 전 · 표에 없는 행은 없음.
+ */
+export function switchRowNote(row: SwitchRow): SwitchRowNote | null {
+  if (row.kind !== 'present') return null;
+  const alt = row.impl !== row.defaultImpl;
+  if (row.spec.id === 'SW-01' && alt)
+    return { tone: 'danger', text: `실험 전용 · 정상 경로 아님${row.warning ? ` (${row.warning})` : ''}` };
+  if (row.spec.id === 'SW-12')
+    return alt
+      ? { tone: 'warning', text: SW12_DIRECT_NOTE }
+      : { tone: 'info', text: `조합 제약 #10 — ${COMBO_10_NOTICE}` };
+  return null;
+}
+
+/** 공통 셸 배지 툴팁에 덧붙일 문구 — 기본값과 다른 스위치 중 셸이 이름을 대는 것(현재 SW-12 direct 하나) */
+export function shellBadgeNotes(switches: SwitchStates): string[] {
+  const r = buildSwitchRows(switches).find((x) => x.kind === 'present' && x.spec.id === 'SW-12');
+  return r?.kind === 'present' && r.impl !== r.defaultImpl ? [SW12_DIRECT_BADGE] : [];
+}
+
 /**
  * 기록 조건 블록 — 측정 기록 템플릿 §조건 표 모양(10_observability/04). 4요소는 health에서 채우고 게이트 칸만 수기(?)로 둔다.
- * 사람이 읽는 표는 "바꾼 것만 명시 · 나머지 기본값"이고, 전수 줄에 스위치 11키 전부(도입 전은 value(도입 전))를 싣는다.
+ * 사람이 읽는 표는 "바꾼 것만 명시 · 나머지 기본값"이고, 전수 줄에 스위치 전부(SWITCHES 12키 · 도입 전은 value(도입 전))를 싣는다.
  */
 export function recordConditionBlock(health: HealthBody): string {
   const rows = buildSwitchRows(health.switches);
@@ -106,7 +144,7 @@ export function recordConditionBlock(health: HealthBody): string {
   const changed = rows
     .filter((r): r is Extract<SwitchRow, { kind: 'present' }> => r.kind === 'present' && !r.sameAsDefault)
     .map((r) => `${r.spec.id}=${r.value}`);
-  // 전수 줄은 11키를 다 싣는다 — 도입 전 스위치는 value(도입 전)
+  // 전수 줄은 SWITCHES 전부를 싣는다 — 도입 전 스위치는 value(도입 전)
   const all = rows.map((r) => {
     if (r.kind === 'present') return `${r.spec.id}=${r.value}(${r.impl})`;
     if (r.kind === 'not_introduced') return `${r.spec.id}=${r.value ?? '?'}(도입 전)`;

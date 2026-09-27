@@ -1,23 +1,20 @@
 'use client';
-// 알람 쿼리 · 쓰기 — 이벤트 · 확인 · 규칙은 BFF 경유(no-store) · 판정 분석은 직결(07_api/07 공통 규약 경로 행)
+// 알람 쿼리 — 이벤트 · 확인 · 규칙은 BFF 경유(no-store) · 판정 분석은 직결(07_api/07 공통 규약 경로 행)
 // 쿼리 키는 lib/alarms의 alarmKeys(신호 무효화 cache:alarmrules → alarm · rules와 같은 접두)
+// 쓰기(확인 · 규칙 등록 · 수정)는 명령 경로 — lib/alarms의 요청 생성 + lib/commands의 useBizWrite
 import { useInfiniteQuery, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useCallback } from 'react';
 import {
   ALARM_EVENTS_TTL_MS,
   ALARM_RULES_STALE_MS,
-  type AlarmRule,
   alarmKeys,
   type EvalRangeId,
   type EventListQuery,
   evaluationsSearch,
   eventListSearch,
-  parseAlarmEvent,
-  parseAlarmRule,
   parseEvaluations,
   parseEventPage,
   parseRuleList,
-  type RuleBody,
 } from '../../lib/alarms';
 import { directUrl, requestJson, retryOn503 } from '../../lib/api';
 
@@ -58,30 +55,6 @@ export const useEvaluations = (ruleId: number | null, range: EvalRangeId, nowMs:
     retry: retryOn503,
   });
 };
-
-/** 확인 — 본문 없음 · 응답 이벤트 객체(#1 모양) */
-export async function postAck(eventId: number) {
-  const r = await requestJson(`/bff/alarms/events/${eventId}/ack`, { method: 'POST' });
-  return parseAlarmEvent(r.body);
-}
-
-export async function createRule(body: RuleBody): Promise<AlarmRule> {
-  const r = await requestJson('/bff/alarms/rules', {
-    method: 'POST',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify(body),
-  });
-  return parseAlarmRule(r.body);
-}
-
-export async function patchRule(ruleId: number, body: Partial<RuleBody>): Promise<AlarmRule> {
-  const r = await requestJson(`/bff/alarms/rules/${ruleId}`, {
-    method: 'PATCH',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify(body),
-  });
-  return parseAlarmRule(r.body);
-}
 
 /** 쓴 탭의 로컬 무효화 — 응답을 받은 뒤에만(낙관적 갱신 없음) */
 export function useAlarmInvalidate() {

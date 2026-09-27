@@ -3,8 +3,9 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { retryOn503 } from '../../lib/api';
 import { masterKeys } from '../../lib/cache-signal';
+import { useBizWrite } from '../../lib/commands';
 import { MASTER_STALE_MS } from '../../lib/config';
-import { bffGet } from '../../lib/master-api';
+import { bffGet, markMasterFresh } from '../../lib/master-api';
 import { DeviceObject, LineObject, ModbusConfigObject, SiteObject, TagObject } from '../../lib/shared';
 
 /** 목록 응답 { items, meta.count } → 항목 배열 */
@@ -74,3 +75,10 @@ export function useLocalInvalidate() {
     for (const k of keys) void qc.invalidateQueries({ queryKey: [...k] });
   };
 }
+
+/**
+ * 마스터 폼 하나의 업무 쓰기(lib/commands) — 202 뒤 명령 조회로 applied를 확인하면 신선 창을 연다.
+ * 그 쓰기에는 BFF ⑤가 걸리지 않아 표지 없이 재조회하면 revalidate 창만큼 옛 목록을 받는다(08_screen/01 §업무 쓰기 응답).
+ */
+export const useMasterWrite = (scope: string) =>
+  useBizWrite({ scope: `master:${scope}`, onViaCommand: () => markMasterFresh() });

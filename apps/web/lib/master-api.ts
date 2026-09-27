@@ -1,6 +1,8 @@
 // 마스터 표면 호출 — 전부 BFF 경유(/bff/master/{path} → api /api/v1/{path}) · 정본 docs/08_screen/06_master_admin.md
-// 조회는 BFF 서버 fetch 캐시(revalidate 30초)를 지나고, 쓰기 성공은 BFF가 revalidateTag(⑤)한다.
+// 조회는 BFF 서버 fetch 캐시(revalidate 30초)를 지나고, 쓰기 성공(200 · 201)은 BFF가 revalidateTag(⑤)한다.
+// 쓰기는 명령 경로(lib/commands)로 보낸다 — 202 뒤 명령 조회로 applied를 본 경우는 ⑤가 없어 신선 창을 열고 재조회한다.
 import { requestJson } from './api';
+import type { WriteRequest } from './commands';
 
 /**
  * 신호 뒤 신선 창 — ⑥(신호)이 ③ 시점에 발화해 ⑤(BFF revalidateTag · api 응답 뒤)보다 먼저 BFF에 닿을 수 있다(검수 M5).
@@ -20,17 +22,9 @@ export async function bffGet<T>(path: string, schema: { parse(x: unknown): T }):
   return schema.parse(r.body);
 }
 
-export async function bffWrite(
-  method: 'POST' | 'PATCH' | 'PUT',
-  path: string,
-  body: unknown,
-): Promise<unknown> {
-  const r = await requestJson(`/bff/master/${path}`, {
-    method,
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify(body),
-  });
-  return r.body;
+/** 마스터 쓰기 요청 — 보내기 · 키 · 202 처리는 lib/commands의 useBizWrite가 한다 */
+export function masterWrite(method: WriteRequest['method'], path: string, body: unknown): WriteRequest {
+  return { method, url: `/bff/master/${path}`, body };
 }
 
 /** 루프백 host — SIMULATED 표지(REQ-MST-03 · 그 설비의 정상 값은 품질 9로 적재된다) */

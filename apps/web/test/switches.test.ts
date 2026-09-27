@@ -1,6 +1,16 @@
 import { describe, expect, it } from 'vitest';
 import type { HealthBody } from '../lib/shared';
-import { buildSwitchRows, comboWarnings, countNonDefault, recordConditionBlock } from '../lib/switches';
+import {
+  buildSwitchRows,
+  COMBO_10_NOTICE,
+  comboWarnings,
+  countNonDefault,
+  recordConditionBlock,
+  SW12_DIRECT_BADGE,
+  SW12_DIRECT_NOTE,
+  shellBadgeNotes,
+  switchRowNote,
+} from '../lib/switches';
 import { backoffMs, shouldReconnect } from '../lib/ws-policy';
 
 const health: HealthBody = {
@@ -28,7 +38,7 @@ describe('스위치 표', () => {
     expect(rows.find((r) => r.kind === 'present' && r.spec.id === 'SW-03')).toMatchObject({
       sameAsDefault: true,
     });
-    expect(rows.filter((r) => r.kind === 'not_introduced')).toHaveLength(9);
+    expect(rows.filter((r) => r.kind === 'not_introduced')).toHaveLength(10);
     expect(countNonDefault(rows)).toBe(1);
   });
 
@@ -133,5 +143,55 @@ describe('WebSocket 재연결 정책', () => {
 
   it('지수 백오프 1 · 2 · 4 … 최대 30초', () => {
     expect([0, 1, 2, 3, 4, 5, 6].map(backoffMs)).toEqual([1000, 2000, 4000, 8000, 16000, 30000, 30000]);
+  });
+});
+
+describe('SW-12 BIZ_WRITE_PATH', () => {
+  const stream = { name: 'BIZ_WRITE_PATH', value: 'stream', impl: 'StreamBizWriter', warning: null };
+  const direct = { name: 'BIZ_WRITE_PATH', value: 'direct', impl: 'DirectBizWriter', warning: null };
+
+  it('direct는 다름으로 세고 행 문구 · 배지 툴팁을 붙인다', () => {
+    const rows = buildSwitchRows({ 'SW-12': direct });
+    const r = rows.find((x) => x.kind === 'present' && x.spec.id === 'SW-12');
+    expect(r).toMatchObject({ sameAsDefault: false, defaultImpl: 'StreamBizWriter' });
+    expect(countNonDefault(rows)).toBe(1);
+    expect(r && switchRowNote(r)).toEqual({ tone: 'warning', text: SW12_DIRECT_NOTE });
+    expect(SW12_DIRECT_NOTE).toBe('업무 쓰기 옛 경로(비교 실험 EXP-46용) — 202 · 명령 멱등 없음');
+    expect(shellBadgeNotes({ 'SW-12': direct })).toEqual([SW12_DIRECT_BADGE]);
+    expect(SW12_DIRECT_BADGE).toBe('업무 쓰기 옛 경로 — 202 · 명령 멱등 없음');
+  });
+
+  it('stream(기본값)은 경고가 아니라 행 안내 #10 · 배지 문구 없음', () => {
+    const rows = buildSwitchRows({ 'SW-12': stream });
+    const r = rows.find((x) => x.kind === 'present' && x.spec.id === 'SW-12');
+    expect(r).toMatchObject({ sameAsDefault: true });
+    expect(r && switchRowNote(r)).toEqual({ tone: 'info', text: `조합 제약 #10 — ${COMBO_10_NOTICE}` });
+    expect(comboWarnings({ 'SW-12': stream })).toEqual([]);
+    expect(comboWarnings({ 'SW-12': direct })).toEqual([]);
+    expect(shellBadgeNotes({ 'SW-12': stream })).toEqual([]);
+  });
+
+  it('도입 전(impl null)이면 안내 · 배지 문구 없음 · 기록 전수 줄에 SW-12가 실린다', () => {
+    const rows = buildSwitchRows({ 'SW-12': { ...stream, impl: null } });
+    const r = rows.find((x) => x.kind === 'not_introduced' && x.spec.id === 'SW-12');
+    expect(r && switchRowNote(r)).toBeNull();
+    expect(recordConditionBlock({ ...health, switches: { ...health.switches, 'SW-12': direct } })).toContain(
+      'SW-12=direct(DirectBizWriter)',
+    );
+  });
+
+  it('SW-01 대안 행 문구는 빨간 경고', () => {
+    const r = buildSwitchRows({
+      'SW-01': {
+        name: 'REDIS_STREAM_BUFFER',
+        value: 'off',
+        impl: 'InProcessQueueBuffer',
+        warning: 'stream_boundary_bypassed',
+      },
+    }).find((x) => x.kind === 'present');
+    expect(r && switchRowNote(r)).toEqual({
+      tone: 'danger',
+      text: '실험 전용 · 정상 경로 아님 (stream_boundary_bypassed)',
+    });
   });
 });

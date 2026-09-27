@@ -2,13 +2,15 @@
 // ADM-MASTER — 정본 docs/08_screen/06_master_admin.md (요소 11 · 상태 4행 · 쓰기 뒤 체인과 화면)
 // 좌측 트리(사이트 → 라인 → 설비) · 우측 상세 탭 3(설비 정보 · 접속 설정 · 태그). 삭제 버튼 · 태그 재활성화 버튼은 없다.
 // 쓰기는 응답을 받은 뒤에만 화면을 바꾼다(낙관적 갱신 없음) · 쓴 탭은 해당 쿼리를 로컬 무효화한다.
+// 쓰기는 명령 경로(08_screen/01 §업무 쓰기 응답) — 폼마다 useMasterWrite 하나 · 202면 폼 잠금 · 명령 조회로 결말.
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import { ApiError } from '../../lib/api';
 import { masterKeys } from '../../lib/cache-signal';
+import { settle, submitLabel } from '../../lib/commands';
 import { errorText } from '../../lib/error-display';
-import { bffWrite, changedFields, isLoopbackHost } from '../../lib/master-api';
+import { changedFields, isLoopbackHost, masterWrite } from '../../lib/master-api';
 import {
   DATA_TYPES,
   DeviceObject,
@@ -22,11 +24,19 @@ import { Badge } from '../ui/badge';
 import { Band } from '../ui/band';
 import { Card, CardContent, CardHeader, CardTitle } from '../ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../ui/table';
+import { CommandNotice } from './command-notice';
 import { Button, Field, Select, TextInput } from './field';
-import { useDevices, useLines, useLocalInvalidate, useModbus, useSites, useTag, useTags } from './queries';
+import {
+  useDevices,
+  useLines,
+  useLocalInvalidate,
+  useMasterWrite,
+  useModbus,
+  useSites,
+  useTag,
+  useTags,
+} from './queries';
 import { AFTER_WRITE_NOTE, TagEditor } from './tag-editor';
-
-const asApiError = (e: unknown) => (e instanceof ApiError ? e : new ApiError(0, null, String(e)));
 
 export function MasterAdmin({ deviceId, tagId }: { deviceId?: number; tagId?: number }) {
   // 태그 딥링크 — 태그 단건(비활성이어도 200)으로 설비를 찾는다
@@ -213,15 +223,20 @@ function DeviceForm({
   });
   const [err, setErr] = useState<ApiError | null>(null);
   const invalidate = useLocalInvalidate();
-  const write = async (patch: Record<string, unknown>) => {
+  const w = useMasterWrite(`device:${device.deviceId}`);
+  const write = (patch: Record<string, unknown>) => {
     setErr(null);
-    try {
-      DeviceObject.parse(await bffWrite('PATCH', `devices/${device.deviceId}`, patch));
-      invalidate(['master', 'devices', siteId]);
-      onNote('저장했다 — 다른 화면의 설비 선택기는 신호(cache:devlist)로 갱신된다');
-    } catch (e) {
-      setErr(asApiError(e));
-    }
+    void w.run(masterWrite('PATCH', `devices/${device.deviceId}`, patch), (o) =>
+      settle(
+        o,
+        (body) => {
+          DeviceObject.parse(body);
+          invalidate(['master', 'devices', siteId]);
+          onNote('저장했다 — 다른 화면의 설비 선택기는 신호(cache:devlist)로 갱신된다');
+        },
+        setErr,
+      ),
+    );
   };
   const diff = changedFields(
     {
@@ -234,6 +249,7 @@ function DeviceForm({
   );
   return (
     <div className="flex flex-col gap-2">
+      <CommandNotice writer={w} />
       {err && err.code !== 'common.duplicate_key' ? <Band>{errorText(err)}</Band> : null}
       <div className="grid grid-cols-4 gap-2">
         <Field label="설비 코드" error={err?.code === 'common.duplicate_key' ? '이미 있는 값' : null}>
@@ -250,11 +266,12 @@ function DeviceForm({
         </Field>
       </div>
       <div className="flex gap-2">
-        <Button disabled={Object.keys(diff).length === 0} onClick={() => write(diff)}>
-          저장
+        <Button disabled={w.locked || Object.keys(diff).length === 0} onClick={() => write(diff)}>
+          {submitLabel(w.state, '저장')}
         </Button>
         <Button
           variant={device.isActive ? 'danger' : 'outline'}
+          disabled={w.locked}
           onClick={() => write({ isActive: !device.isActive })}
         >
           {device.isActive ? '사용 중지' : '재활성화'}
@@ -297,16 +314,20 @@ function ModbusForm({
   );
   const [err, setErr] = useState<ApiError | null>(null);
   const invalidate = useLocalInvalidate();
-  const save = async () => {
+  const w = useMasterWrite(`modbus:${deviceId}`);
+  const save = () => {
     setErr(null);
-    try {
-      const body = Object.fromEntries(MODBUS_FIELDS.map(([k]) => [k, k === 'host' ? f[k] : Number(f[k])]));
-      await bffWrite('PUT', `devices/${deviceId}/modbus-config`, body);
-      invalidate(masterKeys.modbus(deviceId));
-      onNote('교체했다 — Collector가 다음 사이클에 다시 읽는다');
-    } catch (e) {
-      setErr(asApiError(e));
-    }
+    const body = Object.fromEntries(MODBUS_FIELDS.map(([k]) => [k, k === 'host' ? f[k] : Number(f[k])]));
+    void w.run(masterWrite('PUT', `devices/${deviceId}/modbus-config`, body), (o) =>
+      settle(
+        o,
+        () => {
+          invalidate(masterKeys.modbus(deviceId));
+          onNote('교체했다 — Collector가 다음 사이클에 다시 읽는다');
+        },
+        setErr,
+      ),
+    );
   };
   return (
     <div className="flex flex-col gap-2">
@@ -315,6 +336,7 @@ function ModbusForm({
           SIMULATED — 루프백 host · 정상 값은 품질 9로 적재된다
         </Badge>
       ) : null}
+      <CommandNotice writer={w} />
       {err ? <Band>{errorText(err)}</Band> : null}
       <div className="grid grid-cols-3 gap-2">
         {MODBUS_FIELDS.map(([k, label]) => (
@@ -323,8 +345,8 @@ function ModbusForm({
           </Field>
         ))}
       </div>
-      <Button className="self-start" onClick={save}>
-        교체 저장
+      <Button className="self-start" disabled={w.locked} onClick={save}>
+        {submitLabel(w.state, '교체 저장')}
       </Button>
     </div>
   );
@@ -431,30 +453,35 @@ function TagCreateForm({ deviceId, onDone }: { deviceId: number; onDone: (tagId:
   });
   const [err, setErr] = useState<ApiError | null>(null);
   const invalidate = useLocalInvalidate();
+  const w = useMasterWrite(`tag-create:${deviceId}`);
   const single = ['UINT16', 'INT16', 'BOOL'].includes(f.dataType);
-  const submit = async () => {
+  const submit = () => {
     setErr(null);
-    try {
-      const t = TagObject.parse(
-        await bffWrite('POST', 'tags', {
-          deviceId,
-          tagCode: f.tagCode,
-          tagName: f.tagName,
-          functionCode: Number(f.functionCode),
-          address: Number(f.address),
-          dataType: f.dataType,
-          wordOrder: single ? null : f.wordOrder,
-          scale: Number(f.scale),
-          offsetValue: Number(f.offsetValue),
-          unit: f.unit,
-          scanRateMs: Number(f.scanRateMs),
-        }),
-      );
-      invalidate(['master', 'tags']);
-      onDone(t.tagId);
-    } catch (e) {
-      setErr(asApiError(e));
-    }
+    void w.run(
+      masterWrite('POST', 'tags', {
+        deviceId,
+        tagCode: f.tagCode,
+        tagName: f.tagName,
+        functionCode: Number(f.functionCode),
+        address: Number(f.address),
+        dataType: f.dataType,
+        wordOrder: single ? null : f.wordOrder,
+        scale: Number(f.scale),
+        offsetValue: Number(f.offsetValue),
+        unit: f.unit,
+        scanRateMs: Number(f.scanRateMs),
+      }),
+      (o) =>
+        settle(
+          o,
+          (body) => {
+            const t = TagObject.parse(body);
+            invalidate(['master', 'tags']);
+            onDone(t.tagId);
+          },
+          setErr,
+        ),
+    );
   };
   const input = (k: keyof typeof f, label: string) => (
     <Field
@@ -466,6 +493,7 @@ function TagCreateForm({ deviceId, onDone }: { deviceId: number; onDone: (tagId:
   );
   return (
     <div className="flex flex-col gap-2 rounded border border-slate-200 p-3">
+      <CommandNotice writer={w} />
       {err && err.code !== 'common.duplicate_key' ? <Band tone="warning">{errorText(err)}</Band> : null}
       <div className="grid grid-cols-5 gap-2">
         {input('tagCode', '태그 코드')}
@@ -485,8 +513,8 @@ function TagCreateForm({ deviceId, onDone }: { deviceId: number; onDone: (tagId:
         {input('unit', '단위')}
         {input('scanRateMs', '수집 주기(ms)')}
       </div>
-      <Button className="self-start" onClick={submit}>
-        등록
+      <Button className="self-start" disabled={w.locked} onClick={submit}>
+        {submitLabel(w.state, '등록')}
       </Button>
     </div>
   );
@@ -521,39 +549,43 @@ function CreateForm({ kind, onClose }: { kind: 'site' | 'line' | 'device'; onClo
       <TextInput value={f[k] ?? ''} onChange={(e) => setF({ ...f, [k]: e.target.value })} />
     </Field>
   );
-  const submit = async () => {
+  const w = useMasterWrite(`create:${kind}`);
+  const submit = () => {
     setErr(null);
-    try {
-      if (kind === 'site') {
-        await bffWrite('POST', 'sites', { siteCode: f.code, siteName: f.name });
-        invalidate(masterKeys.sites());
-      } else if (kind === 'line') {
-        await bffWrite('POST', 'lines', { siteId: sid, lineCode: f.code, lineName: f.name });
-        invalidate(['master', 'lines']);
-      } else {
-        const lineId = Number(f.lineId || lines.data?.[0]?.lineId);
-        const d = DeviceObject.parse(
-          await bffWrite('POST', 'devices', {
-            lineId,
-            deviceCode: f.code,
-            deviceName: f.name,
-            modbusConfig: {
-              host: f.host,
-              port: Number(f.port),
-              unitId: Number(f.unitId),
-              timeoutMs: Number(f.timeoutMs),
-              retryCount: Number(f.retryCount),
-              maxRegsPerRequest: Number(f.maxRegsPerRequest),
-            },
-          }),
-        );
-        invalidate(['master', 'devices', sid]);
-        router.push(`/admin/master/devices/${d.deviceId}`);
-      }
-      onClose();
-    } catch (e) {
-      setErr(asApiError(e));
-    }
+    const req =
+      kind === 'site'
+        ? masterWrite('POST', 'sites', { siteCode: f.code, siteName: f.name })
+        : kind === 'line'
+          ? masterWrite('POST', 'lines', { siteId: sid, lineCode: f.code, lineName: f.name })
+          : masterWrite('POST', 'devices', {
+              lineId: Number(f.lineId || lines.data?.[0]?.lineId),
+              deviceCode: f.code,
+              deviceName: f.name,
+              modbusConfig: {
+                host: f.host,
+                port: Number(f.port),
+                unitId: Number(f.unitId),
+                timeoutMs: Number(f.timeoutMs),
+                retryCount: Number(f.retryCount),
+                maxRegsPerRequest: Number(f.maxRegsPerRequest),
+              },
+            });
+    void w.run(req, (o) =>
+      settle(
+        o,
+        (body) => {
+          if (kind === 'site') invalidate(masterKeys.sites());
+          else if (kind === 'line') invalidate(['master', 'lines']);
+          else {
+            const d = DeviceObject.parse(body);
+            invalidate(['master', 'devices', sid]);
+            router.push(`/admin/master/devices/${d.deviceId}`);
+          }
+          onClose();
+        },
+        setErr,
+      ),
+    );
   };
   return (
     <Card>
@@ -567,6 +599,7 @@ function CreateForm({ kind, onClose }: { kind: 'site' | 'line' | 'device'; onClo
         </CardTitle>
       </CardHeader>
       <CardContent className="flex flex-col gap-2">
+        <CommandNotice writer={w} />
         {err && err.code !== 'common.duplicate_key' ? <Band tone="warning">{errorText(err)}</Band> : null}
         <div className="grid grid-cols-3 gap-2">
           {kind !== 'site' ? (
@@ -596,7 +629,9 @@ function CreateForm({ kind, onClose }: { kind: 'site' | 'line' | 'device'; onClo
           {kind === 'device' ? MODBUS_FIELDS.map(([k, label]) => input(k, `접속 ${label}`)) : null}
         </div>
         <div className="flex gap-2">
-          <Button onClick={submit}>등록</Button>
+          <Button disabled={w.locked} onClick={submit}>
+            {submitLabel(w.state, '등록')}
+          </Button>
           <Button variant="outline" onClick={onClose}>
             닫기
           </Button>
