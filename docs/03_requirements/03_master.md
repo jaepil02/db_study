@@ -2,6 +2,7 @@
 
 > **대상**: 마스터 데이터(MST · NestJS master 모듈)의 동작 계약 — 사이트 · 라인 · 설비 · Modbus 접속 설정 · 태그 마스터 쓰기 · 논리 삭제 · 스케일 변경 · 캐시 무효화 체인 · Dictionary 원천 — REQ-MST-NN 채번 정본
 > **작성일**: 2026-09-24
+> **개정일**: 2026-09-27 — D-04 부분 개정 반영(사용자 결정 — 업무 쓰기도 Redis를 거친다 · 동기 응답) — 도입 단락의 ③계층 인용 "Stream을 타지 않음" → **명령 스트림 경유 · 커밋 뒤 응답**(REQ-GLB-12 개정) — REQ 수 불변
 > **개정일**: 2026-09-24 — 최종 정밀 검수 — REQ-MST-08 해설의 dictGet 이름 소실 불일치 → W3 판정(전 행 적재)으로 닫힘 표기
 > **개정일**: 2026-09-24 — W7 검수 반영 — REQ-MST-09 실패 칸 보정 7.4 단 번호 ④ · ⑤ → **⑤ · ⑥**(6단 번호) · 미확인 3행 닫힘(dict_tag 비활성 · 쓰기 표면 · tag_master_history 컬럼) — REQ 수 불변
 > **개정일**: 2026-09-24 — W6 실험 채번 반영 — EXP 번호 · 메트릭 이름 반영(정본 10_observability/01 · 06)
@@ -9,7 +10,7 @@
 > **개정일**: 2026-09-24 — W4 판정 반영 — REQ-MST-03 · 08 실행 중 마스터 변경 재기동 전 미반영 → **ch:cacheinv로 Collector 반영**(modbus_config도 신호) · REQ-MST-09 체인 5단 표기 → **6단 번호**(① 커밋) — REQ 수 불변
 > **원천**: 원본 architecture.md §5 · §6 · §7.4 · §8.2 · §10.1 · §11 · §12 · §17 · §18(커밋 ff66a37) · 원본 data_flow.md §3 · §5 · §7 · §7.1 · §17(커밋 ff66a37) · 원본 implementation_plan.md §5 S2 · S4 · §7.4 · §7.5(커밋 ff66a37) · 저장소 루트 docs_plan.md 보정 #15 · D-04 · D-11 · [../02_features/02_master.md](../02_features/02_master.md) MST-01~09 · [../11_glossary/02_error_codes.md](../11_glossary/02_error_codes.md) 채번 보류 · [01_global_rules.md](./01_global_rules.md) REQ-GLB-12 · 14
 
-이 문서는 MST 기능 9개의 동작 계약을 고정한다. MST는 분기 ③계층(PostgreSQL 전용 · Stream을 타지 않음 — REQ-GLB-12)이면서 **한 번의 저장이 네 저장소 층(PostgreSQL · Redis · ClickHouse Dictionary · 웹 캐시)을 건드리는 유일한 도메인**이다. 그래서 요구의 절반이 쓰기 자체가 아니라 **쓰기 뒤의 순서**에 걸려 있다.
+이 문서는 MST 기능 9개의 동작 계약을 고정한다. MST는 분기 ③계층(PostgreSQL 전용 · 쓰기는 명령 스트림 stream:biz:cmd를 거쳐 워커가 커밋한 뒤 응답 — REQ-GLB-12)이면서 **한 번의 저장이 네 저장소 층(PostgreSQL · Redis · ClickHouse Dictionary · 웹 캐시)을 건드리는 유일한 도메인**이다. 그래서 요구의 절반이 쓰기 자체가 아니라 **쓰기 뒤의 순서**에 걸려 있다.
 
 **태그는 불변 사실 기록의 열쇠다**(REQ-GLB-14). tag_id가 ClickHouse의 모든 행에 박혀 있으므로 태그 쓰기의 계약은 "마스터를 어떻게 고치는가"가 아니라 **"과거 시계열의 해석을 어떻게 보존하는가"**로 읽는다. 웨이브 인계 두 건(스케일 변경 PATCH · 비활성 태그 요청)이 이 축에서 판정된다 — §인계 판정.
 

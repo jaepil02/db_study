@@ -1,7 +1,8 @@
 # 스위치 매트릭스 — 역할 스위치 SW-NN
 
-> **대상**: 역할 스위치 11종의 채번 · 환경변수 · 기본값 · off · on 동작 · 측정 대상 · 교체되는 포트 · 관련 기능 · 흐름 · 원본 예상치 · 실험 자리 · 조합 제약 — SW-NN 채번 정본
+> **대상**: 역할 스위치 12종의 채번 · 환경변수 · 기본값 · off · on 동작 · 측정 대상 · 교체되는 포트 · 관련 기능 · 흐름 · 원본 예상치 · 실험 자리 · 조합 제약 — SW-NN 채번 정본
 > **작성일**: 2026-09-24
+> **개정일**: 2026-09-27 — **SW-12 BIZ_WRITE_PATH 신설**(사용자 결정 2026-09-27 · D-04 부분 개정 — 업무 쓰기도 Redis를 거친다) · 스위치 11 → **12** · Redis 역할 10 → **11** · 기본값 stream · 구현 선택 1 → **2** · 흐름 참여 18 → **19**(F-05 편입 · 스위치 없는 흐름 F-08만) · 조합 제약 #10 신설 9 → **10** · 스위치별 판정 SW-12 행 · 실험 자리 EXP-46 · 포트 이름 잠정
 > **개정일**: 2026-09-26 — 목적 적합성 실증 — SW-09 실험 자리에 함께 쓰는 실험 EXP-45(on 고정) 병기(정본 10_observability/06) — 스위치 수 불변
 > **개정일**: 2026-09-25 — S4 실측 반영(기록 022~026) — SW-03~07 원본 예상치 열에 실측 병기(4요소는 기록) · 조합 제약 #1의 구현 — SW-03 off면 SW-05를 NoopRebuildLock으로 주입(S4 검수 M1) — 스위치 수 불변
 > **개정일**: 2026-09-25 — S3 구현 반영 — SW-08 off 동작에 서버 중복 제거 해제(deduplicate_insert 'disable') 명시 — 토큰만 빼면 26.8에서 off가 재현되지 않는다(기록 016)
@@ -19,7 +20,7 @@
 
 ## 스위치 정본 표
 
-SW-01~SW-10의 순서는 [README.md](./README.md) 고정 기준의 목록 순서 그대로다. **SW-11은 사용자 결정(D-13 · 2026-09-24)으로 말미에 채번했다.** 번호는 식별자이지 순서가 아니다 — 새 스위치는 SW-12부터 말미 채번한다.
+SW-01~SW-10의 순서는 [README.md](./README.md) 고정 기준의 목록 순서 그대로다. **SW-11은 사용자 결정(D-13 · 2026-09-24)으로, SW-12는 사용자 결정(D-04 부분 개정 · 2026-09-27)으로 말미에 채번했다.** 번호는 식별자이지 순서가 아니다 — 새 스위치는 SW-13부터 말미 채번한다.
 
 | ID | 환경변수 | 분류 | 기본값 | off 동작 | on 동작 | 도입 단계 |
 |------|------|------|------|------|------|------|
@@ -34,10 +35,12 @@ SW-01~SW-10의 순서는 [README.md](./README.md) 고정 기준의 목록 순서
 | **SW-09** | CONTROL_TABLE_ENABLED | Redis 역할 — 대조군 | **off** | PostgreSQL 대조군에 싣지 않는다 | 같은 배치를 plc_tag_raw_control에도 삽입 | S3(적재) · S5(측정) |
 | **SW-10** | COLLECTOR_DEADBAND | 수집 | **off** | 데드밴드 비활성 — 변화량과 무관하게 전부 발행 | 태그별 tag_master.deadband 적용 | S3 |
 | **SW-11** | LATEST_VALUE_WRITER | Redis 역할 — 최신값 결합 | **ingest** | ingest — Ingest가 ClickHouse 삽입 성공 · XACK 뒤에 rt:latest를 덮어쓴다(ING-08) | collector — Collector가 XADD와 같은 파이프라인으로 rt:latest를 덮어쓴다 | S3(ingest 잠정) · S6(비교) |
+| **SW-12** | BIZ_WRITE_PATH | Redis 역할 — 업무 쓰기 경유 | **stream** | direct — api가 PostgreSQL 트랜잭션을 직접 커밋하고 응답한다(옛 경로 · 명령 스트림 · 원장 · 결과 키 없음) | stream — api가 stream:biz:cmd에 명령을 싣고 워커(소비자 1 · 직렬)가 커밋한 결과를 받은 뒤 응답한다 · 5초 초과 202 pending | S7(업무 축 · 마스터 · 알람 쓰기는 구현 즉시) |
 
 - 도입 단계의 정본은 [../01_overview/05_priorities_roadmap.md](../01_overview/05_priorities_roadmap.md) §스위치 도입 시점이다 — 이 열은 인용이며 이 문서는 단계를 다시 세지 않는다.
 - **SW-09가 "Redis 역할"로 분류되는 것은 docs_plan 스위치 표의 분류를 승계한 것이다.** 대조군 동시 적재는 Redis 기능이 아니지만 Stream 뒤 적재 경로의 한 갈래로 Redis 역할 10에 센다. 분류 축을 바꾸면 루트 README 고정 기준의 검산식이 함께 바뀐다.
 - SW-10 기본값의 원본 표기는 "0"이다(원본 implementation_plan.md §4.1) — 데드밴드 0 = 비활성 = off와 같다.
+- **SW-12도 구현 선택 스위치다**(stream · direct). D-04 개정(사용자 결정 2026-09-27)이 업무 쓰기를 Redis 명령 경로로 돌리면서 옛 직접 커밋 경로를 버리지 않고 비교 손잡이로 남겼다 — Redis 경유의 값(멱등 · 분산 적용 대비)과 대가(Redis 불가 503 · 홉 지연)를 같은 코드에서 재려면 둘이 한 스위치여야 한다. 두 구현은 같은 쓰기 서비스 · 같은 무효화 체인을 불러 표면 응답(상태 코드 · 본문 · 오류 코드)이 같고, 202 pending과 명령 멱등은 stream에만 있다. 도입 단계 정본(05_priorities_roadmap)의 반영은 리드 몫이다.
 - **SW-11은 켜고 끄는 스위치가 아니라 구현 선택 스위치다.** off · on 열에 두 값(ingest · collector)을 적는다. 원본 보정 7.2가 "S6 실측으로 결정"한 최신값 갱신 주체를 스위치로 노출해, ClickHouse 중단 중 대시보드가 살아 있는지의 비교가 스위치 상태로 기록되게 한다(ADR-10 · D-13). S6 결정 뒤에도 스위치는 남긴다 — 결합도 비교가 학습 목표 ②의 실험이기 때문이다.
 
 ## 측정 · 교체 표
@@ -55,6 +58,7 @@ SW-01~SW-10의 순서는 [README.md](./README.md) 고정 기준의 목록 순서
 | SW-09 | 목표 ①의 실행 — 쿼리별 역전 지점 · 비교 축 6 | ControlTableSinkPort — PostgresControlSink · NoopControlSink | ING-11 · GEN-10 | F-02 · F-09 | 원본 예상치 없음 — 역전 지점이 산출물이다 | 상동 — **EXP-01~EXP-05**(대조군 쿼리 5종) · 함께 쓰는 실험 **EXP-45**(스트리밍 동시 적재 · on 고정)([../11_glossary/04_id_conventions.md](../11_glossary/04_id_conventions.md)) |
 | SW-10 | 전송량 · ClickHouse 행 수 · 압축률 | DeadbandFilterPort — TagDeadbandFilter · PassthroughFilter | COL-06 | F-01 | 프로파일별 전송률 3~100%(원본 data_flow.md §3.3) | 상동 — **EXP-14** |
 | SW-11 | ClickHouse 중단 중 최신값 갱신 지속 · 적재 경로와 최신값의 결합도 | LatestValueWritePort — IngestLatestValueWriter · CollectorLatestValueWriter | ING-08 · COL-07 | F-01 · F-02 · F-03 · F-10 | 원본 예상치 없음 — ingest는 ClickHouse 중단 동안 최신값이 멈추고 collector는 계속 갱신된다는 구조적 차이만 있다(원본 implementation_plan.md §7.2) | 상동 — **EXP-15** |
+| SW-12 | 업무 쓰기 지연 · 처리량 · Redis 장애 시 업무 쓰기 가용성 · 재요청 중복 | BizWritePort — StreamBizWriter · DirectBizWriter(**잠정 이름** — 정본 04_architecture/02 확정 대기) | MST-01~06 · ALM-01 · ALM-08 · WRK-01~03 | F-05 | 원본 예상치 없음 — stream은 홉(XADD · 소비 · 회신)만큼 느리고 Redis 불가 중 업무 쓰기가 503이며, direct는 같은 키 재요청을 막지 못한다는 구조적 차이만 있다 | 상동 — **EXP-46** |
 
 - **포트 이름의 정본은 [../04_architecture/02_module_boundaries.md](../04_architecture/02_module_boundaries.md)다(W3 확정).** SW-02는 쓰기 포트(SW-11)와 가르기 위해 LatestValueReadPort로 개명됐다. 이 표는 "포트 하나에 구현 둘"이라는 모양과 교체 대상 기능을 고정한다.
 - **예상 차이는 전부 3계층 미확인이다** — 4요소가 없는 원본 예상치이며 목표가 아니다. 확정은 해당 실험의 실측 결과로만 한다([../CLAUDE.md](../CLAUDE.md) 수치 3계층).
@@ -62,10 +66,10 @@ SW-01~SW-10의 순서는 [README.md](./README.md) 고정 기준의 목록 순서
 
 ### 검산
 
-- 분류: 백프레셔 1(SW-01) + 캐시 4(SW-02 · 03 · 04 · 05) + 팬아웃 2(SW-06 · 07) + 멱등 1(SW-08) + 대조군 1(SW-09) + 수집 1(SW-10) + 최신값 결합 1(SW-11) = **11** — Redis 역할 1 + 4 + 2 + 1 + 1 + 1 = **10** · 수집 **1**
-- 기본값: on 8(SW-01~08) + off 2(SW-09 · 10) + 구현 선택 1(SW-11 = ingest) = **11**
-- 값 형식: 켜고 끄는 불리언 9 + 밀리초 1(SW-07 — 0이 off) + 구현 선택 1(SW-11) = **11**
-- 관련 흐름 참여(중복 허용): F-01 3(SW-01 · 10 · 11) + F-02 4(SW-01 · 08 · 09 · 11) + F-03 2(SW-02 · 11) + F-04 3 + F-06 1 + F-07 2 + F-09 1 + F-10 2(SW-01 · 11) = **18**. 세는 기준은 **그 흐름 안에서 스위치의 구현이 실행되는가**다 — SW-11 collector는 Collector 발행 파이프라인(F-01)에서 최신값을 쓰므로 F-01에 든다(W4 판정 · [../06_pipeline/01_flow_inventory.md](../06_pipeline/01_flow_inventory.md)). 스위치가 걸린 흐름 8 · 걸리지 않는 흐름 F-05 · F-08 — 10 − 8 = **2**(업무 CRUD의 무효화 체인과 롤업은 정합성 계약이라 스위치를 두지 않는다)
+- 분류: 백프레셔 1(SW-01) + 캐시 4(SW-02 · 03 · 04 · 05) + 팬아웃 2(SW-06 · 07) + 멱등 1(SW-08) + 대조군 1(SW-09) + 수집 1(SW-10) + 최신값 결합 1(SW-11) + 업무 쓰기 경유 1(SW-12) = **12** — Redis 역할 1 + 4 + 2 + 1 + 1 + 1 + 1 = **11** · 수집 **1**
+- 기본값: on 8(SW-01~08) + off 2(SW-09 · 10) + 구현 선택 2(SW-11 = ingest · SW-12 = stream) = **12**
+- 값 형식: 켜고 끄는 불리언 9 + 밀리초 1(SW-07 — 0이 off) + 구현 선택 2(SW-11 · 12) = **12**
+- 관련 흐름 참여(중복 허용): F-01 3(SW-01 · 10 · 11) + F-02 4(SW-01 · 08 · 09 · 11) + F-03 2(SW-02 · 11) + F-04 3 + F-05 1(SW-12) + F-06 1 + F-07 2 + F-09 1 + F-10 2(SW-01 · 11) = **19**. 세는 기준은 **그 흐름 안에서 스위치의 구현이 실행되는가**다 — SW-11 collector는 Collector 발행 파이프라인(F-01)에서 최신값을 쓰므로 F-01에 든다(W4 판정 · [../06_pipeline/01_flow_inventory.md](../06_pipeline/01_flow_inventory.md)). 스위치가 걸린 흐름 9 · 걸리지 않는 흐름 F-08 — 10 − 9 = **1**(롤업은 정합성 계약이라 스위치를 두지 않는다). F-05에서 SW-12가 바꾸는 것은 쓰기의 적용 주체와 경로뿐이고 무효화 체인은 두 구현에 같다 — 체인은 여전히 스위치 대상이 아니다
 
 ## 공통 규칙
 
@@ -73,8 +77,8 @@ SW-01~SW-10의 순서는 [README.md](./README.md) 고정 기준의 목록 순서
 |------|------|------|
 | DI 구현체 | 포트 하나에 구현 둘 · 모듈 초기화 때 환경변수로 고른다 | 분기가 측정 대상 코드에 섞이고 스위치 수만큼 경로가 조합 폭발한다 |
 | 전환 = 재기동 | 화면 · API로 바꾸지 않는다. 환경변수를 바꾸고 api 컨테이너를 재기동한다 | 런타임 토글을 만들면 결국 경로 안 if로 돌아간다(D-06 버린 대안 ④) |
-| 상태 노출 | 11종 전부를 /api/v1/health 응답과 /metrics 레이블로 노출한다(OBS-06) | 기록자가 환경변수를 손으로 옮겨 적다 틀린다 — 스위치 상태는 측정 기록 4요소의 하나다(D-10) |
-| 기록 병기 | 모든 측정 수치에 11종의 상태를 적는다. 바꾼 것만 명시하고 나머지는 "기본값"으로 적을 수 있다 | 같은 조건이라 믿은 두 측정의 조건이 다르다 — SW-10이 빠지면 행 수가 다른 두 측정이 같은 실험으로 묶인다(D-08) |
+| 상태 노출 | 스위치 전부를 /api/v1/health 응답과 /metrics 레이블로 노출한다(OBS-06) | 기록자가 환경변수를 손으로 옮겨 적다 틀린다 — 스위치 상태는 측정 기록 4요소의 하나다(D-10) |
+| 기록 병기 | 모든 측정 수치에 스위치 전부의 상태를 적는다. 바꾼 것만 명시하고 나머지는 "기본값"으로 적을 수 있다 | 같은 조건이라 믿은 두 측정의 조건이 다르다 — SW-10이 빠지면 행 수가 다른 두 측정이 같은 실험으로 묶인다(D-08) |
 | 같은 커밋의 계측 | 스위치와 그 on/off 차이를 재는 계측을 같은 커밋에서 만든다 | 계측 없는 스위치는 장식이다 |
 | SW-01 off 부팅 경고 | off로 기동하면 경고를 남기고 상태로 노출한다 | off가 정상 경로로 오인되어 유실이 기본 동작이 된다 |
 
@@ -101,8 +105,9 @@ SW-01~SW-10의 순서는 [README.md](./README.md) 고정 기준의 목록 순서
 | 7 | SW-11 비교 + SW-02 off | 측정하지 않는다 — SW-11 비교는 SW-02 on으로 한다 | SW-02 off면 최신값 API가 rt:latest를 읽지 않아 갱신 주체를 바꿔도 조회 결과에 차이가 드러나지 않는다 |
 | **8** | SW-10 on + 주입 모드 B · C · D | **조합 금지 — SW-10 on 실험은 모드 A로만 한다** | 데드밴드 필터는 Collector 발행 파이프라인 안에서만 돈다 — 모드 B · C · D는 Collector를 거치지 않아 필터가 한 번도 돌지 않고 "데드밴드 효과 0"이 거짓으로 기록된다 |
 | **9** | SW-11 collector + 주입 모드 B · C · D | **조합 금지 — SW-11 collector는 모드 A로만 기동한다** | collector 구현은 Collector 발행 파이프라인에서만 rt:latest를 쓴다 — 모드 B · C · D에서는 rt:latest를 쓰는 주체가 하나도 없어 최신값이 복원 창 뒤 빈 목록이 된다 |
+| **10** | SW-12 stream + 워커 역할 없는 기동(APP_ROLE api만 · worker 컨테이너 없음) | **조합 금지 — stream은 worker 역할이 도는 구성(all · 또는 api + worker)에서만 기동한다** | 명령을 소비할 grp:biz-writer 소비자가 없어 업무 쓰기가 전부 5초 뒤 202 pending이 되고 명령 유효 창을 넘겨 EXPIRED로 끝난다 — EXP-46의 stream 지연이 대기 상한으로 기록된다 |
 
-- 검산: 조합 제약 = **9** — 원본 · W2 7 + W6 신설 2(#8 · #9 — 실험 카탈로그 EXP-14 · 15 조건에서 도출 · [../10_observability/06_experiment_catalog.md](../10_observability/06_experiment_catalog.md))
+- 검산: 조합 제약 = **10** — 원본 · W2 7 + W6 신설 2(#8 · #9 — 실험 카탈로그 EXP-14 · 15 조건에서 도출 · [../10_observability/06_experiment_catalog.md](../10_observability/06_experiment_catalog.md)) + D-04 개정 신설 1(#10 — EXP-46 조건)
 - **두 학습 축의 비교 방향은 반대다** — 목표 ①은 데이터를 고정하고 저장소를 바꾸며(SW-09), 목표 ②는 저장소를 고정하고 역할을 바꾼다(SW-01~08). 제약 #4가 두 축을 가르는 자리다([../01_overview/01_purpose_learning_goals.md](../01_overview/01_purpose_learning_goals.md)).
 
 ## 스위치별 판정
@@ -114,6 +119,7 @@ SW-01~SW-10의 순서는 [README.md](./README.md) 고정 기준의 목록 순서
 | SW-02 | **읽기 포트만 교체한다** — off에서도 Ingest의 rt:latest 갱신과 ch:rt 발행은 그대로다 | 측정 대상이 "점조회 비용"이다(원본 implementation_plan.md §4.1) | 갱신까지 끄면 WebSocket 경로(F-07)와 Redis 메모리가 함께 바뀌어 on/off 차이가 점조회 비용 하나로 설명되지 않는다 |
 | SW-06 | **대상 채널은 WebSocket 팬아웃 채널(ch:rt · ch:alarm)이다.** ch:cacheinv는 대상이 아니다 | off 동작이 "WS 게이트웨이를 직접 호출"이다 — ch:cacheinv의 구독자는 게이트웨이가 아니라 다른 api 인스턴스다 | ch:cacheinv까지 끄면 무효화 체인(MST-08)이 스위치 상태에 따라 달라져 정합성 계약에 스위치가 생긴다 |
 | SW-01 | off 실험은 **모드 A 전용**이다 · off에서는 스풀 경로가 없다 | 조합 제약 #2 · §SW-01 off는 원칙을 증명하는 경로다 | 모드 B로 off를 재면 Stream이 없는 구성에 Stream 직결 주입을 거는 모순이 생긴다 |
+| SW-12 | **쓰기 경로만 교체한다** — 읽기(PostgreSQL 직접 + 캐시) · 무효화 체인 · 오류 카탈로그 · 성공 응답 본문은 두 값에서 같다. 결과 회신 채널 ch:bizreply는 SW-06의 대상이 아니다 | 측정 대상이 "업무 쓰기 경로의 값과 대가"다(D-04 개정) | 읽기까지 명령 경로로 돌리면 read-your-writes가 결과 회신이 아니라 읽기 지연에 묶이고, ch:bizreply를 SW-06 off로 끄면 응답 대기가 스위치 상태에 따라 달라져 정합성 계약에 스위치가 생긴다 |
 | SW-10 | 기본 **off**다 | 원본 기본값 0 · 성능 측정은 데드밴드 0이 규칙이다(원본 data_flow.md §3.3) | on을 기본으로 두면 모든 처리량 · 행 수 · 압축률 수치에 데드밴드가 섞인다 |
 
 ## 스위치 추가 · 변경 절차
@@ -130,14 +136,14 @@ SW-01~SW-10의 순서는 [README.md](./README.md) 고정 기준의 목록 순서
 | 항목 | 상태 | 확정 자리 |
 |------|------|------|
 | 스위치 상태 레이블 이름 | **W6 판정** — 정보 메트릭 obs_switch_info(레이블 switch · env · value · impl) + obs_switch_warning | [../10_observability/01_metrics_catalog.md](../10_observability/01_metrics_catalog.md) |
-| 스위치별 실험 EXP 번호(SW-09 제외) | **채번 완료(W6)** — SW-01~08 · 10 · 11 = EXP-06~15 · 스위치당 1 | [../10_observability/06_experiment_catalog.md](../10_observability/06_experiment_catalog.md) |
+| 스위치별 실험 EXP 번호(SW-09 제외) | **채번 완료(W6)** — SW-01~08 · 10 · 11 = EXP-06~15 · SW-12 = EXP-46(D-04 개정) · 스위치당 1 | [../10_observability/06_experiment_catalog.md](../10_observability/06_experiment_catalog.md) |
 | SW-09 on에서 대조군 삽입 실패의 의미론 · 대조군 멱등 수단 | 닫힘 — COPY는 ClickHouse 성공 뒤 1회 · 재시도 없음 · XACK 비차단 · 중복은 구간 count로 검출 — [../06_pipeline/04_routing.md](../06_pipeline/04_routing.md) | [../06_pipeline/04_routing.md](../06_pipeline/04_routing.md)(W4) · [../05_data_stores/10_olap_vs_rdb_control.md](../05_data_stores/10_olap_vs_rdb_control.md)(W3) |
 | SW-01 off에서의 배치 토큰 재료 | 닫힘 — (설비 · 시퀀스) 쌍 정렬 목록 + 행 수의 sha1 · 재전달 멱등은 성립 대상이 없다(조합 제약 #3) — [../06_pipeline/03_ingest_batch.md](../06_pipeline/03_ingest_batch.md) | [../06_pipeline/03_ingest_batch.md](../06_pipeline/03_ingest_batch.md)(W4) |
 | 예상 차이 전 행 | 미확인 — 확정 전 임의 값 고정 금지 | 각 실험의 실측 결과 |
 
 ## 관련 문서
 
-- [README.md](./README.md) — 스위치 11종 목록 · DI 제약(축약)
+- [README.md](./README.md) — 스위치 목록 · DI 제약(축약)
 - [../01_overview/06_design_decisions.md](../01_overview/06_design_decisions.md) — D-06 스위치 1급 요구사항 · D-08 SW-10 유지
 - [../01_overview/05_priorities_roadmap.md](../01_overview/05_priorities_roadmap.md) — 스위치 도입 시점
 - [../04_architecture/02_module_boundaries.md](../04_architecture/02_module_boundaries.md) — 스위치 = DI 포트 제약 정본

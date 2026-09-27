@@ -1,7 +1,9 @@
 # PostgreSQL 제약 · 인덱스 · 한계 등재 (02_postgresql_constraints)
 
-> **대상**: PostgreSQL 업무 테이블 14의 테이블 간 제약(FK · UNIQUE · 결합 CHECK · 가드 트리거 · DB 권한) · 인덱스 · alarm_event 월 파티션 · 커넥션(ADR-19) · **한계 등재 — 어느 계층도 강제하지 않는 것**의 정본
+> **대상**: PostgreSQL 업무 테이블 15의 테이블 간 제약(FK · UNIQUE · 결합 CHECK · 가드 트리거 · DB 권한) · 인덱스 · alarm_event 월 파티션 · 커넥션(ADR-19) · **한계 등재 — 어느 계층도 강제하지 않는 것**의 정본
 > **작성일**: 2026-09-24
+> **개정일**: 2026-09-28 — 웨이브 1 검수 반영(B-H4 · B-M9) — FK 절 "행위자는 audit_log가 갖는다" → **actor(요청자)에도 FK 없음 · 감사 행위자 정본은 audit_log.user_id** · 한계 등재 #26 신설(failed 명령의 적용 여부 미확정 — 강제 주체 없음) — 등재 25 → **26**행 · 없음 8 → **9** · FK · UNIQUE 수 불변
+> **개정일**: 2026-09-28 — 업무 쓰기 Redis 경유 개정(사용자 결정 2026-09-27) — biz_command_log 제약 — UNIQUE 8 → **9**(cmd_id) · 추가 전용 권한 2 → **3** · app_rw 업무 14 → **15** · 한계 등재 #24 신설(같은 cmdId · 다른 본문) · #25 신설(미적용 명령의 트리밍) — 등재 23 → **25**행 · 부분 강제 15 → **17** · #18 실적 이중 제출 잔여 문구(같은 cmdId 재요청은 원장이 막고 새 cmdId 이중 제출만 남는다) · FK 수 불변(원장은 FK를 갖지 않는다)
 > **개정일**: 2026-09-27 — W6 결과 반영 — 한계 등재 #23 신설(ClickHouse 업무 대조 테이블의 CHECK는 INSERT 경로만 · 기록 043) — 등재 22 → **23**행 · 부분 강제 14 → **15**
 > **개정일**: 2026-09-26 — W3 코드 검수 반영(r-alarm M5 · L4) — 한계 등재 신설 3행(#20 열기 커밋 뒤 상태 쓰기 실패의 고아 열린 행 · #21 닫기 커밋 뒤 상태 쓰기 실패의 새 에피소드 누락 — ⑥ 1회 재시도 뒤 잔여 · #22 cache-aside 채움 경합 — cache:alarmrules · cache:alarmevents · 태그 메타 · 설비 목록) · 등재 19 → **22** · 단독 · 부분 강제 11 → **14**
 > **개정일**: 2026-09-26 — S7 ① 알람 착수 반영 — 한계 등재 #4 단계 경계 S7 이후 → **인증 도입(S7 ②) 이후** — 등재 수 불변
@@ -9,7 +11,7 @@
 > **개정일**: 2026-09-24 — W6 판정 반영 — pg_partman 미리 만들기 · 유지 작업 주기 미확인을 닫는다(도구 기본값 · 백그라운드 워커 1시간 — 정본 09_tech_stack/03)
 > **개정일**: 2026-09-24 — W5 판정 반영 — 한계 등재 신설 2행(#18 실적 이중 제출 · #19 실적 정정 수단 없음 — 강제 주체 없음) · 등재 17 → **19** · unit만 바꾸는 태그 수정 미확인 → W5 판정(허용)
 > **개정일**: 2026-09-24 — W4 판정 반영 — 한계 등재 #2 강제 주체 없음 → **조건부 쓰기** · 신설 3행(#15 소진 모드 전환 중 크래시 재전달 중복 · #16 BFF 비경유 쓰기의 무효화 누락 · #17 비활성 태그의 열린 알람 이벤트) · 등재 14 → **17** · 없음 6 · 부분 강제 8 → **11**
-> **원천**: 원본 architecture.md §6 설계 결정 · §10.1 · §12 · §17 · §18(커밋 ff66a37) · 원본 data_flow.md §4.2 · §7.1 · §8.2 · §13(커밋 ff66a37) · 원본 tech_stack.md §5.1(커밋 ff66a37) · docs_plan.md 이식 패턴 ① 한계 등재 · 웨이브 인계 W3 05_data_stores 행(audit_log 소유) · ADR-16 · ADR-19 · [../README.md](../README.md) 전역 불변식 순서 무관성
+> **원천**: 원본 architecture.md §6 설계 결정 · §10.1 · §12 · §17 · §18(커밋 ff66a37) · 원본 data_flow.md §4.2 · §7.1 · §8.2 · §13(커밋 ff66a37) · 사용자 결정 2026-09-27(업무 쓰기 Redis 경유) · 원본 tech_stack.md §5.1(커밋 ff66a37) · docs_plan.md 이식 패턴 ① 한계 등재 · 웨이브 인계 W3 05_data_stores 행(audit_log 소유) · ADR-16 · ADR-19 · [../README.md](../README.md) 전역 불변식 순서 무관성
 
 컬럼 하나에 걸리는 제약(타입 · NOT NULL · 단일 컬럼 CHECK)은 [01_postgresql_schema.md](./01_postgresql_schema.md)가 갖고, 이 문서는 **둘 이상의 컬럼 · 행 · 테이블에 걸치는 강제**와 그 강제가 끝나는 자리를 갖는다.
 
@@ -41,6 +43,7 @@
 
 - 검산: FK = MST 계열 7(#1~#7) + ALM 3(#8~#10) + AUT 2(#11 · #12) + WRK 3(#13~#15) = **15** · CASCADE **0** · SET NULL **0**
 - **교차 저장소 참조에는 FK가 없다.** ClickHouse tag_raw.tag_id · device_id와 alarm_eval.rule_id는 PostgreSQL 키를 가리키지만 두 DB를 묶는 제약은 존재할 수 없다(ADR-16) — §한계 등재 10행.
+- **biz_command_log는 FK를 갖지 않는다.** kind · result가 가리키는 업무 행은 명령마다 테이블이 달라 한 FK로 표현되지 않는다. **actor(요청자)에도 FK를 걸지 않는다** — 명령 조회의 요청자 대조 기준일 뿐 감사 행위자의 정본은 같은 트랜잭션의 audit_log.user_id이고, 추가 전용 원장이 user_account 변경에 묶이지 않게 한다([01_postgresql_schema.md](./01_postgresql_schema.md) §biz_command_log 설계).
 - 대조군 plc_tag_raw_control은 FK를 하나도 갖지 않는다. 적재 경로에 FK 검사를 넣으면 비교 축 삽입 처리량이 ClickHouse에 없는 비용을 낸다([10_olap_vs_rdb_control.md](./10_olap_vs_rdb_control.md)).
 
 ## UNIQUE와 결합 CHECK
@@ -55,6 +58,7 @@
 | UNIQUE | user_account | (email) | 해당 없음 |
 | UNIQUE | role | (role_code) | 해당 없음 |
 | UNIQUE | work_order | (order_no) | 동시 등록 경합(REQ-WRK-02) |
+| UNIQUE | biz_command_log | (cmd_id) | **재전달 · 같은 cmdId 재요청의 이중 적용** — 원장 행 조회와 INSERT 사이의 경합도 커밋 시점에 막는다 |
 | CHECK | tag_master | (word_order IS NULL) = (data_type IN ('UINT16', 'INT16', 'BOOL')) | 16비트 태그에 워드 순서가 붙어 디코더가 워드를 잘못 합친다 |
 | CHECK | tag_master | (data_type = 'BOOL') = (function_code IN (1, 2)) | 레지스터 영역을 비트로 읽거나 그 반대 — 레지스터 비트 BOOL은 미확인이라 막아 둔다 |
 | CHECK | tag_master | range_min IS NULL 또는 range_max IS NULL 또는 range_min < range_max | 뒤집힌 범위가 모든 값을 BAD_RANGE로 만든다 |
@@ -64,12 +68,12 @@
 | CHECK | work_order | planned_end > planned_start | 해당 없음 |
 | CHECK | tag_master_history | old_tag_id <> new_tag_id | 자기 자신을 계보로 가리킴 |
 
-- 검산: UNIQUE **8** + 결합 CHECK **8** = **16**
+- 검산: UNIQUE **9** + 결합 CHECK **8** = **17**
 - **BOOL과 function_code의 결합은 막아 두는 판정이다.** 레지스터 안 비트를 BOOL로 읽는 경로는 미확인([../11_glossary/03_enums_state_machines.md](../11_glossary/03_enums_state_machines.md))이다. 확정되면 CHECK를 넓히는 마이그레이션 하나로 열리지만, 열어 둔 채 시작하면 확정 전에 쌓인 태그를 되돌릴 수 없다.
 
 ## 가드 트리거와 DB 권한
 
-제약으로 표현할 수 없는 불변 조건(계보 키 · 변환식)을 트리거 하나로, 추가 전용 테이블 둘을 권한으로 막는다. 아래 DDL은 설계 계약이다 — 함수 본문은 구현이 쓴다.
+제약으로 표현할 수 없는 불변 조건(계보 키 · 변환식)을 트리거 하나로, 추가 전용 테이블 셋을 권한으로 막는다. 아래 DDL은 설계 계약이다 — 함수 본문은 구현이 쓴다.
 
 ```sql
 -- tag_master: 계보 키와 변환식은 갱신하지 않는다 (REQ-MST-06 · REQ-MST-07)
@@ -81,8 +85,8 @@ CREATE TRIGGER tag_master_guard_immutable
                   OR OLD.offset_value IS DISTINCT FROM NEW.offset_value)
   EXECUTE FUNCTION reject_update();   -- 예외를 던진다 · 서비스는 master.scale_change_forbidden/409로 옮긴다
 
--- audit_log · tag_master_history: 추가 전용
-REVOKE UPDATE, DELETE, TRUNCATE ON audit_log, tag_master_history FROM app_rw;
+-- audit_log · tag_master_history · biz_command_log: 추가 전용
+REVOKE UPDATE, DELETE, TRUNCATE ON audit_log, tag_master_history, biz_command_log FROM app_rw;
 ```
 
 - **트리거는 서비스 거절의 백스톱이다.** 서비스가 스케일 PATCH를 409로 먼저 거절하고(REQ-MST-07), 트리거는 서비스를 거치지 않는 경로(수동 SQL · 새 표면의 누락)를 막는다. 트리거가 없으면 psql 한 줄이 과거 값의 공학 단위 의미를 조용히 바꾼다.
@@ -92,10 +96,10 @@ REVOKE UPDATE, DELETE, TRUNCATE ON audit_log, tag_master_history FROM app_rw;
 | DB 역할 | 접속 주체 | 권한 | 막는 것 |
 |------|------|------|------|
 | app_owner | 마이그레이션 | 스키마 소유 · DDL | 런타임이 DDL을 실행하지 못하게 소유를 가른다 |
-| app_rw | api 풀 · 대조군 적재 | 업무 14 SELECT · INSERT · UPDATE(추가 전용 2 제외) · 대조군 INSERT · SELECT | 감사 · 계보 행 수정 · 물리 DELETE |
+| app_rw | api 풀 · 명령 워커 · 대조군 적재 | 업무 15 SELECT · INSERT · UPDATE(추가 전용 3 제외) · 대조군 INSERT · SELECT | 감사 · 계보 행 수정 · 물리 DELETE |
 | ch_reader | ClickHouse Dictionary 소스 | tag_master SELECT만 | Dictionary 소스가 쓰기 권한을 가진다(REQ-MST-11) |
 
-- 검산: DB 역할 = **3** · 가드 트리거 **1** · 권한으로 막는 추가 전용 테이블 **2**
+- 검산: DB 역할 = **3** · 가드 트리거 **1** · 권한으로 막는 추가 전용 테이블 **3**
 - app_rw에 DELETE를 주지 않으므로 물리 삭제 표면은 코드가 아니라 권한에서 이미 없다. 대조군의 일 파티션 정리는 app_owner가 한다([08_retention_lifecycle.md](./08_retention_lifecycle.md)).
 
 ## 인덱스
@@ -173,14 +177,18 @@ ADR-19의 저장소 쪽 계약이다. 풀 크기 · max_connections는 2계층 �
 | 15 | **소진 모드 전환 중 크래시 재전달 중복** | 창 정렬 배치 · 결정적 토큰 — **같은 모드 안에서만** 같은 배치가 된다 | 막는 것 — 재시도 · 같은 모드 안 재전달의 중복. 못 막는 것 — 정상 모드로 삽입된 창이 XACK 전 크래시 뒤 소진 모드 묶음으로 재전달(또는 그 반대)되어 토큰이 달라진 배치의 중복 | tag_id + ts 중복 조회(AC-02) · 기전 [../06_pipeline/03_ingest_batch.md](../06_pipeline/03_ingest_batch.md) §소진 모드 |
 | 16 | **BFF를 거치지 않은 쓰기의 BFF 캐시 무효화 누락** | BFF가 자기가 중계한 쓰기 성공에서만 무효화한다(체인 ⑤) | 막는 것 — BFF 경유 쓰기 뒤의 옛 목록. 못 막는 것 — k6 · 수동 호출이 api에 직결한 쓰기 뒤 revalidate 창 동안의 옛 목록 | BFF revalidate 창 · 기전 [../06_pipeline/07_business_crud.md](../06_pipeline/07_business_crud.md) §무효화 체인 6단 |
 | 17 | **비활성 태그의 열린 알람 이벤트** | 없음 — 태그 비활성화 뒤 판정이 멈춰 해소를 관측하지 못한다 | 막는 것 — 없음(거짓 해제를 막으려 시스템은 닫지 않는다). 못 막는 것 — 사람이 확인하기 전까지 열린 채 남는 이벤트 | 목록의 태그 is_active 표지 · 닫는 수단은 두지 않는다(W5 판정 — 알람 강제 해제 표면 없음) [../06_pipeline/08_alarm.md](../06_pipeline/08_alarm.md) §비활성 태그 규칙 |
-| 18 | **실적 이중 제출** | 없음 — production_log에 자연 유일 키가 없고 멱등 키를 담을 Redis 계열도 없다 | 막는 것 — 없음. 못 막는 것 — 같은 값을 두 번 제출하면 두 행이 되어 작업지시 실적 합계가 부풀려진다 | 화면의 제출 잠금 · audit_log 행 대조 · 범위 밖 판정(W5) [../02_features/10_work_orders.md](../02_features/10_work_orders.md) |
+| 18 | **실적 이중 제출** | 없음 — production_log에 자연 유일 키가 없다 · 원장(biz_command_log)은 **같은 cmdId**만 막는다 | 막는 것 — 없음(자연 키 층). 같은 cmdId의 재전달 · 재요청은 원장이 막는다(#24 · SW-12 stream). 못 막는 것 — **새 cmdId로** 같은 값을 두 번 제출하면 두 행이 되어 작업지시 실적 합계가 부풀려진다 | 화면의 제출 잠금 · audit_log 행 대조 · 범위 밖 판정(W5) [../02_features/10_work_orders.md](../02_features/10_work_orders.md) |
 | 19 | **실적 정정 수단 없음** | 없음 — 실적 수정 · 삭제 표면이 없고 CHECK(good_qty · defect_qty 0 이상)가 음수 보정 행을 막는다 | 막는 것 — 감사 없는 실적 변조. 못 막는 것 — 오입력 실적이 영구히 합계에 남는다 | 범위 밖 판정(W5) — 학습 목표 무관 · D-11은 존재만 요구 [../02_features/10_work_orders.md](../02_features/10_work_orders.md) · [../07_api/08_work_orders.md](../07_api/08_work_orders.md) |
 | 20 | **열기 커밋 뒤 상태 쓰기 실패의 고아 열린 행** | 판정기의 ⑥ 같은 파이프라인 1회 재시도 · 다음 열기의 열린 행 재사용 확인 | 막는 것 — Redis 순간 단절 · 재위반 때의 중복 INSERT. 못 막는 것 — **재시도도 실패하고 다음 행이 정상이면** Redis는 옛 PENDING에서 NORMAL로 가고 PostgreSQL에는 ACTIVE 행이 남는다 — 닫을 판정 경로가 그 event_id를 모른다 | 다음 위반 확정이 열린 행을 재사용해 메운다 · 그 전까지는 사람의 확인 대상 · 검증은 state ACTIVE 행의 rule_id 중 alarm:state.state가 NORMAL인 것 조회 · 기전 [../06_pipeline/08_alarm.md](../06_pipeline/08_alarm.md) §부분 실패 |
 | 21 | **닫기 커밋 뒤 상태 쓰기 실패의 새 에피소드 누락** | 판정기의 ⑥ 같은 파이프라인 1회 재시도 | 막는 것 — Redis 순간 단절. 못 막는 것 — **재시도도 실패하고 재위반하면** Redis는 CLEARED 행의 event_id를 쥔 채 CLEARING → ACTIVE로 가 새 alarm_event 행이 INSERT되지 않고 열림도 통지되지 않는다 | 검증은 alarm:state.event_id가 state CLEARED 행을 가리키는 규칙 조회 · 잔여는 그 에피소드가 해소되어 닫기가 0행으로 끝날 때 끊긴다 · 기전 [../06_pipeline/08_alarm.md](../06_pipeline/08_alarm.md) §부분 실패 |
 | 22 | **cache-aside 채움 경합** | 커밋 뒤 DEL(무효화 체인 ②) · TTL | 막는 것 — 커밋 뒤에 시작한 조회의 옛 사본. 못 막는 것 — **커밋 전에 PostgreSQL을 읽은 조회가 ② 삭제 뒤에 사본을 채우는 순서** — 규칙 쓰기 뒤 판정기가 옛 임계값으로 판정하고(cache:alarmrules · 지터 포함 TTL 상한), 확인 뒤 목록이 확인 전 행을 보인다(cache:alarmevents · 첫 채움 기준 TTL) · 태그 메타 · 설비 목록도 같은 순서로 남는다 | 잔여 상한은 키별 TTL(현행 참고 · 소유 [05_redis_keyspace.md](./05_redis_keyspace.md) — cache:alarmrules 300초 ±20% · 최대 약 360초 · cache:alarmevents 30초)과 다음 쓰기의 DEL이 끊는다 · ADR-12는 덮어쓰기 경합만 막는다 · 기전 [../06_pipeline/07_business_crud.md](../06_pipeline/07_business_crud.md) §무효화 체인 6단 |
 | 23 | **ClickHouse 업무 대조 테이블의 CHECK는 INSERT 경로만** | ClickHouse CONSTRAINT CHECK — INSERT 때 행마다 | 막는 것 — CHECK 3종(target_qty 0 · planned_end = planned_start · status 값 밖)의 INSERT. 못 막는 것 — **같은 값을 경량 UPDATE · ALTER UPDATE(mutations_sync 1)로 쓰는 것** — 오류 없이 받아 되읽힌다(3종 × 3규모 × 3회 · 기록 043 · valid · 19f8861 · 부하 실험 · 티어 해당 없음 · 스위치 기본값 · 26.8.10.6). 같은 테이블이 같은 값을 INSERT로는 거절한다 | 계측물(업무 대조 테이블)의 한계라 운영 데이터에는 닿지 않는다 — 업무 데이터 목적지가 PostgreSQL인 근거의 하나(PostgreSQL CHECK는 INSERT · UPDATE 두 경로를 커밋 전에 막는다) · 보장 표 [03_clickhouse_schema.md](./03_clickhouse_schema.md) §업무 대조 테이블 · 결과 [10_olap_vs_rdb_control.md](./10_olap_vs_rdb_control.md) §결과 |
+| 24 | **같은 cmdId · 다른 본문** | biz_command_log UNIQUE(cmd_id) — 첫 판정에 고정 | 막는 것 — 재전달 · 같은 cmdId 재요청의 이중 적용. 못 막는 것 — **같은 cmdId에 다른 본문을 실은 요청이 첫 명령의 결과를 받는 것**(원장은 본문을 대조하지 않는다) · SW-12 direct 경로의 재요청 중복(원장이 없다) | 클라이언트는 새 쓰기에 새 cmdId를 쓴다 · 표면 계약 [../07_api/01_conventions.md](../07_api/01_conventions.md) · 기전 [../06_pipeline/07_business_crud.md](../06_pipeline/07_business_crud.md) §업무 명령 경로 |
+| 25 | **미적용 업무 명령의 트리밍** | stream:biz:cmd MAXLEN · 명령 유효 창 | 막는 것 — 명령 스트림의 메모리 무한 증가 · 유효 창을 넘긴 명령의 늦은 적용(EXPIRED). 못 막는 것 — **워커 정지 중 쌓인 명령이 MAXLEN을 넘어 적용 전에 잘리는 것** — 202를 받은 쓰기가 원장 행 없이 사라져 명령 조회가 pending에 머문다 | MAXLEN ≥ 유효 창 동안의 최대 업무 쓰기 수(관계 — 값 [06_redis_memory.md](./06_redis_memory.md)) · biz_stream_lag 감시 · 키 [05_redis_keyspace.md](./05_redis_keyspace.md) |
+| 26 | **failed 명령의 적용 여부 미확정** | 없음 — 판정을 기록할 PostgreSQL이 불가하다 · 원장은 PostgreSQL이 돌아온 뒤 같은 키 재요청에서만 확인된다 | 막는 것 — 같은 키 재요청의 이중 적용(원장이 돌아오면 저장된 판정을 낸다 · #24). 못 막는 것 — **failed가 '적용되지 않았다'로 읽히는 것** — 재전달된 명령이 이미 커밋된 뒤 PostgreSQL이 불가하면 원장 확인도 못 해 failed가 되므로 failed는 '적용 여부를 확정하지 못했다'다 · 결과 키가 만료되면 pending으로 보인다 | 같은 키 재요청으로 확정한다(원장이 돌아오면 applied) · biz_commands_total{result=failed} · 기전 [../06_pipeline/07_business_crud.md](../06_pipeline/07_business_crud.md) §멱등 · 재전달 · 표면 [../07_api/01_conventions.md](../07_api/01_conventions.md) |
 
-- 검산: 등재 = **23**행 · 강제 주체 "없음"인 행 8(#4 · #6 · #10 · #11 · #13 · #17 · #18 · #19) + 단독 · 부분 강제 15(#1 · #2 · #3 · #5 · #7 · #8 · #9 · #12 · #14 · #15 · #16 · #20 · #21 · #22 · #23) = **23**
+- 검산: 등재 = **26**행 · 강제 주체 "없음"인 행 9(#4 · #6 · #10 · #11 · #13 · #17 · #18 · #19 · #26) + 단독 · 부분 강제 17(#1 · #2 · #3 · #5 · #7 · #8 · #9 · #12 · #14 · #15 · #16 · #20 · #21 · #22 · #23 · #24 · #25) = **26**
+- **#24 · #25 · #26은 업무 쓰기를 명령 스트림에 올린 대가다**(사용자 결정 2026-09-27). 옛 경로(요청 = 트랜잭션)에는 명령과 적용 사이의 간격이 없어 세 행이 생길 자리가 없었다 — #25의 폭은 워커 정지 시간과 MAXLEN의 관계로 정해진다.
 - **#20 · #21은 세 쓰기를 트랜잭션으로 묶지 않은 대가다**(REQ-GLB-13). 커밋과 Redis 쓰기 사이에 원자성이 없으므로 재시도 1회가 좁히는 것은 순간 단절뿐이다 — 재시도를 늘리면 판정 구간이 늘어 flusher 정지로 번진다([../06_pipeline/08_alarm.md](../06_pipeline/08_alarm.md) §부분 실패).
 - **#9는 DB가 막을 수 없는 것이 구조로 확정된 행이다.** 파티션을 버리면 막을 수 있지만 월 파티션이 주는 범위 조회 · 분리 이득을 잃는다 — 파티션을 고른 대가가 이 행이다.
 - **#1과 #2는 같은 뿌리(컨슈머 간 순서 무관)에서 나온 두 결과다.** #1은 ts가 있어 무해하고 #2는 ts를 보지 않는 덮어쓰기라 유해했다 — 순서 무관성이 무해한 것은 **ts로 읽는 소비자에게만**이다. W4가 #2의 쓰기를 ts 비교 조건부 쓰기로 바꿔 덮어쓰기도 ts로 읽는 소비자가 되었다.

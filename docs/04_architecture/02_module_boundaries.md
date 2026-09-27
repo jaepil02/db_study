@@ -1,7 +1,10 @@
 # 모듈 경계
 
-> **대상**: api 프로세스 안 모듈 사이의 경계 — Stream 경계 원칙과 근거 4 · 경계 예외(알람 직접 호출)의 근거 · APP_ROLE 5값과 모듈 배정 · worker_threads 격리 대상 · **스위치 = DI 포트 확정 표(포트 · 구현 이름 정본)** · 리포지터리 구조
+> **대상**: api 프로세스 안 모듈 사이의 경계 — Stream 경계 원칙과 근거 4 · **업무 명령 경계(stream:biz:cmd · 워커 적용)** · 경계 예외(알람 직접 호출)의 근거 · APP_ROLE 5값과 모듈 배정 · worker_threads 격리 대상 · **스위치 = DI 포트 확정 표(포트 · 구현 이름 정본)** · 리포지터리 구조
 > **작성일**: 2026-09-24
+> **개정일**: 2026-09-28 — 웨이브 1 검수 반영(B-H5) — SW-12 BizWritePort 사용 모듈 master · alarms · work-orders · auth → **master · alarms · work-orders(업무 쓰기 표면 — auth의 로그인 · 토큰은 대상 아님)** — 스위치 · 포트 · 구현 수 불변
+> **개정일**: 2026-09-28 — 리드 정정(d-biz-b 대조) — 명령 스트림 경계 · worker 명령 적용의 도메인에서 AUT 제외(로그인 · 토큰은 업무 쓰기 아님 · 지침 §10) — 04_domain_map 자기 간선 3과 일치 · "반영 대기" 문구 해소
+> **개정일**: 2026-09-28 — 업무 쓰기 Redis 경유 개정(사용자 결정 2026-09-27 · ADR-26) — 경계 유형 표에 **명령 스트림 경계**(stream:biz:cmd · grp:biz-writer · ch:bizreply) — 유형 4 → **5** · APP_ROLE worker에 업무 명령 적용 · 확정 표 **SW-12 BizWritePort · StreamBizWriter(stream · 기본) · DirectBizWriter(direct)** 신설 — 스위치 11 → **12** · 포트 11 → **12** · 구현 22 → **24**
 > **개정일**: 2026-09-24 — S0 반영 — 리포지터리 구조에 scripts/ · .githooks/ 자리 추가 · Taskfile 행에 docs:lint
 > **개정일**: 2026-09-24 — W6 실험 채번 반영 — 스위치 상태 레이블 · 이벤트 루프 메트릭 이름(정본 10_observability/01 · 06)
 > **원천**: 원본 architecture.md §1 · §4 · §8.2 · §9(커밋 ff66a37) · 원본 tech_stack.md §1 · §3.1 · §3.3 · §3.4 · §5.3 · §11(커밋 ff66a37) · 원본 data_flow.md §4.2 · §8 · §9 · §15(커밋 ff66a37) · 원본 implementation_plan.md §4.3 · §6 · §7.2 · §7.3 · §7.5(커밋 ff66a37) · D-06 · ADR-06 · ADR-07 · ADR-08 · ADR-10 · ADR-11 · ADR-22 · ADR-25 · [../01_overview/04_domain_map.md](../01_overview/04_domain_map.md) · [../02_features/13_switch_matrix.md](../02_features/13_switch_matrix.md)
@@ -32,9 +35,10 @@
 | Stream 경계 | stream:plc:raw · 컨슈머 그룹 | COL → ING · GEN(모드 B · C) → ING | 발행자는 Stream 페이로드 계약(스키마 버전 v) 하나로만 결합한다 |
 | Pub/Sub 경계 | ch:rt · ch:alarm · ch:cacheinv | ING → RLT · ALM → RLT · MST → 다른 api 인스턴스 | 발행자는 구독자를 모른다 |
 | Modbus 경계 | 루프백 TCP 소켓 | SIM → COL | 같은 프로세스여도 소켓을 지난다 |
+| 명령 스트림 경계 | stream:biz:cmd · 컨슈머 그룹 grp:biz-writer(소비자 1) · 결과 biz:result · ch:bizreply | 업무 쓰기 표면(MST · ALM · WRK — AUT의 로그인 · 토큰은 대상 아님) → 명령 적용 워커 | 표면은 명령 봉투(cmdId · kind · payload · actor · requestedAt) 하나로만 결합하고 결과를 기다린다 · 수집 스트림과 키 · 그룹을 공유하지 않는다(ADR-26 · [../06_pipeline/07_business_crud.md](../06_pipeline/07_business_crud.md) §업무 명령 경로) |
 | 직접 호출(예외) | 프로세스 안 호출 | ING → ALM | §경계 예외 — 알람 판정 직접 호출 |
 
-- 경계 유형 전수 · 간선 검산의 정본은 [../01_overview/04_domain_map.md](../01_overview/04_domain_map.md) §경계 유형이다. 이 표는 데이터가 모듈을 건너는 네 유형만 다시 적고 저장소 경유 · 트랜잭션 공유 · 인가 · 시뮬레이션 결합은 다루지 않는다.
+- 경계 유형 전수 · 간선 검산의 정본은 [../01_overview/04_domain_map.md](../01_overview/04_domain_map.md) §경계 유형이다. 이 표는 데이터가 모듈을 건너는 다섯 유형만 다시 적고(명령 스트림 경계는 04_domain_map의 자기 간선 3 — MST · ALM · WRK) 저장소 경유 · 트랜잭션 공유 · 인가 · 시뮬레이션 결합은 다루지 않는다.
 
 ## 경계 예외 — 알람 판정 직접 호출
 
@@ -59,11 +63,12 @@ APP_ROLE은 한 이미지에서 기동할 모듈 범위를 고르는 환경변�
 |------|------|------|
 | all | 11모듈 전부 | 기본값 — 컨테이너 4 구성 |
 | api | AUT · MST · TSQ · RLT · WRK · ALM(규칙 · 조회 · 확인 표면) · GEN(모드 C 수신 표면 /api/v1/ingest/bulk) · OBS | 사람과 k6가 부르는 HTTP · WebSocket 표면이 전부 여기 있다 |
-| worker | ING · ALM(디바운스 판정 · 세 쓰기 · ch:alarm 발행) · OBS | 판정이 ingest 배치의 후처리라 직접 호출이 프로세스를 건너지 않는다 |
+| worker | ING · ALM(디바운스 판정 · 세 쓰기 · ch:alarm 발행) · **업무 명령 적용(grp:biz-writer — MST · ALM · WRK의 쓰기 서비스 호출)** · OBS | 판정이 ingest 배치의 후처리라 직접 호출이 프로세스를 건너지 않는다 · 명령 적용은 표면과 명령 스트림으로만 이어져 api와 떨어져도 호출부가 그대로다 |
 | collector | COL · **SIM** · **GEN(모드 A 레지스터 갱신)** · OBS | PlcSim이 루프백에만 바인드하고 모드 A 갱신이 프로세스 안 호출이라 셋이 한 프로세스여야 한다 |
 | datagen | GEN(모드 B 발행 · 모드 C 발신 · 모드 D 백필 · 대조군 동일 행 백필 · 단독 처리량 실측) · OBS | 생성기가 대상과 CPU를 다투지 않게 떼어내는 자리(원본 tech_stack.md §3.4) |
 
 - 검산: APP_ROLE 값 = **5** · all을 뺀 역할 4
+- **업무 명령 적용은 도메인이 아니라 공통 명령 기전의 기능이다(ADR-26).** worker 역할이 이 기능을 켜면 그 안에서 MST · ALM · WRK의 쓰기 서비스(트랜잭션 · 감사 · 무효화 체인)를 부른다 — 쓰기 서비스의 소유는 각 모듈 그대로이고, api 역할의 같은 모듈은 검증 · XADD · 결과 대기만 한다. SW-12 direct면 api 역할이 쓰기 서비스를 직접 부른다. 아래 도메인 배정 셈은 이 공통 기능을 빼고 센다.
 - **모듈이 아니라 기능 단위로 배정되는 도메인이 셋이다** — ALM(표면 api · 판정 worker) · GEN(모드 C 수신 api · 모드 A collector · 나머지 datagen) · OBS(전 역할). 검산: ALM 2역할 + GEN 3역할 + OBS 4역할 · 나머지 8도메인은 역할 하나. 모듈 하나를 여러 역할에서 기동하되 역할마다 켜는 기능이 다르다 — 기능 선택은 APP_ROLE을 읽는 모듈 초기화가 하고 경로 안 분기로 하지 않는다(ADR-08과 같은 원리).
 
 ### SIM · OBS · GEN 모드 A 판정
@@ -121,8 +126,10 @@ CPU 바운드 작업은 piscina worker_threads 풀에서 돈다(ADR-25 · REQ-GL
 | SW-09 | ControlTableSinkPort | PostgresControlSink | NoopControlSink | ingest | 유지 |
 | SW-10 | DeadbandFilterPort | TagDeadbandFilter | PassthroughFilter | collector | 유지 |
 | **SW-11** | **LatestValueWritePort** | **IngestLatestValueWriter**(값 ingest · 기본) | **CollectorLatestValueWriter**(값 collector) | ingest · collector | **신설** — 스위치 아닌 교체 포트에서 이동 |
+| **SW-12** | **BizWritePort** | **StreamBizWriter**(값 stream · 기본 — XADD · 결과 대기 · 202) | **DirectBizWriter**(값 direct — 쓰기 서비스 직접 호출 · 옛 경로) | master · alarms · work-orders(업무 쓰기 표면 — auth의 로그인 · 토큰은 대상 아님) | **신설**(사용자 결정 2026-09-27 · ADR-26 · EXP-46) |
 
-- 검산: 스위치 11 = 유지 9 + 개명 1(SW-02) + 신설 1(SW-11) = **11** · 포트 **11** · 구현 11 × 2 = **22**
+- 검산: 스위치 12 = 유지 9 + 개명 1(SW-02) + 신설 2(SW-11 · SW-12) = **12** · 포트 **12** · 구현 12 × 2 = **24**
+- **SW-12의 두 구현은 같은 쓰기 서비스 · 같은 무효화 체인을 부른다.** 달라지는 것은 적용 주체(워커 대 api)와 그 사이의 명령 스트림 · 원장 · 결과 키뿐이라 표면 응답이 같다 — 차이가 지연 · 가용성 · 멱등으로만 드러나야 EXP-46이 경로의 비용을 잰다. 포트를 표면 컨트롤러 뒤에 두어 경로 안 if를 두지 않는다(ADR-08).
 - **SW-11은 on/off가 아니라 갱신 주체 값(ingest · collector)을 고른다.** on 구현 열에 기본값 쪽을, off 구현 열에 대안 쪽을 적었다. 분류는 "Redis 역할 — 최신값 결합"이며 채번 · 기본값의 정본은 [../02_features/13_switch_matrix.md](../02_features/13_switch_matrix.md)다. ADR-10의 S6 비교가 스위치 상태로 측정 기록에 남는다.
 - **SW-02를 개명한 이유 — 최신값에는 포트가 둘 생긴다.** 보정 7.2의 갱신 주체를 교체 가능하게 두려면 쓰기 쪽 포트가 필요한데(ADR-10), 읽기 포트가 LatestValuePort라는 이름을 가지면 두 포트의 이름이 겹쳐 "SW-02 off가 갱신도 끄는가"라는 오독이 생긴다. SW-02는 **읽기 포트만 교체한다**(02_features/13 §스위치별 판정) — 이름이 그 판정을 싣는다.
 - **SW-07만 값이 밀리초다.** WindowMergeThrottle은 창 크기(0 초과)를 주입받고, 0이면 PassthroughThrottle을 주입한다 — 창 0의 WindowMergeThrottle을 만들지 않는다. 창 0을 병합 구현으로 돌리면 "병합 없음"과 "병합하되 창이 0"이 계측에서 갈리지 않는다.

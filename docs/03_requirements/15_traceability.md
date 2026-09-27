@@ -1,7 +1,9 @@
 # 추적성 — 기능 ↔ 요구사항 ↔ 흐름 ↔ 화면 ↔ API ↔ 테이블
 
-> **대상**: 기능 91 전수의 요구사항 · 흐름 · 화면 · API 문서 · 저장 객체 대응 · 요구사항 229의 역방향 검산 · 흐름 10 · 화면 10 · API 문서 9 · 저장 객체 27 · AC 45 축별 검산 · 미매핑 0 · 유령 0 · 재생성 규칙
+> **대상**: 기능 91 전수의 요구사항 · 흐름 · 화면 · API 문서 · 저장 객체 대응 · 요구사항 229의 역방향 검산 · 흐름 10 · 화면 10 · API 문서 10 · 저장 객체 28 · AC 45 축별 검산 · 미매핑 0 · 유령 0 · 재생성 규칙
 > **작성일**: 2026-09-24
+> **개정일**: 2026-09-28 — 웨이브 1 검수 반영(B-L3) — ALM-08 흐름 F-06 → **F-05 · F-06**(확인 쓰기는 업무 명령 경로) · 흐름 축 F-05 참여 20 → **21** — 기능 · REQ · 미매핑 · 유령 수 불변
+> **개정일**: 2026-09-27 — D-04 부분 개정 반영(사용자 결정 — 업무 쓰기도 Redis를 거친다) — 업무 쓰기 기능 11(MST-01~06 · ALM-01 · ALM-08 · WRK-01~03)의 API 열에 01_conventions(명령 조회 #1) · 저장 객체 열에 **biz_command_log**(명령 원장 · WRK 소유) · API 축 문서 9 → **10** · 표면 43 → **44** · 저장 객체 27 → **28**(PostgreSQL 15 → **16**) — 기능 · REQ 수 불변
 > **개정일**: 2026-09-26 — 목적 적합성 실증 W1 — 저장 객체 축에 ClickHouse 업무 대조 테이블 3 한 행(기능 해당 없음 — 계측물) — 저장 객체 24 → **27** · 기능이 가리키지 않는 객체 0 → **3**(해당 없음 명시 · 미매핑 0 유지) · 닫힌 어휘 해당 없음의 쓰는 열에 저장 객체 축의 기능 열
 > **개정일**: 2026-09-24 — 최종 정밀 검수 — 요구사항 열을 REQ- 접두 전체 ID로(줄인 표기가 기능 ID와 같은 모양이라 두 축이 섞인다)
 > **개정일**: 2026-09-24 — W7 검수 반영 — REQ-GLB-24 반영(요구사항 228 → **229** · 기능을 가리킴 223 → **224**) · API 열이 기능 표면의 API 문서 전부를 싣도록 재생성(RLT-07 → 11_websocket · 06_realtime)
@@ -61,12 +63,12 @@
 
 | 기능 ID | 기능명 | 요구사항 | 흐름 | 화면 | API | 저장 객체 |
 |------|------|------|------|------|------|------|
-| MST-01 | 사이트 · 라인 관리 | REQ-GLB-24 · REQ-MST-01 · REQ-MST-14 · REQ-MST-15 · REQ-TEC-05 | F-05 | ADM-MASTER | 04_master | PostgreSQL site · production_line · Redis cache 계열 |
-| MST-02 | 설비 관리 | REQ-GLB-24 · REQ-MST-02 · REQ-MST-14 · REQ-MST-15 | F-05 | ADM-MASTER | 04_master | PostgreSQL device · Redis cache:devlist |
-| MST-03 | Modbus 접속 설정 관리 | REQ-GLB-24 · REQ-MST-03 · REQ-MST-14 · REQ-MST-15 | F-01 · F-05 | ADM-MASTER | 04_master | PostgreSQL modbus_config |
-| MST-04 | 태그 마스터 관리 | REQ-GLB-12 · REQ-GLB-24 · REQ-MST-04 · REQ-MST-05 · REQ-MST-14 · REQ-MST-15 · REQ-NFR-09 | F-05 | ADM-MASTER | 04_master | PostgreSQL tag_master · audit_log(WRK 소유) |
-| MST-05 | 태그 논리 삭제 | REQ-GLB-14 · REQ-GLB-24 · REQ-MST-05 · REQ-MST-06 · REQ-MST-08 · REQ-MST-15 | F-05 | ADM-MASTER | 04_master | PostgreSQL tag_master |
-| MST-06 | 스케일 변경 시 새 태그 발급 | REQ-GLB-14 · REQ-GLB-24 · REQ-MST-05 · REQ-MST-07 · REQ-MST-15 | F-05 | ADM-MASTER | 04_master | PostgreSQL tag_master · tag_master_history |
+| MST-01 | 사이트 · 라인 관리 | REQ-GLB-24 · REQ-MST-01 · REQ-MST-14 · REQ-MST-15 · REQ-TEC-05 | F-05 | ADM-MASTER | 04_master · 01_conventions | PostgreSQL site · production_line · Redis cache 계열 · biz_command_log |
+| MST-02 | 설비 관리 | REQ-GLB-24 · REQ-MST-02 · REQ-MST-14 · REQ-MST-15 | F-05 | ADM-MASTER | 04_master · 01_conventions | PostgreSQL device · Redis cache:devlist · biz_command_log |
+| MST-03 | Modbus 접속 설정 관리 | REQ-GLB-24 · REQ-MST-03 · REQ-MST-14 · REQ-MST-15 | F-01 · F-05 | ADM-MASTER | 04_master · 01_conventions | PostgreSQL modbus_config · biz_command_log |
+| MST-04 | 태그 마스터 관리 | REQ-GLB-12 · REQ-GLB-24 · REQ-MST-04 · REQ-MST-05 · REQ-MST-14 · REQ-MST-15 · REQ-NFR-09 | F-05 | ADM-MASTER | 04_master · 01_conventions | PostgreSQL tag_master · audit_log(WRK 소유) · biz_command_log |
+| MST-05 | 태그 논리 삭제 | REQ-GLB-14 · REQ-GLB-24 · REQ-MST-05 · REQ-MST-06 · REQ-MST-08 · REQ-MST-15 | F-05 | ADM-MASTER | 04_master · 01_conventions | PostgreSQL tag_master · biz_command_log |
+| MST-06 | 스케일 변경 시 새 태그 발급 | REQ-GLB-14 · REQ-GLB-24 · REQ-MST-05 · REQ-MST-07 · REQ-MST-15 | F-05 | ADM-MASTER | 04_master · 01_conventions | PostgreSQL tag_master · tag_master_history · biz_command_log |
 | MST-07 | 태그 메타 캐시 | REQ-GLB-08 · REQ-MST-13 | F-01 · F-03 | 표면 없음 | 표면 없음 — 다른 기능의 내부 조회 | Redis cache:tagmeta |
 | MST-08 | 캐시 무효화 체인 | REQ-GLB-09 · REQ-MST-09 · REQ-MST-10 | F-05 | 표면 없음 | 표면 없음 — 쓰기 표면의 후처리 | Redis cache 계열 · ch:cacheinv · ClickHouse dict_tag |
 | MST-09 | Dictionary 원천 제공 | REQ-GLB-11 · REQ-GLB-14 · REQ-MST-08 · REQ-MST-10 · REQ-MST-11 · REQ-MST-12 · REQ-TEC-14 | F-04 · F-08 | 표면 없음 | 표면 없음 — TSQ-07이 소비 | PostgreSQL tag_master · ClickHouse dict_tag |
@@ -188,14 +190,14 @@
 
 | 기능 ID | 기능명 | 요구사항 | 흐름 | 화면 | API | 저장 객체 |
 |------|------|------|------|------|------|------|
-| ALM-01 | 알람 규칙 관리 | REQ-ALM-01 · REQ-ALM-02 · REQ-ALM-03 · REQ-ALM-04 · REQ-ALM-18 · REQ-ALM-19 · REQ-ALM-20 · REQ-GLB-24 | F-05 | ALM-RULES | 07_alarms | PostgreSQL alarm_rule · Redis cache:alarmrules |
+| ALM-01 | 알람 규칙 관리 | REQ-ALM-01 · REQ-ALM-02 · REQ-ALM-03 · REQ-ALM-04 · REQ-ALM-18 · REQ-ALM-19 · REQ-ALM-20 · REQ-GLB-24 | F-05 | ALM-RULES | 07_alarms · 01_conventions | PostgreSQL alarm_rule · Redis cache:alarmrules · biz_command_log |
 | ALM-02 | 규칙 캐시 | REQ-ALM-02 · REQ-ALM-05 · REQ-ALM-20 | F-06 | 표면 없음 | 표면 없음 — ALM-03의 내부 단계 | Redis cache:alarmrules |
 | ALM-03 | 디바운스 판정 | REQ-ALM-06 · REQ-ALM-07 · REQ-ALM-08 · REQ-ALM-20 · REQ-GLB-01 · REQ-GLB-13 | F-06 | 표면 없음 | 표면 없음 — ING-09가 호출 | Redis alarm:state |
 | ALM-04 | 이벤트 확정 | REQ-ALM-09 · REQ-ALM-10 · REQ-ALM-16 · REQ-ALM-19 · REQ-ALM-20 · REQ-GLB-13 | F-06 | 표면 없음 | 표면 없음 — ALM-03의 후속 | PostgreSQL alarm_event(월 파티션) |
 | ALM-05 | 판정 전수 기록 | REQ-ALM-11 · REQ-ALM-20 · REQ-GLB-13 | F-06 | 표면 없음 | 표면 없음 — ALM-03의 후속 | ClickHouse alarm_eval |
 | ALM-06 | 발생 · 해제 발행 | REQ-ALM-10 · REQ-ALM-12 · REQ-ALM-20 | F-06 · F-07 | 표면 없음 | 표면 없음 — RLT-08이 전달 | Redis ch:alarm |
 | ALM-07 | 알람 이벤트 조회 | REQ-ALM-13 · REQ-ALM-18 · REQ-ALM-19 · REQ-ALM-20 · REQ-GLB-24 | F-06 | ALM-CONSOLE | 07_alarms | PostgreSQL alarm_event(읽기) |
-| ALM-08 | 알람 확인 | REQ-ALM-14 · REQ-ALM-15 · REQ-ALM-16 · REQ-ALM-18 · REQ-ALM-19 · REQ-ALM-20 · REQ-GLB-24 | F-06 | ALM-CONSOLE | 07_alarms | PostgreSQL alarm_event |
+| ALM-08 | 알람 확인 | REQ-ALM-14 · REQ-ALM-15 · REQ-ALM-16 · REQ-ALM-18 · REQ-ALM-19 · REQ-ALM-20 · REQ-GLB-24 | F-05 · F-06 | ALM-CONSOLE | 07_alarms · 01_conventions | PostgreSQL alarm_event · biz_command_log |
 | ALM-09 | 판정 이력 분석 | REQ-ALM-17 · REQ-ALM-20 · REQ-GLB-24 | F-06 | ALM-RULES | 07_alarms | ClickHouse alarm_eval(읽기) |
 
 - 검산: ALM 기능 = **9**
@@ -206,9 +208,9 @@
 
 | 기능 ID | 기능명 | 요구사항 | 흐름 | 화면 | API | 저장 객체 |
 |------|------|------|------|------|------|------|
-| WRK-01 | 작업지시 관리 | REQ-GLB-12 · REQ-GLB-24 · REQ-NFR-09 · REQ-WRK-01 · REQ-WRK-02 · REQ-WRK-03 · REQ-WRK-06 · REQ-WRK-11 · REQ-WRK-12 | F-05 | ADM-WORKORDER | 08_work_orders | PostgreSQL work_order · Redis cache 계열 |
-| WRK-02 | 작업지시 상태 관리 | REQ-GLB-24 · REQ-WRK-01 · REQ-WRK-04 · REQ-WRK-06 · REQ-WRK-11 · REQ-WRK-12 | F-05 | ADM-WORKORDER | 08_work_orders | PostgreSQL work_order |
-| WRK-03 | 생산 실적 기록 | REQ-GLB-24 · REQ-WRK-01 · REQ-WRK-05 · REQ-WRK-06 · REQ-WRK-11 · REQ-WRK-12 | F-05 | ADM-WORKORDER | 08_work_orders | PostgreSQL production_log |
+| WRK-01 | 작업지시 관리 | REQ-GLB-12 · REQ-GLB-24 · REQ-NFR-09 · REQ-WRK-01 · REQ-WRK-02 · REQ-WRK-03 · REQ-WRK-06 · REQ-WRK-11 · REQ-WRK-12 | F-05 | ADM-WORKORDER | 08_work_orders · 01_conventions | PostgreSQL work_order · Redis cache 계열 · biz_command_log |
+| WRK-02 | 작업지시 상태 관리 | REQ-GLB-24 · REQ-WRK-01 · REQ-WRK-04 · REQ-WRK-06 · REQ-WRK-11 · REQ-WRK-12 | F-05 | ADM-WORKORDER | 08_work_orders · 01_conventions | PostgreSQL work_order · biz_command_log |
+| WRK-03 | 생산 실적 기록 | REQ-GLB-24 · REQ-WRK-01 · REQ-WRK-05 · REQ-WRK-06 · REQ-WRK-11 · REQ-WRK-12 | F-05 | ADM-WORKORDER | 08_work_orders · 01_conventions | PostgreSQL production_log · biz_command_log |
 | WRK-04 | 감사 로그 기록 | REQ-WRK-01 · REQ-WRK-07 · REQ-WRK-08 · REQ-WRK-09 · REQ-WRK-12 | F-05 | 표면 없음 | 표면 없음 — 쓰기 표면의 트랜잭션 안 단계 | PostgreSQL audit_log |
 | WRK-05 | 감사 로그 조회 | REQ-GLB-24 · REQ-WRK-06 · REQ-WRK-09 · REQ-WRK-10 · REQ-WRK-12 | F-05 | ADM-AUDIT | 08_work_orders | PostgreSQL audit_log(읽기) |
 
@@ -283,7 +285,7 @@
 | F-02 | 12 | COL-07 · GEN-06 · ING-01 · ING-02 · ING-03 · ING-04 · ING-05 · ING-06 · ING-07 · ING-08 · ING-10 · ING-11 |
 | F-03 | 12 | AUT-04 · AUT-05 · AUT-06 · AUT-07 · MST-07 · ING-08 · TSQ-08 · RLT-01 · RLT-02 · RLT-03 · RLT-04 · RLT-07 |
 | F-04 | 14 | AUT-04 · AUT-05 · AUT-06 · AUT-07 · MST-09 · TSQ-01 · TSQ-02 · TSQ-03 · TSQ-04 · TSQ-05 · TSQ-06 · TSQ-07 · TSQ-08 · TSQ-09 |
-| F-05 | 20 | AUT-01 · AUT-02 · AUT-03 · AUT-04 · AUT-05 · AUT-06 · MST-01 · MST-02 · MST-03 · MST-04 · MST-05 · MST-06 · MST-08 · RLT-09 · ALM-01 · WRK-01 · WRK-02 · WRK-03 · WRK-04 · WRK-05 |
+| F-05 | 21 | AUT-01 · AUT-02 · AUT-03 · AUT-04 · AUT-05 · AUT-06 · MST-01 · MST-02 · MST-03 · MST-04 · MST-05 · MST-06 · MST-08 · RLT-09 · ALM-01 · ALM-08 · WRK-01 · WRK-02 · WRK-03 · WRK-04 · WRK-05 |
 | F-06 | 12 | AUT-05 · ING-09 · ING-10 · RLT-08 · ALM-02 · ALM-03 · ALM-04 · ALM-05 · ALM-06 · ALM-07 · ALM-08 · ALM-09 |
 | F-07 | 9 | AUT-04 · AUT-05 · AUT-07 · ING-08 · RLT-05 · RLT-06 · RLT-07 · RLT-08 · ALM-06 |
 | F-08 | 3 | MST-09 · GEN-08 · ING-12 |
@@ -321,6 +323,7 @@
 
 | API 문서 | 표면 수 | 기능 수 | 기능 |
 |------|:--:|:--:|------|
+| [../07_api/01_conventions.md](../07_api/01_conventions.md) | 1 | 11 | MST-01 · MST-02 · MST-03 · MST-04 · MST-05 · MST-06 · ALM-01 · ALM-08 · WRK-01 · WRK-02 · WRK-03 |
 | [../07_api/03_auth.md](../07_api/03_auth.md) | 3 | 3 | AUT-01 · AUT-02 · AUT-03 |
 | [../07_api/04_master.md](../07_api/04_master.md) | 17 | 6 | MST-01 · MST-02 · MST-03 · MST-04 · MST-05 · MST-06 |
 | [../07_api/05_timeseries.md](../07_api/05_timeseries.md) | 2 | 6 | TSQ-01 · TSQ-02 · TSQ-06 · TSQ-07 · TSQ-08 · TSQ-09 |
@@ -331,8 +334,8 @@
 | [../07_api/10_metrics.md](../07_api/10_metrics.md) | 2 | 6 | OBS-01 · OBS-02 · OBS-03 · OBS-04 · OBS-05 · OBS-06 |
 | [../07_api/11_websocket.md](../07_api/11_websocket.md) | 1 | 7 | AUT-04 · AUT-07 · RLT-05 · RLT-06 · RLT-07 · RLT-08 · RLT-09 |
 
-- 검산: 표면 = 3 + 17 + 2 + 2 + 6 + 9 + 1 + 2 + 1 = **43** · 기능이 가리키지 않는 API 문서 **0** · 표면 열이 API 문서가 아닌 기능 횡단(전 표면에 걸림) 2 + 표면 없음 48 = **50**
-- 01_conventions · 02_errors는 규약 · 미러라 기능이 가리키지 않는다 — 미매핑이 아니다.
+- 검산: 표면 = 1 + 3 + 17 + 2 + 2 + 6 + 9 + 1 + 2 + 1 = **44** · 기능이 가리키지 않는 API 문서 **0** · 표면 열이 API 문서가 아닌 기능 횡단(전 표면에 걸림) 2 + 표면 없음 48 = **50**
+- 02_errors는 미러라 기능이 가리키지 않는다 — 미매핑이 아니다. **01_conventions는 규약이지만 횡단 표면 명령 조회(#1 · D-04 개정)를 채번하므로 API 문서로 센다** — 그 표면이 결과를 확인해 주는 업무 쓰기 기능 11이 가리킨다.
 
 ## 저장 객체 축
 
@@ -355,6 +358,7 @@
 | PostgreSQL | production_log | 1 | WRK-03 |
 | PostgreSQL | audit_log | 3 | MST-04 · WRK-04 · WRK-05 |
 | PostgreSQL | plc_tag_raw_control | 2 | GEN-10 · ING-11 |
+| PostgreSQL | biz_command_log | 11 | MST-01 · MST-02 · MST-03 · MST-04 · MST-05 · MST-06 · ALM-01 · ALM-08 · WRK-01 · WRK-02 · WRK-03 |
 | ClickHouse | tag_raw | 9 | GEN-08 · ING-03 · ING-04 · ING-10 · TSQ-01 · TSQ-02 · TSQ-09 · RLT-04 · OBS-04 |
 | ClickHouse | tag_1m | 4 | GEN-08 · ING-12 · TSQ-01 · TSQ-02 |
 | ClickHouse | tag_1h | 4 | GEN-08 · ING-12 · TSQ-01 · TSQ-02 |
@@ -364,7 +368,7 @@
 | ClickHouse | dict_tag | 3 | MST-08 · MST-09 · TSQ-07 |
 | ClickHouse | work_order_control · work_order_control_rmt · production_log_control | 0 | 해당 없음 — 계측물(역방향 대조 실행기 EXP-40~44 · 도구 컨테이너 전용) |
 
-- 검산: PostgreSQL 15 + ClickHouse 테이블 8(목적지 5 + 계측물 3 한 행) + MV 3(한 행) + Dictionary 1 = 객체 **27** · 기능이 가리키지 않는 객체 = 계측물 3(해당 없음 명시) · 미매핑 **0**
+- 검산: PostgreSQL 16 + ClickHouse 테이블 8(목적지 5 + 계측물 3 한 행) + MV 3(한 행) + Dictionary 1 = 객체 **28** · 기능이 가리키지 않는 객체 = 계측물 3(해당 없음 명시) · 미매핑 **0**
 - **업무 대조 테이블 셋이 기능을 갖지 않는 것은 미매핑이 아니다.** 앱 모듈이 읽지도 쓰지도 않고 실행기가 앱 밖에서 쓰는 계측물이다 — 기능 정본에 대응 행을 만들면 앱에 없는 기능이 유령으로 생긴다(정본 [../05_data_stores/03_clickhouse_schema.md](../05_data_stores/03_clickhouse_schema.md) §객체 목록). PostgreSQL 대조군 plc_tag_raw_control은 ING-11 · GEN-10이 쓰므로 기능을 갖는다 — 같은 계측물이어도 쓰는 주체가 앱인지가 가른다.
 
 ## AC 축
@@ -388,8 +392,8 @@
 | 요구사항 → 기능 | 229 | 0(해당 없음 5 명시) | 0 |
 | 흐름 | 10 | 0 | 0 |
 | 화면 | 10 | 0 | 0 |
-| API 문서 | 9 | 0 | 0 |
-| 저장 객체 | 27 | 0(해당 없음 3 명시) | 0 |
+| API 문서 | 10 | 0 | 0 |
+| 저장 객체 | 28 | 0(해당 없음 3 명시) | 0 |
 | AC | 45 | 0 | 0 |
 
 - 검산: 축 = **7** · 미매핑 합 **0** · 유령 합 **0**

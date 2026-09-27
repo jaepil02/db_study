@@ -2,6 +2,7 @@
 
 > **대상**: 로컬 머신 1대의 요구사항 · 원본 실측 환경(WSL2 · 20스레드 · 가용 RAM) · WSL2 메모리 조정 · **컨테이너 메모리 상한(정본)** · 메모리 프로파일 2 + 조건부 중간 · 대조 실험 메모리 조건 · networkingMode=mirrored · **환경변수 목록(정본)** · 기동 · 정지 · 스냅샷 명령 · 아카이브 위치 · 착수 전 조정
 > **작성일**: 2026-09-24
+> **개정일**: 2026-09-28 — SW-12 BIZ_WRITE_PATH 반영(사용자 결정 2026-09-27 · 업무 쓰기 Redis 경유) — 역할 스위치 행 SW-01~SW-11의 11 → **SW-01~SW-12의 12** — 표 행 17 불변 · 이름 38 → **39**
 > **개정일**: 2026-09-26 — S7 ① 알람 착수 반영 — 환경변수 1행 신설(ALARM_ACK_ACTOR_EMAIL · 인증 전 확인 행위자 · 판정 정본 07_api/07) — 표 행 16 → **17** · 이름 37 → **38**
 > **개정일**: 2026-09-25 — S3 구현 반영 — 환경변수 3행 신설(INGEST_BATCH_PLAN · INGEST_LAB_FAULT · GEN_PROFILE) — 표 행 13 → **16** · 이름 34 → **37**
 > **개정일**: 2026-09-24 — S2 구현 반영 — 기동 명령 ① compose up → **task up**(스키마 · 시드가 api 기동 앞 — 04_architecture/03 기동 순서 교정)
@@ -150,12 +151,12 @@ swap=8GB
 
 ## 환경변수 (정본)
 
-**이 표가 환경변수 이름의 정본이다.** 07_api/10(run 필드) · 07_api/09(게이트) · 08_screen/07(재기동 명령)이 이 문서를 가리킨다. 스위치 11종의 이름 · 기본값 · 값 형식의 정본은 [../02_features/13_switch_matrix.md](../02_features/13_switch_matrix.md)이고 여기서는 계열로만 센다. 비밀(접속 자격 증명 · 토큰 서명 키)의 취급은 [../12_security/02_secrets_config.md](../12_security/02_secrets_config.md)(W7)가 갖는다.
+**이 표가 환경변수 이름의 정본이다.** 07_api/10(run 필드) · 07_api/09(게이트) · 08_screen/07(재기동 명령)이 이 문서를 가리킨다. 스위치 12종의 이름 · 기본값 · 값 형식의 정본은 [../02_features/13_switch_matrix.md](../02_features/13_switch_matrix.md)이고 여기서는 계열로만 센다. 비밀(접속 자격 증명 · 토큰 서명 키)의 취급은 [../12_security/02_secrets_config.md](../12_security/02_secrets_config.md)(W7)가 갖는다.
 
 | 계열 | 이름 | 값 | 기본 | 읽는 시점 | 읽는 자리 · 노출 | 잘못 주면 |
 |------|------|------|------|------|------|------|
 | 기동 역할 | **APP_ROLE** | all · api · worker · collector · datagen | all | 기동 시 1회 | 모듈 초기화 범위(ADR-22) | 허용값 밖이면 기동 거부 — 조용히 all로 돌면 역할 분리 실험이 분리 없이 기록된다 |
-| 역할 스위치 | SW-01~SW-11의 11개 | 정본 02_features/13 | 정본 02_features/13 | 기동 시 1회 | DI 포트 구현 선택(ADR-08) · health switches · /metrics 레이블 | 허용값 밖이면 기본 구현이 주입되고 health가 실제 구현을 보여 준다(07_api/10 A형) |
+| 역할 스위치 | SW-01~SW-12의 12개 | 정본 02_features/13 | 정본 02_features/13 | 기동 시 1회 | DI 포트 구현 선택(ADR-08) · health switches · /metrics 레이블 | 허용값 밖이면 기본 구현이 주입되고 health가 실제 구현을 보여 준다(07_api/10 A형) |
 | 부하 주입 게이트 | **DATAGEN_BULK_ENABLED** | true · false | false | 기동 시 1회 | 모드 C 표면 라우트 존재 여부(07_api/09) · 스위치 목록에 넣지 않는다 | true로 둔 채 잊으면 부하 주입 표면이 상시 열린다 — 레이트 리밋 등급의 방어만 남는다 |
 | 측정 조건 | **MEMORY_PROFILE** | load · dev · mid | 없음(null) | 기동 시 1회 | health run.memoryProfile | 없으면 null — 그 기록은 4요소가 빠져 인용할 수 없다 |
 | 측정 조건 | **CAPACITY_TIER** | S · M · M+ · L | 없음(null) | 기동 시 1회 | health run.capacityTier | 상동 |
@@ -172,7 +173,7 @@ swap=8GB
 | 비밀 | **JWT_SIGNING_KEY · POSTGRES_ADMIN_PASSWORD · APP_OWNER_PASSWORD · APP_RW_PASSWORD · CH_READER_PASSWORD · CLICKHOUSE_PASSWORD · REDIS_PASSWORD · SEED_USER_PASSWORD · GRAFANA_ADMIN_PASSWORD** | 비밀 값 — 비밀 목록 정본 [../12_security/02_secrets_config.md](../12_security/02_secrets_config.md)의 9종과 1:1 | 없음 — .env.example에는 자리표시만 | 기동 시 1회(migrate · seed는 실행 시 1회) | 서명 키 api · 관리자 비밀번호 postgres 이미지 초기화 · app_owner migrate · app_rw 접속 문자열 치환과 migrate 역할 생성 · ch_reader ClickHouse 설정 파일과 migrate · ClickHouse · Redis 비밀번호 이미지 초기화와 접속 문자열 치환 · 학습자 seed · Grafana 이미지 | 비었거나 자리표시와 같으면 **기동 거부** — 허용하면 모든 환경이 같은 서명 키 · 같은 저장소 비밀번호로 돈다 · 서명 키는 256비트 무작위 미만이면 거부 · 공개 접두(NEXT_PUBLIC_) 이름을 쓰지 않는다 |
 | 웹 | **API_BASE_URL · NEXT_PUBLIC_API_BASE_URL** | BFF 서버 측 · 브라우저 직결 api 주소 | http://127.0.0.1:3000 · http://localhost:3000 | 웹 기동 시 | BFF fetch · 브라우저 직결(ADR-02) | 브라우저 쪽을 BFF 주소로 두면 고빈도 요청이 1홉 늘어난다 |
 
-- 검산: 표 행 = **17** · 이름 수 = 1 + 11 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 3 + 9 + 2 = **38** — 스위치 11 + 스위치 밖 27(APP_ROLE · DATAGEN_BULK_ENABLED · MEMORY_PROFILE · CAPACITY_TIER · COMMIT_HASH · NODE_OPTIONS · UV_THREADPOOL_SIZE · WORKER_POOL_SIZE · SIM_FAULT_PLAN · INGEST_BATCH_PLAN · INGEST_LAB_FAULT · GEN_PROFILE · ALARM_ACK_ACTOR_EMAIL · POSTGRES_URL · CLICKHOUSE_URL · REDIS_URL · 비밀 9 · API_BASE_URL · NEXT_PUBLIC_API_BASE_URL) = **38**
+- 검산: 표 행 = **17** · 이름 수 = 1 + 12 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 3 + 9 + 2 = **39** — 스위치 12 + 스위치 밖 27(APP_ROLE · DATAGEN_BULK_ENABLED · MEMORY_PROFILE · CAPACITY_TIER · COMMIT_HASH · NODE_OPTIONS · UV_THREADPOOL_SIZE · WORKER_POOL_SIZE · SIM_FAULT_PLAN · INGEST_BATCH_PLAN · INGEST_LAB_FAULT · GEN_PROFILE · ALARM_ACK_ACTOR_EMAIL · POSTGRES_URL · CLICKHOUSE_URL · REDIS_URL · 비밀 9 · API_BASE_URL · NEXT_PUBLIC_API_BASE_URL) = **38**
 - **이 표에서 이름을 새로 정한 것은 이 문서의 판정이다** — MEMORY_PROFILE · CAPACITY_TIER · COMMIT_HASH(health run 주입 · 인계 W5 07_api 행) · WORKER_POOL_SIZE · SIM_FAULT_PLAN · 접속 3 · 웹 2. 원본 이름은 APP_ROLE · NODE_OPTIONS · UV_THREADPOOL_SIZE이고, DATAGEN_BULK_ENABLED는 07_api/09가, 비밀 9는 W7 보안 리뷰([../12_security/02_secrets_config.md](../12_security/02_secrets_config.md))가 판정했다.
 - **접속 문자열의 로컬 값(판정 2026-09-24)** — PostgreSQL DB 이름 plc(ClickHouse 데이터베이스 plc와 같은 이름) · PostgreSQL 관리자 계정은 이미지 기본 postgres · ClickHouse 계정 이름 app. 셋 다 비밀이 아닌 설계 값이다([../12_security/02_secrets_config.md](../12_security/02_secrets_config.md) §비밀이 아닌 것).
 - **비밀 하나 = 변수 하나다.** migrate는 app_owner 비밀번호를 치환한 접속으로 돌고(api는 이 값을 읽지 않는다 — 런타임이 DDL 권한을 갖지 않게), 역할을 만들 때 APP_RW_PASSWORD · CH_READER_PASSWORD를 읽는다. 저장소 이미지의 초기화 변수 이름은 이미지가 정하므로 Compose 파일이 이 이름을 이미지 변수로 옮긴다.

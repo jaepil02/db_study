@@ -2,12 +2,13 @@
 
 > **대상**: WRK 도메인 REST 표면 — 작업지시 조회 · 등록 · 수정 · 상태 전이 · 생산 실적 기록과 조회 · 감사 로그 조회 · 태그 새 발급 계보 조회 · **실적 기록 시점의 작업지시 상태 조건 판정** · 일반 수정 본문의 status 처리 판정 · 원본에 없는 표면 판정(생산 실적 · 감사 조회)
 > **작성일**: 2026-09-24
+> **개정일**: 2026-09-27 — D-04 부분 개정 반영(사용자 결정 — 업무 쓰기도 Redis를 거친다 · 동기 응답) — 도입 단락 ③계층 반례 → **시연**(명령 스트림 경유 · 커밋 뒤 응답) · 공통 규약 쓰기 행(202 pending · Idempotency-Key · Redis 불가 503) · 실적 불릿 — 항목 수 · 표면 수 불변
 > **개정일**: 2026-09-26 — W1 검수 반영 — userId null 행의 무인증 기간 S4~S6 → **인증 도입(S7 ②) 전**(S7 ①도 무인증 · 정본 05_data_stores/01 §인계 판정)
 > **개정일**: 2026-09-24 — 최종 정밀 검수 — §판정 → §실적 기록 시점의 작업지시 상태 조건 판정(절 참조 명확화)
 > **개정일**: 2026-09-24 — W5 판정 반영 — #7 실적 상태 조건 거절 → **work_orders.production_log_not_allowed/409** · #9 계보 조회 역할 ADMIN → **전원**(리드 판정) · 실적 정정 · 이중 제출 범위 밖 · 한계 등재 — 표면 수 불변
 > **원천**: 원본 architecture.md §6 · §11 · §12 · §18(커밋 ff66a37) · 원본 data_flow.md §7 · §7.2(커밋 ff66a37) · REQ-WRK-01~12 · D-04 · D-11 · ADR-12 · [../02_features/10_work_orders.md](../02_features/10_work_orders.md) WRK-01~05 · [../11_glossary/03_enums_state_machines.md](../11_glossary/03_enums_state_machines.md) 상태 머신 4 · [../05_data_stores/01_postgresql_schema.md](../05_data_stores/01_postgresql_schema.md) work_order · production_log · audit_log · tag_master_history · [../06_pipeline/07_business_crud.md](../06_pipeline/07_business_crud.md) 작업지시 캐시 · docs_plan.md 웨이브 인계 W5 07_api 행(실적 기록 시점의 작업지시 상태 조건 · 원본에 없는 표면)
 
-WRK 표면은 분기 **③계층의 반례 자리**다 — 업무 쓰기는 Stream을 타지 않고 API가 PostgreSQL 트랜잭션으로 동기 커밋한 뒤에 응답한다(D-04 · REQ-WRK-01). 그래서 이 문서의 모든 쓰기는 **응답 직후의 같은 대상 조회가 새 값을 본다**(read-your-writes)는 계약을 지고, BFF 서버 fetch 캐시를 두지 않는다(no-store).
+WRK 표면은 분기 **③계층의 시연 자리**다 — 업무 쓰기는 명령 스트림 stream:biz:cmd를 거쳐 워커가 PostgreSQL 트랜잭션으로 커밋하고, api는 그 결과를 받은 뒤에만 응답한다(D-04 2026-09-27 부분 개정 · REQ-WRK-01). 그래서 이 문서의 모든 쓰기는 **응답 직후의 같은 대상 조회가 새 값을 본다**(read-your-writes)는 계약을 지고, BFF 서버 fetch 캐시를 두지 않는다(no-store).
 
 원본 API 표에는 /api/v1/work-orders(GET · POST · PATCH) 한 줄뿐이다(원본 architecture.md §11). 기능 WRK-02(상태 관리) · WRK-03(실적) · WRK-05(감사 조회)는 표면을 요구하고, 관리 화면의 "변경 이력 확인"이 감사 조회를 요구한다. 이 문서는 그 표면을 **기능 근거로 신설**한다. 감사 기록(WRK-04)은 표면이 없다 — 쓰기 표면의 트랜잭션 안 단계다.
 
@@ -19,7 +20,7 @@ WRK 표면은 분기 **③계층의 반례 자리**다 — 업무 쓰기는 Stre
 |------|------|------|
 | 경로 | 전 표면 BFF 경유 · **no-store** | [01_conventions.md](./01_conventions.md) §BFF 경유와 직결 · REQ-WRK-03 |
 | 인가 | 작업지시 · 실적 조회 전원 · 쓰기 · 상태 전이 ADMIN · 감사 원문 조회(#8) ADMIN · 계보 조회(#9) 전원 | REQ-WRK-10 · 11 · 권한 매트릭스 WRK-05 |
-| 쓰기 | 동기 커밋 뒤 응답 · Stream · 큐 · 로컬 파일에 보관했다 재생하지 않는다 | REQ-WRK-01 · 06 |
+| 쓰기 | 쓰기 4(#2 · #3 · #5 · #7) — 명령 스트림 stream:biz:cmd → 워커 트랜잭션 → **커밋 뒤 응답** · 대기 상한 초과 **202 + {cmdId, status: 'pending'}** · 명령 ID는 Idempotency-Key 헤더 · PostgreSQL · Redis 불가면 common.postgres_unavailable/503 · 워커는 불가 중 명령을 붙들었다 재생하지 않는다 | REQ-WRK-01 · 06 · [01_conventions.md](./01_conventions.md) §업무 쓰기 경로 |
 | 감사 | 쓰기 하나 = 트랜잭션 하나(변경 + audit_log) · 감사 실패는 변경 전체 롤백 | REQ-WRK-08 |
 | 캐시 | cache:workorders Hash(필드 = 정규화 목록 쿼리 SHA-1 · 첫 채움 기준 만료 현행 참고 60초) · 작업지시 · 실적 쓰기 커밋 뒤 키 하나 DEL | REQ-WRK-03 · [../05_data_stores/05_redis_keyspace.md](../05_data_stores/05_redis_keyspace.md) |
 | PostgreSQL 불가 | common.postgres_unavailable/503 · 시계열 조회는 계속 | REQ-WRK-06 |
@@ -114,7 +115,7 @@ PLANNED ──→ IN_PROGRESS ──→ COMPLETED
 | 실패 | 없는 지시 404 | 없는 지시 404 · 형식 400 · 상태 조건 위반 409 work_orders.production_log_not_allowed |
 | 관련 REQ | REQ-WRK-05 · 11 | REQ-WRK-01 · 05 · 08 · 11 |
 
-- **실적은 사람이 API로 입력하는 업무 데이터다.** Stream 유래 생산 카운터로 자동 채우지 않고 한 테이블로 합치지 않는다 — 합치면 스트림 유래 값이 업무 트랜잭션 경로에 섞여 ③의 "Stream을 타지 않는다"가 거짓이 된다(REQ-WRK-05).
+- **실적은 사람이 API로 입력하는 업무 데이터다.** Stream 유래 생산 카운터로 자동 채우지 않고 한 테이블로 합치지 않는다 — 합치면 수집 스트림 유래 값이 사람의 명령 경로(원장 · 멱등 · 감사)를 거치지 않고 업무 테이블에 섞인다(REQ-WRK-05).
 - **실적 수정 · 삭제 표면은 두지 않는다.** 기능 WRK-03은 기록 · 조회다. 잘못 입력한 실적을 되돌릴 수단이 없는 것은 잔여다 — good_qty CHECK 0 이상이라 음수 보정 행도 쓸 수 없다(§미확인 · 미설계 등재).
 - **같은 값의 이중 제출은 두 행이 된다.** 자연 유일 키가 없고 Idempotency-Key를 담을 키 계열이 없다([01_conventions.md](./01_conventions.md) §멱등) — 화면은 제출 버튼을 응답까지 잠근다.
 

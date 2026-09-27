@@ -18,6 +18,6 @@ Docker Compose로 컨테이너 4개(`api`, `postgres`, `clickhouse`, `redis`)를
 
 ## 문서
 
-설계 문서는 [docs/README.md](docs/README.md)에서 시작한다. 12개 폴더(개요 · 기능 · 요구사항 · 아키텍처 · 저장소 · 데이터 흐름 · API · 화면 · 기술 스택 · 관측과 실험 · 용어 · 보안) 122개 문서로 구성되며, 문서 지도 · 고정 기준 · 읽는 순서는 docs/README.md가, 작성 규약은 [docs/CLAUDE.md](docs/CLAUDE.md)가 갖는다.
+설계 문서는 [docs/README.md](docs/README.md)에서 시작한다. 12개 폴더(개요 · 기능 · 요구사항 · 아키텍처 · 저장소 · 데이터 흐름 · API · 화면 · 기술 스택 · 관측과 실험 · 용어 · 보안) 123개 문서로 구성되며, 문서 지도 · 고정 기준 · 읽는 순서는 docs/README.md가, 작성 규약은 [docs/CLAUDE.md](docs/CLAUDE.md)가 갖는다.
 
 기존 설계서 4본(architecture.md · data_flow.md · tech_stack.md · implementation_plan.md)은 docs/로 흡수하고 삭제했다. 원문은 커밋 ff66a37에서 볼 수 있다.

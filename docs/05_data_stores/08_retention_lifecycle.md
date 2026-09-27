@@ -2,10 +2,11 @@
 
 > **대상**: 데이터 단계별 보존 기간 · 기준 시점 · 삭제 방식 · 삭제 단위 · 실제 삭제 시점 · 복구 가능성 · 파티션 단위 변경 원칙 · 보존 변경 절차 · 대조군 보존 정합 — **보존 조정값의 정본**
 > **작성일**: 2026-09-24
+> **개정일**: 2026-09-28 — 업무 쓰기 Redis 경유 개정(사용자 결정 2026-09-27) — 단계 표 **#16 업무 명령 원장**(biz_command_log · 무기한 · 추가 전용 · 정리 주체 없음 — audit_log와 같은 판정) · **#17 업무 명령 버퍼 · 결과**(stream:biz:cmd MAXLEN · biz:result TTL) 신설 — 단계 15 → **17** · Redis 4 → **5** · PostgreSQL 4 → **5** · #11 업무 12 테이블 산식 업무 14 → **15**
 > **개정일**: 2026-09-26 — W1 검수 반영 — 단계 표 #15 업무 대조 계측물(ClickHouse 3 · TTL 없음 · 실험 스냅샷 수명 · 삭제 = 기준 스냅샷 복원 REQ-TEC-08) 신설 — 단계 14 → **15** · ClickHouse 5 → **6** · PostgreSQL 업무 테이블에 넣은 실험 행 규칙 불릿
 > **개정일**: 2026-09-24 — W7 검수 반영 — 미확인 2행 닫힘(대조군 파티션 정리 · DLQ 재처리 전 보존)
 > **개정일**: 2026-09-24 — W6 판정 반영 — TTL 머지 주기(서버 기본값 유지 · 줄이지 않음) · alarm_event 아카이브 위치(snapshots/archive/alarm_event · 파티션당 덤프 1)를 닫는다 · 파티션 삭제 지연은 미확인 유지
-> **원천**: 원본 data_flow.md §10.1 · §13 · §17(커밋 ff66a37) · 원본 architecture.md §5 · §6 · §7.1 · §7.2 · §7.3 · §15 · §17 · §18(커밋 ff66a37) · 원본 tech_stack.md §10.3(커밋 ff66a37) · [../README.md](../README.md) 고정 기준 조정값(보존의 정본 지정) · ADR-15 · D-05 · D-10
+> **원천**: 원본 data_flow.md §10.1 · §13 · §17(커밋 ff66a37) · 원본 architecture.md §5 · §6 · §7.1 · §7.2 · §7.3 · §15 · §17 · §18(커밋 ff66a37) · 원본 tech_stack.md §10.3(커밋 ff66a37) · 사용자 결정 2026-09-27(업무 쓰기 Redis 경유) · [../README.md](../README.md) 고정 기준 조정값(보존의 정본 지정) · ADR-15 · D-05 · D-10
 
 이 문서는 **보존 기간 값의 정본**이다. 보존은 2계층 조정값이라 다른 문서는 값을 박지 않고 이 문서를 인용한다. Redis 키 TTL의 정본은 [05_redis_keyspace.md](./05_redis_keyspace.md), Stream · DLQ MAXLEN의 정본은 [06_redis_memory.md](./06_redis_memory.md)이며, 이 문서는 그 둘을 단계 목록에 인용만 한다.
 
@@ -46,11 +47,14 @@
 | 13 | 최신값 | Redis rt:latest | 덮어쓰기 | 해당 없음 | 없음 | ClickHouse argMax로 재구성 |
 | 14 | 캐시 · 세션 · 락 · 계수 | Redis cache · lock · rl · auth | 키별 TTL | 쓰기 시 | 만료 · volatile-lru 축출 | 재조회로 복원(auth는 재로그인) |
 | 15 | 업무 대조 계측물 | ClickHouse work_order_control · work_order_control_rmt · production_log_control | **실험 스냅샷 수명** — TTL 없음 | 해당 없음 | 기준 스냅샷 복원(REQ-TEC-08) · 변형마다 비우고 다시 채움 | 불가 — 실행기가 같은 시드 행 벡터로 다시 채운다 |
+| 16 | 업무 명령 원장 | PostgreSQL biz_command_log | **무기한** | applied_at | 없음 — 추가 전용 | 해당 없음 |
+| 17 | 업무 명령 버퍼 · 결과 | Redis stream:biz:cmd · biz:result:{cmdId} | 버퍼는 소비 후 MAXLEN 범위 · 결과는 키별 TTL | 엔트리 순서 · 결과 SET 시 | 근사 트리밍 · 만료 · 축출 | 불가 — 적용된 명령의 판정은 원장(#16)에 있다 · 미적용 명령의 트리밍은 유실(한계 등재 #25) |
 
-- 검산: 단계 = Redis 4(#1 · #2 · #13 · #14) + 볼륨 파일 1(#3) + ClickHouse 6(#4~#8 · #15) + PostgreSQL 4(#9~#12) = **15**
-- **#11의 12 테이블** = 업무 14 − alarm_event(#9) − audit_log(#10) = 12(site · production_line · device · modbus_config · tag_master · tag_master_history · alarm_rule · user_account · role · user_role · work_order · production_log)
+- 검산: 단계 = Redis 5(#1 · #2 · #13 · #14 · #17) + 볼륨 파일 1(#3) + ClickHouse 6(#4~#8 · #15) + PostgreSQL 5(#9~#12 · #16) = **17**
+- **#11의 12 테이블** = 업무 15 − alarm_event(#9) − audit_log(#10) − biz_command_log(#16) = 12(site · production_line · device · modbus_config · tag_master · tag_master_history · alarm_rule · user_account · role · user_role · work_order · production_log)
 - **#15 업무 대조 계측물에 TTL을 두지 않는다.** 역방향 대조(EXP-40~44) 실행 안에서만 행이 있고 실험이 끝나면 기준 스냅샷 복원이 지운다(REQ-TEC-08) — TTL을 두면 머지 스케줄의 TTL 삭제가 갱신 · 머지 비용 측정에 섞인다. 테이블 자체는 순번 마이그레이션(009)이 만들어 남는다([10_olap_vs_rdb_control.md](./10_olap_vs_rdb_control.md) §업무 규모 격자와 채우기).
 - **PostgreSQL 업무 테이블에 넣은 실험 행은 #11 · #10의 무기한 보존을 받지 않는다.** 역방향 대조가 work_order에 채운 10^4~10^6행과 실험이 쓴 production_log · audit_log 행은 실험 전용 스냅샷에서만 살고, 실험이 끝나면 기준 스냅샷 복원으로 사라진다(REQ-TEC-08). 논리 삭제 · 추가 전용 규칙은 사람의 쓰기 표면이 만든 행의 규칙이다 — 실험 행을 기준 스냅샷에 남기면 업무 규모 산정과 감사가 실험 행을 사람의 행위로 센다.
+- **#16 biz_command_log를 audit_log와 같은 이유로 무기한 · 비분할 · 정리 주체 없음으로 판정한다.** 행 증가가 업무 쓰기 수에 묶여 작고 판정이 바뀌지 않는다. 보존이 결과 키 TTL(현행 참고 300초)보다 길어야 명령 조회가 결과 키 만료 뒤에도 답한다 — 무기한이면 관계가 늘 성립한다. 부하 실험이 만든 원장 행은 위 실험 행 규칙대로 기준 스냅샷 복원이 지운다. 정리가 필요해지면 app_rw에 DELETE를 주지 않고 app_owner 작업으로 둔다(추가 전용 권한 — [02_postgresql_constraints.md](./02_postgresql_constraints.md)).
 - **#10 audit_log를 무기한 · 비분할로 판정한다.** 행 증가가 사람의 쓰기 표면 호출 수에 묶여 작고(REQ-WRK-07 — 시스템 쓰기는 감사하지 않는다), 수정 · 삭제 표면이 없다(REQ-WRK-09). 분할이 필요해지는 증가율은 이 시스템에서 나오지 않는다 — 보존을 줄여야 하는 날이 오면 월 파티션 도입이 먼저다.
 
 ## 보존 조회 계약

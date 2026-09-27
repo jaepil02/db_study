@@ -2,6 +2,7 @@
 
 > **대상**: 전원 — db_study가 무엇을 만들고 무엇을 만들지 않는가, 그리고 만들지 않는 것이 측정에 남기는 한계
 > **작성일**: 2026-09-24
+> **개정일**: 2026-09-27 — D-04 부분 개정 반영(사용자 결정 — 업무 쓰기도 Redis를 거친다) — 역할 스위치 범위 SW-01~SW-11 → **SW-01~SW-12** · 오해 표 업무 CRUD 행의 실패 문구를 명령 경로 시연으로
 > **개정일**: 2026-09-24 — ClickHouse 26.8 LTS 전환(사용자 결정 · 25.x 보안 지원 종료) — 저장소 행 스택 표기 ClickHouse 25.8 → **26.8**
 > **개정일**: 2026-09-24 — 최종 정밀 검수 — 생산 카운터 · 대조군 COPY 기전 미설계 → W4 판정(06_pipeline/04) 반영
 > **개정일**: 2026-09-24 — W7 검수 반영 — 확장 3단계 진입 조건의 상관 대상 스트림 길이 → **Stream 점유 메모리**(정본 04_architecture/08 · 10_observability/03)
@@ -39,7 +40,7 @@ db_study의 범위는 **학습 목표 2축(D-01)을 측정으로 닫는 데 필�
 | 저장소 | PostgreSQL 18 · ClickHouse 26.8 · Redis 8(단일 인스턴스) + **PostgreSQL 대조군 테이블** | 목표 ①의 비교 상대와 목표 ②의 세 목적지 | [../05_data_stores/README.md](../05_data_stores/README.md) · D-05 |
 | 3계층 분기 | 원시값 · 알람과 실적 · 업무 CRUD의 목적지 판정과 기전 | 목표 ②의 대상 그 자체 | [../04_architecture/04_storage_split.md](../04_architecture/04_storage_split.md) · D-04 |
 | 데이터 흐름 | F-01~F-10(수집부터 백프레셔와 장애까지) | 분기가 일어나는 경로와 degrade 경로 | [../06_pipeline/01_flow_inventory.md](../06_pipeline/01_flow_inventory.md) |
-| 역할 스위치 | SW-01~SW-11과 그 계측 | 두 축의 공통 손잡이 | [../02_features/13_switch_matrix.md](../02_features/13_switch_matrix.md) · D-06 |
+| 역할 스위치 | SW-01~SW-12와 그 계측 | 두 축의 공통 손잡이 | [../02_features/13_switch_matrix.md](../02_features/13_switch_matrix.md) · D-06 |
 | 테스트 데이터 | 신호 프로파일 · 주입 모드 A~D · 시드 고정 · 백필 · 품질 코드 SIMULATED | 실장비가 없으므로 **생성기의 품질이 곧 실험의 품질**이다 | [../02_features/05_datagen.md](../02_features/05_datagen.md) |
 | 부하 · 장애 실험 | k6 부하 시나리오 · 장애 주입 · 실험 기록 | 병목과 축출 연쇄를 재현한다 | [../10_observability/05_load_scenarios.md](../10_observability/05_load_scenarios.md) · [../10_observability/06_experiment_catalog.md](../10_observability/06_experiment_catalog.md) |
 | 화면 | 실시간 대시보드 · 트렌드 분석 · 알람 콘솔 · 관리 화면군 · 실험 콘솔 | 측정 결과와 분기 결과를 사람이 보는 자리 | [../08_screen/README.md](../08_screen/README.md) |
@@ -90,7 +91,7 @@ db_study의 범위는 **학습 목표 2축(D-01)을 측정으로 닫는 데 필�
 | 로컬이니 인가 검사는 생략해도 된다 | In — 역할 기반 인가를 엔드포인트마다 검사한다 | 인가를 우회하는 경로가 생기고, 확장 2단계에서 인스턴스가 늘 때 방어선을 새로 써야 한다 |
 | 로컬이니 레이트 리밋이 필요 없다 | In — 사용자 · 토큰 기준(IP 기준은 무의미) | 모든 요청이 127.0.0.1에서 오므로 IP 기준 제한은 전원을 한 사용자로 본다 |
 | 학습용이니 감사 로그는 장식이다 | In — 업무 데이터 변경의 before · after | ③계층의 트랜잭션 경계(업무 쓰기와 감사 쓰기를 한 트랜잭션에)를 시연할 대상이 사라진다 |
-| 업무 CRUD는 Redis 학습 가치가 없으니 생략한다 | In(후순위) — 시연 최소분 필수(D-11) | ③계층이 비어 "경로를 고르지 않는 분기"의 반례가 사라진다 |
+| 업무 CRUD는 Redis 학습 가치가 없으니 생략한다 | In(후순위) — 시연 최소분 필수(D-11) | ③계층이 비어 "Redis를 거쳐도 동기 계약(커밋 뒤 응답 · 멱등 · 순서)을 지킨다"의 시연 자리가 사라진다(D-04 개정) |
 | 백업이 없으니 롤백도 없다 | In — 스냅샷과 복원 | 같은 초기 상태에서 반복할 수 없어 on/off 비교가 성립하지 않는다 |
 | 부하 주입 표면은 테스트 코드다 | In — /api/v1/ingest/bulk(기본 비활성) | 주입 모드 C(HTTP 계층 포함 수집 상한)를 잴 수 없다 |
 

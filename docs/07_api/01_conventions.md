@@ -1,7 +1,9 @@
 # API 공통 규약 (01_conventions)
 
-> **대상**: db_study api 컨테이너 표면 전체에 걸리는 규약 — 경로 버전 · 표면 계층 · BFF 경유와 직결의 배정(ADR-02 정본) · 인증 헤더 · 요청 검증 · 성공 본문 · **에러 봉투** · 시각 직렬화(points 시각 형식 판정) · 수치 직렬화 · 페이지네이션 · 멱등 · 캐시 헤더 · 레이트 리밋 헤더 · 응답 필드 변경 규칙 · 표면 번호 규약 · 표면 요약 표 어휘
+> **대상**: db_study api 컨테이너 표면 전체에 걸리는 규약 — 경로 버전 · 표면 계층 · BFF 경유와 직결의 배정(ADR-02 정본) · 인증 헤더 · 요청 검증 · 성공 본문 · **에러 봉투** · 시각 직렬화(points 시각 형식 판정) · 수치 직렬화 · 페이지네이션 · **업무 쓰기 경로(커밋 뒤 동기 응답 · 202 pending · Idempotency-Key · Redis 불가 503)** · **명령 조회 표면** · 멱등 · 캐시 헤더 · 레이트 리밋 헤더 · 응답 필드 변경 규칙 · 표면 번호 규약 · 표면 요약 표 어휘
 > **작성일**: 2026-09-24
+> **개정일**: 2026-09-28 — 웨이브 1 검수 반영(B-H3 · B-H4 · B-M4 · B-M8 · B-M9) — 202 뒤 화면 무효화 "미설계" → **명령 조회 applied 확인 → 로컬 무효화 + 신선 창 표지(x-bff-fresh) 재조회**(08_screen/01 판정) · 같은 키 재요청 — 만료 키 → **202 + {cmdId, status: 'expired'}**(새 코드 없음 · 적용 없음) · 503 뒤 재요청은 원장 재확인 · 생성 응답 202 설명에 expired · 명령 조회 404 = **결과 키 또는 원장의 actor 불일치(둘 다 NULL이면 같다)** · status failed = **적용 여부 미확정**(한계 등재 #26) · 원인 구분 → **Redis 불가 = unavailable · PostgreSQL 불가 = failed** — status 수 · 표면 수 불변
+> **개정일**: 2026-09-27 — D-04 부분 개정 반영(사용자 결정 2026-09-27 — 업무 쓰기도 Redis를 거친다 · 동기 응답) — **§업무 쓰기 경로 신설**(커밋 뒤 동기 응답 · 대기 상한 5초 초과 202 pending · 명령 ID = Idempotency-Key 헤더 · 같은 키 재요청 · Redis 불가 common.postgres_unavailable/503 재사용 판정 · SW-12 direct) · **명령 조회 표면 GET /api/v1/commands/{cmdId} 신설(01_conventions #1 · status 5)** · BFF 요청 묶음 9 → **10** · 202 응답 둘 · 멱등 헤더 판정 뒤집음(판정 자리 PostgreSQL 원장) · 수단 4 → **5** · 표면 채번 자리에 횡단 표면 추가
 > **개정일**: 2026-09-26 — W1 재검수 반영 — 인증 · 인가 절 적용 S7부터 → **S7 ②부터**(인증 도입 전 S2~S6 · S7 ① 무인증) · 문서 안 "S7" = 인증 도입(S7 ②) 해석 한 줄
 > **개정일**: 2026-09-24 — 최종 정밀 검수 — Host 헤더 거절 응답 모양 명시(common.validation_failed/400 · header.host · enum)
 > **개정일**: 2026-09-24 — W7 보안 판정 반영 — 출처 방어 항목 7 → **8**(Host 헤더 허용 목록 · S2부터) · 한도 등급 class 값 확정(general · bulk_read · export · bulk_ingest) · 로그인 시도 제한 판정 인용(정본 12_security/03)
@@ -17,7 +19,7 @@
 
 | 계층 | 방식 | 경로 모양 | 본문 | 인증 실패 표현 | 해당 표면 |
 |------|------|------|------|------|------|
-| REST | HTTP 요청 · 응답 | /api/v1/{도메인 자원} | JSON 객체 | 에러 봉투 + 401 | 도메인 문서 8본의 JSON 표면 |
+| REST | HTTP 요청 · 응답 | /api/v1/{도메인 자원} | JSON 객체 | 에러 봉투 + 401 | 도메인 문서 8본의 JSON 표면 · 이 문서의 명령 조회(#1) |
 | 다운로드 스트림 | HTTP 청크 전송 | /api/v1/timeseries/export | CSV · Parquet 바이트 — ClickHouse FORMAT 중계 | 응답 시작 전 에러 봉투 | [05_timeseries.md](./05_timeseries.md) #2 |
 | 메트릭 텍스트 | HTTP 응답 | **/metrics — 버전 경로 밖** | Prometheus 텍스트 형식 | 해당 없음 — 공개 | [10_metrics.md](./10_metrics.md) #2 |
 | WebSocket | 장기 연결 · JSON 텍스트 프레임 | /ws/realtime | 메시지 봉투(type 필드) | **HTTP 코드가 아니라 종료 코드** | [11_websocket.md](./11_websocket.md) #1 |
@@ -37,13 +39,14 @@
 | 마스터 조회 · 쓰기 | 브라우저 → BFF → api | 조회 revalidate · 쓰기 성공 시 무효화(체인 ⑤단) | 04_master #1~#17 | 저빈도 · 사용자 공통 — BFF가 한 번 더 흡수한다 | 쓰기가 BFF를 우회하면 BFF 캐시가 쓰기를 몰라 revalidate 창만큼 옛 목록을 낸다 |
 | 작업지시 · 실적 · 감사 조회 | 브라우저 → BFF → api | **no-store** | 08_work_orders #1~#9 | ③계층 read-your-writes | 상태 전이 직후 목록이 옛 상태면 전이 요청이 두 번 온다 |
 | 알람 이벤트 · 확인 · 규칙 | 브라우저 → BFF → api | no-store | 07_alarms #1~#5 | 저빈도 — 실시간 표시는 WebSocket 알람 푸시가 맡는다 | 확인 직후 목록이 revalidate 창만큼 미확인으로 남는다 |
+| 명령 조회 | 브라우저 → BFF → api | **no-store** | 01_conventions #1 | 202를 받은 업무 쓰기 화면이 결과를 읽는다 — 결과는 순간값이라 캐시할 것이 없다 | 캐시하면 pending이 revalidate 창만큼 남아 적용된 쓰기를 미적용으로 보인다 |
 | 최신값 조회 | 브라우저 → api 직결 | 해당 없음 | 06_realtime #1 · #2 | 초당 수 회 — 고빈도에 1홉을 더할 이유가 없다 | 최신값 p95가 api가 아니라 BFF 이벤트 루프에 묶인다 |
 | 시계열 조회 · 내보내기 · 판정 이력 분석 | 브라우저 → api 직결 | 해당 없음 | 05_timeseries #1 · #2 · 07_alarms #6 | 응답이 크고(수백 KB) 사용자별이라 중계 · 캐시 이득이 없다 | BFF 힙이 대용량 응답을 한 번 더 들고 내보내기 스트림이 두 번 복사된다 |
 | WebSocket | 브라우저 → api 직결 | 해당 없음 | 11_websocket #1 | 장기 연결을 BFF가 중계할 이유가 없다 | 연결 수만큼 BFF에 소켓이 쌓여 개발 서버 재시작이 모든 실시간 연결을 끊는다 |
 | 헬스 · 메트릭(화면) | 브라우저 → BFF → api | 없음 | 10_metrics #1 · #2 | 실험 콘솔이 저빈도로 읽고 메트릭 텍스트 해석을 서버에서 한다 | 브라우저가 텍스트 형식 전체를 받아 파싱한다 |
 | 기계 호출 | Compose · Prometheus · k6 → api | 해당 없음 | 10_metrics #1 · #2 · 09_datagen #1 | 호출 주체가 브라우저가 아니다 | 해당 없음 |
 
-- 검산: 요청 묶음 = **9** · BFF 5 + 직결 3 + 기계 1 = **9**
+- 검산: 요청 묶음 = **10** · BFF 6 + 직결 3 + 기계 1 = **10**
 - **auth 표면 3종은 CORS 응답 헤더를 내지 않는다(판정).** CORS 허용 오리진 http://localhost:3001은 직결 표면에만 붙는다. 브라우저 JS가 login을 직결로 부르면 응답을 읽지 못해 리프레시 토큰이 JS에 닿지 않는다 — BFF 서버 fetch는 CORS 대상이 아니므로 정상 경로는 막히지 않는다. 판정 근거는 REQ-AUT-04, 방어 리뷰는 [../12_security/03_api_surface_defense.md](../12_security/03_api_surface_defense.md)다.
 - **BFF는 무효화 체인의 ⑤단이다**(ADR-12). BFF를 거치지 않은 쓰기는 ⑤가 빠져 revalidate 창만큼 옛 목록이 남는다 — 마스터 쓰기를 직결로 두지 않는 이유다. 체인 번호 정본은 [../06_pipeline/07_business_crud.md](../06_pipeline/07_business_crud.md)다.
 
@@ -73,7 +76,7 @@
 | 불변 필드 | 경로 식별자 · 소속(deviceId · lineId · tagId 등 도메인 문서가 불변이라 적은 필드)이 수정 본문에 오면 400 | 조용히 무시하면 이동이 된 줄 안다 |
 | 대상 없음 | 경로 식별자 · 조회 필터가 가리키는 대상이 없으면 common.not_found/404 · **쓰기 본문이 참조하는 대상**이 없으면 common.validation_failed/400(reason reference) | 본문 참조를 404로 내면 클라이언트가 경로의 자원이 없다고 읽는다(REQ-WRK-02 · REQ-ALM-04) |
 | 성공 본문 | **항상 JSON 객체** — 최상위 배열을 내지 않는다. 목록은 items 배열 + meta 객체 | 최상위 배열은 필드를 더할 자리가 없어 meta를 붙이는 순간 v2가 된다 |
-| 생성 응답 | 201 + 생성된 자원 전체. 부하 주입만 202(버퍼에 넣었을 뿐 저장이 아니다) | 200으로 내면 생성과 멱등 재요청을 가를 수 없다 |
+| 생성 응답 | 201 + 생성된 자원 전체. 202는 둘뿐이다 — 부하 주입(버퍼에 넣었을 뿐 저장이 아니다) · 업무 쓰기(대기 상한 초과 pending — 명령은 실렸고 적용을 아직 모른다 · 만료 키 재요청 expired — 적용하지 않았다 · §업무 쓰기 경로) | 200으로 내면 생성과 멱등 재요청을 가를 수 없다 |
 | 본문 없는 성공 | 204 — 로그아웃 | 해당 없음 |
 
 - 검산: 항목 = **7**
@@ -157,18 +160,65 @@ REST 표면의 모든 실패는 아래 봉투 하나로 낸다. **예외는 셋�
 - **오프셋을 버린 이유** — alarm_event는 월 파티션이고 깊은 오프셋은 앞 페이지 행을 전부 읽고 버린다. 키셋은 (시각, ID) 인덱스에서 바로 이어 읽는다([../05_data_stores/02_postgresql_constraints.md](../05_data_stores/02_postgresql_constraints.md) 인덱스). 전체 건수를 내지 않는 이유도 같다 — count(*)가 범위 안 파티션 전부를 훑는다.
 - 마스터 목록(사이트 · 라인 · 설비 · 태그)은 페이지를 나누지 않는다. 태그 목록은 설비 필터가 필수라 한 응답이 설비 하나의 태그 수로 묶인다([04_master.md](./04_master.md)).
 
+## 업무 쓰기 경로
+
+사용자 결정(2026-09-27 · D-04 부분 개정 · REQ-GLB-12)으로 **업무 쓰기 표면 전부가 Redis 명령 스트림을 거친다.** 이 절은 그 경로가 표면에 드러나는 의미 — 응답 시점 · 202 · 명령 ID · 명령 조회 · 실패 코드 — 만 고정한다. 봉투 · 적용 단계 · 원장 · 결과 키의 기전 정본은 [../06_pipeline/07_business_crud.md](../06_pipeline/07_business_crud.md) §업무 명령 경로다. 대상은 도메인 문서가 "업무 쓰기"로 표시한 쓰기 표면(04_master · 07_alarms · 08_work_orders의 POST · PATCH · PUT)이고, **로그인 · 갱신 · 로그아웃(03_auth)과 부하 주입(09_datagen)은 대상이 아니다.**
+
+| 항목 | 규칙(SW-12 stream — 기본) | 어기면 |
+|------|------|------|
+| 적용 경로 | api가 스키마 검증 · 인가 뒤 stream:biz:cmd에 명령을 싣고 워커(소비자 1 · 직렬)가 PostgreSQL 트랜잭션 하나로 적용한다 | 검증을 워커로 미루면 형식 오류가 대기 상한까지 기다린 뒤에야 400이 된다 |
+| 응답 시점 | **커밋과 무효화 체인 ②③이 끝난 결과를 받은 뒤에만** 응답한다 — 상태 코드 · 본문은 옛 직접 커밋 경로와 같다(201 · 200 · 400 · 404 · 409) | 커밋 전에 응답하면 응답 직후 재조회가 옛 값을 본다(read-your-writes 붕괴) |
+| 대기 상한 | 5초(2계층 조정값 · 현행 참고 · 소유 [../06_pipeline/07_business_crud.md](../06_pipeline/07_business_crud.md)) — 넘으면 **202 + {cmdId, status: 'pending'}** | 상한 없이 기다리면 워커 정지 중 요청이 연결 시간 초과로 끝나 클라이언트가 명령 ID도 모른 채 재시도한다 |
+| 명령 ID | 요청 헤더 **Idempotency-Key**(UUID · 선택) — 없으면 api가 발급한다. 응답은 같은 헤더로 명령 ID를 되싣는다(202 포함). UUID가 아니면 common.validation_failed/400(path header.idempotency-key · reason format) | 재시도마다 새 키면 같은 쓰기가 두 번 적용된다 |
+| 같은 키 재요청 | 첫 판정(적용 · 도메인 거절)이 난 키는 **적용 없이 첫 응답과 같은 상태 코드 · 본문**을 받는다 · 아직 pending이면 같은 명령의 결과를 기다린다 · 첫 시도가 503이었으면 원장을 다시 확인한다 — 행이 있으면(이미 커밋됐는데 판정을 못 읽은 경우) 저장된 판정, 없으면 다시 적용을 시도한다 · **만료(expired)된 키는 202 + {cmdId, status: 'expired'}**를 받는다 — 새 코드 없음 · 적용 없음 · 새 키로 보내라는 뜻 | 키가 같은데 두 번 적용되면 멱등이 아니다 · 다른 본문을 같은 키로 보내도 첫 결과를 받는다(한계 등재 #24 — [../05_data_stores/02_postgresql_constraints.md](../05_data_stores/02_postgresql_constraints.md)) |
+| 도메인 오류 | UNIQUE · FK · CHECK · 조건부 갱신 실패는 워커가 결과에 코드로 담고 api가 **기존 에러 코드 · HTTP 상태 그대로** 낸다 — 오류 카탈로그 불변 | 경로 때문에 코드가 바뀌면 화면의 code 분기가 스위치 상태에 따라 달라진다 |
+| Redis 불가 | **업무 쓰기도 common.postgres_unavailable/503** — 명령을 싣지 못해 적용 없음 · 읽기는 PostgreSQL 직접(+캐시 degrade)으로 계속 | 새 대가다(D-04 개정) — 옛 경로는 Redis 불가 중에도 쓰기가 됐다 |
+| PostgreSQL 불가 | common.postgres_unavailable/503 — 워커가 재시도 없이 503 결과로 닫는다 · 보관 · 재생 없음(REQ-WRK-06) | 명령을 붙들었다 나중에 적용하면 503을 받은 사용자가 모르는 쓰기가 생긴다 |
+| SW-12 direct | 옛 경로 — api가 직접 커밋하고 응답한다. 202 · 명령 조회 · 같은 키 재요청 방어가 없다(헤더는 형식 검사만 하고 되싣지 않는다) | direct 기동에서 멱등을 기대하면 같은 키 재요청이 두 번 적용된다 — EXP-46이 이 차이를 잰다 |
+
+- 검산: 항목 = **9**
+- **Redis 불가 코드를 새로 만들지 않는다(판정).** 정본 HTTP 상태 규약은 "클라이언트 대응이 같으면 원인이 달라도 한 코드"다 — 업무 쓰기 표면에서 Redis 불가와 PostgreSQL 불가의 대응은 둘 다 백오프 뒤 재요청(같은 Idempotency-Key)이라 common.postgres_unavailable/503을 재사용한다. 원인은 biz_commands_total의 result 레이블로 가른다 — Redis 불가 = unavailable · PostgreSQL 불가 = failed([../10_observability/01_metrics_catalog.md](../10_observability/01_metrics_catalog.md)). 코드 이름이 PostgreSQL을 말하는 불일치는 정본 발생 조건에 적어 닫았다([../11_glossary/02_error_codes.md](../11_glossary/02_error_codes.md)).
+- **B형 — 202는 실패가 아니다.** 결론 — 202 pending은 "명령은 실렸고 적용 결과를 아직 모른다"이다(202 expired는 "이 키로는 적용하지 않는다"다). 반대 시나리오 — 202를 오류로 보고 새 키로 다시 보내면, 워커가 밀린 첫 명령을 적용한 뒤 둘째도 적용해 작업지시가 둘이 된다. 파생 지침 — 202를 받으면 명령 조회로 결과를 기다리고, 다시 보낼 때는 같은 키를 쓴다.
+- **202를 받은 쓰기에는 BFF 무효화(⑤)가 걸리지 않는다** — 성공 응답이 아니기 때문이다. 명령 조회로 applied를 확인하면 화면이 로컬 무효화와 함께 신선 창 표지(x-bff-fresh)를 단 재조회로 BFF 서버 사본을 건너뛴다(판정 [../08_screen/01_standards.md](../08_screen/01_standards.md) §업무 쓰기 응답 — 명령 경로 · 기전 [../06_pipeline/07_business_crud.md](../06_pipeline/07_business_crud.md) §시간 초과 · 명령 조회).
+
+### 명령 조회 표면
+
+업무 쓰기 결과를 cmdId로 읽는 **횡단 표면**이다. 도메인 소유가 없어 이 문서의 아래 요약 표가 채번 자리다(§표면 번호와 요약 표 어휘).
+
+| # | 메서드 | 경로 | 기능 ID | 역할 | 캐시 | 에러 코드 | 호출 화면 | 원본 여부 |
+|:-:|------|------|------|------|------|------|------|------|
+| 1 | GET | /api/v1/commands/{cmdId} | MST-01~06 · ALM-01 · ALM-08 · WRK-01~03(업무 쓰기의 결과 확인) | 전원 | biz:result:{cmdId} · BFF no-store | common.validation_failed/400 · common.not_found/404 · common.postgres_unavailable/503 | ADM-MASTER · ALM-CONSOLE · ALM-RULES · ADM-WORKORDER | 신설 |
+
+- 검산: 표면 = REST **1** · 신설 1 · 조회 1
+- 경로는 BFF 경유 no-store다(§BFF 경유와 직결). 읽는 순서는 결과 키 → 없으면 biz_command_log → 둘 다 없으면 pending이다(기전 정본 [../06_pipeline/07_business_crud.md](../06_pipeline/07_business_crud.md)).
+- **cmdId가 UUID가 아니면 400 · 결과 키 또는 원장(biz_command_log.actor)의 행위자(actor)가 요청자와 다르면 404다** — 둘 다 NULL이면 같다고 본다(인증 전은 판정이 사실상 없다 · 인증 도입 S7 ② 뒤부터 가른다). 알 수 없는 cmdId는 404가 아니라 pending이다 — 아직 소비되지 않은 명령과 가를 수 없기 때문이다. 그래서 404는 다른 사용자의 명령이 있다는 사실을 드러내지만 cmdId가 추측할 수 없는 UUID라 잔여로 둔다.
+
+응답은 200 하나이고 status가 결과를 가른다.
+
+| status | 뜻 | 본문 | 클라이언트 |
+|------|------|------|------|
+| pending | 결과가 아직 없다 — 소비 전 · 적용 중 · 알 수 없는 키 | cmdId · status | 다시 조회한다. 명령 유효 창(현행 참고 300초 · 소유 06_pipeline/07)을 넘도록 pending이면 같은 키로 원 요청을 다시 보낸다 — 소비 전 MAXLEN 트리밍으로 명령이 사라진 경우도 pending에 머문다(한계 등재 #25) |
+| applied | 커밋됐다 | cmdId · status · httpStatus(201 · 200) · result(원 응답 본문) | 결과를 반영한다 · 재조회는 새 값을 본다 |
+| rejected | 도메인 규칙으로 거절됐다 | cmdId · status · httpStatus(400 · 404 · 409) · error(에러 봉투의 error 객체) | code로 분기한다 · 새 값으로 다시 보낼 때는 새 키 |
+| failed | **적용 여부를 확정하지 못했다**(PostgreSQL 불가) — '적용되지 않았다'가 아니다 · 재전달된 명령이 이미 커밋된 뒤 PostgreSQL이 불가하면 원장 확인도 못 해 failed가 된다 · 원장 행을 쓰지 못했다(결과 키에만 있다 — 한계 등재 #26) | cmdId · status · httpStatus 503 · error | 백오프 뒤 같은 키로 원 요청을 다시 보내 확정한다 — 원장이 돌아오면 applied |
+| expired | 명령 유효 창을 넘겨 적용하지 않았다 | cmdId · status | 필요하면 새 키로 다시 보낸다 — 같은 키로 원 요청을 보내면 202 + {cmdId, status: 'expired'}다(§업무 쓰기 경로) |
+
+- 검산: status = **5**
+- **status 값 추가는 응답 enum 추가다**(§응답 필드 변경 규칙 — 주의). 전송 enum 등재는 [../11_glossary/03_enums_state_machines.md](../11_glossary/03_enums_state_machines.md) #20이다. 원장 상태 값(APPLIED · REJECTED · EXPIRED)의 정본은 [../05_data_stores/01_postgresql_schema.md](../05_data_stores/01_postgresql_schema.md)이고, 표면 값은 그것을 소문자로 내리고 원장에 없는 둘(pending · failed)을 더한다.
+
 ## 멱등
 
-Idempotency-Key 헤더를 두지 않는다 — 키를 담을 Redis 키 계열이 키 공간 정본에 없고([../05_data_stores/05_redis_keyspace.md](../05_data_stores/05_redis_keyspace.md)), 새 접두는 그 문서에서만 늘린다. 쓰기 표면의 중복 방어는 아래 셋 중 하나다.
+**Idempotency-Key 헤더는 업무 쓰기 표면에만 있다**(D-04 개정 · §업무 쓰기 경로). 키를 담는 자리는 Redis가 아니라 PostgreSQL 원장 biz_command_log(cmd_id UNIQUE · 적용과 같은 트랜잭션)다 — 옛 판정이 헤더를 두지 않은 이유(담을 Redis 키 계열이 없다)는 판정 자리를 원장으로 옮겨 닫았다. 결과 키 biz:result는 캐시일 뿐이다([../05_data_stores/05_redis_keyspace.md](../05_data_stores/05_redis_keyspace.md)). 쓰기 표면의 중복 방어는 아래 넷이며 명령 멱등은 나머지 셋과 겹쳐 걸린다.
 
 | 수단 | 표면 | 같은 요청을 두 번 보내면 |
 |------|------|------|
+| **명령 멱등 키** | 업무 쓰기 표면 전부(SW-12 stream) | **같은 키**면 둘째가 적용 없이 첫 응답과 같은 상태 코드 · 본문을 받는다 — 키가 다르면 아래 수단이 판정한다 |
 | 자연 유일 제약 | 사이트 · 라인 · 설비 · 태그 등록(코드 UNIQUE) · 작업지시 등록(order_no) · 새 태그 발급(newTagCode) | 둘째가 common.duplicate_key/409 — 클라이언트는 목록을 다시 읽는다 |
 | 조건부 갱신 | 알람 확인 · 작업지시 상태 전이 · 실적 기록(상태 조건) | 둘째가 409 — 조건이 이미 바뀌었다 |
 | 결과 동일(자연 멱등) | PATCH 수정 · PUT 접속 설정 · 비활성화 · 로그아웃 | 같은 결과 · 감사 행은 실제로 바뀐 경우에만 |
-| **수단 없음** | **실적 기록의 같은 값 이중 제출 · 부하 주입** | 행이 두 번 생긴다 — 잔여 등재 |
+| **수단 없음** | **실적 기록의 같은 값 이중 제출(키가 다른 두 제출 · 또는 SW-12 direct) · 부하 주입** | 행이 두 번 생긴다 — 잔여 등재 |
 
-- 검산: 수단 = **4** · 수단 없음 표면 = 08_work_orders #7 · 09_datagen #1 = **2**
+- 검산: 수단 = **5** · 수단 없음 표면 = 08_work_orders #7 · 09_datagen #1 = **2**
 - **부하 주입의 이중 제출은 막지 않는 것이 설계다.** 재시도로 생긴 중복 엔트리는 엔트리 ID가 달라 배치 토큰도 달라진다 — 부하 도구는 재시도하지 않는다(REQ-GEN-09). 실적 이중 제출의 잔여는 [08_work_orders.md](./08_work_orders.md) §미확인 · 미설계 등재에 둔다.
 
 ## 캐시 헤더
@@ -231,7 +281,7 @@ class 값의 정본은 [../12_security/03_api_surface_defense.md](../12_security
 | 규칙 | 내용 |
 |------|------|
 | 형식 | {문서} #N — 문서 지역 번호(05_timeseries #3). 자릿수 없음 |
-| 채번 자리 | 각 도메인 문서의 **표면 요약 표 행**이 유일한 채번 자리다 |
+| 채번 자리 | 각 도메인 문서의 **표면 요약 표 행**이 채번 자리다 · 도메인 소유가 없는 횡단 REST 표면(명령 조회)은 이 문서 §명령 조회 표면의 요약 표가 채번한다(01_conventions #N) |
 | 순서 | 번호는 식별자이지 순서가 아니다 — 새 표면은 말미에 채번하고 재배치하지 않는다 · 폐지 번호는 결번으로 남긴다 |
 | 세는 기준 | 표면 수 = 요약 표의 유효 행 수(최대 번호가 아니다) · 총수의 정본은 [README.md](./README.md) 도메인별 표면 수 표 |
 | 인용 | 다른 문서는 "메서드 + 경로" 또는 "{문서} #N"으로 인용한다 — 경로가 바뀌면 번호는 그대로다 |

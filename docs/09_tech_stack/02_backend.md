@@ -1,7 +1,8 @@
 # 백엔드 스택
 
-> **대상**: api 컨테이너의 런타임 구성 — NestJS + Fastify 어댑터 · 단일 런타임(ADR-01) · 모듈 11과 라이브러리 배정 · 데이터 평면 라이브러리(@clickhouse/client · ioredis · pg · modbus-serial · jsmodbus · msgpackr · piscina · prom-client)의 역할과 사용 제약 · piscina 워커 풀(ADR-25) · 스위치 11종의 환경변수와 DI 주입(ADR-08) · 스위치 밖 환경변수의 백엔드 쪽 읽기 규칙 · 요청 압축 · 보안 헤더
+> **대상**: api 컨테이너의 런타임 구성 — NestJS + Fastify 어댑터 · 단일 런타임(ADR-01) · 모듈 11과 라이브러리 배정 · 데이터 평면 라이브러리(@clickhouse/client · ioredis · pg · modbus-serial · jsmodbus · msgpackr · piscina · prom-client)의 역할과 사용 제약 · piscina 워커 풀(ADR-25) · 스위치 12종의 환경변수와 DI 주입(ADR-08) · 스위치 밖 환경변수의 백엔드 쪽 읽기 규칙 · 요청 압축 · 보안 헤더
 > **작성일**: 2026-09-24
+> **개정일**: 2026-09-28 — 웨이브 1 검수 반영(B-M3) — 대상 줄 · 스위치 환경변수 절 스위치 11종 → **12종** · 주입 표에 **SW-12 행**(BIZ_WRITE_PATH · BizWritePort · master · alarms · work-orders) · 허용값 검증에 stream/direct — 모듈 수 불변
 > **개정일**: 2026-09-25 — S2 실측 반영(EXP-30 기록 012 · d32b09a) — msgpackr-extract S1 판정 끔 → **끔 유지(S2 재판정 → S5)**
 > **개정일**: 2026-09-24 — S2 착수 반영 — @clickhouse/client zstd 요청 압축 미확인 → **지원** 닫힘(버전은 03_data_infra 고정표)
 > **개정일**: 2026-09-24 — S1 실측 반영(EXP-21 기록 006 · 410a146 · EXP-39 기록 007~009 · 019e54d) — 미확인 "워커 수별 생성기 처리량" 미확인 → **워커 1 · 2 · 4 약 590만 · 1,031만 · 2,006만 pps(api 위치)** · 미확인 등재에 msgpackr-extract 끔 행 신설
@@ -99,7 +100,7 @@ ADR-25의 결정 아래 piscina 풀의 운용 규칙이다. **워커 수의 값�
 
 ## 스위치 환경변수와 DI 주입
 
-스위치 11종의 이름 · 기본값 · 값 형식은 [../02_features/13_switch_matrix.md](../02_features/13_switch_matrix.md)가 정본이고, 포트 · 구현 이름은 [../04_architecture/02_module_boundaries.md](../04_architecture/02_module_boundaries.md) §포트 · 구현 이름 확정 표가 정본이다. 이 표는 두 정본을 **백엔드가 환경변수를 읽어 구현을 주입하는 순서**로 묶은 인용이다.
+스위치 12종의 이름 · 기본값 · 값 형식은 [../02_features/13_switch_matrix.md](../02_features/13_switch_matrix.md)가 정본이고, 포트 · 구현 이름은 [../04_architecture/02_module_boundaries.md](../04_architecture/02_module_boundaries.md) §포트 · 구현 이름 확정 표가 정본이다. 이 표는 두 정본을 **백엔드가 환경변수를 읽어 구현을 주입하는 순서**로 묶은 인용이다.
 
 | 스위치 | 환경변수(02_features/13) | 포트(04_architecture/02) | 주입받는 모듈 |
 |------|------|------|------|
@@ -114,12 +115,13 @@ ADR-25의 결정 아래 piscina 풀의 운용 규칙이다. **워커 수의 값�
 | SW-09 | CONTROL_TABLE_ENABLED | ControlTableSinkPort | ingest |
 | SW-10 | COLLECTOR_DEADBAND | DeadbandFilterPort | collector |
 | SW-11 | LATEST_VALUE_WRITER | LatestValueWritePort | ingest · collector |
+| SW-12 | BIZ_WRITE_PATH | BizWritePort | master · alarms · work-orders |
 
 - 검산: 스위치 행 수는 정본(02_features/13)을 다시 세지 않는다 — 이 표는 정본의 행을 하나씩 옮긴 인용이며 정본에 행이 늘면 이 표도 같은 변경 단위에서 는다
 - 주입 절차는 아래 순서다.
 
 ```plain
-① 환경변수 읽기        기동 시 1회 · 허용값 검증(불리언 · 밀리초 · ingest/collector)
+① 환경변수 읽기        기동 시 1회 · 허용값 검증(불리언 · 밀리초 · ingest/collector · stream/direct)
 ② 구현 선택            포트마다 구현 둘 중 하나 — SW-07은 0이면 통과 구현 · 0 초과면 병합 구현에 창 크기 주입
 ③ 경고                 SW-01 off면 부팅 경고를 로그와 상태에 남긴다
 ④ 상태 확정            주입된 구현 이름을 OBS가 읽을 수 있는 자리에 등록

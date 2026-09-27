@@ -2,6 +2,7 @@
 
 > **대상**: ALM 도메인 REST 표면 — 알람 이벤트 목록 · 확인(ACK) · 알람 규칙 조회와 쓰기 · 판정 이력(alarm_eval) 분석 · **알람 목록 범위 기본값 판정** · 원본에 없는 표면 판정(규칙 CRUD · alarm_eval 분석) · **인증 전(S7 ② 이전) 확인 행위자 판정**
 > **작성일**: 2026-09-24
+> **개정일**: 2026-09-27 — D-04 부분 개정 반영(사용자 결정 — 업무 쓰기도 Redis를 거친다 · 동기 응답) — 도입 단락 확인(ACK) 경로 · 공통 규약 **쓰기 경로 행 신설** — 항목 7 → **8** · 표면 수 불변
 > **개정일**: 2026-09-26 — W3 코드 검수 반영(L5) — #5 비활성 태그 거절을 **결과 enabled 참일 때만**으로 명시(검증 칸 · 해설 불릿 1) · #6 버킷 누락 불릿 1(웹 합성 — r-alarm M1) — 구현 유지 · 표면 수 불변
 > **개정일**: 2026-09-26 — W1 검수 반영 — 미확인 2행 닫힘(학습자 계정 email learner@localhost · 감사 NULL 단계 경계 정본 두 문서 갱신 완료) · 감사 NULL 파급 불릿을 완료 사실로
 > **개정일**: 2026-09-26 — 리드 반영 — 확인 행위자 환경변수 이름 정본 등재(09_tech_stack/04) — 미확인 1행 닫힘
@@ -11,7 +12,7 @@
 > **개정일**: 2026-09-24 — W5 판정 반영 — #6 ClickHouse 불가 채번 대기 → **alarms.eval_store_unavailable/503** · 미확인 2행 행선지를 06_pipeline/08 등재로 갱신 — 표면 수 불변
 > **원천**: 원본 architecture.md §6 · §7.3 · §11 · §18(커밋 ff66a37) · 원본 data_flow.md §6.3 · §8 · §8.1 · §8.2(커밋 ff66a37) · REQ-ALM-01~04 · 13~19 · REQ-WRK-07 · ADR-11 · ADR-12 · [../02_features/09_alarms.md](../02_features/09_alarms.md) ALM-01 · 07 · 08 · 09 · [../11_glossary/03_enums_state_machines.md](../11_glossary/03_enums_state_machines.md) 상태 머신 2 · alarm_event.state 대응 · [../06_pipeline/08_alarm.md](../06_pipeline/08_alarm.md) · [../05_data_stores/02_postgresql_constraints.md](../05_data_stores/02_postgresql_constraints.md) 인덱스 · docs_plan.md 웨이브 인계 W5 07_api 행(알람 목록 범위 기본값 · 원본에 없는 표면) · 2026-09-26 사용자 결정(S7 ① 알람 분기를 S7 ② 인증보다 먼저 · S7 ② · ③ 범위 밖) · [../05_data_stores/01_postgresql_schema.md](../05_data_stores/01_postgresql_schema.md) §인계 판정(무인증 기간 감사 행위자) · REQ-AUT-17
 
-알람의 세 쓰기 중 **표면으로 드러나는 것은 PostgreSQL alarm_event와 ClickHouse alarm_eval 둘이다.** 핫 상태 alarm:state는 판정기 하나만 쓰고 읽으며 어떤 표면도 노출하지 않는다 — 확인(ACK)조차 Redis를 쓰지 않는다(W4 판정 · [../06_pipeline/08_alarm.md](../06_pipeline/08_alarm.md) §ACK와 alarm:state). 이벤트 목록은 "누가 언제 확인했는가"에, 판정 이력 분석은 "이 임계값은 적절했는가"에 답한다.
+알람의 세 쓰기 중 **표면으로 드러나는 것은 PostgreSQL alarm_event와 ClickHouse alarm_eval 둘이다.** 핫 상태 alarm:state는 판정기 하나만 쓰고 읽으며 어떤 표면도 노출하지 않는다 — 확인(ACK)은 명령 스트림 stream:biz:cmd를 거쳐 워커가 PostgreSQL에 커밋하지만(D-04 2026-09-27 부분 개정) alarm:state는 건드리지 않는다(W4 판정 · [../06_pipeline/08_alarm.md](../06_pipeline/08_alarm.md) §ACK와 alarm:state). 이벤트 목록은 "누가 언제 확인했는가"에, 판정 이력 분석은 "이 임계값은 적절했는가"에 답한다.
 
 원본 API 표에는 이벤트 목록과 확인 둘뿐이다(원본 architecture.md §11). 규칙 관리(ALM-01)와 판정 이력 분석(ALM-09)은 기능과 권한 매트릭스가 요구하므로 **신설**한다. 판정 · 확정 · 발행(ALM-02~06)은 표면이 없는 내부 단계다.
 
@@ -25,11 +26,12 @@
 | 인가 | 이벤트 · 규칙 조회 전원 · 확인 OPERATOR만 · 규칙 쓰기 ENGINEER만 · 판정 이력 분석 ENGINEER만 — **S7 ② 인증 뒤에 켠다 · 그 전에는 전 표면 무인증이고 확인 행위자만 시드 계정으로 대리한다**(§인증 전 확인 행위자 판정) | REQ-ALM-17 · 18 · 권한 매트릭스 ALM |
 | 감사 | 규칙 등록 · 수정 · 확인은 같은 트랜잭션에서 audit_log · 판정 경로의 시스템 쓰기는 감사하지 않는다 | REQ-ALM-03 · 15 · REQ-WRK-07 |
 | 삭제 | 규칙 · 이벤트 모두 DELETE 표면이 없다 — 규칙을 끄는 수단은 enabled false | REQ-ALM-01 |
+| 쓰기 경로 | 쓰기 3(#2 확인 · #4 · #5 규칙) — **명령 스트림 stream:biz:cmd → 워커 PostgreSQL 트랜잭션 → 커밋 · 무효화 체인 ②③ 뒤 응답**(성공 코드 · 에러 코드는 표 그대로) · 대기 상한 초과 **202 + {cmdId, status: 'pending'}** · 명령 ID는 Idempotency-Key 헤더 · Redis 불가 common.postgres_unavailable/503 | [01_conventions.md](./01_conventions.md) §업무 쓰기 경로 · REQ-GLB-12 · SW-12 |
 | 실시간 | 열림 · 닫힘은 ch:alarm → WebSocket 푸시가 맡고 목록은 캐시 TTL만큼 늦다 | REQ-ALM-13 · [11_websocket.md](./11_websocket.md) |
 | PostgreSQL 불가 | #1~#5 common.postgres_unavailable/503 · 판정은 PENDING에 머물며 재시도 | REQ-ALM-19 |
 | 단계 | 전 표면 S7 ① — 생략 선택지 없음 · 인가는 S7 ② | REQ-ALM-20 · D-11 · 2026-09-26 사용자 결정 |
 
-- 검산: 항목 = **7**
+- 검산: 항목 = **8**
 
 ## 표면 요약
 

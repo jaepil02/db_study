@@ -2,6 +2,7 @@
 
 > **대상**: 전 설계자 · 신규 합류자 — 11도메인이 어느 NestJS 모듈 · 평면 · 위치에 앉고, 서로 어떤 경계로 이어지며, 각 폴더에서 어디가 비는가
 > **작성일**: 2026-09-24
+> **개정일**: 2026-09-27 — D-04 부분 개정 반영(사용자 결정 — 업무 쓰기도 Redis를 거친다 · ADR-26) — 경계 유형 **명령 스트림 경계** 신설(자기 간선 MST · ALM · WRK 3) · 간선 18 → **21** · WRK 소유에 biz_command_log · PostgreSQL 15 → **16**
 > **개정일**: 2026-09-26 — W1 검수 반영 — 도메인 × 저장 객체 검산 ClickHouse 테이블 5 → **8**(목적지 5 + 소유 도메인 없는 계측물 3) · 표 밖 계측물 불릿 신설
 > **개정일**: 2026-09-24 — 최종 정밀 검수 — 공백 매트릭스를 폴더 README 현행 선언에 맞춤: 공백(미선언) 5 → **0**(05_data_stores COL · TSQ · RLT · OBS · 06_pipeline OBS 선언 완료) · 08_screen GEN 행 → **공백(선언)**(W5 GEN 화면 없음) · 행 23 → **22** · 공백(선언) 8 → **14** · 롤업 객체 ING 귀속 확정(W3)
 > **개정일**: 2026-09-24 — W3 판정 반영 — SIM · OBS APP_ROLE 배정(ADR-22) · GEN · ALM 역할 분할 서술
@@ -63,6 +64,9 @@ flowchart LR
     MST["MST 마스터"] -->|"저장소 경유 · 태그 · 접속 설정"| COL
     MST -->|"저장소 경유 · dict_tag"| TSQ
     MST -.->|"트랜잭션 공유 · audit_log"| WRK["WRK 업무 데이터"]
+    MST -->|"명령 스트림 · stream:biz:cmd"| MST
+    ALM -->|"명령 스트림 · stream:biz:cmd"| ALM
+    WRK -->|"명령 스트림 · stream:biz:cmd"| WRK
     AUT["AUT 인증·인가"] -.->|"인가"| MST
     AUT -.->|"인가"| TSQ
     AUT -.->|"인가"| RLT
@@ -87,13 +91,15 @@ flowchart LR
 | Stream 경계 | Redis Stream + 컨슈머 그룹 | COL → ING · GEN → ING | 백프레셔 흡수 · at-least-once · 이벤트 루프 격리 · 역할 분리 시 코드 불변 | ClickHouse 삽입 지연이 Modbus 폴링 주기로 역류하고, 재시작 시 미처리 배치가 사라진다 |
 | Pub/Sub 경계 | Redis Pub/Sub | ING → RLT · ALM → RLT | 발행자와 WebSocket 게이트웨이의 분리 · 수평 확장 시 코드 불변 | api 다중 인스턴스에서 팬아웃 코드를 새로 써야 한다 |
 | Modbus 경계 | 루프백 TCP 소켓 | SIM → COL | 요청 인코딩 · 블록 병합 · 디코딩을 포함한 실제 수집 경로 | 모드 A E2E 지연에서 Modbus 계층이 빠진다 |
+| 명령 스트림 경계 | Redis Stream stream:biz:cmd + 컨슈머 그룹 grp:biz-writer(소비자 1) · 결과 biz:result · ch:bizreply | MST → MST · ALM → ALM · WRK → WRK(같은 도메인의 쓰기 표면 → 명령 적용 워커) | 업무 쓰기의 동기 응답(커밋 뒤) · 명령 ID 멱등 · 도착 순서 적용 · 수집 스트림과 키 · 그룹 분리(ADR-26 · D-04 개정) | 표면이 트랜잭션을 직접 커밋하는 옛 경로(SW-12 direct)로 돌아가 명령 멱등이 사라지고, 역할 분리 때 쓰기 적용 주체를 옮길 경계가 없다 |
 | 직접 호출(예외) | 같은 프로세스 내 호출 | ING → ALM | 배치와 판정의 재처리 단위 일치 — 별도 큐 불필요 | 근거가 없으면 경계 원칙의 무근거 예외가 된다(근거 정본 04_architecture/02 · W3) |
 | 저장소 경유 | 한 도메인이 쓰고 다른 도메인이 읽는 저장 객체 | ING → RLT(rt:latest) · ING → TSQ · MST → COL · MST → TSQ | 쓰는 쪽과 읽는 쪽의 수명 분리 | 호출 결합으로 바뀌어 한쪽 장애가 다른 쪽 응답으로 번진다 |
 | 트랜잭션 공유 | 같은 PostgreSQL 트랜잭션 | MST → WRK | 업무 변경과 감사 기록의 원자성 | 변경은 커밋됐는데 감사가 빠지는 창이 생긴다 |
 | 인가 | 엔드포인트별 Guard | AUT → MST · TSQ · RLT · ALM · WRK · GEN | 표면마다 역할 검사 | 127.0.0.1 바인드만 남아 같은 머신의 모든 프로세스가 전 권한을 갖는다 |
 | 시뮬레이션 결합 | 프로세스 내 Buffer 갱신 | GEN → SIM | 모드 A의 현실 재현 | 해당 없음 — 수집 이전 구간이라 경계 규칙 밖이다 |
 
-- 검산: Stream 2 + Pub/Sub 2 + Modbus 1 + 직접 호출 1 + 저장소 경유 4 + 트랜잭션 공유 1 + 인가 6 + 시뮬레이션 결합 1 = **18**(그래프 간선 수와 같다)
+- 검산: Stream 2 + 명령 스트림 3 + Pub/Sub 2 + Modbus 1 + 직접 호출 1 + 저장소 경유 4 + 트랜잭션 공유 1 + 인가 6 + 시뮬레이션 결합 1 = **21**(그래프 간선 수와 같다)
+- **명령 스트림 경계는 도메인 사이가 아니라 한 도메인 안의 두 역할 사이다(자기 간선).** 쓰기 표면(api 역할)이 명령을 싣고 같은 도메인의 쓰기 서비스가 워커 역할에서 적용한다 — 그래프에 자기 간선으로 그려 경계가 있다는 사실을 센다. 로그인 · 토큰(AUT)은 업무 쓰기가 아니라 대상이 아니다(D-04 개정 범위). Stream 경계와 유형을 가른 이유는 보장이 다르기 때문이다 — Stream 경계는 비동기 at-least-once이고 명령 스트림 경계는 응답이 적용 결과를 기다린다.
 - **W2 판정 — GEN · OBS 표면 인가.** /api/v1/ingest/bulk는 환경변수 게이트 + 인증(역할 무관)이라 AUT → GEN 인가 간선을 둔다. /api/v1/health · /metrics는 **공개**다 — Compose healthcheck가 토큰 없이 부르고, 토큰 만료가 측정 공백을 만들지 않게 하기 위해서다. 그래서 OBS로는 인가 간선이 없다. 정본 [../02_features/12_permission_matrix.md](../02_features/12_permission_matrix.md).
 
 ## 도메인 × 저장 객체
@@ -111,10 +117,10 @@ flowchart LR
 | TSQ | 없음 | 없음 | cache:q · lock:rebuild |
 | RLT | 없음 | 없음 | 없음(ch:rt 구독 · rt:latest 읽기) |
 | ALM | alarm_rule · alarm_event | alarm_eval | alarm:state · cache:alarmrules |
-| WRK | work_order · production_log · audit_log | 없음 | 없음 |
+| WRK | work_order · production_log · audit_log · biz_command_log(명령 원장 · D-04 개정) | 없음 | 없음 |
 | OBS | 없음 | 없음 | 없음 |
 
-- 검산(루트 README 고정 기준과의 대조): PostgreSQL AUT 3 + MST 6 + ING 1 + ALM 2 + WRK 3 = **15** · ClickHouse 테이블 목적지(ING 4 + ALM 1 = 5) + 소유 도메인 없는 계측물 3 = **8**. 두 값이 고정 기준(15 · 8)과 일치하므로 이 귀속표와 아래 표 밖 계측물을 합쳐 빠진 테이블은 없다.
+- 검산(루트 README 고정 기준과의 대조): PostgreSQL AUT 3 + MST 6 + ING 1 + ALM 2 + WRK 4 = **16** · ClickHouse 테이블 목적지(ING 4 + ALM 1 = 5) + 소유 도메인 없는 계측물 3 = **8**. 두 값이 고정 기준(16 · 8 — PostgreSQL은 D-04 개정으로 15 → 16)과 일치하므로 이 귀속표와 아래 표 밖 계측물을 합쳐 빠진 테이블은 없다.
 - **ClickHouse 업무 대조 테이블 3(work_order_control · work_order_control_rmt · production_log_control)은 이 표에 행이 없다.** 역방향 대조(EXP-40~44) 계측물이라 앱 모듈이 읽지도 쓰지도 않고 도구 컨테이너의 실행기만 쓴다 — 소유 도메인이 없으므로 어느 도메인 행에 넣어도 앱에 없는 소유가 생긴다(정본 [../05_data_stores/03_clickhouse_schema.md](../05_data_stores/03_clickhouse_schema.md) §객체 목록). 도메인 공백(소유 테이블 없음)의 셈에도 영향이 없다.
 - **소유 PostgreSQL · ClickHouse 테이블이 없는 도메인이 여섯이다** — COL · SIM · GEN · TSQ · RLT · OBS. 검산: 11 − 테이블 소유 5(AUT · MST · ING · ALM · WRK) = **6**. [../05_data_stores/README.md](../05_data_stores/README.md) 도메인 공백 행이 여섯 전부를 소유 기준으로 선언한다(§폴더별 도메인 공백).
 

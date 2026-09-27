@@ -2,6 +2,8 @@
 
 > **대상**: 스키마 적용의 저장소 간 순서 · PostgreSQL 순번 마이그레이션 · ClickHouse DDL 순번 · 도구 관리 테이블 · 시드(사이트 · 라인 · 설비 · 접속 설정 · 태그 · 계정 · 역할) · 스키마 변경 절차 · 스냅샷과의 관계
 > **작성일**: 2026-09-24
+> **개정일**: 2026-09-28 — 웨이브 1 검수 반영(B-L1) — grp:biz-writer 그룹 생성 XGROUP CREATE MKSTREAM → **XGROUP CREATE stream:biz:cmd grp:biz-writer 0 MKSTREAM**(시작 ID 0) — 순번 · 시드 수 불변
+> **개정일**: 2026-09-28 — 업무 쓰기 Redis 경유 개정(사용자 결정 2026-09-27) — PostgreSQL 순번 **008 biz_command_log 제안**(제안 파일명 008_biz_command_log.sql · UNIQUE(cmd_id) · 추가 전용 REVOKE) · 이후 변경 대역 008~ → **009~** · 컨슈머 그룹 grp:biz-writer 기동 생성 · 시드 0행 테이블 6 → **7**(합 14 → **15**)
 > **개정일**: 2026-09-26 — 목적 적합성 실증 W1 — ClickHouse DDL 순번 **009 업무 대조 테이블 3**(009_business_control.sql · 역방향 대조 EXP-40~44 · 정본 03_clickhouse_schema §업무 대조 테이블) — 객체 검산 9 → **12** · 적용 순서 ⑤에 009 병기
 > **개정일**: 2026-09-26 — 리드 판정 — 학습자 계정 email **learner@localhost** · 확인 행위자 환경변수 이름 정본 등재(09_tech_stack/04) — 미확인 1행 닫힘
 > **개정일**: 2026-09-26 — S7 ① 선행 반영(알람 분기를 인증보다 먼저 · 사용자 결정) — **§S7 ① 계정 · 역할 시드 신설**(문서에 정해진 범위만 — 학습자 계정 1 · 역할 3 · 부여 3 · email 값 미확인 등재) · 무인증 기간 행위자 행의 경계 S4~S6 → **인증 도입(S7 ②) 전**과 확인 행위자 예외(정본 07_api/07 §인증 전 확인 행위자 판정) · 학습자 계정 시드 시점 불릿을 as-built에 맞춤 — 테이블 수 · 시드 행 수 불변
@@ -34,7 +36,7 @@
 ```
 
 - **⑥을 위에서 아래로 만든다.** mv_tag_1m이 먼저 생기면 그 순간부터 tag_raw 삽입이 tag_1m으로 흐르는데 mv_tag_1h가 아직 없어 그 구간의 시간 · 일 롤업이 빈다. 위에서부터 만들면 연쇄의 입구가 마지막에 열린다.
-- **Redis에는 마이그레이션이 없다.** 키는 런타임이 만들고, 컨슈머 그룹 grp:ingest는 Ingest 기동 시 XGROUP CREATE MKSTREAM이 만든다(ING-01). 키 패턴의 정본은 [05_redis_keyspace.md](./05_redis_keyspace.md)이며 스키마 파일이 아니다.
+- **Redis에는 마이그레이션이 없다.** 키는 런타임이 만들고, 컨슈머 그룹 grp:ingest는 Ingest 기동 시 · grp:biz-writer는 명령 워커 기동 시 **XGROUP CREATE stream:biz:cmd grp:biz-writer 0 MKSTREAM**(시작 ID 0 — 그룹 생성 전에 실린 명령도 읽는다 · $면 그 명령이 영영 소비되지 않는다)이 만든다(ING-01 · [../06_pipeline/07_business_crud.md](../06_pipeline/07_business_crud.md) §업무 명령 경로). 키 패턴의 정본은 [05_redis_keyspace.md](./05_redis_keyspace.md)이며 스키마 파일이 아니다.
 - **⑦이 ②보다 뒤인 이유** — Dictionary 생성 자체는 소스를 즉시 읽지 않지만, 첫 조회 때 소스 계정 · 테이블이 없으면 적재 실패가 LIFETIME마다 반복된다. ⑨는 시드 직후의 첫 조회가 빈 사전을 보지 않게 한다.
 
 ## PostgreSQL 마이그레이션
@@ -50,9 +52,11 @@
 | 005 | WRK 3 테이블 | [01_postgresql_schema.md](./01_postgresql_schema.md) | 해당 없음 |
 | 006 | 가드 트리거 · 추가 전용 권한(REVOKE) · 인덱스 | [02_postgresql_constraints.md](./02_postgresql_constraints.md) | 원시 SQL |
 | 007 | 대조군 plc_tag_raw_control · 일 파티션 · BRIN | [10_olap_vs_rdb_control.md](./10_olap_vs_rdb_control.md) | 원시 SQL |
-| 008~ | 이후 변경 — 말미 채번 · 재배치 금지 | 변경한 문서 | 해당 없음 |
+| **008** | **biz_command_log · UNIQUE(cmd_id) · 추가 전용 REVOKE**(제안 파일명 008_biz_command_log.sql) — 업무 쓰기 Redis 경유 | [01_postgresql_schema.md](./01_postgresql_schema.md) §biz_command_log 설계 · [02_postgresql_constraints.md](./02_postgresql_constraints.md) | 원시 SQL — 권한 |
+| 009~ | 이후 변경 — 말미 채번 · 재배치 금지 | 변경한 문서 | 해당 없음 |
 
-- 검산: 초기 대역 = 001~007 = **7** · 초기 테이블 = MST 6 + AUT 3 + ALM 2 + WRK 3 + 대조군 1 = **15**
+- 검산: 초기 대역 = 001~007 = **7** · 초기 테이블 = MST 6 + AUT 3 + ALM 2 + WRK 3 + 대조군 1 = **15** · 008이 1을 더해 현행 테이블 = 15 + 1 = **16**
+- **008은 초기 대역에 끼우지 않고 말미에 둔다.** 기존 볼륨(001~007 적용 · 스냅샷)에 migrate를 다시 돌리면 008만 적용되어 원장 테이블이 생긴다 — 005(WRK)에 넣으면 이미 적용된 순번의 내용이 바뀌어 같은 순번의 두 스키마가 생긴다. 008은 업무 테이블 어느 것도 참조하지 않는다(FK 없음).
 - **도구가 무엇이든 원시 SQL 마이그레이션을 쓸 수 있어야 한다.** 파티션 · 트리거 · 권한 · 확장 · BRIN은 ORM 모델 선언으로 표현되지 않는다 — 원본 후보(Prisma Migrate · node-pg-migrate) 중 이 제약으로 **node-pg-migrate**를 골랐다(W6 판정 · [../09_tech_stack/05_tooling_devops.md](../09_tech_stack/05_tooling_devops.md) §마이그레이션 도구 판정).
 - **대조군은 SW-09 기본 off여도 초기 스키마에 만든다.** 스위치로 테이블이 생기고 사라지면 스위치 전환이 재기동이 아니라 마이그레이션이 되어, 스위치 = DI 구현 교체라는 제약(ADR-08)이 깨진다.
 
@@ -105,9 +109,9 @@ migrate 뒤 seed가 넣는 행이다. 기본 시드는 용량 티어 S(설비 5 
 | user_account | 1 | 학습자 계정 · 비밀번호는 환경 변수에서 해시 | REQ-AUT-17 · 비밀 값은 시드 파일에 쓰지 않는다 |
 | role | 3 | OPERATOR · ENGINEER · ADMIN | [../02_features/12_permission_matrix.md](../02_features/12_permission_matrix.md) |
 | user_role | 3 | 학습자 계정에 세 역할 전부 | REQ-AUT-17 |
-| alarm_rule · work_order · production_log · audit_log · tag_master_history · alarm_event | 0 | 표면(S4 · S7)이 만든다 | 시드는 사람이 쓰기 표면으로 만들 데이터를 흉내 내지 않는다 |
+| alarm_rule · work_order · production_log · audit_log · tag_master_history · alarm_event · biz_command_log | 0 | 표면(S4 · S7)이 만든다 · 원장은 명령 적용이 만든다 | 시드는 사람이 쓰기 표면으로 만들 데이터를 흉내 내지 않는다 — 시드 행에 원장 행을 만들면 존재하지 않은 명령이 명령 조회에 나타난다 |
 
-- 검산: 시드 행이 있는 테이블 8(site · production_line · device · modbus_config · tag_master · user_account · role · user_role) + 0행 6 = **14** · 대조군은 적재가 채운다
+- 검산: 시드 행이 있는 테이블 8(site · production_line · device · modbus_config · tag_master · user_account · role · user_role) + 0행 7 = **15** · 대조군은 적재가 채운다
 - **BOOL · FC01 · FC02 태그는 시드하지 않는다.** 결합 CHECK가 막아 두었고([02_postgresql_constraints.md](./02_postgresql_constraints.md)) W4 판정도 **시드 금지 유지**다 — SIM이 비트 영역을 응답하지 않는다. 해제 조건 4개는 [../06_pipeline/02_collect.md](../06_pipeline/02_collect.md) §BOOL 판정이 갖는다.
 ### S2 적용 범위(as-built)
 

@@ -2,6 +2,8 @@
 
 > **대상**: db_study api 컨테이너의 REST 표면이 반환하는 에러 코드 전수 — 채번 정본
 > **작성일**: 2026-09-24
+> **개정일**: 2026-09-28 — 웨이브 1 검수 반영(B-M4 · B-M9) — common.postgres_unavailable 원인 구분 "result=unavailable이 가른다" → **Redis 불가 = unavailable · PostgreSQL 불가 = failed** · 워커 PostgreSQL 불가 = 명령 조회 failed(적용 여부 미확정 · 같은 키 재요청으로 확정) — 코드 수 불변
+> **개정일**: 2026-09-27 — D-04 부분 개정 반영(사용자 결정 — 업무 쓰기도 Redis를 거친다 · 동기 응답) — common.postgres_unavailable 발생 조건 · 발생 표면 보강 — **업무 쓰기 표면의 Redis 불가(명령 스트림 적재 실패 · SW-12 stream)와 워커의 PostgreSQL 불가도 이 코드**(클라이언트 대응이 같아 재사용 · 원인은 biz_commands_total result 레이블) · 발생 표면에 명령 조회 07_api/01_conventions #1 — **코드 수 불변(22)**
 > **개정일**: 2026-09-26 — W1 검수 반영 — auth.unauthenticated · auth.forbidden 발생 조건에 인증 도입(S7 ②) 전 알람 확인 조건(행위자 해석 실패 · 행위자 OPERATOR 없음 — 정본 07_api/07 §인증 전 확인 행위자 판정) 추가 — 코드 수 불변
 > **개정일**: 2026-09-24 — 최종 정밀 검수 — common.validation_failed 발생 조건에 Host 헤더 허용 목록 위반 추가(코드 수 불변)
 > **개정일**: 2026-09-24 — W7 검수 반영 — README ID 규약 예시와의 충돌 서술 → **W1에 고쳤다**로 갱신 — 코드 수 불변
@@ -46,7 +48,7 @@
 
 | 네임스페이스 | 도메인 | 발생 표면 | 범위 |
 |-------------|--------|----------|------|
-| common | 횡단 | 전 REST 표면 | 요청 검증 · 대상 없음 · 유일 제약 충돌 · 레이트 리밋 · PostgreSQL 접속 불가 |
+| common | 횡단 | 전 REST 표면 | 요청 검증 · 대상 없음 · 유일 제약 충돌 · 레이트 리밋 · PostgreSQL 접속 불가(업무 쓰기의 명령 스트림 불가 포함) |
 | auth | AUT | [../07_api/03_auth.md](../07_api/03_auth.md) + 전 표면의 인증 가드 | 자격 증명 · 액세스 토큰 · 리프레시 토큰 · 역할 권한 |
 | master | MST | [../07_api/04_master.md](../07_api/04_master.md) | 현재 채번 없음 |
 | timeseries | TSQ | [../07_api/05_timeseries.md](../07_api/05_timeseries.md) | 조회 요청 상한 |
@@ -70,7 +72,7 @@
 | common.not_found | 404 | 경로의 식별자가 가리키는 대상이 마스터에 없다(설비 · 태그 · 알람 이벤트 · 작업지시). **rt:latest 키가 비어 있는 것은 여기가 아니다** — 설비가 마스터에 있으면 ClickHouse 복원 경로를 탄다(원본 data_flow.md §5) | [../07_api/04_master.md](../07_api/04_master.md) · [../07_api/06_realtime.md](../07_api/06_realtime.md) · [../07_api/07_alarms.md](../07_api/07_alarms.md) · [../07_api/08_work_orders.md](../07_api/08_work_orders.md) | 식별자를 확인한다 |
 | common.duplicate_key | 409 | 유일 제약 컬럼에 이미 있는 값을 쓴다 — tag_master.tag_code · work_order.order_no(원본 architecture.md §6 ERD의 UK) · site.site_code · production_line(site_id, line_code) · device.device_code(05_data_stores/02 UNIQUE) | [../07_api/04_master.md](../07_api/04_master.md) · [../07_api/08_work_orders.md](../07_api/08_work_orders.md) | 다른 값으로 다시 요청한다 |
 | common.rate_limited | 429 | 사용자 · 토큰 기준 분당 요청 수가 한도를 넘었다. 판정 키는 rl:{class}:{user_id}:{unix_minute} INCR이며(키 모양 정본 [../05_data_stores/05_redis_keyspace.md](../05_data_stores/05_redis_keyspace.md)) **IP 기준이 아니다** — 모든 요청이 127.0.0.1에서 오므로 IP 기준은 전원을 한 사용자로 센다(원본 architecture.md §11.2). 한도 값은 2계층 조정값이며 소유처는 [../12_security/03_api_surface_defense.md](../12_security/03_api_surface_defense.md) | 전 REST 표면 | 다음 분 창까지 기다린다 |
-| common.postgres_unavailable | 503 | PostgreSQL에 접속할 수 없어 업무 읽기 · 쓰기가 실패한다. 시계열 조회는 영향을 받지 않는다 — Dictionary가 마지막 적재 값을 유지한다(원본 architecture.md §17). 최신값 단일 태그 조회는 태그 → 설비 해석(cache:tagmeta 미스)이 PostgreSQL에 막히면 이 코드다 — 설비 전체 조회는 값을 내고 메타만 비운다(W4 판정 · [../06_pipeline/05_realtime_read.md](../06_pipeline/05_realtime_read.md)) | 업무 CRUD 표면 · 로그인 · 인가 단계(권한 캐시 미스 — 인증 표면 전부 · REQ-AUT-15) · 최신값 단일 태그([../07_api/06_realtime.md](../07_api/06_realtime.md)) | 백오프 후 다시 요청한다 |
+| common.postgres_unavailable | 503 | PostgreSQL에 접속할 수 없어 업무 읽기 · 쓰기가 실패한다. 시계열 조회는 영향을 받지 않는다 — Dictionary가 마지막 적재 값을 유지한다(원본 architecture.md §17). 최신값 단일 태그 조회는 태그 → 설비 해석(cache:tagmeta 미스)이 PostgreSQL에 막히면 이 코드다 — 설비 전체 조회는 값을 내고 메타만 비운다(W4 판정 · [../06_pipeline/05_realtime_read.md](../06_pipeline/05_realtime_read.md)) **업무 쓰기 표면에서 Redis에 접속할 수 없어 명령을 명령 스트림 stream:biz:cmd에 싣지 못할 때(SW-12 stream)도 이 코드다** — 적용 없음 · 클라이언트 대응(백오프 뒤 같은 Idempotency-Key로 재요청)이 PostgreSQL 불가와 같아 코드를 가르지 않는다(HTTP 상태 규약 · 재사용 판정 [../07_api/01_conventions.md](../07_api/01_conventions.md) §업무 쓰기 경로) · 원인은 biz_commands_total의 result 레이블이 가른다 — Redis 불가 = unavailable · PostgreSQL 불가 = failed. 워커가 PostgreSQL 불가로 명령을 적용하지 못한 경우도 이 코드다(재시도 · 보관 없음 · 명령 조회 failed — 적용 여부 미확정이라 같은 키 재요청으로 확정한다) | 업무 CRUD 표면 · 로그인 · 인가 단계(권한 캐시 미스 — 인증 표면 전부 · REQ-AUT-15) · 최신값 단일 태그([../07_api/06_realtime.md](../07_api/06_realtime.md)) · 명령 조회([../07_api/01_conventions.md](../07_api/01_conventions.md) #1 — 결과 키가 없고 원장을 읽지 못할 때) | 백오프 후 다시 요청한다 |
 
 ### auth — 인증 · 인가
 

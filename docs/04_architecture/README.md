@@ -2,6 +2,9 @@
 
 > **대상**: db_study의 시스템 구조 — 조감도 · 모듈 경계 · 실행 토폴로지 · 저장소 분리 정책 · 지연 예산 · 백프레셔와 장애 · 용량 · 확장 로드맵 · 기술 결정
 > **작성일**: 2026-09-23
+> **개정일**: 2026-09-28 — 웨이브 1 검수 반영(B-H1 · H2) — 요약 표 기술 결정 25 — ADR-01~25 · 현행 24 → **26 — ADR-01~26 · 현행 25 · 잠정 1**(ADR-26 신설 반영 누락 정정)
+> **개정일**: 2026-09-28 — ADR-26 신설(업무 쓰기 명령 경로) — ADR 선점표 말미에 ADR-26 행 · 검산 25 → **26** · 다음 채번 ADR-27
+> **개정일**: 2026-09-28 — 업무 쓰기 Redis 경유 개정(사용자 결정 2026-09-27) — 04_storage_split 행 "업무 쓰기가 Stream을 타지 않는 이유" → **업무 쓰기가 명령 스트림을 타는 방식** — 문서 수 불변
 > **개정일**: 2026-09-24 — S0 실측 반영 — ADR-14 색인 행 근거 문서에 05/04(롤업 DDL 윈도우 · ADR-14 보강) 추가
 > **원천**: [../README.md](../README.md)(전역 불변식 · 분기 3계층) · 원본 architecture.md §1~§5 · §9 · §13 · §15 · §17 · §19 · 원본 tech_stack.md §3 · §5.3 · §13 · 원본 data_flow.md §8.2 · §15 · 원본 implementation_plan.md §2 · §4.3 · §6 · §7(커밋 ff66a37)
 
@@ -16,7 +19,7 @@
 | [01_system_architecture.md](./01_system_architecture.md) | 조감도 · 시스템 컨텍스트 · 경계별 프로토콜 · 컨테이너 4 · **아키텍처 불변식 표** | architecture §1 · §2 · §3 | W3 |
 | [02_module_boundaries.md](./02_module_boundaries.md) | Stream 경계 원칙과 근거 4 · 경계 예외(알람 직접 호출)의 근거 · APP_ROLE · worker_threads 격리 · **스위치 = DI 포트 제약** · 리포지터리 구조 | architecture §4 · §9 · implementation_plan §4.3 · §6 · §7.3 | W3 |
 | [03_execution_topology.md](./03_execution_topology.md) | Compose 서비스 · healthcheck · 기동 순서 · named volume · 메모리 프로파일 · CPU 가중 · cpuset 배치 · 스냅샷과 복원 | architecture §3 · §13 · tech_stack §10.1~§10.5 · implementation_plan §2 | W3 |
-| [04_storage_split.md](./04_storage_split.md) | ★★ **저장소 분리·분기 정책 정본(학습 목표 ②)** — 3계층 분기 표 · 데이터 종류별 목적지와 근거 · 목적이 다른 세 쓰기 · 업무 쓰기가 Stream을 타지 않는 이유 · 중복 저장의 유일한 예외 | architecture §5 · tech_stack §5.3 · data_flow §8.2 | W3 |
+| [04_storage_split.md](./04_storage_split.md) | ★★ **저장소 분리·분기 정책 정본(학습 목표 ②)** — 3계층 분기 표 · 데이터 종류별 목적지와 근거 · 목적이 다른 세 쓰기 · 업무 쓰기가 명령 스트림을 타는 방식(옛 근거를 지키는 기전) · 중복 저장의 유일한 예외 | architecture §5 · tech_stack §5.3 · data_flow §8.2 | W3 |
 | [05_latency_budget.md](./05_latency_budget.md) | 구간별 p95 예산 · 지배 구간 · 측정 지점 · 알람 판정 구간 신설 | data_flow §15 · implementation_plan §7.3 | W3 |
 | [06_backpressure_failure.md](./06_backpressure_failure.md) | 백프레셔 5단계 · 프로파일별 임계 · MAXLEN과 maxmemory 관계 · 장애 시나리오 · degrade 원칙 · **ClickHouse 중단 시 최신값 정지 문제** | architecture §9.3 · §17 · implementation_plan §7.2 | W3 |
 | [07_capacity_planning.md](./07_capacity_planning.md) | 용량 티어 S · M · M+ · L · 정상 상태 디스크 · 파생 지표 | architecture §15 | W3 |
@@ -27,7 +30,7 @@
 
 ## ADR 선점표
 
-W3 착수 전 리드가 번호를 선점한다. 05_data_stores를 쓰는 팀원이 04_architecture와 동시에 이 번호를 인용하기 때문이다. 결정 본문의 정본은 [09_decision_records.md](./09_decision_records.md)이며, 제목은 본문 작성 때 다듬을 수 있지만 **번호와 주제는 바꾸지 않는다.** 새 결정은 ADR-26부터 말미에 채번한다.
+W3 착수 전 리드가 번호를 선점한다. 05_data_stores를 쓰는 팀원이 04_architecture와 동시에 이 번호를 인용하기 때문이다. 결정 본문의 정본은 [09_decision_records.md](./09_decision_records.md)이며, 제목은 본문 작성 때 다듬을 수 있지만 **번호와 주제는 바꾸지 않는다.** 새 결정은 ADR-27부터 말미에 채번한다.
 
 | ADR | 주제 | 원천 | 주 인용처 |
 |-----|------|------|----------|
@@ -56,8 +59,9 @@ W3 착수 전 리드가 번호를 선점한다. 05_data_stores를 쓰는 팀원�
 | ADR-23 | 백프레셔 하강 히스테리시스 | W3 신설 · 인계 | 04/06 · 11_glossary/03 |
 | ADR-24 | SW-10 off면 경고 단계 데드밴드 강화는 무동작 | W3 신설 · 인계 | 04/06 · 02_features/03 |
 | ADR-25 | CPU 바운드 단계의 piscina worker_threads 격리 | architecture §4 · tech_stack §3.3 | 04/02 · 04/05 |
+| ADR-26 | 업무 쓰기는 명령 스트림 · 직렬 워커 · 멱등 원장 · 동기 응답 | 사용자 결정 2026-09-27(개정 신설) | 06/07 · 04/04 · 04/02 |
 
-검산: 선점 ADR-01~ADR-21 **21** + W3 신설 ADR-22~25 **4** = **25**(결번 없음). 주제별 분류는 [09_decision_records.md](./09_decision_records.md)가 정한다
+검산: 선점 ADR-01~ADR-21 **21** + W3 신설 ADR-22~25 **4** + 개정 신설 ADR-26 **1** = **26**(결번 없음). 주제별 분류는 [09_decision_records.md](./09_decision_records.md)가 정한다
 
 ## 고정 기준 (축약)
 
@@ -70,7 +74,7 @@ W3 착수 전 리드가 번호를 선점한다. 05_data_stores를 쓰는 팀원�
 | 백프레셔 | **5단계**(정상 · 주의 · 경고 · 위험 · 복구). 임계는 2계층 조정값이며 프로파일별 값의 정본은 [06_backpressure_failure.md](./06_backpressure_failure.md) |
 | 용량 티어 | **4개**(S · M · M+ · L) |
 | 확장 단계 | **4단계**(역할 분리 · api 다중 인스턴스 · Redis 분리 · 큐 교체). 각 단계는 실측 진입 조건으로만 진입한다 |
-| 기술 결정 | **25** — ADR-01~25 · 현행 24 · 잠정 1(ADR-10) · 채번 정본 [09_decision_records.md](./09_decision_records.md) |
+| 기술 결정 | **26** — ADR-01~26 · 현행 25 · 잠정 1(ADR-10) · 채번 정본 [09_decision_records.md](./09_decision_records.md) |
 | 보정 결정 | 원본 implementation_plan §7의 보정 5건(배치 트리거 · 최신값 소유 · 알람 조회 상한 · 무효화 체인 · TTL 강제)은 ADR로 결정을 고정하고 각 정본에 반영한다 |
 
 ## 관련 문서

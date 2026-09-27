@@ -2,11 +2,12 @@
 
 > **대상**: MST 도메인 REST 표면 — 사이트 · 라인 · 설비 · Modbus 접속 설정 · 태그 마스터의 조회와 쓰기 · 태그 논리 삭제 · 스케일 변경 새 태그 발급 · 무효화 체인 대상 키 · 원본에 없는 표면 판정(라인 · 사이트 · modbus_config 쓰기) · unit만 바꾸는 태그 수정 판정 · 재활성화 판정
 > **작성일**: 2026-09-24
+> **개정일**: 2026-09-27 — D-04 부분 개정 반영(사용자 결정 — 업무 쓰기도 Redis를 거친다 · 동기 응답) — 도입 단락 쓰기 주체 · 공통 규약 **쓰기 경로 행 신설**(명령 스트림 · 커밋 뒤 응답 · 202 pending · Idempotency-Key · Redis 불가 503) — 항목 8 → **9** · 표면 수 불변 · 에러 코드 열 불변(Redis 불가는 common.postgres_unavailable 재사용)
 > **개정일**: 2026-09-24 — 최종 정밀 검수 — §층별 반영 시점 → §층별 옛 값의 창(없는 절 참조 교정)
 > **개정일**: 2026-09-24 — W5 판정 반영 — #7 비활성 원천 거절 → **master.reissue_source_inactive/409** · 사이트 · 라인 · 태그 목록 Redis 사본 없음(리드 판정) · Modbus 매핑 변경 PATCH 허용 + 감사(리드 판정) — 표면 수 불변
 > **원천**: 원본 architecture.md §6 · §11 · §12 · §18(커밋 ff66a37) · 원본 data_flow.md §7 · §7.1 · §7.2(커밋 ff66a37) · REQ-MST-01~15 · REQ-GLB-14 · ADR-12 · ADR-16 · [../02_features/02_master.md](../02_features/02_master.md) MST-01~06 · [../05_data_stores/01_postgresql_schema.md](../05_data_stores/01_postgresql_schema.md) · [../05_data_stores/02_postgresql_constraints.md](../05_data_stores/02_postgresql_constraints.md) · [../06_pipeline/07_business_crud.md](../06_pipeline/07_business_crud.md) 무효화 체인 · docs_plan.md 웨이브 인계 W5 07_api 행(unit만 바꾸는 태그 수정 · 원본에 없는 표면)
 
-MST 표면은 **한 번의 저장이 네 사본 층을 건드리는 표면**이다. 쓰기는 PostgreSQL 트랜잭션(변경 + audit_log)으로 커밋되고, 커밋 뒤에만 Redis 사본 삭제 · ch:cacheinv 발행 · Dictionary 재적재(태그만) · BFF 무효화 · 브라우저 무효화 신호가 걸린다(ADR-12 · 체인 6단 정본 [../06_pipeline/07_business_crud.md](../06_pipeline/07_business_crud.md)). 그래서 이 문서의 쓰기 계약은 요청 · 응답과 함께 **체인이 지우는 키**를 적는다.
+MST 표면은 **한 번의 저장이 네 사본 층을 건드리는 표면**이다. 쓰기는 명령 스트림 stream:biz:cmd를 거쳐 워커가 PostgreSQL 트랜잭션(변경 + audit_log + 명령 원장)으로 커밋하고(D-04 2026-09-27 부분 개정), 커밋 뒤에만 Redis 사본 삭제 · ch:cacheinv 발행 · Dictionary 재적재(태그만) · BFF 무효화 · 브라우저 무효화 신호가 걸린다(ADR-12 · 체인 6단 정본 [../06_pipeline/07_business_crud.md](../06_pipeline/07_business_crud.md)). 그래서 이 문서의 쓰기 계약은 요청 · 응답과 함께 **체인이 지우는 키**를 적는다.
 
 원본 API 표는 sites(GET) · devices(GET) · tags(GET · POST · PATCH) 다섯 줄뿐이다(원본 architecture.md §11). 그런데 기능 MST-01~06은 사이트 · 라인 · 설비 · 접속 설정의 등록 · 수정과 태그 논리 삭제 · 새 태그 발급을 요구한다(S4 마스터 CRUD 범위). 이 문서는 그 차이를 **기능 근거로 신설**해 닫는다 — 신설 표면마다 기능 ID를 단다.
 
@@ -19,13 +20,14 @@ MST 표면은 **한 번의 저장이 네 사본 층을 건드리는 표면**이�
 | 경로 | 전 표면 BFF 경유 — 조회는 BFF 서버 fetch 캐시(revalidate · 현행 참고 30초) · 쓰기 성공 시 BFF가 해당 태그를 무효화(⑤) | [01_conventions.md](./01_conventions.md) §BFF 경유와 직결 |
 | 인가 | 조회 전원 · 쓰기 ADMIN만 | REQ-MST-15 · 권한 매트릭스 MST |
 | 트랜잭션 | 쓰기 하나 = 트랜잭션 하나(변경 + audit_log) · 감사 실패는 변경 전체 롤백 | REQ-MST-05 · REQ-WRK-08 |
+| 쓰기 경로 | 쓰기 11(#4~#7 · #9 · #10 · #12~#15 · #17) — **명령 스트림 stream:biz:cmd → 워커 PostgreSQL 트랜잭션 → 커밋 · 무효화 체인 ②③ 뒤 응답**(성공 코드 · 에러 코드는 표 그대로) · 대기 상한 초과 **202 + {cmdId, status: 'pending'}** · 명령 ID는 Idempotency-Key 헤더 · Redis 불가 common.postgres_unavailable/503 | [01_conventions.md](./01_conventions.md) §업무 쓰기 경로 · REQ-GLB-12 · SW-12 |
 | 체인 실패 | ② 삭제 · ③ 발행 · ④ 재적재 실패는 **요청을 실패시키지 않는다** — 계수만 한다 | REQ-MST-10 |
 | 물리 삭제 | DELETE 메서드 표면이 없다 — 설비 · 태그는 is_active false로 끈다 | REQ-MST-02 · 06 |
 | 비활성 대상 | 식별자 조회 200 + isActive false · 404는 마스터에 없는 식별자만 | REQ-MST-08 |
 | PostgreSQL 불가 | 읽기 · 쓰기 common.postgres_unavailable/503 · Redis 사본이 있는 조회(#2 설비 목록 · #8 태그 단건)는 사본으로 200 | REQ-MST-14 |
 | 단계 | 조회 S2(시드 최소분) · 쓰기 S4 · 인가 S7 | REQ-MST-01 · D-07 |
 
-- 검산: 항목 = **8**
+- 검산: 항목 = **9**
 - **체인 실패로 요청을 실패시키지 않는 이유(B형)** — 이미 커밋된 쓰기가 실패 응답을 받으면 클라이언트가 같은 쓰기를 재시도해 tag_code 중복 409를 맞는다. 옛 사본은 TTL까지 남고 그 상한은 [../06_pipeline/07_business_crud.md](../06_pipeline/07_business_crud.md) §층별 옛 값의 창이 말한다.
 
 ## 표면 요약

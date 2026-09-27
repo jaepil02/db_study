@@ -1,7 +1,8 @@
 # OBS — 헬스 · 메트릭 표면 (10_metrics)
 
-> **대상**: OBS 도메인 표면 — GET /api/v1/health(저장소별 상태 · 스위치 11종의 실제 주입 구현 · 부분 실패 503) · GET /metrics(Prometheus 텍스트 · 스위치 상태 레이블) · 두 표면의 공개 판정 반영 · **health 본문 필드 이름 판정** · **저장소별 타임아웃 판정**
+> **대상**: OBS 도메인 표면 — GET /api/v1/health(저장소별 상태 · 스위치 12종의 실제 주입 구현 · 부분 실패 503) · GET /metrics(Prometheus 텍스트 · 스위치 상태 레이블) · 두 표면의 공개 판정 반영 · **health 본문 필드 이름 판정** · **저장소별 타임아웃 판정**
 > **작성일**: 2026-09-24
+> **개정일**: 2026-09-28 — 웨이브 1 검수 반영(B-M3) — 대상 줄 스위치 11종 → **12종** · 도입 전 스위치 불릿 "스위치 11키" → **스위치 키(현재 12 — 정본 링크)** · switches 노출 표에 **SW-12 행**(stream · direct · StreamBizWriter · DirectBizWriter) — 스위치 행 11 → **12** · 표면 수 불변
 > **개정일**: 2026-09-24 — S2 구현 반영 — switches.*.impl 문자열 → **문자열 또는 null**(도입 전 스위치) · obs_switch_info는 주입된 스위치만
 > **개정일**: 2026-09-24 — W6 실험 채번 반영 — 레이블 이름 · 설비 레이블 · EXP 반영(정본 10_observability/01 · 06)
 > **개정일**: 2026-09-24 — W6 판정 반영 — Compose api healthcheck timeout **3초**(저장소 타임아웃 1,000 ms의 3배 · 정본 09_tech_stack/03) · run 환경변수 이름 MEMORY_PROFILE · CAPACITY_TIER · COMMIT_HASH(정본 09_tech_stack/04) — 필드 수 불변
@@ -77,7 +78,7 @@ metrics 네임스페이스는 정의만 있고 코드가 0이다. health의 503�
 - **run을 싣는 이유(W5 리드 판정)** — 측정 기록의 4요소(커밋 해시 · 메모리 프로파일 · 용량 티어 · 스위치 상태 — REQ-GLB-17)를 한 응답에서 읽게 한다. 실험 콘솔(EXP-CONSOLE)과 비교 화면(EXP-COMPARE)이 기록 조건을 손으로 옮겨 적지 않는다 — 옮겨 적다 틀리면 같은 조건이라 믿은 두 측정의 조건이 다르다. 셋 다 비밀이 아니다.
 - **값은 기동 시 주입값이며 모르면 null이다.** 커밋 해시는 이미지 빌드 인자, 메모리 프로파일 · 용량 티어는 기동 환경변수에서 읽는다(환경변수 MEMORY_PROFILE · CAPACITY_TIER · 빌드 인자 COMMIT_HASH — 이름 정본 [../09_tech_stack/04_local_environment.md](../09_tech_stack/04_local_environment.md)). 추정값으로 채우지 않는다 — null은 "그 측정 기록은 4요소가 빠져 인용할 수 없다"는 표지다. memoryLimitMb만은 프로파일 이름과 별도로 cgroup의 실제 상한을 읽는다 — 스위치와 같은 "실제 적용값" 원칙(REQ-OBS-11)이다.
 - **error에 원문 메시지를 싣지 않는 이유** — 드라이버 오류 문자열에는 접속 문자열 · 호스트 · 사용자 이름이 섞인다. 공개 표면의 응답에 비밀이 실리면 공개 판정이 무효다(REQ-OBS-10).
-- **도입 전 스위치의 impl은 null이다(S2 as-built).** 주입되지 않은 구현 이름을 적으면 "실제 주입 구현"이 거짓이 되고, 키를 빼면 측정 기록의 스위치 11키가 비어 4요소가 성립하지 않는다([../10_observability/04_experiment_protocol.md](../10_observability/04_experiment_protocol.md) BFF 판독 규칙 4) — 키는 싣고 impl만 비운다. obs_switch_info는 impl 레이블이 비지 않게 주입된 스위치만 낸다.
+- **도입 전 스위치의 impl은 null이다(S2 as-built).** 주입되지 않은 구현 이름을 적으면 "실제 주입 구현"이 거짓이 되고, 키를 빼면 측정 기록의 스위치 키(현재 12 — 정본 [../02_features/13_switch_matrix.md](../02_features/13_switch_matrix.md))가 비어 4요소가 성립하지 않는다([../10_observability/04_experiment_protocol.md](../10_observability/04_experiment_protocol.md) BFF 판독 규칙 4) — 키는 싣고 impl만 비운다. obs_switch_info는 impl 레이블이 비지 않게 주입된 스위치만 낸다.
 - **switches의 키 집합은 정본의 스위치 전부다.** 개수를 이 문서가 세지 않는다 — 스위치가 늘면 키가 늘 뿐이고 응답 필드 추가 규칙(v1 유지)을 따른다. 정본 [../02_features/13_switch_matrix.md](../02_features/13_switch_matrix.md).
 
 ### 스위치 값 — 실제 주입 구현 기준
@@ -97,8 +98,9 @@ metrics 네임스페이스는 정의만 있고 코드가 0이다. health의 503�
 | SW-09 | on · off | PostgresControlSink · NoopControlSink | null |
 | SW-10 | on · off | TagDeadbandFilter · PassthroughFilter | null |
 | SW-11 | ingest · collector | IngestLatestValueWriter · CollectorLatestValueWriter | null |
+| SW-12 | stream · direct | StreamBizWriter · DirectBizWriter | null |
 
-- 검산: 스위치 행 = **11**(정본 행을 옮겨 적은 대조용 — 수의 정본은 [../02_features/13_switch_matrix.md](../02_features/13_switch_matrix.md))
+- 검산: 스위치 행 = **12**(정본 행을 옮겨 적은 대조용 — 수의 정본은 [../02_features/13_switch_matrix.md](../02_features/13_switch_matrix.md))
 - **A형 — "환경변수를 off로 줬는데 health가 on이라 말한다"는 버그가 아니다.** 통념은 health가 설정을 보여 준다는 것이다. 부정 — health는 주입된 구현을 보여 준다. 진짜 축은 **측정 기록의 스위치 상태는 실제로 돈 코드여야 한다**는 것이다(D-10). 대체 경로 — 값이 다르면 환경변수 오타 · 허용값 밖 값으로 기본 구현이 주입된 것이니 환경변수를 고치고 재기동한다.
 - **SW-07만 정수다.** on/off로 내면 창 크기가 다른 두 측정이 같은 조건으로 기록된다(REQ-OBS-11).
 - **SW-01 off의 경고는 이 본문과 부팅 로그 두 자리에 남는다**(REQ-GLB-04). off는 실험 전용이며 정상 경로로 오인되면 유실이 기본 동작이 된다.

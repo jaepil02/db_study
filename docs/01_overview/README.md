@@ -2,6 +2,7 @@
 
 > **대상**: db_study — 왜 만드는가 · 무엇을 배우려는가 · 어디까지 만드는가 · 어떤 순서로 가는가
 > **작성일**: 2026-09-23
+> **개정일**: 2026-09-27 — D-04 부분 개정 반영(사용자 결정 — 업무 쓰기도 Redis를 거친다) — 고정 기준 축약 역할 스위치 11 → **12종**(SW-12 BIZ_WRITE_PATH · Redis 역할 10 → **11**)
 > **원천**: [../README.md](../README.md)(고정 기준 · 전역 불변식) · 원본 tech_stack.md §1 · §14 · 원본 implementation_plan.md §1 · §3 · §5 · §9(커밋 ff66a37) · 저장소 루트 docs_plan.md(학습 목표 2축 · 확정 사항 3건)
 
 신규 합류자와 학습자가 가장 먼저 읽는 폴더다. 이 시스템이 서비스가 아니라 **측정 장치**라는 것, 그래서 기능의 완성도보다 비교 가능한 수치가 우선한다는 것을 여기서 잡는다. 맥락을 잡은 뒤 [../02_features](../02_features/README.md) → [../03_requirements](../03_requirements/README.md) → [../04_architecture](../04_architecture/README.md) 순으로 넘어간다.
@@ -30,7 +31,7 @@
 | 학습 목표 | **2축** — ① 컬럼형 vs RDB를 측정으로 안다 ② Redis 중간 계층에서 성격별 분기를 경험한다 |
 | 도메인 | **11개** — AUT · MST · COL · SIM · GEN · ING · TSQ · RLT · ALM · WRK · OBS(제어 6 · 데이터 4 · 관측 1) |
 | 분기 계층 | **3계층** — ① 원시값 ② 알람 · 실적 ③ 업무 CRUD |
-| 역할 스위치 | **11종** — SW-01~SW-11(Redis 역할 10 + 수집 1). 정본 [../02_features/13_switch_matrix.md](../02_features/13_switch_matrix.md) |
+| 역할 스위치 | **12종** — SW-01~SW-12(Redis 역할 11 + 수집 1). 정본 [../02_features/13_switch_matrix.md](../02_features/13_switch_matrix.md) |
 | 학습 단계 | S0~S7 — 완성 순서(Phase 0~5)와 학습 순서는 다르다. 학습 순서의 정본은 [05_priorities_roadmap.md](./05_priorities_roadmap.md) |
 | 제품·학습 결정 | **13** — D-01~D-13 · 채번 정본 [06_design_decisions.md](./06_design_decisions.md) |
 | 실행 환경 | 로컬 머신 1대 · Docker Compose 컨테이너 4개 + 호스트 웹 · 127.0.0.1 바인드 · 배포 없음 |

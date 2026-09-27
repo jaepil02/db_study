@@ -1,7 +1,8 @@
 # API 표면 방어 (03_api_surface_defense)
 
-> **대상**: api 표면 43개를 위협 관점에서 다시 읽는 리뷰 — 방어 지점 전수 · CORS 단일 오리진 · auth 표면 CORS 제외 판정 리뷰 · BFF 인증 경로의 출처 검사 · **레이트 리밋 등급(class 값 집합)과 한도 관계식(정본)** · 로그인 시도 제한 판정 · 조회 범위 강제 · **내보내기 범위 상한(정본)** · ClickHouse 파라미터 바인딩 · WebSocket Origin 검증과 종료 코드 8종 리뷰 · 보안 헤더 · 응답 비노출
+> **대상**: api 표면 44개를 위협 관점에서 다시 읽는 리뷰 — 방어 지점 전수 · CORS 단일 오리진 · auth 표면 CORS 제외 판정 리뷰 · BFF 인증 경로의 출처 검사 · **레이트 리밋 등급(class 값 집합)과 한도 관계식(정본)** · 로그인 시도 제한 판정 · 조회 범위 강제 · **내보내기 범위 상한(정본)** · ClickHouse 파라미터 바인딩 · WebSocket Origin 검증과 종료 코드 8종 리뷰 · 보안 헤더 · 응답 비노출
 > **작성일**: 2026-09-24
+> **개정일**: 2026-09-28 — 웨이브 1 검수 반영(B-M3) — 대상 줄 api 표면 43 → **44**(명령 조회 01_conventions #1) · 레이트 리밋 general 계수 표면에 01_conventions #1 — general 33 → **34** · 계수 대상 37 → **38** · 검산 총수 43 → **44** — class 수 불변
 > **개정일**: 2026-09-24 — 최종 정밀 검수 — Host 대조 거절 응답 모양 판정 — common.validation_failed/400(header.host · enum) · WS는 업그레이드 전 400
 > **원천**: 원본 architecture.md §2 · §11.2 · §18(커밋 ff66a37) · 원본 tech_stack.md §10.4(커밋 ff66a37) · REQ-AUT-04 · 07 · 11 · 12 · 13 · 14 · 16 · REQ-GLB-19 · REQ-TSQ-01 · 03 · 04 · 15 · 17 · REQ-ALM-13 · REQ-GEN-08 · 09 · 15 · REQ-RLT-09 · REQ-OBS-10 · ADR-02 · [../07_api/01_conventions.md](../07_api/01_conventions.md) · [../07_api/03_auth.md](../07_api/03_auth.md) · [../07_api/05_timeseries.md](../07_api/05_timeseries.md) · [../07_api/06_realtime.md](../07_api/06_realtime.md) · [../07_api/09_datagen.md](../07_api/09_datagen.md) · [../07_api/11_websocket.md](../07_api/11_websocket.md) · [../05_data_stores/05_redis_keyspace.md](../05_data_stores/05_redis_keyspace.md) rl 계열 · docs_plan.md 웨이브 인계 W3 05_data_stores/05 행 · W6 10_observability 행 · W7 12_security 행
 
@@ -17,7 +18,7 @@
 |------|------|------|------|------|------|
 | CORS 단일 오리진 | 브라우저 직결 표면 | S2 | api 전역 CORS 설정 | REQ-AUT-12 | 같은 머신 브라우저의 임의 페이지가 응답을 읽는다 |
 | 액세스 토큰 검증 · 역할 대조 | 인증 표면 전부 | S7 | Guard | REQ-AUT-07 · 09 · [01_authn_authz.md](./01_authn_authz.md) | 무인증 기간이 끝나지 않는다 |
-| 레이트 리밋 | 인증 REST 표면(계수 대상 37) | S7 | Guard 뒤 계수기 | REQ-AUT-11 | 한 사용자 · 한 스크립트가 ClickHouse 대량 스캔을 반복한다 |
+| 레이트 리밋 | 인증 REST 표면(계수 대상 38) | S7 | Guard 뒤 계수기 | REQ-AUT-11 | 한 사용자 · 한 스크립트가 ClickHouse 대량 스캔을 반복한다 |
 | WebSocket Origin 검증 | /ws/realtime | S2 — §Origin 검증 | 게이트웨이 핸드셰이크 | REQ-AUT-13 · REQ-RLT-09 | CORS가 막는 오리진이 실시간 프레임을 받는다 |
 | 보안 헤더 | 모든 HTTP 응답 | S7 | helmet 계열 플러그인 | REQ-AUT-13 | 응답 형식 추측(MIME 스니핑) · 참조 URL 누출 |
 | Host 헤더 대조 | api 전 HTTP 요청 · WebSocket 핸드셰이크 | S2 | api 전역 | REQ-AUT-13 · [../07_api/01_conventions.md](../07_api/01_conventions.md) | DNS 재바인딩 페이지가 브라우저에게 같은 오리진으로 보여 CORS 없이 응답을 읽는다 |
@@ -79,12 +80,12 @@
 
 | class | 묶음 | 표면 | 계수 표면 수 | 한도 현행 참고 | 한도 관계(1계층) |
 |------|------|------|:-:|------|------|
-| **general** | 일반 | 아래 셋을 뺀 계수 대상 전부 — 04_master #1~#17 · 06_realtime #1 · #2 · 07_alarms #1~#5 · 08_work_orders #1~#9 | 33 | 미정 | ≥ bulk_read 한도 · ≥ 재연결 동기화 폭(§관계식 R3) |
+| **general** | 일반 | 아래 셋을 뺀 계수 대상 전부 — 01_conventions #1(명령 조회) · 04_master #1~#17 · 06_realtime #1 · #2 · 07_alarms #1~#5 · 08_work_orders #1~#9 | 34 | 미정 | ≥ bulk_read 한도 · ≥ 재연결 동기화 폭(§관계식 R3) |
 | **bulk_read** | 대량 조회 | 05_timeseries #1 · 07_alarms #6 | 2 | 미정 | ≥ export 한도 · ≤ general 한도 |
 | **export** | 내보내기 | 05_timeseries #2 | 1 | 미정 | ≤ bulk_read 한도 |
 | **bulk_ingest** | 부하 주입 | 09_datagen #1 | 1 | 미정 | **≥ 실험 부하의 분당 요청 수**(§관계식 R2) |
 
-- 검산: class = **4** · 계수 표면 = 33 + 2 + 1 + 1 = **37** · 계수 밖 표면 = 03_auth 3 + 10_metrics 2 + 11_websocket 1 = **6** · 37 + 6 = **43** = API 표면 총수([../07_api/README.md](../07_api/README.md))
+- 검산: class = **4** · 계수 표면 = 34 + 2 + 1 + 1 = **38** · 계수 밖 표면 = 03_auth 3 + 10_metrics 2 + 11_websocket 1 = **6** · 38 + 6 = **44** = API 표면 총수([../07_api/README.md](../07_api/README.md))
 - **엔드포인트별 제한은 class 단위 판정으로 해소한다 — 키 패턴을 바꾸지 않는다.** 원본 "사용자별 + 엔드포인트별"(원본 architecture.md §18)의 목적은 "timeseries/query와 export에 엄격히"였고, 그 목적은 표면을 묶은 class로 충족된다. 키는 이미 rl:{class}:{user_id}:{unix_minute}다(W3 판정 · [../05_data_stores/05_redis_keyspace.md](../05_data_stores/05_redis_keyspace.md)). 엔드포인트 경로를 키에 넣으면 경로 파라미터마다 키가 생겨 한도가 식별자 단위로 쪼개진다 — 설비 100개를 한 번씩 부르면 한도가 100배가 된다.
 - **class 값은 소문자 · 밑줄 문자열이다.** 키 · 메트릭 레이블 · 로그에 같은 문자열이 그대로 들어간다 — 표시 이름(일반 · 대량 조회 · 내보내기 · 부하 주입)은 문서와 화면에만 쓴다.
 - **한도 값을 정하지 않은 것은 누락이 아니다.** 원본은 값이 없고(원본 architecture.md §11.2 "분당 요청 수" · §18 "엄격히"), 값은 관계식의 오른쪽 항(실험 부하 · 구독 상한)이 정해져야 정할 수 있다. 값은 2계층 조정값이며 소유는 이 문서다 — **관계식이 값보다 먼저 고정된다.**

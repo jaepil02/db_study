@@ -2,6 +2,7 @@
 
 > **대상**: 적재·분기(ING · NestJS ingest 모듈) 기능 목록 · 3계층 분기 실행 · 대조군 동시 적재 · 기능별 경계 · 실패 시 보이는 것 — 기능 ID ING-NN 채번 정본
 > **작성일**: 2026-09-24
+> **개정일**: 2026-09-27 — D-04 부분 개정 반영(사용자 결정 — 업무 쓰기도 Redis를 거친다 · 동기 응답) — 분기 표 ③행 — ING가 받지 않는 판정 유지 · 업무 명령은 별도 명령 스트림 stream:biz:cmd · 목적지 PostgreSQL 전용(API 직접) → **명령 스트림 → 워커 트랜잭션** — 기능 수 불변
 > **개정일**: 2026-09-25 — S3 구현 반영 — ING-07 컨슈머 이름 ingest-{pid}-{n} → **ingest-{n}**(S2 판정 고정 이름 · 재기동 뒤 자기 PEL을 이어 읽는다)
 > **개정일**: 2026-09-24 — 최종 정밀 검수 — 생산 카운터 · 대조군 COPY 기전 미설계 → W4 판정(06_pipeline/04) 반영
 > **개정일**: 2026-09-24 — W7 검수 반영 — 장애 표 메트릭 stream_length → **redis_stream_length**(정본 10_observability/01) · 미확인 5행 닫힘(대조군 실패 의미론 · 대조군 멱등 · 생산 카운터 · alarm_eval 재시도 · DLQ 재처리) — 기능 수 불변
@@ -48,9 +49,9 @@ ING는 **Stream에서 배치를 꺼내 저장소에 확정하고, 그 자리에�
 | ① | 태그 원시값 | 배치를 tag_raw에 확정하고 롤업을 발동한다(ING-03 · 12) · 최신값 사본을 갱신한다(ING-08) | 원시값을 PostgreSQL에 싣지 않는다 — 대조군은 SW-09 on의 **실험 계측물**이지 분기 목적지가 아니다(ING-11) | ClickHouse 전용 · Redis는 휘발 사본 |
 | ② | 알람 판정 | 확정된 배치를 판정에 넘긴다(ING-09) | 세 저장소 쓰기를 직접 하지 않는다 — 핫 상태 · 판정 전수 · 확정 이벤트는 ALM이 쓴다 | Redis alarm:state · ClickHouse alarm_eval · PostgreSQL alarm_event |
 | ② | 생산 카운터 | **판정 완료(W4)** — 카운터 표본은 ① 경로 그대로 · 파생 사실 판정기는 목적지 테이블이 없어 두지 않는다 | WRK의 production_log(업무 CRUD)를 대신 쓰지 않는다 | [../06_pipeline/04_routing.md](../06_pipeline/04_routing.md) §생산 카운터 기전 판정 |
-| ③ | 회원 · 작업지시 · 감사 | 없음 — Stream에 들어오지 않는다 | 업무 쓰기를 소비하지 않는다. 받으면 read-your-writes와 트랜잭션 보장이 깨진다 | PostgreSQL 전용(API 직접) |
+| ③ | 회원 · 작업지시 · 감사 | 없음 — 수집 스트림 stream:plc:raw에 들어오지 않는다 | 업무 명령을 소비하지 않는다 — 업무 명령은 별도 명령 스트림 stream:biz:cmd로 가고 워커의 업무 적용 그룹이 받는다. ING가 받으면 수집 백프레셔 · at-least-once 재처리가 업무 쓰기의 동기 응답과 멱등을 흔든다 | PostgreSQL 전용(명령 스트림 → 워커 트랜잭션 · D-04 개정) |
 
-- **"ING가 ③을 처리하지 않는 것"도 분기의 결과다.** 업무 CRUD 부하 중 stream:plc:raw 유입량이 CRUD와 무관하게 움직이는 것이 S7 합격 판정의 한 줄이다([../01_overview/05_priorities_roadmap.md](../01_overview/05_priorities_roadmap.md)).
+- **"ING가 ③을 처리하지 않는 것"도 분기의 결과다** — 업무 쓰기가 Redis를 거쳐도(D-04 개정) 수집 스트림과는 키 · 소비자 그룹이 다르다. 업무 CRUD 부하 중 stream:plc:raw 유입량이 CRUD와 무관하게 움직이는 것이 S7 합격 판정의 한 줄이다([../01_overview/05_priorities_roadmap.md](../01_overview/05_priorities_roadmap.md)).
 - **② 세 쓰기는 dual-write가 아니다.** 같은 사실의 사본이 아니라 각자 다른 질문(다음 판정 · 임계값 적절성 · 확인 이력)에 답한다 — 부분 실패의 진실은 alarm_event다([09_alarms.md](./09_alarms.md)).
 
 ## 스위치가 교체하는 것

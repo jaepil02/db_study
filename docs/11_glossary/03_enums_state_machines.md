@@ -2,6 +2,8 @@
 
 > **대상**: db_study가 저장 · 전송 · 설정에 쓰는 닫힌 값 집합(enum) 전수와 상태 머신 4종(배치 재시도 · 알람 · 백프레셔 · 작업지시) — enum 값 정본
 > **작성일**: 2026-09-24
+> **개정일**: 2026-09-28 — 웨이브 1 검수 반영(B-M8 · B-M9) — #20 명령 조회 status 사용처에 **202 본문 expired(만료 키 재요청)** · failed 뜻에 **적용 여부 미확정** — enum 수 · 값 수 불변
+> **개정일**: 2026-09-28 — 업무 쓰기 Redis 경유 개정(사용자 결정 2026-09-27) — enum 신설 2 — **biz_command_log.status 3값**(APPLIED · REJECTED · EXPIRED · 저장 enum · 정본 컬럼 05_data_stores/01) · **명령 조회 status 5값**(pending · applied · rejected · expired · failed · 전송 enum · 표면 정본 07_api/01) — 전수 18 → **20** · 저장 enum 값 14 → **17**
 > **개정일**: 2026-09-24 — 최종 정밀 검수 — 복구 해설의 길이 대역 → 적체 대역(ADR-21 표기)
 > **개정일**: 2026-09-24 — W7 검수 반영 — 백프레셔 주의 단계 계측 지표 stream_length → **consumer_lag**(판정량은 적체 · ADR-21)
 > **개정일**: 2026-09-24 — W4 판정 반영 — ACKED는 alarm:state에 저장하지 않는 파생 상태 — 저장 state 값 **4** · ACK의 Redis 주체 미확인 → **판정기 단독** · CLEARING 중 ACK 전이 판정 · BAD_TIMEOUT 기록 자리 · FLOAT64 4워드 순서 · 레지스터 비트 BOOL W4 판정 — enum 수 · 값 수 불변
@@ -37,8 +39,10 @@
 | 16 | alarm_rule.severity | alarm_rule.severity · alarm_eval.severity | 3 | 저장 enum(W3 확정) |
 | 17 | work_order.status | work_order.status | 4 | 저장 enum(W3 확정) · 상태 머신 4 |
 | 18 | role.role_code | role.role_code | 3 | 저장 enum(W2 확정) |
+| 19 | biz_command_log.status | biz_command_log.status · biz:result 결과 | 3 | 저장 enum(업무 쓰기 Redis 경유) |
+| 20 | 명령 조회 status | GET /api/v1/commands/{cmdId} 응답 status · 202 본문 status(pending · 만료 키 재요청 expired) | 5 | 기타 enum |
 
-검산: 값 확정 18(#1~#18) + 미설계 0 = **18**
+검산: 값 확정 20(#1~#20) + 미설계 0 = **20**
 
 - **실험 축 중 용량 티어 · 메모리 프로파일 · 부하 시나리오는 enum이 아니다.** 코드가 분기하는 값이 아니라 측정 조건이며, 정본은 [../04_architecture/07_capacity_planning.md](../04_architecture/07_capacity_planning.md) · [../04_architecture/03_execution_topology.md](../04_architecture/03_execution_topology.md) · [../10_observability/05_load_scenarios.md](../10_observability/05_load_scenarios.md)다. 역할 스위치 SW-NN도 여기 두지 않는다 — 정본 [../02_features/13_switch_matrix.md](../02_features/13_switch_matrix.md).
 
@@ -270,8 +274,9 @@ stateDiagram-v2
 |------|----|----|----------|
 | APP_ROLE | all(기본) · api · worker · collector · datagen | 한 이미지에서 기동할 모듈 범위 | 역할 분리는 확장 로드맵 1단계이며 코드 변경이 없다. 역할별 모듈 배정의 정본은 [../04_architecture/02_module_boundaries.md](../04_architecture/02_module_boundaries.md) |
 | alarm_eval.breached | 0 · 1 | 이번 판정에서 조건 위반 여부 | 판정 전수 분석(임계값 튜닝 · 오탐 분석)에 쓴다. 상태 머신 상태가 아니라 한 행의 판정 결과다 |
+| 명령 조회 status | pending · applied · rejected · expired · failed | 결과 없음(적용 전 또는 트리밍) · 원장 APPLIED · 원장 REJECTED · 원장 EXPIRED · 결과 키에 PostgreSQL 불가 503(원장 행 없음 — **적용 여부 미확정**: 이미 커밋된 재전달도 failed일 수 있어 같은 키 재요청으로 확정) | 저장 enum #19의 세 값에 저장 없는 둘(pending · failed)을 더한 전송 값이다 — 표면 정본 [../07_api/01_conventions.md](../07_api/01_conventions.md) · 기전 [../06_pipeline/07_business_crud.md](../06_pipeline/07_business_crud.md) §시간 초과 · 명령 조회 |
 
-검산: APP_ROLE 1 + 4 = **5** · breached **2**
+검산: APP_ROLE 1 + 4 = **5** · breached **2** · 명령 조회 status = 원장 3 + 저장 없음 2 = **5**
 
 ## 저장 enum(W3 확정)
 
@@ -283,8 +288,9 @@ stateDiagram-v2
 | alarm_rule.severity | 1 LOW · 2 MEDIUM · 3 HIGH | 클수록 심각 · alarm_eval.severity UInt8로 복사 | 알림 채널이 없어 정렬 · 필터만 바뀐다 — 숫자는 두 저장소에서 변환 없이 정렬된다 |
 | work_order.status | PLANNED · IN_PROGRESS · COMPLETED · CANCELLED | 등록 · 생산 중 · 완료 · 취소 | 상태 머신 4 |
 | role.role_code | OPERATOR · ENGINEER · ADMIN | 누적 아님 · 합집합 판정 | W2 확정 — [../02_features/12_permission_matrix.md](../02_features/12_permission_matrix.md) |
+| biz_command_log.status | APPLIED · REJECTED · EXPIRED | 업무 행에 반영 · 도메인 오류로 반영 안 함 · 명령 유효 창 초과로 적용 안 함 | 사용자 결정 2026-09-27 — [../05_data_stores/01_postgresql_schema.md](../05_data_stores/01_postgresql_schema.md) §biz_command_log 설계 · 상태 머신이 아니다(한 번 쓰고 바뀌지 않는다) |
 
-검산: condition_type 4 + severity 3 + status 4 + role_code 3 = **14**값
+검산: condition_type 4 + severity 3 + status 4 + role_code 3 + biz_command_log.status 3 = **17**값
 
 - **OUT_OF_RANGE는 태그 범위(range_min · range_max)를 쓰지 않는다.** 태그 범위 밖 값은 BAD_RANGE(4)라 판정에서 빠지므로, 규칙이 자기 경계(threshold_low · threshold)를 갖는다.
 

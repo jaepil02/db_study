@@ -2,6 +2,7 @@
 
 > **대상**: db_study 전체 구조 — 조감도 · 시스템 컨텍스트 · 경계별 프로토콜 · 컨테이너 4 · 모듈 배치 요약 · **아키텍처 불변식 표** · 범위 경계
 > **작성일**: 2026-09-24
+> **개정일**: 2026-09-28 — 업무 쓰기 Redis 경유 개정(사용자 결정 2026-09-27 · D-04 · REQ-GLB-12 개정) — 불변식 10 "업무 쓰기는 Stream을 타지 않는다" → **업무 쓰기는 명령 스트림을 타고 응답은 커밋 뒤다** · 모듈 배치 제어 행 나가는 경계 · 하지 않는 일 · 학습 목표 ② 구조 요소 · PostgreSQL 업무 14 → **15**(조감도 · 컨테이너 표) — 불변식 수 불변
 > **개정일**: 2026-09-26 — 목적 적합성 실증 W1 — 컨테이너 표 clickhouse 담는 것 테이블 5 → **8**(목적지 5 + 업무 대조 계측물 3)
 > **개정일**: 2026-09-24 — ClickHouse 26.8 LTS 전환(사용자 결정 · 25.x 보안 지원 종료) — 도입 단락 스택 표기 ClickHouse 25.8 → **26.8**
 > **개정일**: 2026-09-24 — W7 검수 반영 — 원칙 8 강제 칸 길이 검사 → **적체 검사**(ADR-21)
@@ -35,7 +36,7 @@ flowchart TB
             DATA["데이터 평면<br/>COL · SIM · GEN · ING"]
             OBSM["관측<br/>OBS · /metrics · /api/v1/health"]
         end
-        PG[("postgres<br/>업무 14 + 대조군 1")]
+        PG[("postgres<br/>업무 15 + 대조군 1")]
         CH[("clickhouse<br/>원시 · 롤업 · 판정 전수")]
         RD[("redis<br/>Stream · 최신값 · 캐시 · Pub/Sub")]
         subgraph PROF["observability 프로파일 — 기본 기동 제외"]
@@ -103,7 +104,7 @@ flowchart TB
 | 서비스 | 역할 | 담는 것 | 호스트 publish | 쓰는 named volume |
 |------|------|------|------|------|
 | api | 애플리케이션 1 | NestJS 단일 프로세스 — 제어 평면 6 · 데이터 평면 4 · 관측 1 모듈 · PlcSim 루프백 포트 대역 | 127.0.0.1:3000 | spooldata |
-| postgres | 저장소 — OLTP | 업무 테이블 14 · 대조군 1 | 127.0.0.1:5432 | pgdata |
+| postgres | 저장소 — OLTP | 업무 테이블 15 · 대조군 1 | 127.0.0.1:5432 | pgdata |
 | clickhouse | 저장소 — OLAP | 테이블 8(목적지 5 + 업무 대조 계측물 3) · MV 3 · Dictionary 1 | 127.0.0.1:8123 · 9000 · 9363 | chdata |
 | redis | 저장소 — 중간 계층 | Stream 버퍼 · 최신값 · 알람 상태 · 캐시 · 세션 · Pub/Sub | 127.0.0.1:6379 | redisdata |
 
@@ -119,7 +120,7 @@ flowchart TB
 |------|------|------|------|------|
 | 데이터 | collector · plc-sim · datagen | Modbus 소켓(SIM → COL) · 프로세스 안 레지스터 갱신(GEN → SIM) | Stream stream:plc:raw | DB 직접 쓰기 · Ingest 호출 |
 | 데이터 | ingest | Stream(컨슈머 그룹) | ClickHouse 배치 삽입 · 최신값 Hash · Pub/Sub · 알람 판정 직접 호출(유일한 예외) | 비즈니스 규칙 판정 |
-| 제어 | auth · master · work-orders | HTTP(BFF 경유) | PostgreSQL 트랜잭션 · 캐시 무효화 체인 | Stream 발행 — ③계층은 Stream을 타지 않는다 |
+| 제어 | auth · master · work-orders | HTTP(BFF 경유) | 업무 명령 stream:biz:cmd → 워커 grp:biz-writer의 PostgreSQL 트랜잭션 · 캐시 무효화 체인 · 결과 뒤 응답 | 수집 스트림 발행 · 커밋 결과 없이 성공 응답 — ③계층은 명령 스트림만 탄다 |
 | 제어 | timeseries · realtime · alarms | HTTP · WebSocket(직결) · Pub/Sub 구독 | ClickHouse 조회 · Redis 조회 | 수집 경로 참여(알람 판정만 ingest 후처리로 돈다) |
 | 관측 | metrics | 전 모듈의 카운터 · 세 저장소의 통계 | /metrics · /api/v1/health | 메트릭 저장 · 시각화 · 스위치 전환 |
 
@@ -141,7 +142,7 @@ flowchart TB
 | 7 | 키 접두가 생존 정책의 경계다 · 실패 전략은 계열마다 정반대다 | 캐시 래퍼(TTL 필수 · 타임아웃 degrade) · 봉인 래퍼(TTL 명령 비노출 · 실패 전파) | Stream 엔트리 · 알람 상태가 축출되거나, 캐시 장애가 조회 실패가 된다 | REQ-GLB-08 · 09 | ADR-05 · ADR-13 |
 | 8 | 버퍼가 차면 실패시키고 계측한다 — 1차 신호는 발행자의 적체 검사 | 발행 경로 셋(Collector · 모드 B · 모드 C)의 적체 검사 · MAXLEN은 최후 안전장치 | 트리밍이 오류 없이 미소비 엔트리를 잘라 틀린 처리량 수치를 얻는다 | REQ-GLB-10 | ADR-21 |
 | 9 | 업무는 PostgreSQL · 시계열은 ClickHouse · 중복 저장 예외는 최신값 하나 | 분기 3계층 · 대조군은 SW-09 on에서만 | 두 곳의 값이 갈라질 때 진실을 정할 수 없다 | REQ-GLB-11 | ADR-03 · ADR-17 |
-| 10 | 분기는 성격 판정이다 · 업무 쓰기는 Stream을 타지 않는다 | 제어 평면 쓰기 모듈이 Stream 발행 수단을 갖지 않는다 | read-your-writes가 깨지고 재시도가 트랜잭션 밖에서 중복을 만든다 | REQ-GLB-12 · 13 | ADR-11 · D-04 |
+| 10 | 분기는 성격 판정이다 · 업무 쓰기는 명령 스트림을 타고 응답은 커밋 뒤다 | 제어 평면 쓰기 모듈은 stream:biz:cmd에만 명령을 싣는다(수집 스트림 발행 수단 없음) · 적용은 워커 grp:biz-writer 직렬 · 멱등 원장 biz_command_log가 업무 행과 같은 트랜잭션 · api는 결과를 받아야 응답 | 응답이 커밋을 앞질러 read-your-writes가 깨지거나, 원장이 트랜잭션 밖이라 재전달이 이중 적용을 만든다 | REQ-GLB-12 · 13 | ADR-11 · D-04 · 사용자 결정 2026-09-27 |
 | 11 | 두 DB를 트랜잭션으로 묶지 않는다 | Dictionary 조회 시점 결합 · tag_id 영구 보존 | 한쪽 장애가 다른 쪽 쓰기를 막고, 과거 행의 의미가 조용히 바뀐다 | REQ-GLB-14 | ADR-16 |
 | 12 | CPU 바운드 작업은 이벤트 루프 밖에서 돈다 | piscina worker_threads 풀 | 수집 pps에 비례해 조회 p95가 악화된다 | REQ-GLB-20 | ADR-25 |
 | 13 | 모듈은 데이터 계약으로만 결합한다 | Stream 페이로드 스키마 버전 v · 공유 패키지의 스키마 하나 | 역할 분리 뒤 두 버전이 공존하는 순간 적체 엔트리가 DLQ로 쏟아진다 | REQ-GLB-21 | ADR-01 |
@@ -162,7 +163,7 @@ flowchart TB
 | 축 | 구조 요소 | 비교 방향 | 이 요소가 없으면 |
 |------|------|------|------|
 | ① 컬럼형 대 RDB | ClickHouse tag_raw와 동형인 PostgreSQL 대조군 · SW-09 동시 적재 | 데이터를 고정하고 저장소를 바꾼다 | 역전 지점을 외부 벤치마크로만 말하게 된다 — 이 머신 · 이 스키마에서 재현되지 않는다 |
-| ② 성격별 분기 | Stream 뒤 3계층 분기 · 목적이 다른 세 쓰기 · Stream을 타지 않는 업무 쓰기 | 저장소를 고정하고 경로를 본다 | 분기가 "Stream 뒤의 라우팅"으로 오해되어 ③의 반례가 비고 ②가 dual-write로 읽힌다 |
+| ② 성격별 분기 | Stream 뒤 3계층 분기 · 목적이 다른 세 쓰기 · 명령 스트림 · 동기 응답의 업무 쓰기 | 저장소를 고정하고 경로를 본다 | 분기가 "한 Stream 뒤의 라우팅"으로 오해되어 업무 쓰기가 수집과 같은 비동기 적재로 읽히고 ②가 dual-write로 읽힌다 |
 | 두 축의 손잡이 | 스위치마다 DI 포트 하나 · 구현 둘 | 역할을 하나씩 끄고 켠다 | Redis 기여분을 전후 비교로만 말하게 되어 "코드가 달라져서"가 붙는다 |
 
 - 검산: 행 = **3** — 축 2 + 손잡이 1

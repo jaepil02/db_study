@@ -2,9 +2,11 @@
 
 > **대상**: 데이터 흐름 10종의 채번 정본(F-01~F-10) — 원본 대응 · 방향 · 주 경로 · 성격 · 목표 지연 · 참여 도메인 · 관련 기능 · 스위치 · 요구사항 파일 · 기전 문서 · 전체 흐름도 · 흐름별 병목 후보 · 흐름 검증 항목 · 검산
 > **작성일**: 2026-09-24
+> **개정일**: 2026-09-28 — 웨이브 1 검수 반영(B-L3) — F-05 참여 기능에 **ALM-08**(알람 확인은 업무 명령 경로를 탄다 — F-06 참여 유지) — F-05 20 → **21** · 기능 참여 합 117 → **118** — 흐름 · 스위치 참여 수 불변
+> **개정일**: 2026-09-28 — 업무 쓰기 Redis 경유 개정(사용자 결정 2026-09-27 · D-04 · REQ-GLB-12 개정) — F-05 주 경로 · 성격 "Stream 비경유" → **명령 스트림 경유(stream:biz:cmd → 워커 grp:biz-writer → PostgreSQL 트랜잭션 → 결과 · ch:bizreply → api 응답) · 동기 응답** · 새 F-NN 없음(지연 목표 · 병목 지표가 F-05와 같은 요청 · 응답) · 경계 판정 7 → **8**(업무 명령 적용 → F-05) · F-05 스위치 없음 → **SW-12** — 스위치 참여 18 → **19** · 스위치 없는 흐름 2 → **1**(F-08) · 흐름도에 명령 스트림 · 워커 간선 · PostgreSQL 업무 14 → **15** · 병목 후보 14 → **15**(#15 업무 명령 직렬 적용)
 > **개정일**: 2026-09-24 — 최종 정밀 검수 — §멱등 토큰 → §창 정렬 배치와 결정적 토큰(없는 절 참조 교정)
 > **개정일**: 2026-09-24 — W6 실험 채번 반영 — 메트릭 이름 · EXP 번호 반영(정본 10_observability/01 · 06)
-> **원천**: 원본 data_flow.md §1 · §2 · §16 · §17(커밋 ff66a37) · 원본 architecture.md §9(커밋 ff66a37) · docs_plan.md 실행 계획 보정 #6 · #19 · ADR-06 · ADR-07 · ADR-09 · ADR-11 · [../README.md](../README.md) 고정 기준(데이터 흐름 · 도메인 공백) · [../11_glossary/04_id_conventions.md](../11_glossary/04_id_conventions.md) 원본 흐름 표기 대응 · [../02_features/13_switch_matrix.md](../02_features/13_switch_matrix.md) 관련 흐름 열 · [../02_features](../02_features/README.md) 도메인 파일 흐름 열
+> **원천**: 원본 data_flow.md §1 · §2 · §16 · §17(커밋 ff66a37) · 원본 architecture.md §9(커밋 ff66a37) · docs_plan.md 실행 계획 보정 #6 · #19 · ADR-06 · ADR-07 · ADR-09 · ADR-11 · 사용자 결정 2026-09-27(업무 쓰기 Redis 경유) · [../README.md](../README.md) 고정 기준(데이터 흐름 · 도메인 공백) · [../11_glossary/04_id_conventions.md](../11_glossary/04_id_conventions.md) 원본 흐름 표기 대응 · [../02_features/13_switch_matrix.md](../02_features/13_switch_matrix.md) 관련 흐름 열 · [../02_features](../02_features/README.md) 도메인 파일 흐름 열
 
 이 문서는 **F-NN을 새로 만들 수 있는 유일한 자리**다. 다른 문서는 흐름을 번호로 인용만 하고, 흐름을 더하거나 폐지하면 이 표와 [../README.md](../README.md) 고정 기준을 같은 변경 단위에서 고친다. 번호는 식별자이지 순서가 아니다 — 새 흐름은 F-11부터 말미에 채번하고 결번을 재사용하지 않는다.
 
@@ -20,7 +22,7 @@
 | **F-02** | 원본 data_flow.md §4 | 배치 적재 | 쓰기 | stream:plc:raw → 컨슈머 N(읽기 · 디코딩) → 단일 flusher → ClickHouse tag_raw → XACK | 비동기 · 배치 · at-least-once | 1초 이내 | 미확인 |
 | **F-03** | 원본 data_flow.md §5 | 최신값 조회 | 읽기 | 브라우저 → api 직결 → Redis rt:latest(빈 키면 ClickHouse 복원) | 동기 · 초고빈도 · 점조회 | 10 ms | 미확인 |
 | **F-04** | 원본 data_flow.md §6 | 시계열 이력 조회 | 읽기 | 브라우저 → api 직결 → Redis cache:q → 미스면 ClickHouse 롤업 · 원시 | 동기 · 무거움 · 범위 집계 | 300 ms | 미확인 |
-| **F-05** | 원본 data_flow.md §7 | 업무 데이터 CRUD | 읽기 · 쓰기 | 브라우저 → Next.js BFF → api → PostgreSQL 트랜잭션 → 무효화 체인 6단 | 동기 · 트랜잭션 · Stream 비경유 | 100 ms | 미확인 |
+| **F-05** | 원본 data_flow.md §7 | 업무 데이터 CRUD | 읽기 · 쓰기 | 읽기: 브라우저 → Next.js BFF → api → cache 계열 · PostgreSQL · 쓰기: 브라우저 → BFF → api → stream:biz:cmd → 워커 grp:biz-writer → PostgreSQL 트랜잭션 → 무효화 체인 6단 → biz:result · ch:bizreply → api 응답 | 동기 응답 · 트랜잭션 · 명령 스트림 경유 · 직렬 적용 | 100 ms | 미확인 |
 | **F-06** | 원본 data_flow.md §8 | 알람 판정 | 쓰기 | 확정 배치 → 직접 호출 → Alarm 판정 → alarm:state · alarm_event · alarm_eval · ch:alarm | 비동기 · 배치 후처리 · 세 쓰기 | 2초 | 미확인 |
 | **F-07** | 원본 data_flow.md §9 | 실시간 푸시 | 읽기 | ch:rt · ch:alarm → WebSocket 게이트웨이 → 스로틀 병합 → 브라우저 | 비동기 스트리밍 · 전달 보장 없음 | 500 ms | 미확인 |
 | **F-08** | 원본 data_flow.md §10 | 롤업 집계 | 내부 | tag_raw 삽입 블록 → mv_tag_1m → tag_1m → mv_tag_1h → tag_1h → mv_tag_1d → tag_1d | 삽입 시 자동 · 원자성 없음 | 즉시 | 미확인 |
@@ -42,10 +44,11 @@
 | 확정 배치의 알람 판정 인계 | **F-06** | 인계 이후의 쓰기 셋이 전부 판정의 산출이다 | F-02에 두면 판정 실패가 적재 실패로 계측된다 |
 | 대조군 동시 적재(SW-09) | **F-02** | 같은 배치 · 같은 flusher 안의 한 단계다 | 별도 흐름이면 "대조군은 목적지"라는 오독이 생긴다(대조군은 계측물 — [../04_architecture/04_storage_split.md](../04_architecture/04_storage_split.md)) |
 | 캐시 무효화 체인 · ch:cacheinv | **F-05** | 업무 쓰기 커밋 뒤에만 걸린다 | F-07에 두면 SW-06 대상으로 오독된다 — ch:cacheinv는 SW-06 밖이다 |
+| 업무 명령 적용(stream:biz:cmd 소비 · 원장 · 결과 SET · ch:bizreply) | **F-05** | 요청이 시작하고 응답이 그 결과를 기다린다 — 적용 시간이 CRUD 지연으로 드러나야 한다 · 지연 목표와 병목 지표가 F-05와 같아 새 번호를 주지 않는다(채번 규칙 신설 기준) | F-02에 두면 "ING가 ③을 받는다"는 오독이 생기고 명령 적체가 수집 적체(consumer_lag)와 섞여 계측된다 |
 | 모드 D 백필 · 대조군 동일 행 채우기 | **F-09** | 적재 경로(F-02)를 우회하는 실험 도구의 쓰기다 | F-08에 두면 롤업 흐름이 MV 분리를 소유하게 된다 |
 | 스풀 전환 · 재발행 · 적체 소진 | **F-10** | 정상 흐름이 아니라 단계 반응이다 | F-01에 두면 정상 운전 지연 예산에 스풀이 섞인다 |
 
-- 검산: 경계 판정 = **7**
+- 검산: 경계 판정 = **8**
 - **경계 판정의 기준은 하나다 — "그 동작의 실패가 어느 흐름의 계측에 잡혀야 하는가".** 빈 키 복원의 실패는 최신값 API 지연으로 드러나야 하므로 F-03이고, 판정 실패는 판정 구간 계측으로 드러나야 하므로 F-06이다.
 
 ## 참여 도메인 · 기능 · 스위치 · 문서
@@ -56,16 +59,16 @@
 | F-02 | COL · GEN · ING | COL-07 · GEN-06 · ING-01~08 · ING-10 · ING-11 | 12 | SW-01 · SW-08 · SW-09 · SW-11 | [../03_requirements/07_ingest.md](../03_requirements/07_ingest.md) | [03_ingest_batch.md](./03_ingest_batch.md) · [04_routing.md](./04_routing.md) |
 | F-03 | RLT · AUT · MST · ING · TSQ | RLT-01~04 · RLT-07 · AUT-04~07 · MST-07 · ING-08 · TSQ-08 | 12 | SW-02 · SW-11 | [../03_requirements/09_realtime.md](../03_requirements/09_realtime.md) | [05_realtime_read.md](./05_realtime_read.md) |
 | F-04 | TSQ · AUT · MST | TSQ-01~09 · AUT-04~07 · MST-09 | 14 | SW-03 · SW-04 · SW-05 | [../03_requirements/08_timeseries.md](../03_requirements/08_timeseries.md) | [06_timeseries_read.md](./06_timeseries_read.md) |
-| F-05 | AUT · MST · WRK · ALM · RLT | AUT-01~06 · MST-01~06 · MST-08 · WRK-01~05 · ALM-01 · RLT-09 | 20 | 없음 — 정합성 계약 | [../03_requirements/02_auth.md](../03_requirements/02_auth.md) · [../03_requirements/03_master.md](../03_requirements/03_master.md) · [../03_requirements/11_work_orders.md](../03_requirements/11_work_orders.md) | [07_business_crud.md](./07_business_crud.md) |
+| F-05 | AUT · MST · WRK · ALM · RLT | AUT-01~06 · MST-01~06 · MST-08 · WRK-01~05 · ALM-01 · ALM-08 · RLT-09 | 21 | SW-12 — 쓰기 적용 경로(무효화 체인은 스위치 밖 정합성 계약) | [../03_requirements/02_auth.md](../03_requirements/02_auth.md) · [../03_requirements/03_master.md](../03_requirements/03_master.md) · [../03_requirements/11_work_orders.md](../03_requirements/11_work_orders.md) | [07_business_crud.md](./07_business_crud.md) |
 | F-06 | ING · ALM · RLT · AUT | ING-09 · ING-10 · ALM-02~09 · RLT-08 · AUT-05 | 12 | SW-06 | [../03_requirements/10_alarms.md](../03_requirements/10_alarms.md) | [08_alarm.md](./08_alarm.md) · [04_routing.md](./04_routing.md) |
 | F-07 | RLT · ING · ALM · AUT | RLT-05~08 · ING-08 · ALM-06 · AUT-04 · AUT-05 · AUT-07 | 9 | SW-06 · SW-07 | [../03_requirements/09_realtime.md](../03_requirements/09_realtime.md) | [05_realtime_read.md](./05_realtime_read.md) |
 | F-08 | ING · GEN · MST | ING-12 · GEN-08 · MST-09 | 3 | 없음 — 정합성 계약 | [../03_requirements/07_ingest.md](../03_requirements/07_ingest.md) REQ-ING-16 | [09_rollup.md](./09_rollup.md) |
 | F-09 | GEN · SIM · AUT | GEN-01~10 · SIM-03 · AUT-05 | 12 | SW-09(모드 D 구간은 GEN-10) | [../03_requirements/06_datagen.md](../03_requirements/06_datagen.md) | [10_datagen_inject.md](./10_datagen_inject.md) |
 | F-10 | COL · SIM · GEN · ING · RLT | COL-08 · COL-09 · SIM-04 · GEN-07 · ING-05 · ING-06 · ING-13 · RLT-04 | 8 | SW-01 · SW-11 | [../03_requirements/01_global_rules.md](../03_requirements/01_global_rules.md) REQ-GLB-10 · [../03_requirements/13_nonfunctional.md](../03_requirements/13_nonfunctional.md) | [11_backpressure_failure.md](./11_backpressure_failure.md) |
 
-- 검산(기능 — 중복 허용 · 02_features 11본의 흐름 열을 다시 셈): 15 + 12 + 12 + 14 + 20 + 12 + 9 + 3 + 12 + 8 = **117** · 흐름 열이 "해당 없음 — 관측"인 기능 OBS-01~06 = **6**
+- 검산(기능 — 중복 허용 · 02_features 11본의 흐름 열을 다시 셈): 15 + 12 + 12 + 14 + 21 + 12 + 9 + 3 + 12 + 8 = **118** · 흐름 열이 "해당 없음 — 관측"인 기능 OBS-01~06 = **6**
 - 검산(참여 도메인): 합집합 = AUT · MST · COL · SIM · GEN · ING · TSQ · RLT · ALM · WRK = **10** · 불참 OBS **1** · 10 + 1 = **11** — 루트 고정 기준 "06_pipeline 흐름 불참 1 — OBS"와 같다
-- 검산(스위치 참여 — 중복 허용): F-01 3 · F-02 4 · F-03 2 · F-04 3 · F-06 1 · F-07 2 · F-09 1 · F-10 2 = **18** · 스위치 없는 흐름 F-05 · F-08 = **2**. [../02_features/13_switch_matrix.md](../02_features/13_switch_matrix.md)의 참여 합과 같다 — SW-11 collector는 발행 파이프라인(F-01)에서 실행되므로 F-01에 센다
+- 검산(스위치 참여 — 중복 허용): F-01 3 · F-02 4 · F-03 2 · F-04 3 · F-05 1 · F-06 1 · F-07 2 · F-09 1 · F-10 2 = **19** · 스위치 없는 흐름 F-08 = **1**. [../02_features/13_switch_matrix.md](../02_features/13_switch_matrix.md)의 참여 합과 같다 — SW-11 collector는 발행 파이프라인(F-01)에서 실행되므로 F-01에 센다
 - **OBS가 흐름에 불참하는 것은 설계 진술이다.** OBS는 흐름 구간마다 카운터를 등록할 뿐 데이터를 한 저장소에서 다른 저장소로 옮기지 않는다 — E2E 게이지(OBS-04)가 ClickHouse를 읽는 것도 계측이지 흐름이 아니다.
 
 ## 전체 흐름도
@@ -81,17 +84,19 @@ flowchart TB
         ING["ING 컨슈머 N<br/>+ 단일 flusher"]
         ALM["ALM 판정<br/>직렬 판정기"]
         API["TSQ · RLT · MST · WRK · AUT<br/>REST · WebSocket"]
+        BIZ["업무 명령 워커<br/>grp:biz-writer · 직렬"]
         SP[("spooldata<br/>/app/spool")]
     end
     subgraph RD["redis 단일 인스턴스"]
         SR["stream:plc:raw · dlq"]
+        BC["stream:biz:cmd · biz:result"]
         RT["rt:latest"]
         AS["alarm:state"]
         QC["cache · lock"]
-        PS["ch:rt · ch:alarm · ch:cacheinv"]
+        PS["ch:rt · ch:alarm · ch:cacheinv · ch:bizreply"]
     end
     CH[("clickhouse<br/>tag_raw → 1m → 1h → 1d · alarm_eval")]
-    PG[("postgres<br/>업무 14 · 대조군 1")]
+    PG[("postgres<br/>업무 15 · 대조군 1")]
     WEB["브라우저 · Next.js BFF<br/>호스트 프로세스"]
 
     GEN -->|"F-09 모드 A"| SIM
@@ -116,13 +121,18 @@ flowchart TB
     API -->|"F-03 HGETALL"| RT
     API -->|"F-04 GET · 미스"| QC
     API -->|"F-04 집계"| CH
-    API -->|"F-05 트랜잭션"| PG
+    API -->|"F-05 XADD"| BC
+    BC -->|"F-05 XREADGROUP"| BIZ
+    BIZ -->|"F-05 트랜잭션"| PG
+    BIZ -->|"F-05 결과 SET"| BC
+    BIZ -->|"F-05 ch:bizreply"| PS
+    API -.->|"F-05 SW-12 direct"| PG
     WEB -->|"F-03 · F-04 · F-07 직결"| API
     WEB -->|"F-05 BFF 경유"| API
 ```
 
 - **Collector에서 ClickHouse로 가는 간선이 없다.** 수집과 적재 사이에는 반드시 Stream이 있고 예외는 실험 전용 SW-01 off뿐이다(ADR-06 · REQ-GLB-03) — 그림의 유일한 Stream 우회 간선은 ING → ALM 직접 호출(F-06)이며 그것이 의도된 유일한 예외다(ADR-11).
-- **F-05는 Redis Stream에 닿는 간선이 하나도 없다.** 업무 쓰기가 Stream을 타지 않는 것은 분기의 누락이 아니라 분기의 판정이다(REQ-GLB-12).
+- **F-05의 Stream 간선은 stream:biz:cmd 하나다 — stream:plc:raw에는 닿지 않는다.** 업무 쓰기는 Redis를 거치되 수집 스트림과 키 · 그룹을 공유하지 않는다(REQ-GLB-12). 점선 api → postgres는 SW-12 direct(옛 경로 · 비교 실험 전용)다.
 - **F-08은 자기 자신으로 도는 간선이다.** 롤업은 애플리케이션이 아니라 ClickHouse 안 MV 연쇄가 수행하고, 애플리케이션이 개입하는 것은 백필 · 재계산 때뿐이다([09_rollup.md](./09_rollup.md)).
 - F-10은 정상 간선이 아니라 점선(단계 반응)으로만 나타난다. 저장소별 degrade 경로는 그림에 넣지 않았다 — [11_backpressure_failure.md](./11_backpressure_failure.md).
 
@@ -163,8 +173,9 @@ flowchart TB
 | 12 | F-09 | **생성기 포화** | 목표 부하 미달 · 측정 무의미 | 생성기 CPU · 발행 중단 계수 | APP_ROLE datagen 분리 — **신설**(REQ-GEN-13) |
 | 13 | 전체 | api 이벤트 루프 포화 | 수집 부하에 비례해 조회 p95 악화 | nodejs_eventloop_lag p95 | 워커 격리(ADR-25) → 역할 분리 |
 | 14 | 전체 | 호스트 CPU | 모든 지표 동시 악화 | node CPU | 역할 분리 → 자원 상향 |
+| 15 | F-05 | **업무 명령 직렬 적용** | 쓰기 대기 시간 증가 · 202 pending 비율 상승 | biz_stream_lag · biz_command_seconds · biz_apply_seconds | 적용 트랜잭션 단축 · 워커 역할 분리 — **신설**(사용자 결정 2026-09-27 · EXP-46) |
 
-- 검산: 원본 11(#1~#3 · #5~#8 · #10 · #11 · #13 · #14) + 신설 3(#4 · #9 · #12) = **14**
+- 검산: 원본 11(#1~#3 · #5~#8 · #10 · #11 · #13 · #14) + 신설 4(#4 · #9 · #12 · #15) = **15**
 - **#4는 ADR-09가 만든 새 병목이다.** 컨슈머를 늘리면 읽기 · 디코딩은 빨라지지만 삽입은 여전히 한 곳이라, 적체의 원인이 삽입이면 컨슈머 증설이 효과가 없다([../04_architecture/05_latency_budget.md](../04_architecture/05_latency_budget.md) §ADR-09 반영 시 구간 변화).
 - **#9는 원본 병목표에 없던 행이다.** 원본 판정 시퀀스는 행마다 상태를 조회해 판정 처리량이 곧 Redis 왕복 상한이었다(원본 implementation_plan.md §7.3).
 - 병목 판정은 한 번에 한 주입 모드로만 한다 — 모드 A와 B를 섞으면 #1과 #2를 가를 수 없다(REQ-GEN-05).
@@ -208,10 +219,11 @@ flowchart TB
 
 | 항목 | 상태 | 확정 자리 |
 |------|------|------|
+| F-05 쓰기 지연의 명령 경로 구간(XADD · 대기 · 적용 · 알림) | 3계층 미확인 — 확정 전 임의 값 고정 금지 | EXP-46 · [../04_architecture/05_latency_budget.md](../04_architecture/05_latency_budget.md) |
 | 흐름별 현행 목표 지연 전 행 | 3계층 미확인 — 미확인 · 확정 전 임의 값 고정 금지 | [../03_requirements/13_nonfunctional.md](../03_requirements/13_nonfunctional.md) · EXP-30 · 22~26 · [../10_observability/06_experiment_catalog.md](../10_observability/06_experiment_catalog.md) |
 | F-06 · F-08의 흐름 목표 | 원본 목표만(2초 · 즉시) — 판정 구간 · MV 캐스케이드 예산은 미확인 | [../04_architecture/05_latency_budget.md](../04_architecture/05_latency_budget.md) |
 | 병목 확인 지표의 메트릭 이름 | **W6 판정** — 원본 표기는 유지하고 카탈로그 이름 대응을 정본이 갖는다(신설 3행 = ing_fanin_wait_seconds · alm_handoff_wait_seconds · alm_eval_duration_seconds · gen_worker_utilization) | [../10_observability/01_metrics_catalog.md](../10_observability/01_metrics_catalog.md) |
-| 스위치 참여 합 | 해소 — 스위치 매트릭스가 SW-11 collector의 F-01 참여를 세어 18로 맞췄다 | [../02_features/13_switch_matrix.md](../02_features/13_switch_matrix.md) |
+| 스위치 참여 합 | 해소 — 스위치 매트릭스가 SW-11 collector의 F-01 참여를 세어 맞췄다 · SW-12의 F-05 참여를 더해 매트릭스와 다시 맞춘다(업무 쓰기 Redis 경유 개정) | [../02_features/13_switch_matrix.md](../02_features/13_switch_matrix.md) |
 
 ## 관련 문서
 

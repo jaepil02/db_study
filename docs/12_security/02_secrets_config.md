@@ -2,6 +2,7 @@
 
 > **대상**: 비밀과 설정을 위협 관점에서 다시 읽는 리뷰 — **비밀 목록(정본)** · .env 비커밋 · .env.example의 자리표시 규칙 · 비밀이 새는 자리 · Dictionary 전용 읽기 계정 · 부하 주입 표면 게이트(DATAGEN_BULK_ENABLED) 리뷰 · 백업 정책의 보안 함의 · 설정 전환의 경계
 > **작성일**: 2026-09-24
+> **개정일**: 2026-09-28 — 웨이브 1 검수 반영(B-M3) — 비밀 아님 표 · 변경 수단 표 스위치 11종 → **12종** — 행 수 불변
 > **원천**: 원본 architecture.md §3 · §7.4 · §18(커밋 ff66a37) · 원본 tech_stack.md §10.3(커밋 ff66a37) · REQ-TEC-06 · 08 · 14 · REQ-GEN-08 · REQ-AUT-01 · 17 · REQ-OBS-10 · REQ-MST-11 · D-06 · ADR-16 · ADR-18 · [../09_tech_stack/04_local_environment.md](../09_tech_stack/04_local_environment.md) 환경변수 정본 · [../09_tech_stack/05_tooling_devops.md](../09_tech_stack/05_tooling_devops.md) · [../05_data_stores/02_postgresql_constraints.md](../05_data_stores/02_postgresql_constraints.md) DB 역할 · [../05_data_stores/09_migrations_seed.md](../05_data_stores/09_migrations_seed.md) · [../07_api/09_datagen.md](../07_api/09_datagen.md) · docs_plan.md 웨이브 인계 W7 12_security 행
 
 이 문서는 **무엇이 비밀이고 어디로 새는가**를 고정한다. 환경변수 **이름**의 정본은 [../09_tech_stack/04_local_environment.md](../09_tech_stack/04_local_environment.md)이고 이 문서는 이름을 만들지 않는다 — 비밀의 목록 · 주입 경로 · 커밋 규칙 · 새는 자리만 갖는다. 비밀 9종은 **비밀 하나 = 환경변수 하나**로 이름 정본에 등재되어 있다(W7 — [../09_tech_stack/04_local_environment.md](../09_tech_stack/04_local_environment.md) §환경변수 비밀 행).
@@ -35,7 +36,7 @@
 | 값 | 비밀이 아닌 이유 | 노출 자리 |
 |------|------|------|
 | 커밋 해시 · 메모리 프로파일 · 용량 티어 | 측정 조건이다 — 기록 4요소로 공유해야 한다 | health run(REQ-OBS-10) |
-| 스위치 상태 11종 · APP_ROLE | 측정 조건이다 | health switches · /metrics 레이블 |
+| 스위치 상태 12종 · APP_ROLE | 측정 조건이다 | health switches · /metrics 레이블 |
 | 호스트 포트 · 서비스명 · DB 이름 · 계정 이름 | 설계 값이다 — 고정 기준에 있다 | 문서 · .env.example |
 | DATAGEN_BULK_ENABLED | 게이트 상태 — 비밀이 아니라 **방치 위험**이다(§부하 주입 표면 게이트) | 측정 기록 조건 칸 |
 
@@ -134,7 +135,7 @@ ClickHouse Dictionary는 PostgreSQL을 주기적으로 읽는다(원본 architec
 
 | 전환 대상 | 수단 | 실행 중 변경 표면 | 이 경계가 막는 것 |
 |------|------|------|------|
-| 역할 스위치 11종 | 환경변수 + api 재기동 | 없음(REQ-OBS-12) | 측정 중 스위치가 바뀌어 한 기록 안에 조건이 섞이는 것 · 요청 하나로 방어 구성이 바뀌는 것 |
+| 역할 스위치 12종 | 환경변수 + api 재기동 | 없음(REQ-OBS-12) | 측정 중 스위치가 바뀌어 한 기록 안에 조건이 섞이는 것 · 요청 하나로 방어 구성이 바뀌는 것 |
 | 부하 주입 게이트 | 환경변수 + 재기동 | 없음 | 요청으로 표면을 여는 것 |
 | 비밀 9종 | .env + 재기동(저장소 비밀번호는 저장소 안 변경 먼저) | 없음 | 요청으로 서명 키 · 자격 증명을 바꾸는 것 |
 | 생성기 · 주입 계획 | 실행 인자 · 주입 계획 파일 | 없음([../07_api/09_datagen.md](../07_api/09_datagen.md) 판정) | 실험 기록 밖의 장애 주입 |
