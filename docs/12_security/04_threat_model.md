@@ -2,7 +2,10 @@
 
 > **대상**: db_study 전체를 위협 관점에서 다시 읽은 결과 — 범위와 전제 · 행위자 · 자산 · 신뢰 경계 · **위협 × 통제 추적(기존 REQ · 에러 코드 · 설정으로만)** · 무인증 기간 · 공개 표면 · **잔여 위험 등재** · 통제가 생긴 위협의 반영 이력
 > **작성일**: 2026-09-24
-> **원천**: 신설 — 원본 architecture.md §2 · §3 · §18(커밋 ff66a37) · 원본 tech_stack.md §10.4(커밋 ff66a37) · 원본 implementation_plan.md §2.5(커밋 ff66a37) · D-02 · D-07 · ADR-18 · REQ-GLB-10 · 18 · 19 · REQ-AUT-01~17 · REQ-OBS-10 · REQ-TEC-02 · 14 · REQ-WRK-07 · 09 · REQ-GEN-02 · 08 · [01_authn_authz.md](./01_authn_authz.md) · [02_secrets_config.md](./02_secrets_config.md) · [03_api_surface_defense.md](./03_api_surface_defense.md) · [05_local_exposure.md](./05_local_exposure.md) · [../02_features/12_permission_matrix.md](../02_features/12_permission_matrix.md) §GEN · OBS 표면 인가 · [../07_api/10_metrics.md](../07_api/10_metrics.md) · [../05_data_stores/02_postgresql_constraints.md](../05_data_stores/02_postgresql_constraints.md) 한계 등재 형식
+> **개정일**: 2026-09-28 — 라이브 실행 검수 반영(리드 재판정 2026-09-28) — 흐름 실행 업무 명령 이름 토글 짝 → **시연 전용 설비 DEMO-FLOW-DEV에만 새 이름 명령**(되돌림 없음 · 운영 행 불변) — 위협 행 통제 · 잔여 문구 · 잔여 등재 20 → **21**(시연 전용 행 — 마스터 목록에 보인다 · 사람이 같은 코드로 만든 행을 시연이 쓴다 · ENGINEER가 시연 전용 행의 MST 쓰기 경로를 기동) — 위협 29 · 닫힘 14 · 부분 15 불변
+> **개정일**: 2026-09-28 — 리드 정정(통합 확인) — 흐름 시연 업무 명령 "deviceName 현재 이름 그대로(순 변경 없음)" → **이름 토글 짝**(같은 설비에 "원래 이름 (시연)" → 원래 이름 · 중단이면 되돌림 1건 뒤 종결) — 기존 쓰기 서비스는 변경이 없으면 감사 · 체인을 건너뛰어(통합 확인 2026-09-28) 시연에서 무효화가 보이지 않았다
+> **개정일**: 2026-09-28 — 라이브 실행 제어 반영(사용자 요구 2026-09-28 · 리드 판정 — 표면 09_datagen #2~#5 · 게이트 없음) — 위협 × 통제 26 → **29**행(라이브 실행 대량 적재 · 디스크 소모 · 실험과의 겹침 · 흐름 실행 명령의 감사 귀속 — 전부 부분) · 닫힘 14 · 부분 12 → **15** · 무인증 기간 표면 묶음 4 → **5** · 잔여 등재 17 → **20**
+> **원천**: 신설 — 라이브 실행 제어 리드 판정(2026-09-28) · [../06_pipeline/10_datagen_inject.md](../06_pipeline/10_datagen_inject.md) §라이브 실행 — perf · flow · 원본 architecture.md §2 · §3 · §18(커밋 ff66a37) · 원본 tech_stack.md §10.4(커밋 ff66a37) · 원본 implementation_plan.md §2.5(커밋 ff66a37) · D-02 · D-07 · ADR-18 · REQ-GLB-10 · 18 · 19 · REQ-AUT-01~17 · REQ-OBS-10 · REQ-TEC-02 · 14 · REQ-WRK-07 · 09 · REQ-GEN-02 · 08 · [01_authn_authz.md](./01_authn_authz.md) · [02_secrets_config.md](./02_secrets_config.md) · [03_api_surface_defense.md](./03_api_surface_defense.md) · [05_local_exposure.md](./05_local_exposure.md) · [../02_features/12_permission_matrix.md](../02_features/12_permission_matrix.md) §GEN · OBS 표면 인가 · [../07_api/10_metrics.md](../07_api/10_metrics.md) · [../05_data_stores/02_postgresql_constraints.md](../05_data_stores/02_postgresql_constraints.md) 한계 등재 형식
 
 이 문서는 **통제를 새로 만들지 않는다.** 모든 통제는 이미 채번된 REQ · 에러 코드 · 설정 · 이 폴더의 판정으로 추적한다 — 이 폴더는 아무것도 채번하지 않는다([README.md](./README.md)). 기존 통제로 닫히지 않는 위협은 잔여로 등재하고, 통제가 필요하면 반영 자리를 제안으로 적어 정본에 반영한 뒤 이력으로 남긴다. **"아무도 막지 않는다"를 누락이 아니라 기록된 상태로 만드는 것**이 이 문서의 목적이다.
 
@@ -105,8 +108,11 @@ LAN · 인터넷
 | 무인증 기간 WebSocket 수신 | 다른 사이트 페이지 | 시계열(실시간) | Origin 검증 S2부터 · 종료 코드 4403(REQ-AUT-13 ① · REQ-RLT-09) | 닫힘 |
 | DNS 재바인딩 | 다른 사이트 페이지 | api 응답 · 측정 무결성 | Host 헤더 허용 목록 · S2부터(REQ-AUT-13 ③) | 부분 — api 밖 HTTP 포트(9090 · 9363)는 Host를 보지 않는다 |
 | 웹 개발 서버의 LAN 노출 | LAN 기기 | BFF 경유 api | 기동 명령의 호스트 이름 127.0.0.1([../09_tech_stack/04_local_environment.md](../09_tech_stack/04_local_environment.md)) | 부분 — 인자를 빼고 띄우면 막지 못한다 |
+| 라이브 실행으로 대량 적재 · 디스크 소모 | 같은 머신 프로세스 · 학습자 실수 | 가용성 | 동시 1 datagen.run_in_progress/409 · 매개변수 화이트리스트 common.validation_failed/400 · 실행 수명 객체 종결 · 부팅 정리([03_api_surface_defense.md](./03_api_surface_defense.md) §라이브 실행 표면) | 부분 — 게이트 없음 판정 · 목록 최대값의 디스크와 순차 반복은 막지 않는다 |
+| 라이브 실행이 부하 · 대조 실험과 겹침 | 학습자 실수 | 측정 무결성 | 실험 착수 전 gen_run_active 0 확인([../06_pipeline/10_datagen_inject.md](../06_pipeline/10_datagen_inject.md) §한 번에 한 계층) · 라이브 결과의 "기록 정본 아님" 표지 | 부분 — 표면은 실험 진행을 모른다 |
+| 흐름 실행 업무 명령의 감사 귀속 없음 | 인증 사용자(ENGINEER · ADMIN) | 업무 데이터 · 감사 행 | 명령 actor null(거짓 귀속 없음) · 대상은 시연 전용 행뿐(시연 전용 설비 DEMO-FLOW-DEV · 되돌림 없음 · 운영 행 불변 — [../06_pipeline/10_datagen_inject.md](../06_pipeline/10_datagen_inject.md) §시연 전용 행 · 감사 행은 명령마다 남는다) | 부분 — 어느 사용자의 실행이 남긴 감사 행인지 모른다 · ENGINEER가 ADMIN 단일 주체 밖에서 시연 전용 행의 마스터 쓰기를 기동한다 |
 
-- 검산: 위협 = **26** · 닫힘 14 · 부분 12 · 열림 0 — W7에 통제가 생긴 5건 중 넷은 행으로 옮기고 하나(SQL 조립 주입)는 기존 행의 판정을 부분 → 닫힘으로 바꿨다(§통제가 생긴 위협)
+- 검산: 위협 = **29** · 닫힘 14 · 부분 15 · 열림 0 — 라이브 실행 3행(2026-09-28)은 통제가 표면 판정과 함께 생겨 부분으로 바로 등재했다 — W7에 통제가 생긴 5건 중 넷은 행으로 옮기고 하나(SQL 조립 주입)는 기존 행의 판정을 부분 → 닫힘으로 바꿨다(§통제가 생긴 위협)
 - **닫힘 14 중 6행이 에러 코드의 발생 조건을 통제로 인용한다**(unauthenticated · invalid_credentials · forbidden · postgres_unavailable · stream_full · bulk_disabled · scale_change_forbidden). 코드의 조건 문장이 바뀌면 이 표의 판정이 함께 흔들린다 — 코드 정본은 [../11_glossary/02_error_codes.md](../11_glossary/02_error_codes.md)다.
 
 ## 무인증 기간
@@ -119,8 +125,9 @@ S2~S6은 인증이 없다(D-07 · REQ-AUT-16). 이것은 결함이 아니라 학
 | BFF 경유 쓰기(마스터 · 작업지시) | 스키마 검증 · 감사 행(user_id NULL = 무인증 기간) | 같은 머신 프로세스의 쓰기 | 닫힌다 |
 | /ws/realtime | Origin 검증(S2부터 · 4403) · Host 대조 | 같은 머신 프로세스의 수신 — Origin을 위조한다 | 닫힌다 — 첫 메시지 인증 |
 | 09_datagen #1(게이트 on) | 본문 검증 · 적체 검사 | 같은 머신 프로세스의 SIMULATED 행 적재 | 닫힌다 — 인증 + bulk_ingest 등급 |
+| 09_datagen #2~#5(라이브 실행 · 게이트 없음) | 동시 1 · 매개변수 화이트리스트 · 스키마 검증(JSON 본문만) | 같은 머신 프로세스의 실행 시작 · 다른 사람이 시작한 실행의 중단 | 닫힌다 — 인증 + ENGINEER · ADMIN · general 등급 |
 
-- 검산: 표면 묶음 = **4**
+- 검산: 표면 묶음 = **5**
 - **무인증 기간의 감사 행은 user_id NULL이다**([../05_data_stores/01_postgresql_schema.md](../05_data_stores/01_postgresql_schema.md) 판정). 이 기간의 변경은 행위자를 모른다는 사실이 그대로 기록된다 — 시드 계정으로 채우면 거짓 귀속이 된다.
 - S7 전후 수치는 같은 조건이 아니다(REQ-AUT-16) — 이 절의 노출 차이가 측정 조건 차이이기도 하다.
 
@@ -160,8 +167,12 @@ S2~S6은 인증이 없다(D-07 · REQ-AUT-16). 이것은 결함이 아니라 학
 | api 밖 HTTP 포트의 재바인딩 | 없음 — Host를 보는 것은 api뿐 | api는 Host 대조가 막는다 · Prometheus 9090 · ClickHouse 메트릭 9363은 재바인딩 페이지가 읽는다 — 집계 수치뿐이다 | §통제가 생긴 위협 |
 | 웹 개발 서버 기동 인자 누락 | 기동 명령 규약 | 규약대로 띄우면 막는다 · 인자를 빼고 띄우면 3001이 LAN에 열려 BFF가 api 중계가 된다 — Compose처럼 파일이 강제하지 않는다 | [05_local_exposure.md](./05_local_exposure.md) §노출 검증 절차 ② |
 | 공개 표면의 조건부 판정 | REQ-OBS-10 검증 | 검증을 돌리면 드러난다 · 필드 추가가 검증 없이 들어오면 업무 값이 공개된다 | §공개 표면 |
+| 라이브 실행의 디스크 소모 | 동시 1 · 매개변수 화이트리스트 · 종결 정리 | 실행 하나의 크기를 목록 최대값에 묶고 실행을 겹치지 못하게 한다 · 목록 최대(perf 10^8 — 두 저장소 합 수 GB)와 순차 반복은 막지 않는다 · 저장소가 멈춰 DROP이 실패하면 다음 api 부팅까지 객체가 남는다 | [03_api_surface_defense.md](./03_api_surface_defense.md) §라이브 실행 표면 · [../05_data_stores/10_olap_vs_rdb_control.md](../05_data_stores/10_olap_vs_rdb_control.md) §실행 수명 객체 |
+| 라이브 실행과 실험의 겹침 | 절차 — 실험 착수 전 gen_run_active 0 확인 | 확인하면 드러난다 · 확인 없이 착수하면 기록의 지연 · 처리량에 실행 부하가 섞인다 — 동시 1은 실행끼리만 막는다 | [../06_pipeline/10_datagen_inject.md](../06_pipeline/10_datagen_inject.md) §한 번에 한 계층 · [../10_observability/04_experiment_protocol.md](../10_observability/04_experiment_protocol.md) |
+| 흐름 실행 명령의 감사 귀속 | actor null | 시작한 사용자를 명령 행위자로 거짓 귀속하지 않는다 · 어느 실행 · 어느 사용자가 남긴 감사 행인지는 남지 않는다 — 실행은 메모리 상태라 runId도 감사에 없다(설비 이름의 runId 앞 8자가 유일한 흔적이다) | [../06_pipeline/10_datagen_inject.md](../06_pipeline/10_datagen_inject.md) §흐름 시연 실행 — flow |
+| 시연 전용 행 | 코드 고정(DEMO-FLOW · DEMO-FLOW-L · DEMO-FLOW-DEV) · 비활성 · 태그 없음 | 운영 행(시드 · 사람이 만든 행)을 바꾸지 않는다 · 시연 전용 행 3은 첫 실행 뒤 남아 마스터 목록에 보인다 — 이름("시연 설비 …")으로 식별할 뿐 숨기지 않는다 · 사람이 이 코드로 행을 만들면 시연이 그 행을 쓴다 · ENGINEER가 시연 전용 행의 MST 쓰기 경로를 기동한다(MST-02 ADMIN 단일 주체의 명시 예외) | [../06_pipeline/10_datagen_inject.md](../06_pipeline/10_datagen_inject.md) §시연 전용 행 · [../05_data_stores/02_postgresql_constraints.md](../05_data_stores/02_postgresql_constraints.md) 한계 등재 #27 · [../02_features/12_permission_matrix.md](../02_features/12_permission_matrix.md) |
 
-- 검산: 잔여 = **17**
+- 검산: 잔여 = **21**
 - 이 표의 행을 지우는 변경은 강제 주체 열에 기존 REQ · 코드 · 설정을 적을 수 있을 때만 한다 — 문장이 좋아졌다는 이유로 지우지 않는다.
 
 ## 통제가 생긴 위협 — W7 반영 이력

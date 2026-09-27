@@ -2,6 +2,7 @@
 
 > **대상**: F-05 흐름의 기전 정본 — 읽기 · 쓰기 경로 · **업무 명령 경로(stream:biz:cmd → 워커 → PostgreSQL 트랜잭션 · 동기 응답 · 멱등 원장 biz_command_log · 202 pending · 명령 조회 · SW-12 direct)** · BFF 경유 기준 · **캐시 무효화 체인 6단(ADR-12)의 단계 번호 정본** · 도메인별 체인 적용 · 작업지시 no-store · 층별 옛 값의 창 · 체인 실패와 degrade · 인증 흐름의 BFF 경유 · 감사 트랜잭션
 > **작성일**: 2026-09-24
+> **개정일**: 2026-09-28 — 리드 정정(구현 i-biz-core 판정 채택) — EXPIRED 원장 result {"status":"expired"} → **결과 키와 같은 모양 {status: EXPIRED, actor}**(원장 result = 결과 키 JSON — 재전달이 원장 값을 그대로 다시 SET · 05_data_stores/01 §biz_command_log 설계와 일치)
 > **개정일**: 2026-09-28 — 웨이브 1 검수 반영(f-biz — B-H4 · B-M4~M9 · B-L1 · 흐름 요약 필드) — 봉투 actor → **원장 · 결과 키에 싣는다** · 봉투 → 원장 대응 불릿 · 명령 조회 404 = actor 불일치(둘 다 NULL이면 같다) · 적용 단계 ① **대기 맵 등록 → XADD**(등록이 먼저) · ② **lock:biz:writer를 쥔 워커의 biz-writer-1 · 기동 시 자기 PEL(ID 0) 소진 뒤 >** · 그룹 생성 **XGROUP CREATE … 0 MKSTREAM** · 멱등 표 경우 5 → **6**(만료 뒤 같은 키 재요청 → 202 + expired) · PostgreSQL 불가 행 재요청 = ③부터 다시 · **failed = 적용 여부 미확정**(한계 등재 #26) · EXPIRED 원장 result = {"status":"expired"} · 원인 구분 "result=unavailable이 가른다" → **Redis 불가 = unavailable · PostgreSQL 불가 = failed** · 흐름 요약 필드에 **role**(biz-writer · api-direct) · 발행 대상에 **failed** · queueWaitMs "③ 대기" → **② XREADGROUP 수신까지** — 단계 · 시간 초과 · 실패 · 체인 실패 행 수 불변
 > **개정일**: 2026-09-28 — 503 코드 판정 정정(리드 · d-biz-b — HTTP 규약 "대응이 같으면 한 코드") — Redis 불가 업무 쓰기 코드 common.command_bus_unavailable → **common.postgres_unavailable/503 재사용**(PostgreSQL 불가와 한 코드 · 원인은 biz_commands_total{result=unavailable} · 표면 정본 07_api/01)
 > **개정일**: 2026-09-28 — 표면 확정 정렬 · 화면 무효화 닫힘 — Redis 불가 코드 common.postgres_unavailable 재사용 → **common.command_bus_unavailable/503 신설**(07_api/02 판정 · PostgreSQL 불가는 common.postgres_unavailable 그대로) · 명령 조회 **failed = 결과 키 쪽 값**(원장 status 3값 불변 · 원장 행 없음) 관계 명시 · 미설계 "202 뒤 화면 무효화" **닫힘**(08_screen/01 — 적용 확인 뒤 재조회에 신선 창 표지 x-bff-fresh) — 행 수 불변
@@ -94,7 +95,7 @@ F-05는 **사람이 쓰는 업무 데이터가 Redis 명령 스트림을 거쳐 
 | 재전달(XAUTOCLAIM · 워커 재기동) · 같은 cmdId 재요청 | 행 있음 — 재기동 · 이어받기는 자기 PEL(ID 0)을 먼저 소진하므로 재전달이 새 명령보다 먼저 온다 | 적용 없이 저장된 결과를 다시 SET · 알림 | 첫 응답과 같은 상태 코드 · 본문 |
 | 커밋 뒤 결과 SET 전 크래시 | 행 있음(커밋됨) | 재전달이 ③에서 저장된 결과를 낸다 | 이중 적용 없음 |
 | PostgreSQL 불가 | 트랜잭션도 원장 행도 쓸 수 없다 — ③ 원장 확인도 못 한다 | **재시도하지 않고** 결과 = common.postgres_unavailable SET(명령 조회 failed) · XACK | 503 — 보관 · 재생 없음(REQ-WRK-06) · 같은 cmdId 재요청은 ③부터 다시 — 원장 행이 있으면 저장된 판정, 없으면 적용을 시도한다 |
-| 만료 뒤 같은 cmdId 재요청 | EXPIRED 행 있음(result {"status":"expired"} — httpStatus 없음) | 적용 없이 저장된 결과를 다시 SET · 알림 | **202 + {cmdId, status: 'expired'}** — 새 코드 없음 · 적용 없음 · 새 키로 보내라는 뜻 |
+| 만료 뒤 같은 cmdId 재요청 | EXPIRED 행 있음(result = 결과 키와 같은 모양 {"status":"EXPIRED","actor":…} — httpStatus 없음) | 적용 없이 저장된 결과를 다시 SET · 알림 | **202 + {cmdId, status: 'expired'}** — 새 코드 없음 · 적용 없음 · 새 키로 보내라는 뜻 |
 
 - 검산: 경우 = **6**
 - **B형 — 도메인 오류도 원장에 남긴다.** 결론 — 같은 cmdId는 첫 판정(APPLIED 또는 REJECTED)에 고정된다. 반대 시나리오 — 오류를 남기지 않으면 409를 받은 요청을 재시도할 때 그 사이 경합 상대가 사라져 성공해, 같은 cmdId가 한 번은 409 · 한 번은 201이 된다. 파생 지침 — 새 시도는 새 cmdId다.
@@ -109,7 +110,7 @@ F-05는 **사람이 쓰는 업무 데이터가 Redis 명령 스트림을 거쳐 
 | 대기 상한(5초) 안에 결과 도착 | 기존 상태 코드 · 본문(201 · 200 · 409 · 400 등) | 해당 없음 |
 | 대기 상한 초과 | **202 + {cmdId, status: 'pending'}** | 명령은 버리지 않는다 — 워커가 적용하면 결과가 결과 키 · 원장에 남는다 |
 | 명령 조회 GET /api/v1/commands/{cmdId} | 결과 키 → 없으면 biz_command_log → 둘 다 없으면 pending · 상태 pending · applied · rejected · expired · failed · 결과 키 또는 원장의 actor가 요청자와 다르면 404(둘 다 NULL이면 같다) — 표면 정본 [../07_api/01_conventions.md](../07_api/01_conventions.md) | 결과 키는 TTL(현행 참고 300초) 뒤 사라지고 원장이 남는다 |
-| 명령 유효 창 초과(워커 장기 정지 뒤) | 조회 시 expired(원장 EXPIRED · result {"status":"expired"} — httpStatus 없음) · 같은 키 재요청은 **202 + {cmdId, status: 'expired'}** | **적용하지 않는다** — 사용자가 포기한 쓰기가 한참 뒤 반영되지 않게 한다. 창 = 결과 키 TTL과 같은 값(현행 참고 300초) · 다시 쓰려면 새 키로 보낸다 |
+| 명령 유효 창 초과(워커 장기 정지 뒤) | 조회 시 expired(원장 EXPIRED · result = 결과 키와 같은 모양 {"status":"EXPIRED","actor":…} — httpStatus 없음) · 같은 키 재요청은 **202 + {cmdId, status: 'expired'}** | **적용하지 않는다** — 사용자가 포기한 쓰기가 한참 뒤 반영되지 않게 한다. 창 = 결과 키 TTL과 같은 값(현행 참고 300초) · 다시 쓰려면 새 키로 보낸다 |
 
 - 검산: 상황 = **4**
 - **조회 상태와 원장 status는 같은 집합이 아니다.** applied · rejected · expired는 원장 status(APPLIED · REJECTED · EXPIRED — 3값 그대로)를 읽은 값이고, **failed는 결과 키에만 있는 값**이다 — PostgreSQL 불가면 워커가 원장 행 없이 결과 키에 common.postgres_unavailable 503만 남기므로(§멱등 · 재전달) 결과 키가 만료되면 같은 명령은 pending으로 보인다. pending은 결과 키도 원장도 없는 상태다. 값 사전 [../11_glossary/03_enums_state_machines.md](../11_glossary/03_enums_state_machines.md).

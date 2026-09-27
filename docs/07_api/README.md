@@ -2,6 +2,7 @@
 
 > **대상**: db_study api 컨테이너가 바깥에 여는 표면 — REST 규약 · 에러(미러) · 도메인별 엔드포인트 · WebSocket 프로토콜
 > **작성일**: 2026-09-23
+> **개정일**: 2026-09-28 — 라이브 실행 제어 신설(사용자 요구 2026-09-28 · 리드 판정 4) — 09_datagen #2~#5(POST /api/v1/runs · GET /api/v1/runs/current · GET /api/v1/runs/{runId} · POST /api/v1/runs/{runId}/stop) · API 표면 44 → **48** · 신설 23 → **27** · REST JSON 41 → **45** · GEN 1 → **5** · 에러 코드 22 → **23종**(datagen.run_in_progress/409)
 > **개정일**: 2026-09-27 — D-04 부분 개정 반영(사용자 결정 — 업무 쓰기도 Redis를 거친다) — 명령 조회 표면 GET /api/v1/commands/{cmdId} 신설(01_conventions #1 · 횡단) · API 표면 43 → **44** · 신설 22 → **23** · REST JSON 40 → **41** · 에러 코드 22종 불변
 > **개정일**: 2026-09-24 — W5 완성판 — API 표면 **43**(원본 21 + 신설 22) · 에러 코드 22종 · 도메인별 표면 수 표 신설
 > **원천**: [../README.md](../README.md)(도메인 공백 · 에러 코드 규약) · 원본 architecture.md §11 · §11.1 · §11.2 · 원본 data_flow.md §5 · §6 · §7.2 · §9 · §14.1 · §14.2(커밋 ff66a37)
@@ -22,7 +23,7 @@
 | [06_realtime.md](./06_realtime.md) | RLT — 설비 전체 최신값 · 단일 태그 최신값 · STALE 판정 · Redis 불가 시 503 | architecture §11 · data_flow §5 | W5 |
 | [07_alarms.md](./07_alarms.md) | ALM — 알람 이벤트 목록 · 확인(ack) · 규칙 관리 | architecture §11 · data_flow §8 | W5 |
 | [08_work_orders.md](./08_work_orders.md) | WRK — 작업지시 · 생산 실적 | architecture §11 | W5 |
-| [09_datagen.md](./09_datagen.md) | GEN — **부하 주입 표면 /api/v1/ingest/bulk**(기본 비활성 · 환경변수 게이트 + 인증 · 백프레셔 위험 단계에서 503) · 생성기 실행 제어 표면은 원본 근거가 없어 W5가 판정한다 | architecture §11 · §18 · data_flow §11 | W5 |
+| [09_datagen.md](./09_datagen.md) | GEN — **부하 주입 표면 /api/v1/ingest/bulk**(기본 비활성 · 환경변수 게이트 + 인증 · 백프레셔 위험 단계에서 503) · **라이브 실행 제어 /api/v1/runs #2~#5**(EXP-PERF · EXP-FLOW 시작 · 현재 · 단건 · 중단 · 실행 객체 · 동시 실행 하나 409) · 생성기(모드 A~D) 실행 제어 표면은 두지 않는다(W5 판정) | architecture §11 · §18 · data_flow §11 | W5 |
 | [10_metrics.md](./10_metrics.md) | OBS — /api/v1/health · /metrics(스위치 상태 레이블 포함) | architecture §11 · §14 · implementation_plan §4.1 | W5 |
 | [11_websocket.md](./11_websocket.md) | 횡단 — /ws/realtime · 첫 메시지 인증 · 구독 · 스로틀 병합 · ping · 재연결 · Origin 검증 | data_flow §9 · architecture §11.2 | W5 |
 
@@ -36,10 +37,10 @@
 |------|------|
 | 표면 도메인 | **8** — AUT · MST · TSQ · RLT · ALM · WRK · GEN · OBS |
 | 표면 없는 도메인 | **COL · SIM · ING** — 내부 모듈이다. **/api/v1/ingest/bulk는 경로 이름과 달리 ING 표면이 아니다** — 호출 주체가 부하 주입(GEN 모드 C)이고 ING은 Stream 뒤에서만 데이터를 받는다. 그래서 GEN 문서가 소유한다 |
-| 에러 코드 | **22종** · {domain}.{snake_case} + HTTP 상태 — 채번 정본 [../11_glossary/02_error_codes.md](../11_glossary/02_error_codes.md) |
+| 에러 코드 | **23종** · {domain}.{snake_case} + HTTP 상태 — 채번 정본 [../11_glossary/02_error_codes.md](../11_glossary/02_error_codes.md) |
 | 경로 분리 | 저빈도 업무 조회 · 로그인은 BFF(Next.js Route Handler) 경유, 최신값 · 시계열 · WebSocket은 브라우저 직결 — 기준 정본 [01_conventions.md](./01_conventions.md) |
-| 원본에 없는 표면 | **신설 23** — W5 판정 22(MST 12 · ALM 4 · WRK 6) + D-04 개정 1(명령 조회 01_conventions #1). 두지 않기로 판정한 표면: 생성기 실행 제어 · 실행 중 주입 제어 · 태그 재활성화 · 알람 강제 해제 · 계정 · 역할 관리 |
-| API 표면 수 | **44** — 정본은 아래 §도메인별 표면 수 |
+| 원본에 없는 표면 | **신설 27** — W5 판정 22(MST 12 · ALM 4 · WRK 6) + D-04 개정 1(명령 조회 01_conventions #1) + 라이브 실행 제어 4(09_datagen #2~#5 · 사용자 요구 2026-09-28). 두지 않기로 판정한 표면: 생성기(모드 A~D) 실행 제어 · 실행 중 주입 제어 · 태그 재활성화 · 알람 강제 해제 · 계정 · 역할 관리 |
+| API 표면 수 | **48** — 정본은 아래 §도메인별 표면 수 |
 
 ## 도메인별 표면 수
 
@@ -54,12 +55,12 @@
 | [06_realtime.md](./06_realtime.md) | 2 | 0 | 0 | 0 | 2 | 2 | 0 |
 | [07_alarms.md](./07_alarms.md) | 6 | 0 | 0 | 0 | 6 | 2 | 4 |
 | [08_work_orders.md](./08_work_orders.md) | 9 | 0 | 0 | 0 | 9 | 3 | 6 |
-| [09_datagen.md](./09_datagen.md) | 1 | 0 | 0 | 0 | 1 | 1 | 0 |
+| [09_datagen.md](./09_datagen.md) | 5 | 0 | 0 | 0 | 5 | 1 | 4 |
 | [10_metrics.md](./10_metrics.md) | 1 | 0 | 1 | 0 | 2 | 2 | 0 |
 | [11_websocket.md](./11_websocket.md) | 0 | 0 | 0 | 1 | 1 | 1 | 0 |
-| **계** | **41** | **1** | **1** | **1** | **44** | **21** | **23** |
+| **계** | **45** | **1** | **1** | **1** | **48** | **21** | **27** |
 
-검산: 형식별 41 + 1 + 1 + 1 = **44** · 출처별 원본 21 + 신설 23 = **44**. 원본 21은 원본 architecture.md §11 API 표 17행 중 여러 메서드를 묶은 행을 메서드별로 푼 수다.
+검산: 형식별 45 + 1 + 1 + 1 = **48** · 출처별 원본 21 + 신설 27 = **48**. 원본 21은 원본 architecture.md §11 API 표 17행 중 여러 메서드를 묶은 행을 메서드별로 푼 수다.
 
 ## 관련 문서
 

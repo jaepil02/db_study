@@ -2,6 +2,7 @@
 
 > **대상**: db_study api 컨테이너의 REST 표면이 반환하는 에러 코드 전수 — 채번 정본
 > **작성일**: 2026-09-24
+> **개정일**: 2026-09-28 — 라이브 실행 제어 신설(사용자 요구 2026-09-28 · 리드 판정 2) — **datagen.run_in_progress/409 신설**(실행 중 시작 요청 · details {runId, type} · 발생 표면 07_api/09_datagen #2) — 에러 코드 22 → **23종** · datagen 2 → **3** · 409 6 → **7** · common.not_found 발생 조건에 실행 식별자(runId) · 발생 표면에 09_datagen #4 · #5 · 에러 코드가 아닌 것에 실행 실패(status failed)와 끝난 실행의 중단(200) 2행 — 실행 실패 코드(run_failed)는 만들지 않는다
 > **개정일**: 2026-09-28 — 웨이브 1 검수 반영(B-M4 · B-M9) — common.postgres_unavailable 원인 구분 "result=unavailable이 가른다" → **Redis 불가 = unavailable · PostgreSQL 불가 = failed** · 워커 PostgreSQL 불가 = 명령 조회 failed(적용 여부 미확정 · 같은 키 재요청으로 확정) — 코드 수 불변
 > **개정일**: 2026-09-27 — D-04 부분 개정 반영(사용자 결정 — 업무 쓰기도 Redis를 거친다 · 동기 응답) — common.postgres_unavailable 발생 조건 · 발생 표면 보강 — **업무 쓰기 표면의 Redis 불가(명령 스트림 적재 실패 · SW-12 stream)와 워커의 PostgreSQL 불가도 이 코드**(클라이언트 대응이 같아 재사용 · 원인은 biz_commands_total result 레이블) · 발생 표면에 명령 조회 07_api/01_conventions #1 — **코드 수 불변(22)**
 > **개정일**: 2026-09-26 — W1 검수 반영 — auth.unauthenticated · auth.forbidden 발생 조건에 인증 도입(S7 ②) 전 알람 확인 조건(행위자 해석 실패 · 행위자 OPERATOR 없음 — 정본 07_api/07 §인증 전 확인 행위자 판정) 추가 — 코드 수 불변
@@ -55,7 +56,7 @@
 | realtime | RLT | [../07_api/06_realtime.md](../07_api/06_realtime.md) | 최신값 저장소 접속 불가 |
 | alarms | ALM | [../07_api/07_alarms.md](../07_api/07_alarms.md) | 현재 채번 없음 |
 | work_orders | WRK | [../07_api/08_work_orders.md](../07_api/08_work_orders.md) | 현재 채번 없음 |
-| datagen | GEN | [../07_api/09_datagen.md](../07_api/09_datagen.md) | 부하 주입 표면의 백프레셔 거절 · 비활성 |
+| datagen | GEN | [../07_api/09_datagen.md](../07_api/09_datagen.md) | 부하 주입 표면의 백프레셔 거절 · 비활성 · 라이브 실행의 동시 실행 거절 |
 | metrics | OBS | [../07_api/10_metrics.md](../07_api/10_metrics.md) | 현재 채번 없음 |
 
 - **COL · SIM · ING은 네임스페이스를 두지 않는다.** 세 도메인은 외부 표면이 없는 내부 모듈이라 HTTP 응답을 만드는 자리가 없다. 내부 모듈의 실패는 에러 코드가 아니라 **메트릭과 상태 전이**로 드러난다 — ING의 삽입 실패는 재시도대기 → 격리(DLQ) 전이와 dlq_count로, COL의 XADD 실패는 스풀 전환과 spool_active로 계측한다. 코드를 주면 응답으로 나갈 곳이 없는 코드가 생겨 미러와 추적성 표에 유령 행이 된다.
@@ -69,7 +70,7 @@
 | 코드 | HTTP | 발생 조건 | 발생 표면 | 클라이언트 대응 |
 |------|:----:|----------|----------|---------------|
 | common.validation_failed | 400 | 요청 본문 · 쿼리 · Host 헤더가 계약을 어긴다(Host는 허용 목록 밖 — path header.host · reason enum · 12_security/03) — 타입 불일치 · 필수 누락 · 허용값 밖(interval이 raw · 1m · 1h · 1d가 아님 · aggregations가 5종 밖 · from · to가 ISO 8601이 아님). 원본 architecture.md §11.1 | 전 REST 표면 | 요청을 고친다. 같은 요청의 재시도 금지 |
-| common.not_found | 404 | 경로의 식별자가 가리키는 대상이 마스터에 없다(설비 · 태그 · 알람 이벤트 · 작업지시). **rt:latest 키가 비어 있는 것은 여기가 아니다** — 설비가 마스터에 있으면 ClickHouse 복원 경로를 탄다(원본 data_flow.md §5) | [../07_api/04_master.md](../07_api/04_master.md) · [../07_api/06_realtime.md](../07_api/06_realtime.md) · [../07_api/07_alarms.md](../07_api/07_alarms.md) · [../07_api/08_work_orders.md](../07_api/08_work_orders.md) | 식별자를 확인한다 |
+| common.not_found | 404 | 경로의 식별자가 가리키는 대상이 마스터에 없다(설비 · 태그 · 알람 이벤트 · 작업지시). 라이브 실행의 runId가 api 메모리에 없을 때(옛 실행 · 재기동 전 실행 — [../07_api/09_datagen.md](../07_api/09_datagen.md) #4 · #5)도 이 코드다. **rt:latest 키가 비어 있는 것은 여기가 아니다** — 설비가 마스터에 있으면 ClickHouse 복원 경로를 탄다(원본 data_flow.md §5) | [../07_api/04_master.md](../07_api/04_master.md) · [../07_api/06_realtime.md](../07_api/06_realtime.md) · [../07_api/07_alarms.md](../07_api/07_alarms.md) · [../07_api/08_work_orders.md](../07_api/08_work_orders.md) · [../07_api/09_datagen.md](../07_api/09_datagen.md) | 식별자를 확인한다 · 실행이면 현재 실행(09_datagen #3)을 다시 읽는다 |
 | common.duplicate_key | 409 | 유일 제약 컬럼에 이미 있는 값을 쓴다 — tag_master.tag_code · work_order.order_no(원본 architecture.md §6 ERD의 UK) · site.site_code · production_line(site_id, line_code) · device.device_code(05_data_stores/02 UNIQUE) | [../07_api/04_master.md](../07_api/04_master.md) · [../07_api/08_work_orders.md](../07_api/08_work_orders.md) | 다른 값으로 다시 요청한다 |
 | common.rate_limited | 429 | 사용자 · 토큰 기준 분당 요청 수가 한도를 넘었다. 판정 키는 rl:{class}:{user_id}:{unix_minute} INCR이며(키 모양 정본 [../05_data_stores/05_redis_keyspace.md](../05_data_stores/05_redis_keyspace.md)) **IP 기준이 아니다** — 모든 요청이 127.0.0.1에서 오므로 IP 기준은 전원을 한 사용자로 센다(원본 architecture.md §11.2). 한도 값은 2계층 조정값이며 소유처는 [../12_security/03_api_surface_defense.md](../12_security/03_api_surface_defense.md) | 전 REST 표면 | 다음 분 창까지 기다린다 |
 | common.postgres_unavailable | 503 | PostgreSQL에 접속할 수 없어 업무 읽기 · 쓰기가 실패한다. 시계열 조회는 영향을 받지 않는다 — Dictionary가 마지막 적재 값을 유지한다(원본 architecture.md §17). 최신값 단일 태그 조회는 태그 → 설비 해석(cache:tagmeta 미스)이 PostgreSQL에 막히면 이 코드다 — 설비 전체 조회는 값을 내고 메타만 비운다(W4 판정 · [../06_pipeline/05_realtime_read.md](../06_pipeline/05_realtime_read.md)) **업무 쓰기 표면에서 Redis에 접속할 수 없어 명령을 명령 스트림 stream:biz:cmd에 싣지 못할 때(SW-12 stream)도 이 코드다** — 적용 없음 · 클라이언트 대응(백오프 뒤 같은 Idempotency-Key로 재요청)이 PostgreSQL 불가와 같아 코드를 가르지 않는다(HTTP 상태 규약 · 재사용 판정 [../07_api/01_conventions.md](../07_api/01_conventions.md) §업무 쓰기 경로) · 원인은 biz_commands_total의 result 레이블이 가른다 — Redis 불가 = unavailable · PostgreSQL 불가 = failed. 워커가 PostgreSQL 불가로 명령을 적용하지 못한 경우도 이 코드다(재시도 · 보관 없음 · 명령 조회 failed — 적용 여부 미확정이라 같은 키 재요청으로 확정한다) | 업무 CRUD 표면 · 로그인 · 인가 단계(권한 캐시 미스 — 인증 표면 전부 · REQ-AUT-15) · 최신값 단일 태그([../07_api/06_realtime.md](../07_api/06_realtime.md)) · 명령 조회([../07_api/01_conventions.md](../07_api/01_conventions.md) #1 — 결과 키가 없고 원장을 읽지 못할 때) | 백오프 후 다시 요청한다 |
@@ -132,18 +133,20 @@
 |------|:----:|----------|----------|---------------|
 | datagen.stream_full | 503 | stream:plc:raw의 미확인 적체(컨슈머 그룹 lag + pending — XLEN이 아니다 · ADR-21)가 백프레셔 **위험** 단계 임계를 넘었다. Collector가 스풀로 전환하는 것과 같은 임계다(원본 architecture.md §9.3 · 원본 data_flow.md §12.1). 임계 값은 2계층 조정값이며 정본은 [../04_architecture/06_backpressure_failure.md](../04_architecture/06_backpressure_failure.md) | [../07_api/09_datagen.md](../07_api/09_datagen.md) | 거절 수를 측정값으로 센다. 재시도 루프로 덮지 않는다 |
 | datagen.bulk_disabled | 404 | 부하 주입 표면이 비활성이다. 기본값이 비활성이고 환경변수로만 켠다(원본 architecture.md §11) | [../07_api/09_datagen.md](../07_api/09_datagen.md) | 환경변수를 켜고 재기동한다 |
+| **datagen.run_in_progress** | 409 | 라이브 실행 시작 요청(09_datagen #2) 때 다른 실행이 진행 중(running · stopping)이다 — perf · flow 두 종류를 합쳐 한 번에 하나다(REQ-GEN-16 · 사용자 요구 2026-09-28). details {runId, type}이 진행 중 실행을 가리킨다 | [../07_api/09_datagen.md](../07_api/09_datagen.md) | details.runId로 실행을 읽어 패널을 맞추고 그 실행이 끝난 뒤 다시 시작한다. 같은 요청의 즉시 재시도 금지 |
 
 - **stream_full은 k6 입장에서 실패가 아니라 관측 대상이다.** 모드 C 부하 실험에서 이 코드의 발생률이 곧 HTTP 경유 수집 상한의 신호이며, 재시도로 덮으면 백프레셔가 흡수한 양과 거절한 양을 가를 수 없다.
+- **run_in_progress가 409인 이유** — 요청 형식은 옳고(400 아님) 대상도 있으며(404 아님) 의존 저장소도 살아 있다(503 아님). 충돌하는 것은 **현재 실행 상태**다 — HTTP 상태 규약의 409 "현재 저장 상태와 충돌한다"의 저장 상태 자리에 api 메모리의 실행 상태가 온다. 503으로 내면 화면이 백오프 재시도를 돌려 앞 실행이 끝나는 순간 의도하지 않은 실행이 시작된다.
 - **bulk_disabled가 403 · 503이 아니라 404인 이유** — 403은 역할 권한 축이라 역할을 바꾸면 풀린다는 오해를 주고, 503은 "잠시 뒤 재시도"를 뜻해 부하 도구가 꺼진 표면에 재시도 폭주를 건다. 꺼진 표면은 재기동 전까지 존재하지 않는 것과 같으므로 404다. common.not_found와 가르는 이유는 대응(설정 변경)이 다르기 때문이다.
 
 ## 종수 산정 기준
 
-**전수는 22종 · 네임스페이스 9(정의) · 8(코드 보유)**다. 세는 자리는 이 절 하나이며 다른 절은 이 수를 다시 세지 않는다.
+**전수는 23종 · 네임스페이스 9(정의) · 8(코드 보유)**다. 세는 자리는 이 절 하나이며 다른 절은 이 수를 다시 세지 않는다.
 
 | 산출 축 | 내역 | 합 |
 |--------|------|:--:|
-| 네임스페이스별 | common 5 · auth 6 · master 2 · timeseries 2 · realtime 1 · alarms 2 · work_orders 2 · datagen 2 · metrics 0 | 5 + 6 + 2 + 2 + 1 + 2 + 2 + 2 = **22** |
-| HTTP 상태별 | 400 2(validation_failed · too_many_tags) · 401 4 · 403 1 · 404 2(not_found · bulk_disabled) · 409 6(duplicate_key · scale_change_forbidden · reissue_source_inactive · ack_not_allowed · invalid_status_transition · production_log_not_allowed) · 429 1 · 503 6(postgres_unavailable · token_store_unavailable · clickhouse_unavailable · latest_unavailable · eval_store_unavailable · stream_full) | 2 + 4 + 1 + 2 + 6 + 1 + 6 = **22** |
+| 네임스페이스별 | common 5 · auth 6 · master 2 · timeseries 2 · realtime 1 · alarms 2 · work_orders 2 · datagen 3 · metrics 0 | 5 + 6 + 2 + 2 + 1 + 2 + 2 + 3 = **23** |
+| HTTP 상태별 | 400 2(validation_failed · too_many_tags) · 401 4 · 403 1 · 404 2(not_found · bulk_disabled) · 409 7(duplicate_key · scale_change_forbidden · reissue_source_inactive · ack_not_allowed · invalid_status_transition · production_log_not_allowed · run_in_progress) · 429 1 · 503 6(postgres_unavailable · token_store_unavailable · clickhouse_unavailable · latest_unavailable · eval_store_unavailable · stream_full) | 2 + 4 + 1 + 2 + 7 + 1 + 6 = **23** |
 | 네임스페이스 정의 | 표면 있는 도메인 8(auth · master · timeseries · realtime · alarms · work_orders · datagen · metrics) + common 1 | 8 + 1 = **9** |
 | 코드 보유 네임스페이스 | common · auth · master · timeseries · realtime · alarms · work_orders · datagen — metrics만 0 | **8** |
 
@@ -165,6 +168,8 @@
 | MAXLEN 트리밍으로 미소비 엔트리 유실 | 오류를 내지 않는 조용한 유실이라 코드로 잡을 수 없다. **결함으로 계측**한다 | stream_trimmed_unacked |
 | CORS 거절 | 브라우저가 응답을 막는 것이며 서버 코드가 도달하지 않는다 | 브라우저 콘솔 |
 | WebSocket 인증 · Origin 거절 | HTTP 응답 봉투가 아니라 연결 종료로 표현한다. 종료 코드의 정본은 [../07_api/11_websocket.md](../07_api/11_websocket.md) | 연결 종료 |
+| 라이브 실행의 실패(단계 예외 — 저장소 불가 · 디스크 부족) | 실행은 응답 뒤 비동기로 돈다 — 실패는 요청의 실패가 아니라 실행의 관찰값이다. run_failed 같은 코드를 만들면 조회 응답(200)과 실행 실패가 한 코드 체계에 섞인다 | 실행 객체 status failed · error {code: 원인의 기존 코드 또는 null, message}([../07_api/09_datagen.md](../07_api/09_datagen.md) §중단과 실패) · gen_runs_total{status} |
+| 끝난 실행의 중단 요청 | 사용자가 원한 상태(더 돌지 않음)가 이미 참이다 — 자연 멱등 | 09_datagen #5 200 + 실행 객체 그대로 |
 | 설계 밖 예외(500) | 결함이다. 코드를 주지 않는다 | 로그 · 에러율 메트릭 |
 
 ## 채번 보류의 처리 결과
@@ -184,7 +189,7 @@ W1이 원본에 실패 동작이 없어 보류한 후보 8건은 W2 요구사항
 
 검산: 신설 5 + 재사용 1 + 코드 없음 2 = **8**
 
-W5 표면 판정이 낳은 실패 3건은 보류를 거치지 않고 표면 확정과 같은 변경 단위에서 채번했다 — master.reissue_source_inactive/409 · alarms.eval_store_unavailable/503 · work_orders.production_log_not_allowed/409.
+W5 표면 판정이 낳은 실패 3건은 보류를 거치지 않고 표면 확정과 같은 변경 단위에서 채번했다 — master.reissue_source_inactive/409 · alarms.eval_store_unavailable/503 · work_orders.production_log_not_allowed/409. 라이브 실행 제어(사용자 요구 2026-09-28)가 낳은 실패 1건도 같은 방식이다 — datagen.run_in_progress/409.
 
 ## 관련 문서
 

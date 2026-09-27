@@ -2,7 +2,7 @@
 // 클라이언트는 code로만 분기한다. HTTP 상태는 code가 정한다(한 code = 한 상태).
 import { z } from 'zod';
 
-/** 에러 코드 22 → HTTP 상태 */
+/** 에러 코드 23 → HTTP 상태 */
 export const ERROR_HTTP_STATUS = {
   'common.validation_failed': 400,
   'common.not_found': 404,
@@ -26,6 +26,7 @@ export const ERROR_HTTP_STATUS = {
   'work_orders.production_log_not_allowed': 409,
   'datagen.stream_full': 503,
   'datagen.bulk_disabled': 404,
+  'datagen.run_in_progress': 409,
 } as const;
 export type ErrorCode = keyof typeof ERROR_HTTP_STATUS;
 

@@ -2,6 +2,8 @@
 
 > **대상**: db_study의 저장소 세 종 — PostgreSQL 업무 테이블 · ClickHouse 시계열 테이블과 롤업 · Redis 키 공간과 메모리 · 저장소 간 정합성 · 수명 주기 · 마이그레이션 · PostgreSQL 대조군
 > **작성일**: 2026-09-23
+> **개정일**: 2026-09-28 — 라이브 실행 검수 반영(리드 재판정 2026-09-28) — 한계 등재 26 → **27**행(정본 02 #27 시연 전용 행) — 루트 고정 기준 갱신은 리드
+> **개정일**: 2026-09-28 — DB 시각 UTC(ADR-27 · 사용자 요구 2026-09-28) — 고정 기준 축약에 시간대 행 신설(DB 처리 UTC · 달력 의미 경계 KST 명시) · 파일 목차 03 · 09 행에 시각 컬럼 UTC · DB 시간대 전환 — 테이블 · 객체 수 불변
 > **개정일**: 2026-09-28 — 웨이브 1 검수 반영(f-biz) — 한계 등재 25 → **26**행(#26 failed는 적용 여부 미확정) · 활성 키 패턴 23 → **24**(lock:biz:writer) · 통제 칸 31 → **32**
 > **개정일**: 2026-09-28 — 흐름 이벤트 반영 — Redis 축약 활성 키 패턴 21 → **23**(ch:flow · cache:flow:subscribed) · 통제 칸 30 → **31**
 > **개정일**: 2026-09-28 — 업무 쓰기 Redis 경유 개정(사용자 결정 2026-09-27) — 고정 기준 축약 PostgreSQL 업무 14 → **15**(biz_command_log) · 합 15 → **16** · UNIQUE 8 → **9** · 한계 등재 23 → **25**행 · Redis 영역 접두 9 → **10**(biz · 캐시 6) · 활성 키 패턴 18 → **21** · 봉인 표 통제 칸 26 → **30** · 파일 목차 01 · 05 행 — 루트 고정 기준 갱신은 리드
@@ -20,13 +22,13 @@
 |------|------|----------|--------|
 | [01_postgresql_schema.md](./01_postgresql_schema.md) | 업무 테이블 15 명세 — 컬럼 · 타입 · 설계 결정 · 튜닝 파라미터 · tag_master_history 신설 · biz_command_log(업무 명령 멱등 원장) 신설 | architecture §6 · §12 · tech_stack §5.1 | W3 |
 | [02_postgresql_constraints.md](./02_postgresql_constraints.md) | 제약 · 인덱스 · 월 파티션 · 커넥션 · **한계 등재(어느 계층도 강제하지 않는 것)** | architecture §6 설계 결정 · data_flow §4.2 순서 보장 | W3 |
-| [03_clickhouse_schema.md](./03_clickhouse_schema.md) | tag_raw · alarm_eval · 코덱 · 파티션 · 정렬 키 · 중복 제거 · 서버 설정 · 업무 대조 테이블(역방향 대조 계측물) | architecture §7.1 · §7.3 · §7.5 · tech_stack §5.2 | W3 |
+| [03_clickhouse_schema.md](./03_clickhouse_schema.md) | tag_raw · alarm_eval · 코덱 · 파티션 · 정렬 키 · 중복 제거 · 서버 설정 · 시각 컬럼 시간대 UTC(ADR-27) · 업무 대조 테이블(역방향 대조 계측물) | architecture §7.1 · §7.3 · §7.5 · tech_stack §5.2 | W3 |
 | [04_clickhouse_rollup.md](./04_clickhouse_rollup.md) | tag_1m · tag_1h · tag_1d · MV 캐스케이드 · -State/-Merge 조합자 · MV 제약 · 백필 절차 | architecture §7.2 · data_flow §10 | W3 |
 | [05_redis_keyspace.md](./05_redis_keyspace.md) | ★ 키 계열 · 영역 접두 10 · 업무 명령 키(stream:biz:cmd · biz:result · ch:bizreply) · TTL 정책 · 네이밍 · 실패 전략 · Pub/Sub 채널 · **봉인 표** · 키 계열별 래퍼 강제 | architecture §8 · §8.1~§8.3 · §10.1 · tech_stack §5.3 · implementation_plan §7.5 | W3 |
 | [06_redis_memory.md](./06_redis_memory.md) | ★ 엔트리 단위 설계 · maxmemory 산정 · volatile-lru · **축출 연쇄** · 프로파일별 산정(중간 프로파일 포함) | architecture §8.4 · implementation_plan §2.3 | W3 |
 | [07_cross_store_consistency.md](./07_cross_store_consistency.md) | Dictionary · tag_id 불변 · 논리 삭제 · 스케일 변경 · 즉시 반영 · 두 DB를 묶지 않는 원칙 | architecture §7.4 · §12 | W3 |
 | [08_retention_lifecycle.md](./08_retention_lifecycle.md) | **보존 조정값의 정본** — 단계별 보존 · 삭제 방식 · 복구 가능성 · 파티션 단위 변경 원칙 | data_flow §13 | W3 |
-| [09_migrations_seed.md](./09_migrations_seed.md) | PostgreSQL 마이그레이션 · ClickHouse DDL 순번 · 시드 · 스냅샷과의 관계 | tech_stack §10.5 · §11 | W3 |
+| [09_migrations_seed.md](./09_migrations_seed.md) | PostgreSQL 마이그레이션 · ClickHouse DDL 순번 · 시드 · 스냅샷과의 관계 · DB 시간대 전환(ADR-27 — 빈 볼륨 · 기존 볼륨 · 스냅샷 복원 뒤) | tech_stack §10.5 · §11 | W3 |
 | [10_olap_vs_rdb_control.md](./10_olap_vs_rdb_control.md) | ★★ **PostgreSQL 대조군 설계 정본(학습 목표 ①)** — plc_tag_raw_control · SW-09 동시 적재 · 동일 쿼리 5종 · 비교 축 6 · 역전 지점 탐색 · 스트리밍 동시 적재(EXP-45) · 역방향 대조 — 업무 워크로드(EXP-40~44) | 신설(docs_plan 학습 목표 1) · tech_stack §5.1 "왜 여기에 시계열을 넣지 않나" | W3 |
 | [erd.md](./erd.md) | 번호 없음 · 전역 ERD(PostgreSQL erDiagram + ClickHouse 객체 관계) | architecture §6 | W3 |
 
@@ -38,9 +40,10 @@
 
 | 항목 | 기준 |
 |------|------|
-| PostgreSQL | 업무 **15** + 대조군 **1** = **16** 테이블(부모 테이블 기준 — 도구 관리 테이블 · 자식 파티션 제외) · FK 15 · UNIQUE 9 · 결합 CHECK 8 · 인덱스 9 · 한계 등재 26행 |
+| PostgreSQL | 업무 **15** + 대조군 **1** = **16** 테이블(부모 테이블 기준 — 도구 관리 테이블 · 자식 파티션 제외) · FK 15 · UNIQUE 9 · 결합 CHECK 8 · 인덱스 9 · 한계 등재 27행 |
 | ClickHouse | 테이블 **8**(목적지 5 + 업무 대조 계측물 3) · MV **3** · Dictionary **1** · 검산: 8 + 3 + 1 = **12** |
 | Redis | 단일 인스턴스 · volatile-lru · 영역 접두 **10**(봉인 3 + 캐시 6 + 채널 1 · sess는 예약 · biz는 업무 명령 결과) · 활성 키 패턴 **24** · 봉인 표 통제 칸 **32** |
+| 시간대 | DB 처리 시간대 **UTC**(PostgreSQL DB 기본 · ClickHouse 서버 · 시각 컬럼 인자) · 파티션 · TTL 경계 UTC · 달력 의미 경계만 KST 명시(닫힌 목록 정본 [../11_glossary/05_units_and_time.md](../11_glossary/05_units_and_time.md)) — ADR-27 |
 | 보존 · TTL · MAXLEN | 2계층 조정값 — 보존 정본 [08_retention_lifecycle.md](./08_retention_lifecycle.md) · 키별 TTL 정본 [05_redis_keyspace.md](./05_redis_keyspace.md) · MAXLEN과 메모리 정본 [06_redis_memory.md](./06_redis_memory.md) |
 | 도메인 공백 | 세는 기준은 **소유 테이블**이다. 소유 테이블 없음 **6** — COL · SIM · GEN · TSQ · RLT · OBS. SIM의 레지스터와 GEN의 생성 벡터는 메모리 상태이고 시드는 실행 인자다. **GEN은 모드 D로 tag_raw에 직접 쓰지만 소유하지 않는다.** TSQ · RLT는 읽기만 하고 COL은 Stream까지만 쓰며 OBS는 저장소 카탈로그를 읽는다. 롤업 테이블 · MV는 **ING 귀속**이다(W3 확정 — [04_clickhouse_rollup.md](./04_clickhouse_rollup.md)) |
 

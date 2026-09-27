@@ -1,7 +1,8 @@
 # 에러 코드 미러 (02_errors)
 
-> **대상**: 에러 코드 정본의 **미러** — 코드 22종이 어느 표면(문서 #N)에서 나는가 · 표면 밖 실패 표현(헬스 503 · 스트림 중단 · WebSocket 종료 코드)의 자리 · W5 표면 판정이 낳아 정본이 채번한 코드 3종의 이력
+> **대상**: 에러 코드 정본의 **미러** — 코드 23종이 어느 표면(문서 #N)에서 나는가 · 표면 밖 실패 표현(헬스 503 · 스트림 중단 · WebSocket 종료 코드)의 자리 · W5 표면 판정이 낳아 정본이 채번한 코드 3종의 이력
 > **작성일**: 2026-09-24
+> **개정일**: 2026-09-28 — 라이브 실행 제어 반영(정본 11_glossary/02 뒤따름 · 사용자 요구 2026-09-28) — **datagen.run_in_progress/409** 발생 표면 09_datagen #2 등재 · common.validation_failed에 09_datagen #2 · #4 · #5 · common.not_found에 09_datagen #4 · #5 — 코드 22 → **23종** 미러 · **미러 신설 0**
 > **개정일**: 2026-09-27 — D-04 부분 개정 반영(사용자 결정 — 업무 쓰기도 Redis를 거친다 · 동기 응답) — 업무 쓰기 경로 반영 — 발생 표면에 명령 조회 01_conventions #1 추가(validation_failed · not_found · postgres_unavailable) · Idempotency-Key 형식 위반 · 업무 쓰기 Redis 불가를 common.postgres_unavailable 재사용으로 표기 — **코드 수 불변 · 미러 신설 0**
 > **개정일**: 2026-09-26 — W1 검수 반영(정본 11_glossary/02 뒤따름) — auth.unauthenticated · auth.forbidden 발생 표면에 인증 전(S7 ①) 알람 확인 조건 추가 · 인증 표면 S7 → **S7 ②** — 코드 수 불변
 > **개정일**: 2026-09-24 — 최종 정밀 검수 — 미러 발생 위치에 Host 헤더 거절 추가(정본 11_glossary/02 반영)
@@ -34,8 +35,8 @@
 
 | 코드 | HTTP | 발생 표면 | 미러 비고 |
 |------|:--:|------|------|
-| common.validation_failed | 400 | 01_conventions #1 · 03_auth #1 · #2 · #3 · 04_master #2 · #3 · #4 · #5 · #7 · #9 · #10 · #11 · #12 · #13 · #14 · #15 · #17 · 05_timeseries #1 · #2 · 07_alarms #1 · #3 · #4 · #5 · #6 · 08_work_orders #1 · #2 · #3 · #5 · #6 · #7 · #8 · #9 · 09_datagen #1 | Idempotency-Key 헤더 형식 위반(업무 쓰기 표면 · path header.idempotency-key · reason format)도 여기다 · Host 헤더가 허용 목록 밖(전 표면 · WebSocket 핸드셰이크 포함 — path header.host · reason enum) · 쓰기 본문의 참조 대상 없음(reason reference)도 여기다 — [01_conventions.md](./01_conventions.md) §요청 검증과 성공 본문 |
-| common.not_found | 404 | 01_conventions #1(행위자 불일치) · 04_master #2 · #3 · #5 · #6 · #7 · #8 · #10 · #13 · #15 · #16 · #17 · 06_realtime #1 · #2 · 07_alarms #2 · #5 · 08_work_orders #3 · #4 · #5 · #6 · #7 | 경로 식별자 · 조회 필터의 대상 없음만 · rt:latest 빈 키는 여기가 아니다 |
+| common.validation_failed | 400 | 01_conventions #1 · 03_auth #1 · #2 · #3 · 04_master #2 · #3 · #4 · #5 · #7 · #9 · #10 · #11 · #12 · #13 · #14 · #15 · #17 · 05_timeseries #1 · #2 · 07_alarms #1 · #3 · #4 · #5 · #6 · 08_work_orders #1 · #2 · #3 · #5 · #6 · #7 · #8 · #9 · 09_datagen #1 · #2 · #4 · #5 | Idempotency-Key 헤더 형식 위반(업무 쓰기 표면 · path header.idempotency-key · reason format)도 여기다 · Host 헤더가 허용 목록 밖(전 표면 · WebSocket 핸드셰이크 포함 — path header.host · reason enum) · 쓰기 본문의 참조 대상 없음(reason reference)도 여기다 — [01_conventions.md](./01_conventions.md) §요청 검증과 성공 본문 |
+| common.not_found | 404 | 01_conventions #1(행위자 불일치) · 04_master #2 · #3 · #5 · #6 · #7 · #8 · #10 · #13 · #15 · #16 · #17 · 06_realtime #1 · #2 · 07_alarms #2 · #5 · 08_work_orders #3 · #4 · #5 · #6 · #7 · 09_datagen #4 · #5 | 경로 식별자 · 조회 필터의 대상 없음만 · rt:latest 빈 키는 여기가 아니다 · 09_datagen은 api 메모리에 없는 runId(옛 실행 · 재기동 전 실행) |
 | common.duplicate_key | 409 | 04_master #4 · #5 · #7 · #9 · #10 · #12 · #13 · #14 · #15 · 08_work_orders #2 · #3 | tag_code · order_no · site_code · (site_id, line_code) · device_code UNIQUE — 정본 발생 조건 W5 보강 반영 |
 | common.rate_limited | 429 | 인증 표면 전부(S7) — 공통 4종 | 등급별 한도 [01_conventions.md](./01_conventions.md) §한도 등급이 갈리는 표면 묶음 |
 | common.postgres_unavailable | 503 | 01_conventions #1 · 03_auth #1 · 04_master #1~#17 · 06_realtime #2 · 07_alarms #1~#5 · 08_work_orders #1~#9 · **인가 단계(권한 캐시 미스 + PostgreSQL 불가) — 인증 표면 전부** | 인가 단계는 REQ-AUT-15 · 정본 발생 표면 W5 보강 반영 · **업무 쓰기 표면의 Redis 불가(SW-12 stream — 명령을 싣지 못함)도 이 코드다**(재사용 판정 [01_conventions.md](./01_conventions.md) §업무 쓰기 경로 · 정본 발생 조건 반영 완료) |
@@ -70,8 +71,9 @@
 | **work_orders.production_log_not_allowed** | 409 | 08_work_orders #7 | 작업지시가 IN_PROGRESS가 아님 — W5 신설 |
 | datagen.stream_full | 503 | 09_datagen #1 | details.acceptedEntries — 부분 수용 |
 | datagen.bulk_disabled | 404 | 09_datagen #1 | 게이트 DATAGEN_BULK_ENABLED false |
+| **datagen.run_in_progress** | 409 | 09_datagen #2 | details {runId, type} — 진행 중 실행 · 라이브 실행 제어 신설(2026-09-28) |
 
-- 검산: 도메인 네임스페이스 = master 2 + timeseries 2 + realtime 1 + alarms 2 + work_orders 2 + datagen 2 = **11** · metrics 0
+- 검산: 도메인 네임스페이스 = master 2 + timeseries 2 + realtime 1 + alarms 2 + work_orders 2 + datagen 3 = **12** · metrics 0
 
 ## 미러 대조
 
@@ -79,11 +81,11 @@
 
 | 축 | 이 문서의 행 | 합 | 정본 |
 |------|------|:--:|:--:|
-| 네임스페이스별 | common 5 · auth 6 · master 2 · timeseries 2 · realtime 1 · alarms 2 · work_orders 2 · datagen 2 · metrics 0 | 5 + 6 + 2 + 2 + 1 + 2 + 2 + 2 = **22** | 22 |
-| HTTP 상태별 | 400 2 · 401 4 · 403 1 · 404 2 · 409 6 · 429 1 · 503 6 | 2 + 4 + 1 + 2 + 6 + 1 + 6 = **22** | 22 |
+| 네임스페이스별 | common 5 · auth 6 · master 2 · timeseries 2 · realtime 1 · alarms 2 · work_orders 2 · datagen 3 · metrics 0 | 5 + 6 + 2 + 2 + 1 + 2 + 2 + 3 = **23** | 23 |
+| HTTP 상태별 | 400 2 · 401 4 · 403 1 · 404 2 · 409 7 · 429 1 · 503 6 | 2 + 4 + 1 + 2 + 7 + 1 + 6 = **23** | 23 |
 
-- 검산: 미러 행 = 정본 코드 = **22** · 미러에서의 신설 0 · 개명 0 · 폐기 0
-- **발생 표면이 0인 코드가 없다.** 22종 모두 표면 하나 이상에 앉는다 — 유령 코드가 없다. 반대로 표면 요약 표의 에러 코드 열에 정본 밖 코드가 없다(도메인 문서 8본 대조).
+- 검산: 미러 행 = 정본 코드 = **23** · 미러에서의 신설 0 · 개명 0 · 폐기 0
+- **발생 표면이 0인 코드가 없다.** 23종 모두 표면 하나 이상에 앉는다 — 유령 코드가 없다. 반대로 표면 요약 표의 에러 코드 열에 정본 밖 코드가 없다(도메인 문서 8본 대조).
 - 표면 있는 네임스페이스 중 코드가 0인 것은 metrics 하나다 — 헬스의 부분 실패가 코드 없는 503으로 판정됐다(REQ-OBS-09).
 
 ## 에러 코드가 아닌 실패 표현

@@ -2,6 +2,9 @@
 
 > **대상**: 전 설계자 · 신규 합류자 — 11도메인이 어느 NestJS 모듈 · 평면 · 위치에 앉고, 서로 어떤 경계로 이어지며, 각 폴더에서 어디가 비는가
 > **작성일**: 2026-09-24
+> **개정일**: 2026-09-28 — 라이브 실행 검수 반영(리드 재판정 2026-09-28) — GEN → MST 간선 설명 이름 토글 짝 → **시연 전용 행 한정 마스터 명령**(prepare가 사이트 · 라인 · 설비 생성 명령 · publish가 시연 전용 설비 DEMO-FLOW-DEV에만 master.device.patch · 되돌림 없음 · 운영 행 불변 · MST-02 명시 예외) — 간선 수 불변
+> **개정일**: 2026-09-28 — 리드 정정(통합 확인) — GEN → MST 간선 설명의 "순 변경 없는 본문" → **이름 토글 짝**(06_pipeline/10과 일치) — 간선 수 불변
+> **개정일**: 2026-09-28 — 라이브 실행 제어 반영(사용자 요구 2026-09-28 · 리드 판정) — 명령 스트림 경계에 **GEN → MST 간선 1**(라이브 흐름 실행의 시연 명령 master.device.patch · BizWritePort 프로세스 안 호출 · 같은 명령 스트림) — 명령 스트림 3 → **4**(자기 간선 3 + 도메인 사이 1) · 간선 21 → **22** · Stream 경계 GEN → ING 라벨에 라이브 흐름 실행
 > **개정일**: 2026-09-27 — D-04 부분 개정 반영(사용자 결정 — 업무 쓰기도 Redis를 거친다 · ADR-26) — 경계 유형 **명령 스트림 경계** 신설(자기 간선 MST · ALM · WRK 3) · 간선 18 → **21** · WRK 소유에 biz_command_log · PostgreSQL 15 → **16**
 > **개정일**: 2026-09-26 — W1 검수 반영 — 도메인 × 저장 객체 검산 ClickHouse 테이블 5 → **8**(목적지 5 + 소유 도메인 없는 계측물 3) · 표 밖 계측물 불릿 신설
 > **개정일**: 2026-09-24 — 최종 정밀 검수 — 공백 매트릭스를 폴더 README 현행 선언에 맞춤: 공백(미선언) 5 → **0**(05_data_stores COL · TSQ · RLT · OBS · 06_pipeline OBS 선언 완료) · 08_screen GEN 행 → **공백(선언)**(W5 GEN 화면 없음) · 행 23 → **22** · 공백(선언) 8 → **14** · 롤업 객체 ING 귀속 확정(W3)
@@ -55,7 +58,7 @@ flowchart LR
     GEN["GEN 데이터 생성"] -->|"시뮬레이션 결합 · 레지스터 갱신"| SIM["SIM 시뮬레이션"]
     SIM -->|"Modbus 경계 · 루프백 TCP"| COL["COL 수집"]
     COL -->|"Stream 경계 · stream:plc:raw"| ING["ING 적재·분기"]
-    GEN -->|"Stream 경계 · 모드 B 직결 · 모드 C 표면"| ING
+    GEN -->|"Stream 경계 · 모드 B 직결 · 모드 C 표면 · 라이브 흐름 실행"| ING
     ING -->|"직접 호출 · 유일한 예외"| ALM["ALM 알람"]
     ING -->|"Pub/Sub · ch:rt"| RLT["RLT 실시간"]
     ING -->|"저장소 경유 · rt:latest"| RLT
@@ -67,6 +70,7 @@ flowchart LR
     MST -->|"명령 스트림 · stream:biz:cmd"| MST
     ALM -->|"명령 스트림 · stream:biz:cmd"| ALM
     WRK -->|"명령 스트림 · stream:biz:cmd"| WRK
+    GEN -->|"명령 스트림 · 시연 명령 master.device.patch"| MST
     AUT["AUT 인증·인가"] -.->|"인가"| MST
     AUT -.->|"인가"| TSQ
     AUT -.->|"인가"| RLT
@@ -91,15 +95,16 @@ flowchart LR
 | Stream 경계 | Redis Stream + 컨슈머 그룹 | COL → ING · GEN → ING | 백프레셔 흡수 · at-least-once · 이벤트 루프 격리 · 역할 분리 시 코드 불변 | ClickHouse 삽입 지연이 Modbus 폴링 주기로 역류하고, 재시작 시 미처리 배치가 사라진다 |
 | Pub/Sub 경계 | Redis Pub/Sub | ING → RLT · ALM → RLT | 발행자와 WebSocket 게이트웨이의 분리 · 수평 확장 시 코드 불변 | api 다중 인스턴스에서 팬아웃 코드를 새로 써야 한다 |
 | Modbus 경계 | 루프백 TCP 소켓 | SIM → COL | 요청 인코딩 · 블록 병합 · 디코딩을 포함한 실제 수집 경로 | 모드 A E2E 지연에서 Modbus 계층이 빠진다 |
-| 명령 스트림 경계 | Redis Stream stream:biz:cmd + 컨슈머 그룹 grp:biz-writer(소비자 1) · 결과 biz:result · ch:bizreply | MST → MST · ALM → ALM · WRK → WRK(같은 도메인의 쓰기 표면 → 명령 적용 워커) | 업무 쓰기의 동기 응답(커밋 뒤) · 명령 ID 멱등 · 도착 순서 적용 · 수집 스트림과 키 · 그룹 분리(ADR-26 · D-04 개정) | 표면이 트랜잭션을 직접 커밋하는 옛 경로(SW-12 direct)로 돌아가 명령 멱등이 사라지고, 역할 분리 때 쓰기 적용 주체를 옮길 경계가 없다 |
+| 명령 스트림 경계 | Redis Stream stream:biz:cmd + 컨슈머 그룹 grp:biz-writer(소비자 1) · 결과 biz:result · ch:bizreply | MST → MST · ALM → ALM · WRK → WRK(같은 도메인의 쓰기 표면 → 명령 적용 워커) · GEN → MST(라이브 흐름 실행의 시연 명령 — 시연 전용 행 한정 master.site.create · master.line.create · master.device.create · master.device.patch — BizWritePort 프로세스 안 호출 · 같은 명령 스트림 · 같은 워커) | 업무 쓰기의 동기 응답(커밋 뒤) · 명령 ID 멱등 · 도착 순서 적용 · 수집 스트림과 키 · 그룹 분리(ADR-26 · D-04 개정) | 표면이 트랜잭션을 직접 커밋하는 옛 경로(SW-12 direct)로 돌아가 명령 멱등이 사라지고, 역할 분리 때 쓰기 적용 주체를 옮길 경계가 없다 |
 | 직접 호출(예외) | 같은 프로세스 내 호출 | ING → ALM | 배치와 판정의 재처리 단위 일치 — 별도 큐 불필요 | 근거가 없으면 경계 원칙의 무근거 예외가 된다(근거 정본 04_architecture/02 · W3) |
 | 저장소 경유 | 한 도메인이 쓰고 다른 도메인이 읽는 저장 객체 | ING → RLT(rt:latest) · ING → TSQ · MST → COL · MST → TSQ | 쓰는 쪽과 읽는 쪽의 수명 분리 | 호출 결합으로 바뀌어 한쪽 장애가 다른 쪽 응답으로 번진다 |
 | 트랜잭션 공유 | 같은 PostgreSQL 트랜잭션 | MST → WRK | 업무 변경과 감사 기록의 원자성 | 변경은 커밋됐는데 감사가 빠지는 창이 생긴다 |
 | 인가 | 엔드포인트별 Guard | AUT → MST · TSQ · RLT · ALM · WRK · GEN | 표면마다 역할 검사 | 127.0.0.1 바인드만 남아 같은 머신의 모든 프로세스가 전 권한을 갖는다 |
 | 시뮬레이션 결합 | 프로세스 내 Buffer 갱신 | GEN → SIM | 모드 A의 현실 재현 | 해당 없음 — 수집 이전 구간이라 경계 규칙 밖이다 |
 
-- 검산: Stream 2 + 명령 스트림 3 + Pub/Sub 2 + Modbus 1 + 직접 호출 1 + 저장소 경유 4 + 트랜잭션 공유 1 + 인가 6 + 시뮬레이션 결합 1 = **21**(그래프 간선 수와 같다)
-- **명령 스트림 경계는 도메인 사이가 아니라 한 도메인 안의 두 역할 사이다(자기 간선).** 쓰기 표면(api 역할)이 명령을 싣고 같은 도메인의 쓰기 서비스가 워커 역할에서 적용한다 — 그래프에 자기 간선으로 그려 경계가 있다는 사실을 센다. 로그인 · 토큰(AUT)은 업무 쓰기가 아니라 대상이 아니다(D-04 개정 범위). Stream 경계와 유형을 가른 이유는 보장이 다르기 때문이다 — Stream 경계는 비동기 at-least-once이고 명령 스트림 경계는 응답이 적용 결과를 기다린다.
+- 검산: Stream 2 + 명령 스트림 4(자기 간선 3 + 도메인 사이 1) + Pub/Sub 2 + Modbus 1 + 직접 호출 1 + 저장소 경유 4 + 트랜잭션 공유 1 + 인가 6 + 시뮬레이션 결합 1 = **22**(그래프 간선 수와 같다)
+- **명령 스트림 경계는 기본이 도메인 사이가 아니라 한 도메인 안의 두 역할 사이다(자기 간선).** 쓰기 표면(api 역할)이 명령을 싣고 같은 도메인의 쓰기 서비스가 워커 역할에서 적용한다 — 그래프에 자기 간선으로 그려 경계가 있다는 사실을 센다. 로그인 · 토큰(AUT)은 업무 쓰기가 아니라 대상이 아니다(D-04 개정 범위). Stream 경계와 유형을 가른 이유는 보장이 다르기 때문이다 — Stream 경계는 비동기 at-least-once이고 명령 스트림 경계는 응답이 적용 결과를 기다린다.
+- **GEN → MST는 명령 스트림 경계의 유일한 도메인 사이 간선이다.** 라이브 흐름 실행(RunControlModule · api 역할)이 HTTP 표면을 거치지 않고 BizWritePort를 프로세스 안에서 불러 MST의 kind master.device.patch를 싣는다(prepare는 시연 전용 행이 없으면 사이트 · 라인 · 설비 생성 명령도) — 적용은 MST 쓰기 서비스가 워커에서 하므로 MST 소유 경로 그대로다(**시연 전용 설비 DEMO-FLOW-DEV에만** · 새 이름 · 되돌림 없음 · 운영 행 불변 · actor null · MST-02 ADMIN 단일 주체의 명시 예외 · 정본 [../06_pipeline/10_datagen_inject.md](../06_pipeline/10_datagen_inject.md) §흐름 시연 실행 — flow). 표면 인가 대신 실행 시작 표면의 인가(AUT → GEN)가 이 명령을 가른다.
 - **W2 판정 — GEN · OBS 표면 인가.** /api/v1/ingest/bulk는 환경변수 게이트 + 인증(역할 무관)이라 AUT → GEN 인가 간선을 둔다. /api/v1/health · /metrics는 **공개**다 — Compose healthcheck가 토큰 없이 부르고, 토큰 만료가 측정 공백을 만들지 않게 하기 위해서다. 그래서 OBS로는 인가 간선이 없다. 정본 [../02_features/12_permission_matrix.md](../02_features/12_permission_matrix.md).
 
 ## 도메인 × 저장 객체

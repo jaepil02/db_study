@@ -2,6 +2,7 @@
 
 > **대상**: /metrics로 노출하는 메트릭 전수 — 이름 규약 · 닫힌 레이블 집합 · **스위치 상태 레이블 이름** · **컨슈머 랙 산출식 판정(가장 중요한 단일 지표)** · 계열별 전수(앱 기본 · HTTP·WS · 수집 · 적재 · 알람 · 실시간 · 조회 · 업무 · 인증 · Redis · PostgreSQL · ClickHouse · E2E · 관측 자체) · 파생 지표 식 · 선행 문서 인계 메트릭 대응 · 수집 주기 · E2E 창 · 메모리 표본 수 조회 계약 · Pub/Sub 출력 버퍼 관련 메트릭
 > **작성일**: 2026-09-24
+> **개정일**: 2026-09-28 — 라이브 실행 제어 반영(사용자 요구 2026-09-28 · 리드 판정 — EXP-PERF · EXP-FLOW 시작 · 중단) — **gen_runs_total{type, status} · gen_run_active{type} 신설** · 수집 행 20 → **22**(GEN 5 → **7**) · 표 행 131 → **133** · 이름 143 → **145** · mode 레이블 값에 **run**(라이브 흐름 실행 — 이름 추가 아님) · 닫힌 레이블 route API 표면 44 → **48** · error_code 22 → **23** · mode 값 집합을 주입 모드 4 + standalone + run = **6**으로 정정(S1 standalone 누락 포함) · 인계 대응 원천 행 15 → **16**
 > **개정일**: 2026-09-28 — 웨이브 1 검증 반영(v-wave1 L1) — biz_command_seconds result 3 → **5**값(expired · failed 추가 · unavailable 제외 근거) — 이름 수 불변
 > **개정일**: 2026-09-28 — 웨이브 1 검수 반영(B-M4) — biz_commands_total result 값 applied · rejected · timeout · unavailable → **applied · rejected · expired · failed · timeout · unavailable**(6) · 계수 주체 둘(워커 = 종결 4값 · api = timeout · unavailable) · 한 명령이 api 1 + 워커 1로 두 번 셀 수 있음 · 503 원인 구분 **Redis 불가 = unavailable · PostgreSQL 불가 = failed** — 메트릭 이름 · 행 수 불변
 > **개정일**: 2026-09-27 — EXP-FLOW 흐름 이벤트 반영(리드 전달 · 정본 07_api/11 §흐름 이벤트 · 08_screen/08) — channel 레이블 값에 **flow** · **bizreply** · rlt_publish_failures_total을 ch:* 발행 실패 계열로(흐름 요약 발행 실패 계수는 신설하지 않는다 — 판정) · 행당 바이트 분모 **pg_table_live_tuples · ch_parts_rows 신설** · 저장소 행 28 → **30** · 표 행 129 → **131** · 이름 141 → **143** · table 레이블 PostgreSQL 테이블 15 → **16**(biz_command_log)
@@ -42,18 +43,18 @@
 
 | 레이블 | 값 집합 | 상한의 근거 | 쓰는 계열 |
 |------|------|------|------|
-| route · method · code | API 표면 44 · HTTP 메서드 · HTTP 상태 | [../07_api](../07_api/README.md) 표면 요약 | http |
-| error_code | 에러 코드 22 | [../11_glossary/02_error_codes.md](../11_glossary/02_error_codes.md) | http |
+| route · method · code | API 표면 48 · HTTP 메서드 · HTTP 상태 | [../07_api](../07_api/README.md) 표면 요약 | http |
+| error_code | 에러 코드 23 | [../11_glossary/02_error_codes.md](../11_glossary/02_error_codes.md) | http |
 | channel · close_code | rt · alarm · cacheinv · flow(흐름 이벤트 ch:flow — ws_frames_sent_total · rlt_publish_failures_total) · bizreply(업무 결과 알림 ch:bizreply — rlt_publish_failures_total만 · 연결로 나가지 않는다) · WebSocket 종료 코드 8 | [../07_api/11_websocket.md](../07_api/11_websocket.md) · [../06_pipeline/07_business_crud.md](../06_pipeline/07_business_crud.md) | ws · rlt |
 | device | 설비 ID — **티어 구성으로 상한**(최대 L 100) | [../04_architecture/07_capacity_planning.md](../04_architecture/07_capacity_planning.md) | col |
-| quality · profile · mode | 품질 코드 7 · 신호 프로파일 8 · 주입 모드 4 | [../11_glossary/03_enums_state_machines.md](../11_glossary/03_enums_state_machines.md) | col · gen |
+| quality · profile · mode | 품질 코드 7 · 신호 프로파일 8 · mode = 주입 모드 4(A~D) + 단독 실행 standalone + 라이브 흐름 실행 run = 6 | [../11_glossary/03_enums_state_machines.md](../11_glossary/03_enums_state_machines.md) | col · gen |
 | publisher · stage | collector · gen_b · gen_c · 백프레셔 단계 값 0 정상 · 1 주의 · 2 경고 · 3 위험 · 4 복구 | 발행 경로 3 · 단계 5 | backpressure_stage |
 | phase · from · to · severity | A1~A6 · total · 알람 상태 5 · 심각도 3 | [../04_architecture/05_latency_budget.md](../04_architecture/05_latency_budget.md) · 상태 머신 | alm |
 | prefix · stream | Redis 키 접두 9(stream · rt · alarm · cache · lock · rl · sess · auth · biz) · raw · dlq · biz(stream:biz:cmd) | [../05_data_stores/05_redis_keyspace.md](../05_data_stores/05_redis_keyspace.md) | redis · mst · 래퍼 |
 | store · table | postgres · clickhouse · redis · PostgreSQL 테이블 16(biz_command_log 포함 · D-04 개정) · ClickHouse 목적지 테이블 5 — 업무 대조 계측물 3은 레이블 집합에 넣지 않는다(역방향 대조 실험 스냅샷에서만 행이 있고 그 파트 · 머지 비용은 실행기가 system 테이블에서 직접 읽는다 · 수집기 닫힌 집합 CH_TABLES와 같다) | 루트 README 고정 기준 | obs · pg · ch |
 | **switch · env · value · impl · warning** | 스위치 12 · 환경변수 12 · 값(on · off · 정수 ms · ingest · collector · stream · direct) · 포트 구현 24 · stream_boundary_bypassed | [../02_features/13_switch_matrix.md](../02_features/13_switch_matrix.md) | obs_switch_info · obs_switch_warning |
 | commit_hash · memory_profile · capacity_tier | 기동 1값씩 | 프로세스 수명 동안 불변 | obs_run_info |
-| 나머지(result · reason · layer · writer · freshness · op · kind · class · rank · queryid · quantile) | 계열 표의 레이블 칸이 값을 적는다 | 각 계열 표 | 각 계열 |
+| 나머지(result · reason · layer · writer · freshness · op · kind · class · rank · queryid · quantile · type · status) | 계열 표의 레이블 칸이 값을 적는다 | 각 계열 표 | 각 계열 |
 
 - 검산: 행 = **12**
 - **device 레이블은 판정이다.** REQ-OBS-06의 원래 열거(도메인 · 저장소 · 스위치 · 상태 코드 · 단계)에 설비가 없었지만, Collector의 타임아웃 · 생략분은 설비 단위로 세어야 SIM 주입 계획(설비 포트 범위)과 대조된다([../06_pipeline/02_collect.md](../06_pipeline/02_collect.md)). 설비 수는 티어 구성이 닫으므로 태그 수에 비례하지 않는다 — REQ-OBS-06 열거에 설비가 추가됐다(W6 반영).
@@ -119,13 +120,17 @@
 | **backpressure_stage** | gauge | 단계 값 | publisher | 발행 경로별 백프레셔 단계 — 모드 B 단계가 Collector와 같은 판정인지 대조 | ADR-21 · 23 · [../06_pipeline/10_datagen_inject.md](../06_pipeline/10_datagen_inject.md) |
 | sim_listen_failed_ports | gauge | 포트 | 없음 | 기동 실패한 SIM 포트 수 | REQ-SIM-03 |
 | sim_fault_injection_active | gauge | 0 · 1 | kind(delay · exception) | 지금 적용 중인 주입 계획 | REQ-SIM-10 |
-| gen_points_generated_total | counter | 포인트 | mode · profile | 생성 카운트 — 무손실 판정의 분모 · mode는 주입 모드 A~D와 단독 실행 경로 standalone(S1) · profile은 신호 프로파일 이름 | AC-01 · REQ-NFR-01 |
+| gen_points_generated_total | counter | 포인트 | mode · profile | 생성 카운트 — 무손실 판정의 분모 · mode는 주입 모드 A~D와 단독 실행 경로 standalone(S1) · 라이브 흐름 실행 run(api 안 생성기 · [../06_pipeline/10_datagen_inject.md](../06_pipeline/10_datagen_inject.md) §흐름 시연 실행) · profile은 신호 프로파일 이름 | AC-01 · REQ-NFR-01 |
 | gen_points_dropout_total | counter | 포인트 | mode | DROPOUT이 생략한 행 | AC-01 |
 | gen_publish_halted_entries_total · gen_publish_halted_points_total | counter | 엔트리 · 포인트 | mode | 위험 단계로 발행하지 않은 양 | REQ-GEN-07 |
 | gen_worker_utilization | gauge | 0~1 | mode | 생성기 워커 스레드 이벤트 루프 사용률 — 생성기 CPU · 워커는 작업 사이에 쉬므로 작업 실행 시간 ÷ (경과 × 워커 수)로 잰다 | REQ-GEN-13 |
 | gen_register_update_seconds | histogram | 초 | 없음 | 신호 생성 → 레지스터 반영(구간 #1 · 모드 A) | 지연 예산 #1 |
+| **gen_runs_total** | counter | 건 | type · status | 라이브 실행 종결 수 — type perf · flow · status 종결 3(completed · stopped · failed) · api 재기동이 끊은 실행은 세지 않는다(기록 없음) | GEN-11 · 12 · REQ-GEN-16~19 · [../06_pipeline/10_datagen_inject.md](../06_pipeline/10_datagen_inject.md) §라이브 실행 — perf · flow |
+| **gen_run_active** | gauge | 0 · 1 | type | 진행 중(running · stopping) 라이브 실행 — 두 type의 합은 1을 넘지 않는다(동시 1) · 부하 · 대조 실험 착수 전 0 확인 | 상동 · [../06_pipeline/10_datagen_inject.md](../06_pipeline/10_datagen_inject.md) §한 번에 한 계층 |
 
-- 검산: 행 = **20**(COL 13 + SIM 2 + GEN 5) — 이름 수는 §검산 한 자리에서 센다
+- 검산: 행 = **22**(COL 13 + SIM 2 + GEN 7) — 이름 수는 §검산 한 자리에서 센다
+- **라이브 실행은 run 값을 새 레이블로 만들지 않는다.** mode를 싣는 gen 계열(generated · dropout · publish_halted · worker_utilization)은 흐름 실행에서 mode run으로 센다 — 무손실 차 식(§파생 지표)이 run에도 그대로 선다. 흐름 실행의 백프레셔 단계는 backpressure_stage의 publisher 값을 늘리지 않고 실행 객체의 정지 수(backpressurePauses)로만 드러난다 — 실행은 시연이라 발행자별 단계 대조(모드 B 대 Collector)의 대상이 아니다.
+- **gen_runs_total은 종결 때 한 번만 센다.** 시작 수를 따로 세지 않는다 — 시작 = 종결 + gen_run_active이고, api 재기동이 끊은 실행은 어느 쪽에도 남지 않는다(메모리 상태).
 - **backpressure_stage는 발행자가 판정한 단계다.** 판정량은 consumer_lag와 같은 양이고, 위 계열 모두가 같은 임계(MAXLEN 비율)를 쓴다 — 발행자마다 다른 단계가 보이면 검사 주기 차이이거나 임계 설정 결함이다.
 
 ## 적재 — ING
@@ -269,9 +274,9 @@ OBS가 수집 주기마다 모아 마지막 값을 낸다(REQ-OBS-03). 수집 �
 
 ### 검산
 
-- 표 행 = 14 + 20 + 20 + 11 + 26 + 30 + 10 = **131**
+- 표 행 = 14 + 22 + 20 + 11 + 26 + 30 + 10 = **133**
 - 한 행에 이름 둘을 둔 행 = 수집 3(col_polls · spool · gen_publish_halted) + 적재 2(ing_group · ing_control_copy) + 알람 2(alm_events · alm_eval_gap) + 저장소 5(redis 메모리 · redis keyspace · pg 데드 튜플 · ch 파트 크기 · ch 디스크) = **12**
-- **이름 수 = 131 + 12 = 143** — 계열별 앱 · 워커 풀 · HTTP · WS 14 · 수집 23 · 적재 22 · 알람 13 · 실시간 · 조회 · 업무 · 인증 26 · 저장소 35 · E2E · 관측 10 = 14 + 23 + 22 + 13 + 26 + 35 + 10 = **143**
+- **이름 수 = 133 + 12 = 145** — 계열별 앱 · 워커 풀 · HTTP · WS 14 · 수집 25 · 적재 22 · 알람 13 · 실시간 · 조회 · 업무 · 인증 26 · 저장소 35 · E2E · 관측 10 = 14 + 25 + 22 + 13 + 26 + 35 + 10 = **145**
 - 원본 보존 13종은 전부 위 표에 있다 — points_emitted · poll_duration · deadband_boost_active · spool_active · spool_bytes · spool_drain_rate(수집) · consumer_lag · rows_inserted · insert_duration · batch_size · dlq_count(적재) · stream_trimmed_unacked(저장소) · e2e_latency(E2E) = **13**
 
 ## 파생 지표
@@ -313,8 +318,9 @@ PromQL 기록 규칙으로 계산하는 값이다. 관측 프로파일이 없을
 | 06_pipeline/12 | 음수 dt · 잘린 스풀 프레임 | ing_negative_dt_total · col_spool_truncated_frames_total |
 | 07_api/05 | 내보내기 중단 | tsq_export_aborted_total |
 | 02_features/13 · 07_api/10 · 03_requirements/12 | 스위치 상태 레이블 이름 | obs_switch_info(switch · env · value · impl) |
+| REQ-GEN-16~19 · 06_pipeline/10 §라이브 실행 — perf · flow | 라이브 실행 종결 수 · 진행 중 실행 · 흐름 실행 발행 | gen_runs_total · gen_run_active · gen_points_generated_total{mode="run"} |
 
-- 검산: 원천 행 = **15** · 넘긴 지표 전부 이름 있음 · 미명명 **0**
+- 검산: 원천 행 = **16** · 넘긴 지표 전부 이름 있음 · 미명명 **0**
 - 병목 확인 지표(06_pipeline/01 §흐름별 병목 후보의 원본 표기)는 poll_duration · ch_active_parts · redis_ops_per_sec · ch_query_duration_p95_seconds · tsq_cache_requests_total · pg_connections · alm_eval_duration_seconds · nodejs_eventloop_lag_p95_seconds · gen_worker_utilization · ing_fanin_wait_seconds · alm_handoff_wait_seconds로 읽는다. 디스크 대기 · 호스트 CPU는 메트릭이 아니라 호스트 도구다([02_instrumentation.md](./02_instrumentation.md)).
 
 ## 조정값 — 조회 계약

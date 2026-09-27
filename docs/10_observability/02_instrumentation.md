@@ -1,7 +1,8 @@
 # 계측 지점과 수집 방식
 
-> **대상**: 어디서 · 어느 시각을 · 어떻게 재는가 — 구간별 계측 지점(시작 · 끝 시각) · 수집 방식(prom-client · Redis INFO · XINFO · MEMORY USAGE · pg_stat_* · system.* · 호스트 도구 · 부하 도구 출력 · 판정 SQL) · E2E 지연 SQL(게이지 · 기록) · **Stream 대기 측정 시작점 = 엔트리 ID 시각** · 키 계열별 메모리 샘플링(표본 수) · 트리밍 결함 검출 · **구간 기록의 자리(alarm_eval 무효 구간 · 대조군 실패 · 롤업 의심)** · **확인(ACK) 신호 부재의 계측** · 스위치 · run 노출
+> **대상**: 어디서 · 어느 시각을 · 어떻게 재는가 — 구간별 계측 지점(시작 · 끝 시각) · 수집 방식(prom-client · Redis INFO · XINFO · MEMORY USAGE · pg_stat_* · system.* · 호스트 도구 · 부하 도구 출력 · 판정 SQL) · E2E 지연 SQL(게이지 · 기록) · **Stream 대기 측정 시작점 = 엔트리 ID 시각** · 키 계열별 메모리 샘플링(표본 수) · 트리밍 결함 검출 · **구간 기록의 자리(alarm_eval 무효 구간 · 대조군 실패 · 롤업 의심)** · **확인(ACK) 신호 부재의 계측** · 스위치 · run 노출 · **라이브 실행 계측(gen_run_active · gen_runs_total — 전이 지점)**
 > **작성일**: 2026-09-24
+> **개정일**: 2026-09-28 — 라이브 실행 제어 반영(사용자 요구 2026-09-28 · 리드 판정) — 계측 지점에 라이브 실행 행(RunControlModule · 시작 수락 → 종결 전이 · gen_run_active · gen_runs_total) — 지점 16 → **17** · 흐름 실행 발행의 mode run 계수 지점 불릿 · 경과 시간은 메트릭이 아니라 실행 객체(서버 계산)
 > **개정일**: 2026-09-28 — 웨이브 1 검증 반영 — 업무 명령 대기 행의 result 값 5 명시(카탈로그와 일치) — 계측 지점 수 불변
 > **개정일**: 2026-09-28 — 웨이브 1 검수 반영(B-M3) — 기동 1회 수집 행 스위치 11 → **12**(SW-12 BIZ_WRITE_PATH 반영 누락 정정) — 수집 행 수 불변
 > **개정일**: 2026-09-27 — D-04 부분 개정 반영(사용자 결정 — 업무 쓰기도 Redis를 거친다 · 동기 응답) — 계측 지점에 업무 명령 대기 · 적용 2행(14 → **16**) · 수집 방식에 업무 명령 랙 행(10 → **11**) · PostgreSQL n_live_tup · ClickHouse 활성 파트 행 수 수집(행당 바이트 분모) · 메모리 샘플링 stream 키 2 → **3**(biz:cmd) · 접두 8 → **9**(biz)
@@ -38,8 +39,10 @@
 | COPY | ING flusher(SW-09) | COPY 트랜잭션 시작 | 커밋 | ing_control_copy_seconds |
 | 업무 명령 대기 | api 업무 쓰기 경로(SW-12 stream) | XADD 직전 | 결과 수신 또는 대기 상한(5초) 도달 | biz_command_seconds{result — applied · rejected · expired · failed · timeout} · biz_commands_total |
 | 업무 명령 적용 | 워커 grp:biz-writer | BEGIN | COMMIT 또는 롤백 | biz_apply_seconds{kind} · 원장에 이미 있으면 적용 없이 biz_duplicates_total |
+| 라이브 실행 | GEN RunControlModule(api 역할) | 시작 요청 수락(running 진입 · 202 응답 전) | 종결 전이(cleanup 뒤 completed · stopped · failed) | gen_run_active{type}(시작 1 · 종결 0) · gen_runs_total{type, status}(종결 때 1) |
 
-- 검산: 지점 = **16**
+- 검산: 지점 = **17**
+- **라이브 실행의 소요 시간은 메트릭이 아니다.** 실행 객체의 elapsedMs · 단계별 elapsedMs를 서버가 계산해 표면으로 돌려준다(정본 [../06_pipeline/10_datagen_inject.md](../06_pipeline/10_datagen_inject.md) §라이브 실행 — perf · flow) — 히스토그램으로 두면 실행 하나가 표본 하나라 분포가 뜻을 갖지 않는다. 흐름 실행의 발행은 생성기가 XADD 묶음을 만든 순간 gen_points_generated_total{mode="run"}을, 위험 단계로 건너뛴 묶음은 gen_publish_halted_*{mode="run"}을 센다(모드 B와 같은 지점).
 - **업무 명령의 스트림 대기(requestedAt → XREADGROUP 수신)는 메트릭으로 두지 않는다.** 흐름 요약(ch:flow biz 이벤트)의 stages.queueWaitMs가 명령마다 싣고, 적체는 biz_stream_lag가 드러낸다 — 대기 분포가 필요한 실험(EXP-46)은 biz_command_seconds − biz_apply_seconds의 분포 차로 읽는다.
 - **ts와 t0가 다르다.** ts는 그 태그를 실은 요청 블록의 송신 직전 시각이고 t0는 사이클 첫 요청의 송신 직전 시각이다([../06_pipeline/02_collect.md](../06_pipeline/02_collect.md) §모드 A ts 채취 시점). 한 사이클에 블록이 여럿이면 뒤 블록의 ts > t0다.
 - **발행 → 송신은 수신이 아니다.** 브라우저 수신까지는 서버가 볼 수 없다 — SW-06 비교(EXP-11)는 같은 서버 지점에서 재므로 차이는 성립하고, 브라우저 수신 지연은 k6 ws 쪽 기록이 갖는다.

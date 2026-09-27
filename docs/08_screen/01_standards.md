@@ -2,6 +2,8 @@
 
 > **대상**: 08_screen 화면 명세 전부가 따르는 공통 규격 — 명세 템플릿 · 상태 4행 · 단계별 화면 가용성 · 요청 경로와 공통 셸 · 차트 표준(uPlot 주력 · ECharts 보조) · 시각 표시(Asia/Seoul) · 에러 코드별 사용자 표시 · TanStack Query staleTime과 Redis TTL 정렬 · 무효화 체인 ⑥단 신호 수신
 > **작성일**: 2026-09-24
+> **개정일**: 2026-09-28 — DB 시간대 UTC 반영(사용자 요구 2026-09-28 · 리드 지침 .omc/utc-storage-brief.md 판정 4 · ADR-27 · d-utc 문장 리드 전달) — §시각 표시 표시 형식 행 실패 칸(수동 조회 기본 출력 UTC) · 달력 경계 행 근거에 11_glossary/05 §달력 의미 경계 닫힌 목록 #3(1d 스냅 KST 자정 유지) · A형 대체 경로에 수동 조회 UTC 출력 대조법 · 화면 규칙 불변 불릿 신설 — 자리 수 불변
+> **개정일**: 2026-09-28 — 라이브 실행 제어 반영(사용자 요구 2026-09-28 · 리드 지침 .omc/run-control-brief.md · 패널 규칙 정본 08_evidence_screens §실행 패널 — 두 화면 공통 규칙) — 요청 경로 no-store 행에 라이브 실행(07_api/09_datagen #2~#5 · EXP-PERF · EXP-FLOW) — 요청 유형 수 불변 · 시각 표시 표시 형식 행에 실행 패널 시각 초 예외 · **경과 시간 행 신설**(자리 6 → **7**) · 에러 표 **datagen.run_in_progress/409 행 신설** · common.not_found 행에 실행 조회 예외 — 화면에 닿는 코드 20 → **21** · 코드 22 → **23** · 에러 코드가 아닌 신호에 라이브 실행 종결 행(신호 6 → **7**) · 캐시 쿼리에 라이브 실행 행(쿼리 13 → **14**)
 > **개정일**: 2026-09-28 — 리드 정정 2 — 업무 쓰기 503 띠 문구 "업무 쓰기 대기열 응답 불가" → **"업무 쓰기 저장소 응답 불가 — 조회는 된다 · 같은 키로 다시 보내면 안전"**(한 코드가 Redis 불가 · PostgreSQL 불가 둘 다에서 오므로)
 > **개정일**: 2026-09-28 — 리드 정정 — Redis 불가 코드는 신설하지 않고 **common.postgres_unavailable/503 재사용**(클라이언트 대응이 같으면 한 코드 — 07_api/01) · 에러 표의 command_bus 행 삭제 · 화면에 닿는 코드 21 → **20** · 코드 23 → **22** · 업무 쓰기 표면의 503 띠 문구 "업무 쓰기 대기열 응답 불가 — 조회는 된다" 유지
 > **개정일**: 2026-09-28 — 07_api/01 확정 값 반영 — 명령 조회 GET /api/v1/commands/{cmdId}(01_conventions #1 · status 5) · 명령 ID 헤더 Idempotency-Key(응답이 되싣는다) · Redis 불가 **common.command_bus_unavailable/503** 신설 반영 — §업무 쓰기 응답 표 확정 대기 3자리 채움 · 화면에 닿는 코드 20 → **21** · 코드 22 → **23** · 미확인 1행 닫힘
@@ -98,12 +100,12 @@
 |------|------|------|------|
 | 로그인 · 토큰 갱신 · 로그아웃 | 브라우저 → BFF → api | AUTH-LOGIN · 공통 셸 | 없음 |
 | 사이트 · 라인 · 설비 · 태그 목록과 마스터 쓰기 | 브라우저 → BFF → api | ADM-MASTER · 설비 선택기(DSH · ANL · ALM-RULES) | 있음 — 쓰기 성공 시 체인 ⑤ |
-| 작업지시 · 실적 · 알람 규칙 · 알람 이벤트 · 감사 · 명령 조회 | 브라우저 → BFF → api | ADM-WORKORDER · ALM-RULES · ALM-CONSOLE · ADM-AUDIT | **no-store** |
+| 작업지시 · 실적 · 알람 규칙 · 알람 이벤트 · 감사 · 명령 조회 · 라이브 실행(시작 · 현재 · 단건 · 중단) | 브라우저 → BFF → api | ADM-WORKORDER · ALM-RULES · ALM-CONSOLE · ADM-AUDIT · EXP-PERF · EXP-FLOW(실행 패널) | **no-store** |
 | 최신값 | 브라우저 → api 직결 | DSH-REALTIME | 해당 없음 |
 | 시계열 조회 · 내보내기 · 판정 이력 분석 | 브라우저 → api 직결 | ANL-TREND · DSH-REALTIME · ALM-RULES | 해당 없음 |
 | WebSocket | 브라우저 → api 직결 | DSH-REALTIME · ALM-CONSOLE · EXP-FLOW(subscribe_flow) · 공통 셸(신호 수신) | 해당 없음 |
 | health · metrics(화면) | 브라우저 → BFF → api · 메트릭 텍스트 해석은 BFF가 한다 | EXP-CONSOLE · EXP-COMPARE · EXP-FLOW(metrics 5초) · 공통 셸(실험 조건 배지) | 없음 |
-| 측정 기록 읽기 | 브라우저 → BFF · BFF가 docs/measurements를 읽기 전용으로 읽는다 — api 표면 없음 | EXP-COMPARE(역전 지점 · 실증 요약) · EXP-PERF | 없음 — no-store(기록은 커밋으로만 바뀐다) |
+| 측정 기록 읽기 | 브라우저 → BFF · BFF가 docs/measurements를 읽기 전용으로 읽는다 — api 표면 없음 | EXP-COMPARE(역전 지점 · 실증 요약) · EXP-PERF(기록 곡선 · 표) | 없음 — no-store(기록은 커밋으로만 바뀐다) |
 
 - 검산: 요청 유형 = **8** · BFF 경유 5 + 직결 3
 - **알람 이벤트 · 확인 · 규칙은 BFF no-store다**(배정 정본 [../07_api/01_conventions.md](../07_api/01_conventions.md) §BFF 경유와 직결). 확인 직후 목록이 BFF 캐시의 옛 목록이면 확인한 알람이 미확인으로 남아 운영자가 두 번 누른다 — 작업지시 no-store와 같은 read-your-writes 요구다. 실시간 표시는 WebSocket 알람 푸시가 맡는다.
@@ -192,14 +194,16 @@
 | 자리 | 규칙 | 금지 | 근거 |
 |------|------|------|------|
 | 표시 | 모든 시각을 **Asia/Seoul로 표시**한다 · 변환은 렌더 직전 한 번만 | 서버 KST 문자열에 브라우저 로컬 시간대를 다시 적용 — 9시간이 두 번 더해진다 | AC-04 |
-| 표시 형식 | 날짜 · 시각 · 초까지 · 실험 화면(EXP)과 최신값 ts 툴팁은 밀리초까지 · 시간대 표기 KST를 붙인다 | 시간대 표기 없는 시각 — 수동 조회(clickhouse-client) 결과와 대조할 때 기준을 잃는다 | 원본 data_flow.md §17 "저장 시각과 UI 표시 시각 대조" |
+| 표시 형식 | 날짜 · 시각 · 초까지 · 실험 화면(EXP)과 최신값 ts 툴팁은 밀리초까지(예외 — EXP-PERF · EXP-FLOW 실행 패널의 시작 · 종료 시각은 초까지 · 실행 단위가 초 이상이라 밀리초가 소음) · 시간대 표기 KST를 붙인다 | 시간대 표기 없는 시각 — 수동 조회(psql · clickhouse-client)의 기본 출력이 UTC(ADR-27)라 KST 표기가 없으면 9시간 차를 기준 없이 본다 | 원본 data_flow.md §17 "저장 시각과 UI 표시 시각 대조" |
 | 입력 | 범위 입력은 KST로 받고 요청에는 **오프셋 포함 ISO 8601**(+09:00)로 보낸다 | 오프셋 없는 ISO 8601 — 서버가 400 common.validation_failed로 거절한다 | REQ-TSQ-02 |
 | 응답 해석 | 측정 시각(ts · points 첫 열 · WS 값)은 **epoch ms 정수**, 업무 시각(At으로 끝나는 필드)은 **UTC ISO 8601(Z)**로 받는다 — 둘 다 Asia/Seoul로 한 번 변환해 그린다 | UTC 문자열을 KST로 착각해 변환 생략 · epoch를 초로 해석 | [../07_api/01_conventions.md](../07_api/01_conventions.md) §시각 직렬화 |
 | 두 시각 | ts는 "측정 시각", ingested_at은 "적재 시각"으로 라벨을 가른다 · 최신값 화면의 신선도 기준은 ts다 | ingested_at을 "갱신 시각"으로 표시 — 백프레셔로 늦게 적재된 값이 방금 갱신된 것처럼 보인다 | REQ-RLT-03 |
-| 달력 경계 | 1d 해상도 버킷의 하루는 KST 자정에 시작한다 · 축 눈금도 KST 자정 | UTC 자정 눈금 — 일별 막대가 오전 9시에 끊긴다 | [../05_data_stores/04_clickhouse_rollup.md](../05_data_stores/04_clickhouse_rollup.md) |
+| 달력 경계 | 1d 해상도 버킷의 하루는 KST 자정에 시작한다 · 축 눈금도 KST 자정 | UTC 자정 눈금 — 일별 막대가 오전 9시에 끊긴다 | [../05_data_stores/04_clickhouse_rollup.md](../05_data_stores/04_clickhouse_rollup.md) · [../11_glossary/05_units_and_time.md](../11_glossary/05_units_and_time.md) §달력 의미 경계 — 닫힌 목록 #3 · 1d 스냅은 DB가 UTC여도 KST 자정을 유지한다(ADR-27) |
+| 경과 시간 | 시각이 아니라 길이라 시간대 변환이 없다 · 서버가 계산한 elapsedMs를 기준으로 두고 진행 중에만 그 뒤 흐른 길이를 더한다 · 종결이면 endedAt − startedAt · 형식 "3분 12.4초" | 브라우저 현재 시각에서 startedAt을 빼기 — 두 시계 차이가 경과에 섞인다 | [08_evidence_screens.md](./08_evidence_screens.md) §실행 패널 — 두 화면 공통 규칙 |
 
-- 검산: 자리 = **6**
-- **A형 — "화면 시각이 9시간 어긋났다"는 대개 저장 문제가 아니다.** 통념은 저장값이 틀렸다는 것이다. 부정 — 저장은 epoch이고 시간대 인자는 표시 · 파싱 · 달력 함수만 바꾼다. 진짜 축은 변환이 몇 번 일어났는가다. 대체 경로 — 같은 행을 epoch 밀리초로 보이는 툴팁과 수동 조회의 toUnixTimestamp64Milli 결과를 대조한다.
+- 검산: 자리 = **7**
+- **A형 — "화면 시각이 9시간 어긋났다"는 대개 저장 문제가 아니다.** 통념은 저장값이 틀렸다는 것이다. 부정 — 저장은 epoch이고 시간대 인자는 표시 · 파싱 · 달력 함수만 바꾼다. 진짜 축은 변환이 몇 번 일어났는가다. 대체 경로 — 같은 행을 epoch 밀리초로 보이는 툴팁과 수동 조회의 toUnixTimestamp64Milli 결과를 대조한다. 수동 조회는 UTC로 출력된다(ADR-27) — toTimeZone(ts, 'Asia/Seoul') 또는 epoch로 대조한다.
+- **DB 처리 시간대 UTC(ADR-27) 뒤에도 화면 규칙은 불변이다** — API가 이미 UTC(epoch ms · Z)로 내리고 화면이 KST로 한 번 바꾼다.
 
 ## 에러 코드별 사용자 표시
 
@@ -208,7 +212,7 @@
 | 코드 | 닿는 화면 | 표시 | 사용자 다음 행동 | 금지 표시 |
 |------|------|------|------|------|
 | common.validation_failed/400 | 입력이 있는 전 화면 | 필드 옆 문구 · 필드를 특정할 수 없으면 폼 머리 문구 | 입력을 고친다 · 재시도 버튼 없음 | 자동 재시도 |
-| common.not_found/404 | 경로 식별자를 쓰는 전 화면 | "대상이 없다" + 목록으로 돌아가기 · 설비 선택기는 선택을 해제 | 식별자 확인 | 최신값의 빈 목록(200)을 이 문구로 표시 |
+| common.not_found/404 | 경로 식별자를 쓰는 전 화면 | "대상이 없다" + 목록으로 돌아가기 · 설비 선택기는 선택을 해제 · 실행 패널의 실행 조회 · 중단 404는 예외 — 실행 기록이 사라진 것(api 재기동)으로 current를 다시 읽는다(아래 신호 표 라이브 실행 종결 행) | 식별자 확인 | 최신값의 빈 목록(200)을 이 문구로 표시 |
 | common.duplicate_key/409 | ADM-MASTER(tag_code) · ADM-WORKORDER(order_no) | 해당 필드 옆 "이미 있는 값" | 다른 값으로 저장 | 폼 초기화 |
 | common.rate_limited/429 | 전 인증 화면 | 화면 머리 띠 "요청 한도 초과" + Retry-After 초 카운트다운 | 기다린다 · 자동 재조회는 Retry-After까지 멈춘다 | 로그인 화면으로 이동 |
 | common.postgres_unavailable/503 | 관리 화면 · AUTH-LOGIN · 알람 목록 · DSH 단일 태그 · 업무 쓰기(명령 경로 — Redis 불가도 이 코드) | 영역 띠 "업무 저장소 응답 불가" · 기존 값 유지 · **업무 쓰기 요청의 503은 §업무 쓰기 응답 — 명령 경로의 띠**(원인을 코드로 가르지 않는다) | 백오프 뒤 재시도 버튼 | DSH 설비 전체 값까지 숨기기 — 그 경로는 200으로 값을 낸다 |
@@ -227,8 +231,9 @@
 | alarms.eval_store_unavailable/503 | ALM-RULES | 분석 차트 띠 "판정 기록 저장소 응답 불가" · 규칙 편집은 그대로 | 백오프 뒤 재조회 | timeseries.clickhouse_unavailable 문구로 표시 · 빈 차트를 "위반 0"으로 그리기 |
 | work_orders.invalid_status_transition/409 | ADM-WORKORDER | "현재 상태에서 할 수 없는 전이" · 현재 상태 재조회 후 허용 전이만 버튼으로 | 허용 전이 선택 | 전이 버튼 상태 유지 |
 | work_orders.production_log_not_allowed/409 | ADM-WORKORDER | "생산 중(IN_PROGRESS)인 작업지시에만 실적을 기록한다" · 단건 재조회 | 없음 — 완료 뒤에는 기록하지 않는다 | 폼 입력 버리기 |
+| datagen.run_in_progress/409 | EXP-PERF · EXP-FLOW(실행 패널 시작) | 실행 패널 띠 "다른 실행이 먼저 시작됐다 — {type}" · details의 runId로 그 실행을 조회해 패널을 맞춘다(시작 비활성 · 다른 종류면 그 화면 링크) | 진행 중 실행이 끝나기를 기다리거나 그 화면에서 중단 | 자동 재시도 · 시작 버튼을 켠 채 두기 |
 
-- 검산: 화면에 닿는 코드 = common 5 + auth 6 + master 2 + timeseries 2 + realtime 1 + alarms 2 + work_orders 2 = **20** · 화면에 닿지 않는 코드 = datagen 2(stream_full · bulk_disabled — 부하 주입 표면은 k6가 부른다 · 화면 없음(API 전용)) · 20 + 2 = **22**
+- 검산: 화면에 닿는 코드 = common 5 + auth 6 + master 2 + timeseries 2 + realtime 1 + alarms 2 + work_orders 2 + datagen 1(run_in_progress) = **21** · 화면에 닿지 않는 코드 = datagen 2(stream_full · bulk_disabled — 부하 주입 표면은 k6가 부른다 · 화면 없음(API 전용)) · 21 + 2 = **23**
 - **datagen.stream_full은 화면에 코드로 오지 않고 EXP-CONSOLE의 메트릭으로만 보인다.** 모드 C 거절 수는 측정값이지 사용자 오류가 아니다.
 - **낙관적 갱신을 하지 않는다.** ACK · 상태 전이 · 마스터 저장은 응답을 받은 뒤에 화면을 바꾼다 — 409가 올 수 있는 쓰기를 먼저 반영하면 되돌릴 때 사용자가 두 상태를 본다.
 
@@ -242,8 +247,9 @@
 | 최신값 메타 비움(tagName null · meta.metaMissing) | DSH-REALTIME | 값 · 품질은 그리고 태그명 자리에 tag_id와 "메타 없음" · STALE 대신 값의 나이 | [../07_api/06_realtime.md](../07_api/06_realtime.md) |
 | 캐시 degrade · 락 대기 소진 | ANL-TREND | 표시 없음 — 지연만 늘어난다 | REQ-TSQ-11 |
 | 업무 쓰기 202 pending | ADM-MASTER · ALM-RULES · ALM-CONSOLE(확인) · ADM-WORKORDER | 성공도 오류도 아닌 "적용 대기" — §업무 쓰기 응답 — 명령 경로 | [../06_pipeline/07_business_crud.md](../06_pipeline/07_business_crud.md) §시간 초과 · 명령 조회 |
+| 라이브 실행 종결(status stopped · failed) | EXP-PERF · EXP-FLOW | 오류 행이 아니라 실행 패널의 종결 띠(회색 "중단됨" · 빨강 "실패 — 메시지") — 표면은 200으로 실행 객체를 냈다 · 실행 조회 404(api 재기동으로 실행이 사라짐)도 실패가 아니라 "기록 없음" | [08_evidence_screens.md](./08_evidence_screens.md) §실행 패널 — 두 화면 공통 규칙 |
 
-- 검산: 신호 = **6**
+- 검산: 신호 = **7**
 
 ## 업무 쓰기 응답 — 명령 경로
 
@@ -280,8 +286,9 @@
 | health | obs · health | 없음 | 해당 없음 | 0 | 화면별 폴링 |
 | metrics | obs · metrics | 없음 | 해당 없음 | 0 | 화면별 폴링 · 캡처 |
 | 명령 조회 | command · {cmdId} | Redis biz:result(없으면 biz_command_log) · BFF no-store | 결과 키 300초(현행 참고) | 0 | 202 뒤 백오프 폴링 — §업무 쓰기 응답 — 명령 경로 |
+| 라이브 실행 | runs · current(1초 폴링) · runs · {runId}(409 뒤 1회) | 없음 — 실행 상태는 api 인스턴스 메모리 · BFF no-store | 해당 없음 | 0 | 진입 1회 · running · stopping 동안 1초 폴링 · 종결되면 멈춘다 — [08_evidence_screens.md](./08_evidence_screens.md) §실행 패널 — 두 화면 공통 규칙 |
 
-- 검산: 쿼리 = **13**
+- 검산: 쿼리 = **14**
 - **관계식의 근거는 2단 캐시 실험이다**(원본 tech_stack.md §4.3). staleTime이 서버 수명보다 길면 서버가 새 값을 가진 뒤에도 화면이 옛 값을 보이고, 0에 가깝게 짧으면 브라우저 재조회가 같은 서버 사본만 다시 받아 브라우저 층과 서버 층의 기여를 측정에서 가를 수 없다. 지터 계열은 하한(TTL × 0.8)에 맞춘다 — 평균에 맞추면 절반의 재조회가 만료 전 사본을 다시 받는다.
 - **gcTime은 시계열 쿼리만 짧게 둔다.** 시계열 응답은 수백 KB이고 사용자별이라 화면을 떠난 뒤 오래 들고 있으면 탭 메모리가 범위 조회 횟수에 비례해 는다 — 현행값 60초 · 소유 [../09_tech_stack/01_frontend.md](../09_tech_stack/01_frontend.md).
 - **작업지시 · 실적의 다른 사용자 화면은 cache:workorders TTL만큼 늦는 것을 허용한다.** 체인 ③ · ⑥을 걸지 않는 판정([../06_pipeline/07_business_crud.md](../06_pipeline/07_business_crud.md))의 화면 쪽 결과이며, 쓴 사람의 화면은 자기 쓰기 성공으로 즉시 무효화한다.

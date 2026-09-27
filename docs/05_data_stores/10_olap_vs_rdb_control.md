@@ -1,7 +1,11 @@
 # PostgreSQL 대조군 (10_olap_vs_rdb_control)
 
-> **대상**: 학습 목표 ① 설계 정본 — PostgreSQL 대조군 plc_tag_raw_control의 tag_raw 동형 설계(BRIN · 일자 파티션) · SW-09 동시 적재 · 삽입 실패 의미론과 멱등 수단 판정 · 동일 쿼리 5종(양쪽 SQL) · 비교 축 6 · 역전 지점 탐색 설계(행 수 격자) · 측정 조건 · EXP-01~05 예약 대역 연결 · **스트리밍 동시 적재 EXP-45 · 역방향 대조(업무 워크로드를 ClickHouse에) EXP-40~44 설계** · **결과(쿼리별 역전 구간 · 비교 축 6 · 역방향 대조표) · 원리 대응표 — 측정 기록 034 · 042~054 인용**
+> **대상**: 학습 목표 ① 설계 정본 — PostgreSQL 대조군 plc_tag_raw_control의 tag_raw 동형 설계(BRIN · 일자 파티션) · SW-09 동시 적재 · 삽입 실패 의미론과 멱등 수단 판정 · 동일 쿼리 5종(양쪽 SQL) · 비교 축 6 · 역전 지점 탐색 설계(행 수 격자) · 측정 조건 · EXP-01~05 예약 대역 연결 · **스트리밍 동시 적재 EXP-45 · 역방향 대조(업무 워크로드를 ClickHouse에) EXP-40~44 설계** · **결과(쿼리별 역전 구간 · 비교 축 6 · 역방향 대조표) · 원리 대응표 — 측정 기록 034 · 042~054 인용** · **실행 수명 객체(라이브 실행 perf — plc.run_perf_raw · run_perf_raw) · 라이브 실행의 쿼리 재사용 규칙**
 > **작성일**: 2026-09-24
+> **개정일**: 2026-09-28 — 리드 판정(구현 i-run 문의) — 실행 수명 객체 PostgreSQL 생성 · 삭제 주체 → **마이그레이션 010의 SECURITY DEFINER 함수 run_perf_create · run_perf_drop**(런타임 app_rw DDL 권한 없음 유지 · 소유자 비밀번호를 api에 주지 않는다) — 객체 수 불변
+> **개정일**: 2026-09-28 — 라이브 실행 검수 반영(리드 재판정 2026-09-28) — 실행 수명 객체의 생성 식 고정(행 번호 n · **ts 오름차순 삽입(ORDER BY n)** · device_id · tag_id · value 식 · 두 저장소 같은 식) · 규모 증가분 구간(k = 5는 [S, S + 10초) · k > 5는 [S + 10^(k−1) ÷ 10^4초, S + 10^k ÷ 10^4초)) · perf 전용 PostgreSQL 연결 1 — 객체 · 규칙 수 불변
+> **개정일**: 2026-09-28 — DB 시각 UTC(ADR-27) — 동형 표 ts · ingested_at DateTime64(3, 'Asia/Seoul') → **'UTC'** · 대조군 DDL 주석 경계 Asia/Seoul 자정 → **UTC 자정** · 사후 대조 단위 KST 일 → **UTC 일(파티션 경계)** · 파티션 경계 불릿 KST 자정 → **UTC 자정** — 컬럼 · 폭 수 불변
+> **개정일**: 2026-09-28 — 라이브 실행 제어 반영(사용자 요구 2026-09-28 · 리드 판정) — §실행 수명 객체 신설(ClickHouse plc.run_perf_raw · PostgreSQL run_perf_raw — tag_raw · 대조군 동형 · I2 변형만 · 실행마다 생성 · 종결 시 DROP · 부팅 시 정리 · **고정 기준 테이블 수에 세지 않는다**) · 라이브 실행의 쿼리 재사용 규칙(동일 쿼리 5종 그대로 · 웜만 · 워밍업 1 + 3회 · Q5x 제외) · 라이브 값이 측정 기록이 아니라는 A형 — 테이블 수 불변
 > **개정일**: 2026-09-28 — 업무 쓰기 Redis 경유 개정(사용자 결정 2026-09-27) — 버린 대안 ② 칸의 고정 기준 인용 "업무 14 + 대조군 1" → **업무 · 대조군 부모 테이블 수**(수치는 정본이 갖는다) — 판정 불변
 > **개정일**: 2026-09-27 — W6 검수 반영 — Q5 웜 10^5 미정 · 10^5.5부터 ClickHouse를 판정 문장 전부에 · 열 단위 읽기 원리를 Q5로 한정(Q4는 읽는 비율 3.11% 대 3.6%라 설명되지 않음) · BRIN 블록을 hit + read로 통일(10^8 36.1% · 10^9 3.6%) · ClickHouse 머지 증폭 수치 삭제(머지 시점 의존 — 인용 안 함 · WAL 바이트 유지) · 1차 폐기 사유(편차 초과)와 적재 순서의 BRIN 붕괴(039)를 가름 · synchronous_commit off 병기(044 on 보조 팔로 결론 유지) · 버퍼 블록 ≈ 읽은 태그 행 수 · btree 31.6 · 31.5 B · WAL 분모 표현 · 결정적 값 태그 3곳 · 비교 축 6 헤더에 PG 저장 열 구성과 압축률 분모 차 · §예상 결과 역전 행은 역전 표 검산 줄을 가리킴
 > **개정일**: 2026-09-27 — W6 결과 반영 — §결과 신설(쿼리별 역전 구간 — 구조 판정 정본 · 중앙값 구간 참고 · 비교 축 6 · 역방향 대조표 EXP-40~45 — 기록 034 · 042~054) · §원리 대응 — 관측에서 원인 구조로 신설(읽은 양 ÷ 테이블 양) · §예상 결과 실측 대조 열 · §미확인 · 미설계 등재 닫힘 7행 · §역전 지점 탐색 설계 "쌓이는 순서" 불릿에 1차 어긋남(역방향 적재)과 2차 해소 한 줄 — 인용 규칙은 04 §기록 상태와 정정(discarded는 구조 사실 · 결정적 값만)
@@ -16,7 +20,7 @@
 > **개정일**: 2026-09-24 — W7 검수 반영 — 미확인 1행 닫힘(모드 D 대조군 동일 행 절차) — 테이블 수 불변
 > **개정일**: 2026-09-24 — W6 실험 채번 반영 — 격자 6단계 보존 판정 · 조정값 · EXP 반영(정본 10_observability/01 · 06)
 > **개정일**: 2026-09-24 — W6 판정 반영 — 대조 실험 자원 조건의 메모리 동일화 값 → ClickHouse 3.5 GB · PostgreSQL 3.5 GB(정본 09_tech_stack/04 · 합계 불변)
-> **원천**: docs_plan.md 학습 목표 1(대조군 설계) · 웨이브 인계 W3 05/10 · W4 06/04 행(SW-09 삽입 실패 의미론 · PostgreSQL 멱등 수단) · 원본 tech_stack.md §5.1 "왜 여기에 시계열을 넣지 않나" · §5.2(커밋 ff66a37) · 원본 architecture.md §7.1 · §13 · §15(커밋 ff66a37) · 원본 data_flow.md §10.1 · §11.1 · §11.2(커밋 ff66a37) · 원본 implementation_plan.md §2.4 · §5 S5(커밋 ff66a37) · D-05 · D-10 · D-12 · ADR-17 · [../01_overview/01_purpose_learning_goals.md](../01_overview/01_purpose_learning_goals.md) 목표 ① · [../03_requirements/07_ingest.md](../03_requirements/07_ingest.md) REQ-ING-15 · [../03_requirements/13_nonfunctional.md](../03_requirements/13_nonfunctional.md) REQ-NFR-18 · 목적 적합성 실증 계획 W1(2026-09-26 · 역방향 대조 · EXP-40~45) · ClickHouse 공식 문서 UPDATE 문 · 업데이트 개요 · ReplacingMergeTree · 테이블 제약 · 삽입 재시도 중복 제거 · 비동기 삽입 세션 설정(26.8 · 2026-09-26 context7 대조 — ClickHouse 문서 행 [../03_requirements/16_official_references.md](../03_requirements/16_official_references.md) · 대조 항목 추가는 그 문서 소유)
+> **원천**: docs_plan.md 학습 목표 1(대조군 설계) · 웨이브 인계 W3 05/10 · W4 06/04 행(SW-09 삽입 실패 의미론 · PostgreSQL 멱등 수단) · 원본 tech_stack.md §5.1 "왜 여기에 시계열을 넣지 않나" · §5.2(커밋 ff66a37) · 원본 architecture.md §7.1 · §13 · §15(커밋 ff66a37) · 원본 data_flow.md §10.1 · §11.1 · §11.2(커밋 ff66a37) · 원본 implementation_plan.md §2.4 · §5 S5(커밋 ff66a37) · D-05 · D-10 · D-12 · ADR-17 · [../01_overview/01_purpose_learning_goals.md](../01_overview/01_purpose_learning_goals.md) 목표 ① · [../03_requirements/07_ingest.md](../03_requirements/07_ingest.md) REQ-ING-15 · [../03_requirements/13_nonfunctional.md](../03_requirements/13_nonfunctional.md) REQ-NFR-18 · 목적 적합성 실증 계획 W1(2026-09-26 · 역방향 대조 · EXP-40~45) · ClickHouse 공식 문서 UPDATE 문 · 업데이트 개요 · ReplacingMergeTree · 테이블 제약 · 삽입 재시도 중복 제거 · 비동기 삽입 세션 설정(26.8 · 2026-09-26 context7 대조 — ClickHouse 문서 행 [../03_requirements/16_official_references.md](../03_requirements/16_official_references.md) · 대조 항목 추가는 그 문서 소유) · 라이브 실행 제어 리드 판정(2026-09-28 — 실행 수명 객체 · 쿼리 재사용)
 
 **학습 목표 ①은 "시계열을 왜 RDB가 아니라 컬럼형으로 다루는가"를 측정으로 아는 것이다**([../01_overview/01_purpose_learning_goals.md](../01_overview/01_purpose_learning_goals.md)). 원본에는 RDB 대조 실험이 아예 없었고, PostgreSQL에 시계열을 넣지 않는 이유는 타인의 벤치마크 범위로만 적혀 있었다(원본 tech_stack.md §5.1 · §5.2). 이 문서는 그 이유를 이 머신 · 이 스키마 · 이 쿼리에서 재는 **실험의 설계**다(D-05 · ADR-17).
 
@@ -46,13 +50,13 @@ tag_raw와 **같은 컬럼 · 같은 의미 · 같은 파티션 경계**를 갖�
 
 | 컬럼 | ClickHouse tag_raw | PostgreSQL 대조군 | 폭(바이트) CH · PG | 동형 판정 |
 |------|------|------|------|------|
-| ts | DateTime64(3, 'Asia/Seoul') | timestamptz NOT NULL | 8 · 8 | 같다 — 값은 epoch ms · PG 정밀도 μs가 ms 값을 정확히 담는다 |
+| ts | DateTime64(3, 'UTC') | timestamptz NOT NULL | 8 · 8 | 같다 — 값은 epoch ms · PG 정밀도 μs가 ms 값을 정확히 담는다 |
 | device_id | UInt32 | integer NOT NULL | 4 · 4 | 같다 — 값 범위가 2^31 미만 |
 | tag_id | UInt32 | integer NOT NULL | 4 · 4 | 같다 |
 | value | Float64 | double precision NOT NULL | 8 · 8 | 같다 — 비트 단위 동일 |
 | quality | UInt8 | **smallint** NOT NULL | 1 · **2** | 다르다 — PostgreSQL에 1바이트 정수가 없다. 폭 차 1바이트를 기록한다 |
 | scan_seq | UInt64 | bigint NOT NULL | 8 · 8 | 같다 — 값 범위가 2^63 미만 |
-| ingested_at | DateTime64(3, 'Asia/Seoul') DEFAULT now64(3) | timestamptz NOT NULL DEFAULT now() | 8 · 8 | 같다 — 한 적재 단위의 행이 같은 값을 받는다(질의 · 트랜잭션 단위 1회 평가) |
+| ingested_at | DateTime64(3, 'UTC') DEFAULT now64(3) | timestamptz NOT NULL DEFAULT now() | 8 · 8 | 같다 — 한 적재 단위의 행이 같은 값을 받는다(질의 · 트랜잭션 단위 1회 평가) |
 
 - 검산: 컬럼 = **7** · 폭 합 CH 41 · PG 42 바이트 · 같은 폭 6 + 다른 폭 1
 - **PostgreSQL 쪽 컬럼 순서는 정렬 여백이 없게 둔다.** 8바이트 4개(ts · value · scan_seq · ingested_at) → 4바이트 2개 → 2바이트 1개 순이면 행 안 여백이 0이다. 선언 순서대로(ts · device_id · tag_id · value …) 두면 quality 뒤에 6바이트 여백이 생겨 저장 용량 축이 PostgreSQL에 불리하게 부풀린다 — 동형은 논리 스키마의 동일이지 선언 순서의 동일이 아니다.
@@ -70,7 +74,7 @@ CREATE TABLE plc_tag_raw_control
     device_id   integer          NOT NULL,
     tag_id      integer          NOT NULL,
     quality     smallint         NOT NULL
-) PARTITION BY RANGE (ts);                       -- 일자 파티션 · 경계 Asia/Seoul 자정 · pg_partman 관리
+) PARTITION BY RANGE (ts);                       -- 일자 파티션 · 경계 UTC 자정(ADR-27) · pg_partman 관리
 
 CREATE INDEX plc_tag_raw_control_ts_brin
     ON plc_tag_raw_control USING brin (ts);       -- 인덱스 변형 I1(기본)
@@ -80,7 +84,7 @@ CREATE INDEX plc_tag_raw_control_ts_brin
 ```
 
 - **PK · UNIQUE · FK를 두지 않는다.** tag_raw는 기본 키 유일성 · 참조 검사를 하지 않는다. 대조군에만 두면 삽입 처리량 · 인덱스 크기 축이 두 엔진의 차가 아니라 제약 비용의 차를 잰다 — 멱등을 유일 제약으로 풀지 않는 이유와 같다(§삽입 실패 의미론).
-- **파티션 경계는 tag_raw의 toYYYYMMDD(ts)와 같은 KST 자정이다.** DB 기본 timezone이 Asia/Seoul이라 pg_partman이 같은 경계로 만든다([02_postgresql_constraints.md](./02_postgresql_constraints.md)). 경계가 다르면 보존 · 쿼리 창의 경계 행이 한쪽에만 있다.
+- **파티션 경계는 tag_raw의 toYYYYMMDD(ts)와 같은 UTC 자정이다(ADR-27).** DB 기본 timezone이 UTC라 pg_partman이 같은 경계로 만든다(옛 KST 경계 볼륨은 순번 009가 다시 세운다 · [09_migrations_seed.md](./09_migrations_seed.md) §DB 시간대 전환 · [02_postgresql_constraints.md](./02_postgresql_constraints.md)). 경계가 다르면 보존 · 쿼리 창의 경계 행이 한쪽에만 있다.
 - 보존은 tag_raw와 같은 기간이다 — 정본 [08_retention_lifecycle.md](./08_retention_lifecycle.md) §대조군 보존 정합.
 
 ## 인덱스 변형
@@ -272,7 +276,7 @@ SELECT count(*) FROM plc_tag_raw_control WHERE value > $v;
 ③ 정상 상태 창       창 앞 캡처 → 창 유지 → 창 뒤 캡처(히스토그램 · 계수기 · pg_stat_wal · part_log)
 ④ 창 판독            버킷 차 분위수 · 증가율 · 달성 판정
 ⑤ 다음 계단          판정 점을 지난 뒤 한 계단 더 가고 멈춘다(Breakpoint 끝 규칙과 같은 모양 · 05_load_scenarios §시나리오 조정값)
-⑥ 사후 대조          KST 일 단위 구간 count 대조 — 어긋난 구간의 계단은 무효
+⑥ 사후 대조          UTC 일(파티션 경계) 단위 구간 count 대조 — 어긋난 구간의 계단은 무효
 ```
 
 - **⑥이 실패하면 그 계단의 PostgreSQL 수치는 무효다.** COPY 타임아웃 뒤 서버 커밋이 행을 남기면 실패로 세면서 행은 있는 상태가 된다([../06_pipeline/04_routing.md](../06_pipeline/04_routing.md)) — 두 싱크의 행 집합이 다른 계단의 시간 비교는 같은 배치의 비교가 아니다.
@@ -365,6 +369,77 @@ EXP-01~05는 대조군 동일 쿼리 5종의 예약 대역이다([../11_glossary
 
 - 검산: EXP = **5** · 쿼리와 1:1
 - **비 쿼리 축은 단계마다 한 번 잰다.** 쿼리와 무관하게 테이블 상태의 값이라 다섯 EXP가 같은 단계의 같은 값을 공유한다 — **W6 판정 — 비 쿼리 축은 격자 단계 기록 하나에 싣고 EXP-01~05가 그 기록을 공유한다**(기계 판독 블록의 axes · [../10_observability/04_experiment_protocol.md](../10_observability/04_experiment_protocol.md)). 오른쪽 열은 해석에서 주로 짝짓는 축이다.
+
+## 실행 수명 객체
+
+EXP-PERF 화면의 성능 비교 라이브 실행(type perf)이 격자의 앞부분을 다시 채울 자리다. 실행 단계 · 취소 · 채우기 규칙의 정본은 [../06_pipeline/10_datagen_inject.md](../06_pipeline/10_datagen_inject.md) §라이브 실행 — perf · flow이고, 이 절은 **객체 모양 · 수명 · 쿼리 재사용 규칙**을 고정한다.
+
+**A형 — 라이브 실행의 쿼리 시간은 이 문서의 측정 기록이 아니다.** 통념은 같은 쿼리 · 같은 분포면 라이브 값이 §결과의 칸을 채운다는 것이다. 부정 — 라이브 실행은 api를 거쳐(드라이버 · 풀 · 이벤트 루프 포함) 웜 3회만 재고, 4요소 · 실험 3회 중앙값 · 편차 판정 · 콜드가 없다. 격자 기록은 호스트 CLI로 앱을 거치지 않고 쟀다(기록 048 조건). 진짜 축은 **재는 경로와 기록 규칙**이다. 대체 경로 — 라이브 결과는 "라이브 실행 — 앱 경유 · 시연값 · 기록 정본 아님" 표지를 달고 docs/measurements 기록을 만들지 않으며, 역전 구간 · 비교 축의 정본은 §결과(기록 048~053)만이다.
+
+| 저장소 | 객체 | 동형 기준 | 인덱스 | 수명 |
+|------|------|------|------|------|
+| ClickHouse | plc.run_perf_raw | tag_raw(ClickHouse 원시 테이블)와 **컬럼 · 엔진 · 정렬 키 · 파티션 · 코덱 동형** — TTL 절만 뺀다 | 희소 기본 인덱스(정렬 키) — tag_raw와 같다 | 실행 시작(prepare) 때 생성 · **종결(완료 · 중단 · 실패) 때 반드시 DROP** · api 부팅 때 남은 것 DROP |
+| PostgreSQL | run_perf_raw | plc_tag_raw_control과 **컬럼 · 컬럼 순서 · 일 파티션 경계 동형** — 파티션은 실행이 덮는 일(1~2개)만 prepare가 만든다(pg_partman 등록 없음) | **I2 변형만** — BRIN(ts) + btree(device_id, tag_id, ts) | 상동 |
+
+- 검산: 객체 = **2** · 저장소마다 1
+- **PostgreSQL 쪽 생성 · 삭제는 함수 둘로만 한다(리드 판정 2026-09-28).** 런타임 계정 app_rw는 DDL 권한이 없다(001 · 12_security) — 마이그레이션 010이 app_owner 소유 SECURITY DEFINER 함수 run_perf_create(p_from, p_to)(부모 · 덮는 UTC 일 파티션 · I2 인덱스 생성 · 규모를 올릴 때 다시 불러 파티션 추가 · app_rw에 SELECT · INSERT · MAINTAIN 부여)와 run_perf_drop()(DROP IF EXISTS)을 만들고 EXECUTE만 app_rw에 준다. 채우기 · ANALYZE · 쿼리 · 취소(같은 역할의 pg_cancel_backend)는 app_rw로 한다 — api에 소유자 비밀번호를 주면 런타임이 모든 업무 테이블의 DDL을 얻는다. ClickHouse는 api 계정의 DDL 권한 그대로다.
+- **고정 기준 테이블 수에 세지 않는다.** 수명이 실행 하나이고 실행 밖에는 존재하지 않는다 — 업무 · 대조군 부모 테이블 수(루트 README 고정 기준)와 ClickHouse 객체 수는 이 둘을 더하지 않는다. 스키마 문서(01_postgresql_schema · 03_clickhouse_schema)는 이 절을 가리키는 포인터만 둔다.
+- **운영 테이블을 건드리지 않는다.** tag_raw · plc_tag_raw_control에 쓰지도 지우지도 않는다 — 라이브 실행이 격자 대조군을 채우면 SW-09 · 모드 D의 구간 count 대조(REQ-NFR-18)가 실행 행으로 어긋난다.
+- **I2만 두는 이유 — 격자 053 구조 판정의 기준 변형이 I2다.** 역전 구간은 전부 I2 대비로 정했고(§쿼리별 역전 구간), I1 대비는 전 범위 ClickHouse 우세라 버튼 실행이 새로 보일 것이 없다. 두 변형을 다 재면 I2 빌드가 실행마다 한 번 더 들어 10^8에서 btree 약 3 GB(§대조군 용량 축)를 두 번 쓴다.
+- **TTL을 빼는 이유** — 실행 데이터의 ts는 실행 시작 시각까지 과거 약 2.8시간(10^8) 안이라 TTL이 지울 행은 없지만, TTL 절이 있으면 머지가 TTL 평가를 더해 채우기 직후 파트 상태가 tag_raw 격자와 달라질 여지가 생긴다. 수명은 DROP이 정한다.
+- **이름이 하나로 고정된 것은 동시 1의 결과다(B형).** 결론 — 실행마다 접미를 붙이지 않는다. 반대 시나리오 — runId 접미를 붙이면 api 크래시 뒤 부팅 정리가 지울 이름의 목록을 따로 기억해야 하고, 그 목록이 메모리뿐이라 크래시와 함께 사라져 고아 테이블이 디스크를 계속 쓴다. 파생 지침 — 동시 실행을 허용하는 변경은 이 이름 규칙과 부팅 정리를 같은 변경 단위에서 다시 판정한다.
+
+아래는 객체 DDL 계약이다(설계 계약 · 구현 코드 아님 · 순번 마이그레이션이 아니라 실행이 만든다).
+
+```sql
+-- ClickHouse — tag_raw DDL의 컬럼 · 코덱 · ENGINE · PARTITION BY · ORDER BY · SETTINGS 그대로, TTL 절 없음
+CREATE TABLE plc.run_perf_raw ( /* tag_raw와 같은 컬럼 7 */ )
+ENGINE = MergeTree PARTITION BY toYYYYMMDD(ts) ORDER BY (device_id, tag_id, ts);
+
+-- PostgreSQL — 대조군과 같은 컬럼 순서 · 일 파티션 · I2
+CREATE TABLE run_perf_raw (LIKE plc_tag_raw_control INCLUDING DEFAULTS) PARTITION BY RANGE (ts);
+-- 실행이 덮는 일마다 CREATE TABLE run_perf_raw_pYYYYMMDD PARTITION OF run_perf_raw FOR VALUES FROM (…) TO (…);
+CREATE INDEX ON run_perf_raw USING brin (ts);
+CREATE INDEX ON run_perf_raw (device_id, tag_id, ts);
+
+-- 종결 · 부팅 정리
+DROP TABLE IF EXISTS plc.run_perf_raw;   -- ClickHouse
+DROP TABLE IF EXISTS run_perf_raw;       -- PostgreSQL(파티션 함께)
+```
+
+- **PostgreSQL 일 파티션 경계는 대조군과 같은 경계식을 쓴다** — 경계가 다르면 Q3(1일 창)의 파티션 가지치기가 격자와 달라진다. 경계식 · 시간대의 정본은 [01_postgresql_schema.md](./01_postgresql_schema.md) · [02_postgresql_constraints.md](./02_postgresql_constraints.md)다.
+- **btree는 채우기 전에 만든다.** 격자는 I1 쿼리 뒤 I2를 지었지만(기록 048 ⑥) 라이브 실행은 I2만 재므로 규모를 올릴 때마다 인덱스를 다시 지을 이유가 없다 — 채우기 시간(fillMs.pg)에 btree 유지 비용이 들어간다는 점이 격자 적재 계측과 다르다.
+
+### 라이브 실행의 쿼리 재사용
+
+| 규칙 | 계약 | 어기면 |
+|------|------|------|
+| 쿼리 | §동일 쿼리 5종 **그대로** — 같은 SQL(테이블 이름만 run_perf_raw) · 같은 매개변수 규칙({device} · {tag} = (device_id, tag_id) 사전순 첫 쌍 · {end} = 그 규모의 데이터 끝 · {v} = 첫 규모 채우기 직후 quantileExact(0.5)(value)로 한 번 정해 고정) | 쿼리를 화면용으로 줄이면 라이브 결과가 §결과의 어느 칸과도 대응하지 않는다 |
+| Q5x 제외 | 조건 없는 count(보조 관찰 Q5x)는 돌리지 않는다 | ClickHouse가 파트 메타데이터로 답해 "전체 스캔 1 ms"로 읽힌다(§동일 쿼리 5종 A형) |
+| 캐시 | **웜만** — 쿼리 · 저장소마다 워밍업 1회 버림 + 3회 | 버튼 실행에서 콜드(컨테이너 재기동)를 만들면 api · 운영 경로 전체가 끊긴다 |
+| 결과 | 3회 값 · 중앙값 · 빠른 쪽 · 배수(PG ÷ CH) · 결과 행 수 일치(resultMatch) | 결과가 다른 두 쿼리의 속도를 비교하게 된다 |
+| 격자와의 관계 | 곡선에 라이브 계열로 따로 그린다(다른 마커 · 범례 "라이브 실행(시연값)") · 역전 음영은 053 구조 판정만 | 라이브 점이 기록 점과 한 계열이 되면 시연값이 정본 곡선을 흔든다 |
+
+- 검산: 규칙 = **5**
+- 데이터 분포(태그 10,000 = 설비 50 × 태그 200 · 1 Hz · 기간 = 행 수 ÷ 10,000초 · quality 9)는 §역전 지점 탐색 설계의 격자 구성과 같다. 값은 결정적 정수 산술 식이라 격자의 신호 프로파일과 압축이 다르다 — 라이브 storageBytes는 §결과 비교 축 6과 겹쳐 읽지 않는다.
+
+두 저장소가 **같은 식**으로 만드는 생성 식이다(ClickHouse numbers · PostgreSQL generate_series가 n을 준다 · 채우기 기전 정본 [../06_pipeline/10_datagen_inject.md](../06_pipeline/10_datagen_inject.md) §성능 비교 실행 — perf).
+
+```plain
+n          행 번호 — 0부터 · 규모 k의 증가분은 k = 5면 0 ~ 10^5 − 1 · k > 5면 10^(k−1) ~ 10^k − 1
+sec        n div 10000
+ts         S + sec초 — 규모 k의 증가분 구간은 k = 5면 [S, S + 10초) · k > 5면 [S + 10^(k−1) ÷ 10^4초, S + 10^k ÷ 10^4초)
+idx        n mod 10000
+device_id  idx div 200 + 1     (1~50)
+tag_id     idx + 1             (1~10000)
+value      ((tag_id × 7 + sec × 13) mod 1000) ÷ 10
+quality    9
+삽입 순서   ts 오름차순(ORDER BY n)
+```
+
+- **ts 오름차순 삽입이 BRIN · 파트 모양을 격자와 맞춘다.** 삽입 순서가 ts와 어긋나면 PostgreSQL 힙의 ts 상관이 무너져 BRIN이 블록 범위를 좁히지 못한다(1차 기록 039의 붕괴와 같은 원인).
+- **정수 산술만 쓴다** — 두 엔진의 정수 mod와 Float64 나눗셈 한 번은 같은 비트를 낸다 · 엔진별 수학 함수(sin 등)는 마지막 비트가 달라 resultMatch · avg 대조가 흔들린다.
+- **PostgreSQL 쪽은 실행 수명 동안 전용 연결 1(풀 밖)로 채우고 잰다** — 취소가 그 연결의 pid를 겨눈다(기전 정본 06_pipeline/10 §취소 · 정리).
 
 ## 역방향 대조 — 업무 워크로드
 
@@ -691,4 +766,5 @@ EXP-41의 index_granularity 256 변형을 어디에 둘지의 판정이다. **in
 - [../04_architecture/04_storage_split.md](../04_architecture/04_storage_split.md) — #9 주장(역방향 검증 대상)
 - [../10_observability/04_experiment_protocol.md](../10_observability/04_experiment_protocol.md) — 구조 판정 · 기계 판독 블록
 - [../10_observability/05_load_scenarios.md](../10_observability/05_load_scenarios.md) — EXP-45 계단 · 판정 창
+- [../06_pipeline/10_datagen_inject.md](../06_pipeline/10_datagen_inject.md) — 라이브 실행 perf의 채우기 · 단계 · 취소
 - [../04_architecture/09_decision_records.md](../04_architecture/09_decision_records.md) — ADR-17

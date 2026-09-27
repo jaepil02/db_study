@@ -2,6 +2,8 @@
 
 > **대상**: db_study의 동작 계약 — 전역 규칙 · 도메인별 요구사항 · 비기능 · 인수 기준 · 추적성 · 공식 참조
 > **작성일**: 2026-09-23
+> **개정일**: 2026-09-28 — DB 시각 UTC(ADR-27) 근거 등재 반영 — 공식 참조 등재 70 → **79** · 확인 7 → **16** · 미확인 63 불변
+> **개정일**: 2026-09-28 — 라이브 실행 제어 신설(사용자 요구 2026-09-28) — REQ 229 → **233**(GEN 15 → **19** · REQ-GEN-16~19) · AC 45 → **46**(AC-46 · 원천 ④ 시연 기능) · 추적성 7축 수치 재동기(기능 93 · 요구사항 233 · 화면 12 · API 문서 10 · 저장 객체 28 · AC 46 — 정본 15_traceability)
 > **개정일**: 2026-09-26 — W1 검수 반영 — 공식 참조 확인일 확인 8 → **7** · 미확인 62 → **63**(ClickHouse 문서 행은 부분 확인 — 미확인으로 센다 · 정본 16)
 > **개정일**: 2026-09-26 — 공식 참조 확인일 확인 7 → **8** · 미확인 63 → **62**(ClickHouse 문서 행 · 정본 16)
 > **개정일**: 2026-09-26 — 목적 적합성 실증 W1 — 고정 기준 추적성 저장 객체 24 → **27**(ClickHouse 업무 대조 계측물 3 — 기능 해당 없음 명시 · 정본 15_traceability)
@@ -31,7 +33,7 @@
 | [11_work_orders.md](./11_work_orders.md) | REQ-WRK | architecture §6 | W2 |
 | [12_metrics.md](./12_metrics.md) | REQ-OBS | architecture §14 · tech_stack §9 | W2 |
 | [13_nonfunctional.md](./13_nonfunctional.md) | REQ-NFR(지연 예산 · 처리량 · 무손실) + REQ-TEC(로컬 실행 · 마이그레이션 · 버전 고정). 성능 목표치는 3계층 미확인으로 등재 | architecture §15 · §16 · data_flow §15 | W2 |
-| [14_acceptance_criteria.md](./14_acceptance_criteria.md) | **AC-NN 채번 정본** — 흐름 검증 체크리스트 · 단계별 합격 판정 · 학습 목표 산출물 | data_flow §17 · implementation_plan §5 | W2 |
+| [14_acceptance_criteria.md](./14_acceptance_criteria.md) | **AC-NN 채번 정본** — 흐름 검증 체크리스트 · 단계별 합격 판정 · 학습 목표 산출물 · 시연 기능 판정 | data_flow §17 · implementation_plan §5 | W2 |
 | [15_traceability.md](./15_traceability.md) | 기능 ↔ REQ ↔ 흐름 ↔ 화면 ↔ API ↔ 테이블 전수 매핑 · 미매핑 0 · 유령 0 | 신설 | W7(리드) |
 | [16_official_references.md](./16_official_references.md) | 외부 URL 유일 등재처 — 공식 문서 · 릴리스 노트 | 신설 | W7(리드) |
 
@@ -43,11 +45,11 @@
 
 | 항목 | 기준 |
 |------|------|
-| 요구사항 ID | REQ-{도메인}-NN · 횡단 접두 GLB(전역) · NFR(비기능) · TEC(기술운영). 총수 **229** — GLB 24 · AUT 17 · MST 15 · COL 16 · SIM 12 · GEN 15 · ING 18 · TSQ 17 · RLT 18 · ALM 20 · WRK 12 · OBS 12 · NFR 18 · TEC 15. 세는 자리는 각 파일의 요구사항 표 |
-| 인수 기준 | **45** — AC-01~45(흐름 검증 13 + 단계 판정 25 + 학습 목표 산출 7) · 채번 정본 [14_acceptance_criteria.md](./14_acceptance_criteria.md) |
+| 요구사항 ID | REQ-{도메인}-NN · 횡단 접두 GLB(전역) · NFR(비기능) · TEC(기술운영). 총수 **233** — GLB 24 · AUT 17 · MST 15 · COL 16 · SIM 12 · GEN 19 · ING 18 · TSQ 17 · RLT 18 · ALM 20 · WRK 12 · OBS 12 · NFR 18 · TEC 15. 세는 자리는 각 파일의 요구사항 표 |
+| 인수 기준 | **46** — AC-01~46(흐름 검증 13 + 단계 판정 25 + 학습 목표 산출 7 + 시연 기능 1) · 채번 정본 [14_acceptance_criteria.md](./14_acceptance_criteria.md) |
 | 성능 목표 | 실측 전 수치는 **미확인 — 확정 전 임의 값 고정 금지.** 원본의 목표치는 "원본 목표(4 vCPU 가정)"로 표기하고 로컬 첫 실측을 기준선으로 다시 잡는다 |
-| 추적성 | 대응이 없는 칸은 비우지 않고 닫힌 어휘 **4**(해당 없음 · 내부 모듈 · 표면 없음 · 화면 없음(API 전용))로 적는다. 7축(기능 91 · 요구사항 229 · 흐름 10 · 화면 10 · API 문서 9 · 저장 객체 27 · AC 45) 미매핑 0 · 유령 0 — 정본 [15_traceability.md](./15_traceability.md) |
-| 공식 참조 | 등재 **70** · 확인일 확인 7 · 미확인 63(부분 확인 1행 포함 · 착수 체크리스트 7번 · 단계 착수 때 대조) — 정본 [16_official_references.md](./16_official_references.md) |
+| 추적성 | 대응이 없는 칸은 비우지 않고 닫힌 어휘 **4**(해당 없음 · 내부 모듈 · 표면 없음 · 화면 없음(API 전용))로 적는다. 7축(기능 93 · 요구사항 233 · 흐름 10 · 화면 12 · API 문서 10 · 저장 객체 28 · AC 46) 미매핑 0 · 유령 0 — 정본 [15_traceability.md](./15_traceability.md) |
+| 공식 참조 | 등재 **79** · 확인일 확인 16 · 미확인 63(부분 확인 1행 포함 · 착수 체크리스트 7번 · 단계 착수 때 대조) — 정본 [16_official_references.md](./16_official_references.md) |
 
 ## 관련 문서
 

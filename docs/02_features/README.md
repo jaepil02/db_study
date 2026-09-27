@@ -2,6 +2,7 @@
 
 > **대상**: db_study 11도메인의 기능 목록 · 권한 매트릭스 · Redis 역할 스위치 매트릭스
 > **작성일**: 2026-09-23
+> **개정일**: 2026-09-28 — 라이브 실행 제어 신설(사용자 요구 2026-09-28) — **GEN-11 성능 비교 라이브 실행 · GEN-12 흐름 시연 실행** — 기능 ID 91 → **93**(GEN 10 → **12**) · 05 행에 라이브 실행 제어
 > **개정일**: 2026-09-27 — SW-12 BIZ_WRITE_PATH 신설 반영(D-04 부분 개정 · 사용자 결정 2026-09-27) — 역할 스위치 11 → **12종** · 구현 선택 1 → **2**
 > **원천**: [../README.md](../README.md)(도메인 11 · 스위치 12) · [../01_overview/04_domain_map.md](../01_overview/04_domain_map.md) · 원본 architecture.md §4 · §6 · §11 · 원본 data_flow.md §3~§12 · 원본 tech_stack.md §6 · §7 · 원본 implementation_plan.md §4(커밋 ff66a37)
 
@@ -17,7 +18,7 @@
 | [02_master.md](./02_master.md) | MST — 사이트 · 라인 · 설비 · Modbus 접속 설정 · 태그 마스터 CRUD · 태그 변경 이력 · 캐시 무효화 체인 | architecture §5 · §6 · §12 · data_flow §7 | W2 |
 | [03_collector.md](./03_collector.md) | COL — Modbus 폴링 · 레지스터 블록 병합 · 디코딩 · 품질 판정 · 데드밴드 · Stream 발행 · 스풀 전환 | tech_stack §6 · data_flow §3 · architecture §9 | W2 |
 | [04_plc_sim.md](./04_plc_sim.md) | SIM — Modbus TCP 서버 시뮬레이터 · 설비당 포트 · 지연·오류 주입 | tech_stack §6 · §7 · architecture §4 | W2 |
-| [05_datagen.md](./05_datagen.md) | GEN — 신호 프로파일 8종 · 주입 모드 A~D · 시드 고정 · 백필 · 부하 주입 표면 | tech_stack §7 · data_flow §11 | W2 |
+| [05_datagen.md](./05_datagen.md) | GEN — 신호 프로파일 8종 · 주입 모드 A~D · 시드 고정 · 백필 · 부하 주입 표면 · **라이브 실행 제어(성능 비교 · 흐름 시연)** | tech_stack §7 · data_flow §11 | W2 |
 | [06_ingest.md](./06_ingest.md) | ING — Stream 소비 · 배치 적재 · 멱등 · 재시도 · DLQ · XAUTOCLAIM 회수 · 최신값 갱신 · **3계층 분기 실행** · 대조군 동시 적재 | architecture §9 · data_flow §4 · docs_plan 목표 1 | W2 |
 | [07_timeseries.md](./07_timeseries.md) | TSQ — 시계열 조회 · 해상도 자동 선택 · 캐시 키 정규화 · 스탬피드 방지 · 다운샘플 · 내보내기 | architecture §10 · §11.1 · data_flow §6 | W2 |
 | [08_realtime.md](./08_realtime.md) | RLT — 최신값 조회 · WebSocket 구독 · 스로틀 병합 · 재연결 동기화 | data_flow §5 · §9 | W2 |
@@ -36,7 +37,7 @@
 | 항목 | 기준 |
 |------|------|
 | 도메인 | **11개** — 파일 번호 01~11이 AUT · MST · COL · SIM · GEN · ING · TSQ · RLT · ALM · WRK · OBS 순서와 같다 |
-| 기능 ID | **91** — AUT 7 · MST 9 · COL 9 · SIM 5 · GEN 10 · ING 13 · TSQ 9 · RLT 9 · ALM 9 · WRK 5 · OBS 6. 채번 자리는 각 도메인 파일의 기능 목록 표 · 세는 자리는 [12_permission_matrix.md](./12_permission_matrix.md) §검산 |
+| 기능 ID | **93** — AUT 7 · MST 9 · COL 9 · SIM 5 · GEN 12 · ING 13 · TSQ 9 · RLT 9 · ALM 9 · WRK 5 · OBS 6. 채번 자리는 각 도메인 파일의 기능 목록 표 · 세는 자리는 [12_permission_matrix.md](./12_permission_matrix.md) §검산 |
 | 역할 | **3** — OPERATOR · ENGINEER · ADMIN(누적 아님 · 합집합 판정) |
 | 역할 스위치 | **12종** — SW-01 REDIS_STREAM_BUFFER · SW-02 REDIS_LATEST_CACHE · SW-03 REDIS_QUERY_CACHE · SW-04 CACHE_KEY_TIME_SNAP · SW-05 CACHE_STAMPEDE_LOCK · SW-06 REDIS_PUBSUB_FANOUT · SW-07 WS_THROTTLE_MS · SW-08 INGEST_IDEMPOTENCY · SW-09 CONTROL_TABLE_ENABLED · SW-10 COLLECTOR_DEADBAND · SW-11 LATEST_VALUE_WRITER · SW-12 BIZ_WRITE_PATH. 검산: 백프레셔 1 + 캐시 4 + 팬아웃 2 + 멱등 1 + 대조군 1 + 수집 1 + 최신값 결합 1 + 업무 쓰기 경유 1 = **12**. 기본값 on 8 · off 2(SW-09 · SW-10) · 구현 선택 2(SW-11 = ingest · SW-12 = stream) |
 | 스위치 구현 제약 | 스위치는 런타임 분기가 아니라 **DI로 주입되는 구현체**다(포트 하나에 구현 둘). 모듈 초기화 시 선택하므로 **전환은 재기동이 필요하다.** 제약의 정본 [../04_architecture/02_module_boundaries.md](../04_architecture/02_module_boundaries.md) |

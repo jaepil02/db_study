@@ -1,7 +1,10 @@
 # GEN — 데이터 생성 기능 명세
 
-> **대상**: 데이터 생성(GEN · NestJS datagen 모듈) 기능 목록 · 주입 모드 4종 · 부하 주입 표면 · SIMULATED 표기 · 기능별 경계 · 실패 시 보이는 것 — 기능 ID GEN-NN 채번 정본
+> **대상**: 데이터 생성(GEN · NestJS datagen 모듈) 기능 목록 · 주입 모드 4종 · 부하 주입 표면 · **라이브 실행 제어(EXP-PERF 성능 비교 · EXP-FLOW 흐름 시연)** · SIMULATED 표기 · 기능별 경계 · 실패 시 보이는 것 — 기능 ID GEN-NN 채번 정본
 > **작성일**: 2026-09-24
+> **개정일**: 2026-09-28 — 라이브 실행 검수 반영(리드 재판정 2026-09-28) — GEN-12 업무 명령 이름 토글 짝(운영 설비 이름을 바꿨다 되돌림) → **시연 전용 설비 DEMO-FLOW-DEV에만 새 이름 명령**(prepare가 없으면 사이트 DEMO-FLOW · 라인 DEMO-FLOW-L · 설비를 명령으로 만든다 · 되돌림 없음 · 운영 행 불변) · 도메인 간선 MST · WRK → **MST**(GEN-12 명령은 마스터 kind만) — 기능 수 불변
+> **개정일**: 2026-09-28 — 리드 정정(통합 확인) — 흐름 시연 업무 명령 "deviceName 현재 이름 그대로(순 변경 없음)" → **이름 토글 짝**(같은 설비에 "원래 이름 (시연)" → 원래 이름 · 중단이면 되돌림 1건 뒤 종결) — 기존 쓰기 서비스는 변경이 없으면 감사 · 체인을 건너뛰어(통합 확인 2026-09-28) 시연에서 무효화가 보이지 않았다
+> **개정일**: 2026-09-28 — 라이브 실행 제어 신설(사용자 요구 2026-09-28 "시작 · 중단 · 완료 표시 · 소요 시간" · 리드 판정 10) — **GEN-11 성능 비교 라이브 실행 · GEN-12 흐름 시연 실행** 신설(S5 · 표면 07_api/09_datagen #2~#5 · 실행 주체 RunControlModule) — GEN 기능 10 → **12** · 단계 집계 S5 3 → **5** · 표면 있음 1 → **3** · 에러 코드를 내는 기능 1 → **3**(datagen.run_in_progress/409) · 소유 테이블 없음 서술에 실행 수명 객체 · 미확인 "생성기 실행 제어 표면" 행 갱신(모드 A~D는 여전히 표면 없음)
 > **개정일**: 2026-09-25 — S3 구현 반영 — GEN-06 모드 B 단계 S5 → **S3**(최소분 당김 · 06_pipeline/10 §모드 B 적체 검사 as-built) — 단계 집계 S5 4 → **3** · S3 **1** 신설
 > **개정일**: 2026-09-24 — S1 실측 반영(EXP-21 기록 006 · 410a146) — 미확인 "생성 처리량" 미확인 → **워커 1 약 590만 pps**(압축률은 미확인 유지)
 > **개정일**: 2026-09-24 — 최종 정밀 검수 — "표면 번호는 W5 몫" → 각 API 문서가 채번(W5 완료) · 과거 ts와 STALE 행 닫힘(실험 프로토콜 규칙으로 강제)
@@ -14,7 +17,9 @@ GEN은 **실장비가 없는 이 시스템에서 실험의 품질을 결정하�
 
 **생성기가 병목이면 측정 자체가 무의미하다.** 생성기는 수집 · 적재와 같은 CPU를 나눠 쓰므로 S1에서 단독 처리량을 먼저 재고, 모든 부하 측정에 생성기 CPU 사용률을 함께 기록한다. 생성기가 포화되지 않은 구간의 수치만 신뢰한다(원본 data_flow.md §11.1 · 원본 tech_stack.md §8).
 
-**GEN은 소유 테이블이 없다.** 생성 벡터는 메모리 상태이고 시드는 실행 인자다. 모드 D가 tag_raw에 직접 쓰지만 소유하지 않는다([../05_data_stores/README.md](../05_data_stores/README.md)).
+**GEN은 소유 테이블이 없다.** 생성 벡터는 메모리 상태이고 시드는 실행 인자다. 모드 D가 tag_raw에 직접 쓰지만 소유하지 않는다([../05_data_stores/README.md](../05_data_stores/README.md)). 라이브 성능 비교(GEN-11)가 만드는 run_perf_raw 둘(ClickHouse · PostgreSQL)은 **실행 하나 동안만 존재하는 실행 수명 객체**라 테이블 수에 세지 않는다 — 실행 종결 때 반드시 DROP하고 api 부팅 때 남은 것을 DROP한다([../05_data_stores/10_olap_vs_rdb_control.md](../05_data_stores/10_olap_vs_rdb_control.md) §실행 수명 객체).
+
+**라이브 실행(GEN-11 · 12)은 측정이 아니라 시연이다**(사용자 요구 2026-09-28). 실증 화면 EXP-PERF · EXP-FLOW의 실행 패널에서 시작 · 중단하고 진행 단계 · 완료 · 총 소요 시간을 보인다. 앱을 거쳐 재므로 결과에 "라이브 실행 — 앱 경유 · 시연값 · 기록 정본 아님" 표지가 붙고 측정 기록을 만들지 않는다 — 측정 기록을 만드는 실험은 여전히 모드 A~D의 실행 인자로만 돈다.
 
 ## 기능 목록
 
@@ -32,9 +37,12 @@ GEN은 **실장비가 없는 이 시스템에서 실험의 품질을 결정하�
 | **GEN-08** | 모드 D 백필 | ClickHouse에 직접 삽입해 과거 구간을 채운다(시간 압축). 절차는 MV 분리 → 원시 대량 삽입 → 롤업 직접 채우기(INSERT SELECT) → MV 재연결 → 원시 count 대 롤업 countMerge 대조 순이다. MV를 붙인 채 백필하면 삽입이 느려지고 중간 실패 시 롤업이 부분만 채워져 정합 판단이 불가능하다(원본 data_flow.md §10.3). **ING를 우회하므로 멱등 토큰 · 대조군 동시 적재를 타지 않는다** | S5 | F-08 · F-09 | 해당 없음 | 표면 없음 — 실행 인자 | ClickHouse tag_raw · tag_1m · tag_1h · tag_1d(쓰기 · 소유 아님) |
 | **GEN-09** | 생성기 단독 처리량 실측 | 수집 경로 없이 생성 + MessagePack 인코딩 처리량을 워커 수별로 잰다. 합격은 **M 티어 초당 포인트의 3배**(원본 목표 30,000 pps)이며 목적은 판정보다 **기준선 확보**다. 미달이면 APP_ROLE=datagen 별도 컨테이너 또는 Python 생성기로 간다(원본 tech_stack.md §3.4) | S1 | F-09 | 해당 없음 | 표면 없음 — 실행 인자 | 없음 |
 | **GEN-10** | 대조군 동일 행 백필 | 모드 D로 채운 구간은 SW-09 동시 적재가 적용되지 않으므로, 같은 시드 · 같은 구간 · 같은 태그 집합으로 PostgreSQL 대조군 plc_tag_raw_control에도 **같은 행 집합**을 채운다. 행 집합이 다르면 두 저장소의 쿼리 결과 자체를 대조할 수 없다(D-05). S5의 용량 단계별 대조 쿼리가 이 기능 위에서 돈다(D-12). 절차의 정본은 [../06_pipeline/10_datagen_inject.md](../06_pipeline/10_datagen_inject.md) | S5 | F-09 | SW-09 | 표면 없음 — 실행 인자 | PostgreSQL plc_tag_raw_control(쓰기 · 소유 아님) |
+| **GEN-11** | 성능 비교 라이브 실행 | EXP-PERF에서 규모 10^5 ~ 10^maxExponent(maxExponent ∈ 5~8)의 격자 분포 데이터를 실행 수명 객체 run_perf_raw 둘(tag_raw · plc_tag_raw_control과 동형 · PostgreSQL 인덱스 I2 변형만)에 **서버 측 생성**(INSERT … SELECT)으로 이어 채우고, 규모마다 동일 쿼리 5종을 두 저장소에서 웜 3회 재어 중앙값 · 빠른 쪽 · 배수 · 결과 일치를 낸다. 끝 · 중단 · 실패 모두 정리 단계가 객체를 DROP한다. 결과는 시연값 — 곡선의 기록 계열과 섞지 않는다 | S5 | F-09 | 해당 없음 | 07_api/09_datagen | ClickHouse plc.run_perf_raw · PostgreSQL run_perf_raw(실행 수명 객체 — 테이블 수에 세지 않는다) |
+| **GEN-12** | 흐름 시연 실행 | EXP-FLOW에서 durationSec 동안 api 안의 생성기가 stream:plc:raw에 **엔트리 계약 v1 그대로** pps만큼 발행하고(모드 B와 같은 적체 검사 · 위험 단계면 멈췄다 잇는다) 1 ÷ bizPerSec초마다 BizWritePort로 업무 명령 master.device.patch를 **시연 전용 설비 DEMO-FLOW-DEV에만**(비활성 · 태그 없음 · 새 이름 · 되돌림 없음 — 운영 행은 바뀌지 않는다 · prepare가 없으면 사이트 · 라인 · 설비를 명령으로 만든다) 하나 보낸 뒤, grp:ingest 적체가 시작 전 수준으로 돌아올 때까지(상한 30초) 기다린다. 흐름도는 기존 flow 프레임으로 움직인다 — 흐름 계약은 바꾸지 않는다 | S5 | F-02 · F-05 · F-09 | 해당 없음 | 07_api/09_datagen | Redis stream:plc:raw · stream:biz:cmd(BizWritePort 경유 — 시연 전용 행(site · production_line · device DEMO-FLOW 계열) · 원장 쓰기는 명령 워커) |
 
-- 검산: GEN-01~10 = **10**. 단계별(첫 도입 기준) S1 5(GEN-01 · 02 · 03 · 04 · 09) + S2 1(GEN-05) + S3 1(GEN-06) + S5 3(GEN-07 · 08 · 10) = **10**
-- 표면 있음 1(GEN-07) + 표면 없음 9 = **10**. 생성기의 실행 · 설정은 실행 인자와 환경변수이며 원본에 실행 제어 API가 없다(§미확인 · 미설계 등재).
+- 검산: GEN-01~12 = **12**. 단계별(첫 도입 기준) S1 5(GEN-01 · 02 · 03 · 04 · 09) + S2 1(GEN-05) + S3 1(GEN-06) + S5 5(GEN-07 · 08 · 10 · 11 · 12) = **12**
+- 표면 있음 3(GEN-07 · 11 · 12) + 표면 없음 9 = **12**. 모드 A~D 생성기의 실행 · 설정은 실행 인자와 환경변수이며 원본에 실행 제어 API가 없다(§미확인 · 미설계 등재). GEN-11 · 12의 표면(#2~#5)은 모드 A~D의 원격 손잡이가 아니라 시연 실행의 시작 · 관찰 · 중단이다.
+- **두 실행은 합쳐 한 번에 하나다** — 동시에 돌면 서로의 부하를 잰다(REQ-GEN-16 · datagen.run_in_progress/409). 실행 주체는 api 프로세스(APP_ROLE api · all)의 RunControlModule이고 실행 상태는 인스턴스 메모리다 — 재기동이면 실행은 사라지고 실패가 아니라 기록 없음이다.
 
 ## 주입 모드
 
@@ -69,6 +77,8 @@ GEN은 **실장비가 없는 이 시스템에서 실험의 품질을 결정하�
 | GEN-08 | 롤업 · MV를 정의하지 않는다 — 분리 · 재연결 절차만 실행한다 | [../05_data_stores/04_clickhouse_rollup.md](../05_data_stores/04_clickhouse_rollup.md) |
 | GEN-08 · 10 | 저장 객체를 소유하지 않는다 | ING(tag_raw · 대조군 — 잠정) |
 | GEN-09 | 시스템 처리량을 판정하지 않는다 — 생성기 자신의 여유만 판정한다 | 부하 시나리오 [../10_observability/05_load_scenarios.md](../10_observability/05_load_scenarios.md) |
+| GEN-11 | **측정 기록을 만들지 않는다** · 운영 테이블(tag_raw · plc_tag_raw_control)을 건드리지 않는다 · 역전 음영을 판정하지 않는다 | 측정 기록 EXP-01~05 · 구조 판정 [../05_data_stores/10_olap_vs_rdb_control.md](../05_data_stores/10_olap_vs_rdb_control.md) |
+| GEN-12 | Stream을 소비하지 않는다 · 업무 행을 직접 쓰지 않는다(명령만 싣는다) · **운영 마스터 행(시드 · 사람이 만든 행)에 명령을 보내지 않는다**(시연 전용 행만) · flow 프레임 계약을 바꾸지 않는다 | ING · 명령 워커([../06_pipeline/07_business_crud.md](../06_pipeline/07_business_crud.md)) · RLT |
 
 ## 의존 도메인
 
@@ -77,12 +87,13 @@ GEN은 **실장비가 없는 이 시스템에서 실험의 품질을 결정하�
 | SIM | GEN → SIM | 시뮬레이션 결합 | 모드 A Buffer 갱신. 같은 프로세스여야 한다([04_plc_sim.md](./04_plc_sim.md)) |
 | ING | GEN → ING | Stream 경계 | 모드 B · C. 모드 D는 ING를 우회한다 |
 | COL | 간접 | 해당 없음 | 모드 A의 표지를 Collector가 단다 |
-| AUT | AUT → GEN | 인가 | GEN-07에 S7 이후 인증이 걸린다. 게이트가 먼저다([12_permission_matrix.md](./12_permission_matrix.md)) |
+| AUT | AUT → GEN | 인가 | GEN-07에 S7 이후 인증이 걸린다. 게이트가 먼저다. GEN-11 · 12의 시작 · 중단은 S7 ② 뒤 ENGINEER · ADMIN([12_permission_matrix.md](./12_permission_matrix.md)) |
+| MST | GEN → 명령 경로 | 업무 명령 포트 | GEN-12가 BizWritePort로 시연 전용 행에 한정한 마스터 명령을 싣는다 — 적용 · 감사 · 무효화는 명령 워커가 한다(HTTP가 아니라 프로세스 안 호출 · actor null · MST-02 ADMIN 단일 주체의 명시 예외 — [12_permission_matrix.md](./12_permission_matrix.md)) |
 | OBS | GEN → OBS | 계측 | 생성 카운트(무손실 판정의 분자) · 생성기 CPU 사용률 |
 
 ## 실패 시 보이는 것
 
-에러 코드는 [../11_glossary/02_error_codes.md](../11_glossary/02_error_codes.md)의 유효 코드만 인용한다. GEN-07만 코드를 내고 나머지는 메트릭과 실험 판정으로 드러난다.
+에러 코드는 [../11_glossary/02_error_codes.md](../11_glossary/02_error_codes.md)의 유효 코드만 인용한다. 표면 있는 GEN-07 · 11 · 12만 코드를 내고 나머지는 메트릭과 실험 판정으로 드러난다. **라이브 실행의 실패는 코드가 아니라 실행 객체의 status failed와 error 필드다.**
 
 | 상황 | 드러나는 형태 | 코드 또는 지표 | 기능 |
 |------|------|------|------|
@@ -90,6 +101,9 @@ GEN은 **실장비가 없는 이 시스템에서 실험의 품질을 결정하�
 | 백프레셔 위험 단계 | 거절 — **거절 수가 측정값이다.** 재시도 루프로 덮지 않는다 | datagen.stream_full/503 | GEN-07 |
 | 요청 본문 계약 위반 | 요청 수정 | common.validation_failed/400 | GEN-07 |
 | S7 이후 인증 실패 · 한도 초과 | auth 계열 · 레이트 리밋 | auth.unauthenticated/401 · common.rate_limited/429 | GEN-07 |
+| 다른 라이브 실행이 진행 중인데 시작 | 거절 — 화면은 진행 중 실행으로 패널을 맞춘다 | datagen.run_in_progress/409 | GEN-11 · 12 |
+| 라이브 실행 단계 예외(저장소 불가 · 디스크 부족) | 정리 단계를 돈 뒤 실행 status failed · error 메시지 · 끝난 단계까지의 결과는 남는다 | 코드 없음 — status failed · gen_runs_total{status="failed"} | GEN-11 · 12 |
+| 라이브 실행 중 api 재기동 | 실행이 사라진다 — 기록 없음 · 부팅 때 실행 수명 객체 DROP | 코드 없음 — 현재 실행 null | GEN-11 · 12 |
 | 생성기 포화 | 코드 없음 — **그 구간의 수치를 버린다** | 생성기 CPU 사용률 | GEN-01 · 09 |
 | 모드 D 도중 실패 | 롤업이 부분만 채워짐 — MV 분리 상태에서 절차를 처음부터 다시 한다 | 원시 count 대 롤업 countMerge 불일치 | GEN-08 |
 | 모드 D와 대조군 행 수 불일치 | 대조 쿼리 무효 | 두 저장소 count 대조 | GEN-10 |
@@ -111,7 +125,7 @@ GEN은 **실장비가 없는 이 시스템에서 실험의 품질을 결정하�
 | 항목 | 원본에서 확인되는 것 | 상태 | 확정 자리 |
 |------|------|------|------|
 | 모드 B의 스트림 길이 검사 | Collector는 그룹 적체(lag + pending)를 파이프라인으로 확인하고(ADR-21 — XLEN이 아니다) bulk 표면도 같은 임계에서 거절한다(원본 architecture.md §9.3) · MAXLEN은 "검사를 우회한 발행자"를 막는 최후 안전장치다 | 닫힘 — 모드 B도 XADD 전에 적체 검사 · 위험 단계면 발행 중단 · 주의 임계에서 재개(REQ-GEN-07) — [../06_pipeline/10_datagen_inject.md](../06_pipeline/10_datagen_inject.md) | [../06_pipeline/10_datagen_inject.md](../06_pipeline/10_datagen_inject.md)(W4) |
-| 생성기 실행 제어 표면 | 원본 API 표(원본 architecture.md §11)에 생성기 실행 · 정지 표면이 없다 | **근거 없음** — 07_api 목차가 "생성기 실행 제어"를 적었으나 원본에 없다. 이 문서는 표면을 만들지 않았다 | [../07_api/09_datagen.md](../07_api/09_datagen.md)(W5) · 리드 판정 |
+| 생성기 실행 제어 표면 | 원본 API 표(원본 architecture.md §11)에 생성기 실행 · 정지 표면이 없다 | 모드 A~D는 **닫힘 — 두지 않는다**(W5 판정 유지) · 시연 실행은 **사용자 요구 2026-09-28로 GEN-11 · 12 신설** — 측정 기록을 만들지 않는 시연이라 W5 판정의 실패(실험 조건이 요청 본문으로 흩어짐)와 부딪히지 않는다 | [../07_api/09_datagen.md](../07_api/09_datagen.md) §원본에 없는 표면 판정 |
 | 모드 D와 대조군의 동일 행 절차 | 대조군 쪽도 같은 행 집합이어야 한다(W1 [../01_overview/01_purpose_learning_goals.md](../01_overview/01_purpose_learning_goals.md)) | 닫힘 — §모드 D 백필과 대조군 동일 행(같은 행 벡터를 날짜 단위로 두 저장소에 차례로 쓰고 일마다 count 대조) — [../06_pipeline/10_datagen_inject.md](../06_pipeline/10_datagen_inject.md) | [../06_pipeline/10_datagen_inject.md](../06_pipeline/10_datagen_inject.md)(W4) |
 | 생성 모드의 과거 ts와 STALE | 시간 압축으로 과거 시각을 찍으면 최신값 화면이 전부 STALE이다(W1 [../11_glossary/05_units_and_time.md](../11_glossary/05_units_and_time.md)) | 닫힘 — 실시간 화면 · STALE · E2E를 읽는 실험은 현재 시각 생성만 쓴다(실험 프로토콜 §조건 분리 강제) | [../10_observability/04_experiment_protocol.md](../10_observability/04_experiment_protocol.md) |
 | 압축률 · 생성 처리량 | 원본 예상치(프로파일별 압축률 · 20 스레드 머신 미달 가능성 낮음) | 생성 처리량 **닫힘**(워커 1 약 590만 pps · 기록 006 · 410a146 · 부하 실험 · M · 스위치 기본값) · 압축률은 미확인 — 확정 전 임의 값 고정 금지 | EXP-35 · EXP-21 · [../10_observability/06_experiment_catalog.md](../10_observability/06_experiment_catalog.md) |
@@ -119,7 +133,7 @@ GEN은 **실장비가 없는 이 시스템에서 실험의 품질을 결정하�
 ## 관련 문서
 
 - [../03_requirements/06_datagen.md](../03_requirements/06_datagen.md) — REQ-GEN 동작 계약
-- [../07_api/09_datagen.md](../07_api/09_datagen.md) — 부하 주입 표면
+- [../07_api/09_datagen.md](../07_api/09_datagen.md) — 부하 주입 표면 · 라이브 실행 제어 표면
 - [../06_pipeline/10_datagen_inject.md](../06_pipeline/10_datagen_inject.md) — F-09 주입 기전
 - [../05_data_stores/04_clickhouse_rollup.md](../05_data_stores/04_clickhouse_rollup.md) — 백필 절차
 - [../05_data_stores/10_olap_vs_rdb_control.md](../05_data_stores/10_olap_vs_rdb_control.md) — 대조군 설계

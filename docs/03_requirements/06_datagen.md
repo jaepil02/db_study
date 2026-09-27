@@ -1,20 +1,23 @@
 # REQ-GEN — 데이터 생성 요구사항
 
-> **대상**: 데이터 생성(GEN · NestJS datagen 모듈)의 동작 계약 — 신호 프로파일 · SIMULATED 표지와 결측 · 시드 재현성 · 부하 티어 · 주입 모드 A~D · 부하 주입 표면 · 백필 절차 · 생성기 여유 · 대조군 동일 행 — REQ-GEN-NN 채번 정본
+> **대상**: 데이터 생성(GEN · NestJS datagen 모듈)의 동작 계약 — 신호 프로파일 · SIMULATED 표지와 결측 · 시드 재현성 · 부하 티어 · 주입 모드 A~D · 부하 주입 표면 · 백필 절차 · 생성기 여유 · 대조군 동일 행 · **라이브 실행 제어(동시 실행 하나 · 성능 실행 단계와 정리 · 흐름 실행 발행과 드레인 · 중단 · 경과 시간 · 완료 표시)** — REQ-GEN-NN 채번 정본
 > **작성일**: 2026-09-24
+> **개정일**: 2026-09-28 — 라이브 실행 검수 반영(리드 재판정 2026-09-28) — REQ-GEN-18 업무 명령 이름 토글 짝 → **시연 전용 설비 DEMO-FLOW-DEV에만 새 이름 명령**(prepare가 없으면 명령으로 만든다 · 되돌림 없음) · 검증 "실행 뒤 device 행 값 불변" → **실행 뒤 시연 전용 행 밖의 마스터 행 불변** · 위반 열 "운영 설비에 명령을 보내면 시연이 운영 마스터를 바꾼다" · REQ-GEN-17 생성 식(ts 오름차순 삽입 · 두 저장소 같은 식) · REQ-GEN-19 전용 PostgreSQL 연결 pid 취소 · 종결 규칙(정상 경로 정리 실패 → failed · 정리 중 중단 무시) — 요구 수 불변
+> **개정일**: 2026-09-28 — 리드 정정(통합 확인) — 흐름 시연 업무 명령 "deviceName 현재 이름 그대로(순 변경 없음)" → **이름 토글 짝**(같은 설비에 "원래 이름 (시연)" → 원래 이름 · 중단이면 되돌림 1건 뒤 종결) — 기존 쓰기 서비스는 변경이 없으면 감사 · 체인을 건너뛰어(통합 확인 2026-09-28) 시연에서 무효화가 보이지 않았다
+> **개정일**: 2026-09-28 — 라이브 실행 제어 신설(사용자 요구 2026-09-28 "시작 · 중단 · 완료 표시 · 소요 시간" · 리드 판정 10) — **REQ-GEN-16~19** 신설(16 동시 실행 하나 · 409 · 17 성능 실행 단계 · 정리 · 18 흐름 실행 발행 · 드레인 · 19 중단 · 경과 시간 · 완료 표시) · 기능 → REQ 대응에 GEN-11 · 12 · 에러 코드 인용 5 → **8**(datagen.run_in_progress/409 · common.not_found/404 · 라이브 실행의 common.validation_failed/400) · 코드를 내는 자리 1 → **2**(부하 주입 · 라이브 실행) — REQ-GEN 15 → **19**
 > **개정일**: 2026-09-24 — S1 실측 반영(EXP-21 기록 006 · 410a146) — 미확인 "생성기 단독 처리량" 미확인 → **워커 1 약 590만 pps**(압축률은 미확인 유지)
 > **개정일**: 2026-09-24 — 최종 정밀 검수 — 과거 ts와 STALE 행 닫힘(실험 프로토콜 규칙으로 강제)
 > **개정일**: 2026-09-24 — W7 검수 반영 — 미확인 2행 닫힘(모드 D 대조군 절차 · 부하 주입 표면 게이트 · 본문) — REQ 수 불변
 > **개정일**: 2026-09-24 — W6 실험 채번 반영 — EXP 번호 · 메트릭 이름 반영 · 이벤트 루프 p95 메트릭 이름 통일(정본 10_observability/01 · 06)
 > **개정일**: 2026-09-24 — W4 판정 반영 — REQ-GEN-07 · 09 스트림 길이 검사 → **미확인 적체 검사**(ADR-21) · 모드 B 검사 기전 W4 판정 반영 — REQ 수 불변
 > **개정일**: 2026-09-24 — W3 판정 반영 — 모드 B 검사의 판정량을 그룹 적체로 교정(ADR-21)
-> **원천**: 원본 tech_stack.md §3.4 · §7 · §8 · §10.6(커밋 ff66a37) · 원본 data_flow.md §10.2 · §10.3 · §11 · §11.1 · §11.2 · §11.3 · §12.1(커밋 ff66a37) · 원본 architecture.md §4 · §9.3 · §11 · §14 · §15 · §18(커밋 ff66a37) · 원본 implementation_plan.md §5 S1 · S5(커밋 ff66a37) · 저장소 루트 docs_plan.md 보정 #11 · D-05 · D-07 · D-12 · [../02_features/05_datagen.md](../02_features/05_datagen.md) GEN-01~10 · [../11_glossary/02_error_codes.md](../11_glossary/02_error_codes.md) datagen 네임스페이스 · [01_global_rules.md](./01_global_rules.md) REQ-GLB-10 · 17 · 18 · 21
+> **원천**: 원본 tech_stack.md §3.4 · §7 · §8 · §10.6(커밋 ff66a37) · 원본 data_flow.md §10.2 · §10.3 · §11 · §11.1 · §11.2 · §11.3 · §12.1(커밋 ff66a37) · 원본 architecture.md §4 · §9.3 · §11 · §14 · §15 · §18(커밋 ff66a37) · 원본 implementation_plan.md §5 S1 · S5(커밋 ff66a37) · 저장소 루트 docs_plan.md 보정 #11 · D-05 · D-07 · D-12 · 사용자 요구 2026-09-28(라이브 실행 제어) · [../02_features/05_datagen.md](../02_features/05_datagen.md) GEN-01~12 · [../07_api/09_datagen.md](../07_api/09_datagen.md) #2~#5 · [../11_glossary/02_error_codes.md](../11_glossary/02_error_codes.md) datagen 네임스페이스 · [01_global_rules.md](./01_global_rules.md) REQ-GLB-10 · 17 · 18 · 21
 
-이 문서는 GEN 기능 10개의 동작 계약을 고정한다. GEN은 실장비가 없는 이 시스템에서 **실험의 품질을 결정하는 도메인**이다 — 생성기가 틀리면 측정된 모든 수치가 틀리고, 생성기가 병목이면 측정 자체가 무의미하다.
+이 문서는 GEN 기능 12개의 동작 계약을 고정한다. GEN은 실장비가 없는 이 시스템에서 **실험의 품질을 결정하는 도메인**이다 — 생성기가 틀리면 측정된 모든 수치가 틀리고, 생성기가 병목이면 측정 자체가 무의미하다.
 
-**GEN의 요구는 두 종류로 갈린다.** 하나는 파이프라인에 넣는 데이터의 **정합**(표지 · 결측 · 페이로드 계약 · 적체 검사)이고, 다른 하나는 측정을 성립시키는 **재현성**(시드 · 모드 단일성 · 생성기 여유 · 대조군 동일 행)이다. 앞쪽은 파이프라인 결함을 막고, 뒤쪽은 측정 결함을 막는다.
+**GEN의 요구는 세 종류로 갈린다.** 하나는 파이프라인에 넣는 데이터의 **정합**(표지 · 결측 · 페이로드 계약 · 적체 검사)이고, 둘째는 측정을 성립시키는 **재현성**(시드 · 모드 단일성 · 생성기 여유 · 대조군 동일 행)이다. 앞쪽은 파이프라인 결함을 막고, 뒤쪽은 측정 결함을 막는다. 셋째는 **라이브 실행 제어**(REQ-GEN-16~19 · 사용자 요구 2026-09-28)다 — 측정이 아니라 시연이므로 재현성 요구를 지지 않는 대신 **시연이 측정 · 운영 데이터를 오염시키지 않는 것**(동시 실행 하나 · 실행 수명 객체 정리 · 기록 비생성)과 **사용자가 보는 진행 · 완료 · 소요 시간이 참인 것**을 요구한다.
 
-**에러 코드를 내는 자리는 부하 주입 표면(GEN-07) 하나다.** 네임스페이스는 URL의 ingest가 아니라 표면 소유 도메인인 datagen이다(docs_plan 보정 #11). 나머지 기능은 실행 인자로 돌며 실패가 메트릭과 대조 쿼리로 드러난다.
+**에러 코드를 내는 자리는 둘이다** — 부하 주입 표면(GEN-07)과 라이브 실행 표면(GEN-11 · 12 — 07_api/09_datagen #2~#5). 네임스페이스는 URL의 ingest가 아니라 표면 소유 도메인인 datagen이다(docs_plan 보정 #11). 나머지 기능은 실행 인자로 돌며 실패가 메트릭과 대조 쿼리로 드러나고, 라이브 실행의 실패도 코드가 아니라 실행 객체의 status failed로 드러난다.
 
 ## 요구사항 — 생성 · 표지 · 재현성
 
@@ -46,6 +49,19 @@
 | **REQ-GEN-14** | 모드 D로 채운 구간은 같은 시드 · 같은 구간 · 같은 태그 집합으로 PostgreSQL 대조군 plc_tag_raw_control에도 채운다. 두 저장소의 구간별 행 수는 **정확 일치**해야 대조 쿼리를 돌린다. 절차 정본 [../06_pipeline/10_datagen_inject.md](../06_pipeline/10_datagen_inject.md)(W4) | D-05 · D-12 · [../05_data_stores/10_olap_vs_rdb_control.md](../05_data_stores/10_olap_vs_rdb_control.md) | 행 집합이 다르면 두 저장소 쿼리 결과 자체를 대조할 수 없어 역전 지점이 저장소 차이가 아니라 **데이터 차이**를 가리킨다 | 구간별 count(tag_raw) = count(plc_tag_raw_control) 대조 후에만 대조 쿼리 실행 | GEN-10 | F-09 | 해당 없음 |
 | **REQ-GEN-15** | 모드 C의 인증 비용은 S7 이후에만 잰다. S5의 모드 C 수치에는 인증이 없으므로 S7 이후 수치와 같은 조건으로 비교하지 않는다 — 커밋 해시가 둘을 가른다 | D-07 · [../02_features/05_datagen.md](../02_features/05_datagen.md) 주입 모드 · REQ-AUT-16 | 두 수치를 한 표에 섞으면 인증 비용이 처리량 저하로, 또는 처리량 개선이 인증 제거로 오독된다 | 모드 C 측정 기록의 커밋 해시 · 인증 적용 여부 칸 대조 | GEN-07 | F-09 | 해당 없음 |
 
+## 요구사항 — 라이브 실행 제어
+
+표면 정본 [../07_api/09_datagen.md](../07_api/09_datagen.md) §라이브 실행 제어 · 기전 정본 [../06_pipeline/10_datagen_inject.md](../06_pipeline/10_datagen_inject.md) §라이브 실행. 결과는 전부 "라이브 실행 — 앱 경유 · 시연값 · 기록 정본 아님"이다 — 이 요구들은 수치의 정확도가 아니라 **시연의 무해성과 표시의 참**을 검증한다.
+
+| ID | 요구 | 근거 | 위반 시 구체적 실패 | 검증 방법 | 관련 기능 | 관련 흐름 | 관련 에러 코드 |
+|------|------|------|------|------|------|------|------|
+| **REQ-GEN-16** | 라이브 실행은 **두 종류(perf · flow)를 합쳐 한 번에 하나**다. 진행 중(running · stopping) 실행이 있을 때 시작 요청은 datagen.run_in_progress/409(details {runId, type})로 거절하고, 확인과 생성을 한 임계 구역으로 묶어 동시 시작 두 건 중 하나만 running이 된다. 실행 상태는 api 인스턴스 메모리에 두고 재기동이면 실행은 사라진다(실패가 아니라 기록 없음) | 사용자 요구 2026-09-28 · 리드 판정 2 · 3 · [../11_glossary/02_error_codes.md](../11_glossary/02_error_codes.md) datagen | perf와 flow가 함께 돌면 flow의 발행 · 적재가 perf 쿼리 지연에 섞이고 perf의 서버 측 적재가 ClickHouse 머지를 올려 flow 배치 단계가 늘어난다 — 두 화면이 서로의 부하를 잰다 · 임계 구역이 없으면 동시 클릭 두 번에 실행 둘이 running이 된다 | perf 실행 중 flow 시작 → 409 · details.runId = 진행 중 runId · 시작 요청 2건 동시 발사 → 202 1 + 409 1 · 재기동 뒤 현재 실행 null | GEN-11 · GEN-12 | F-09 | datagen.run_in_progress/409 |
+| **REQ-GEN-17** | 성능 비교 실행(perf)은 prepare(실행 수명 객체 run_perf_raw 둘 생성 — tag_raw · plc_tag_raw_control과 컬럼 · 엔진 · 정렬 키 동형 · PostgreSQL 인덱스는 I2 변형만) → 규모 10^5 ~ 10^maxExponent마다 fill-ch · fill-pg(ANALYZE 포함) · query → cleanup(DROP) 순으로 돈다. 데이터는 격자와 같은 분포(태그 10,000 · 1 Hz · **시작 S 고정**(실행 시작 초 − 10^max ÷ 10,000초) · 결정적 값 · quality 9)를 **서버 측 생성**으로 — 두 저장소가 같은 생성 식(행 번호 n → ts · device_id · tag_id · value)으로 **ts 오름차순 삽입** — 만들고 규모를 올릴 때 앞 규모에 **미래 방향으로** 이어 채운다(마지막 규모의 끝 = 실행 시작 · 끝 고정 과거 방향은 격자 1차 BRIN 붕괴의 원인 — 기록 039). 쿼리는 동일 쿼리 5종을 웜 3회(워밍업 1회 버림)로 두 저장소에서 잰다. **실행 수명 객체는 종결(완료 · 중단 · 실패) 때 반드시 DROP하고 api 부팅 때 남은 것을 DROP한다.** 운영 테이블을 건드리지 않고 측정 기록을 만들지 않는다 | 리드 판정 EXP-PERF · [../05_data_stores/10_olap_vs_rdb_control.md](../05_data_stores/10_olap_vs_rdb_control.md) §동일 쿼리 5종 · 실행 수명 객체 | 앱이 행을 만들어 보내면 앱 → 저장소 전송이 적재 시간에 섞여 두 저장소 비교가 앱 직렬화 비교가 된다 · 객체가 남으면 다음 prepare가 이미 있는 테이블과 부딪혀 실패하고 10^8 규모 디스크가 회수되지 않는다 · 운영 tag_raw에 쓰면 실시간 화면 · 무손실 대조가 시연 행을 센다 | 완료 · 중단 · 실패 각각 뒤 system.tables · pg_class의 run_perf_raw **0** · 실행 전후 tag_raw · plc_tag_raw_control count 불변 · docs/measurements 새 파일 0 · 같은 maxExponent 2회 실행의 규모별 행 수 일치 | GEN-11 | F-09 | common.validation_failed/400 |
+| **REQ-GEN-18** | 흐름 시연 실행(flow)은 durationSec 동안 api 안의 생성기가 stream:plc:raw에 **엔트리 계약 v1 그대로**(시드의 설비 · 태그 · quality 9 · 현재 시각) pps만큼 발행하고, 모드 B와 같은 적체 검사로 백프레셔 위험 단계면 멈췄다 해제되면 잇는다(멈춘 횟수를 센다 · gen_points_generated_total의 mode 값 run). 1 ÷ bizPerSec초마다 BizWritePort로 명령 master.device.patch를 **시연 전용 설비 DEMO-FLOW-DEV에만**(사이트 DEMO-FLOW · 라인 DEMO-FLOW-L · 비활성 · 태그 없음 — prepare가 없으면 명령으로 만든다 · 본문은 매번 새 이름 · 되돌림 없음 · actor null) 하나 싣고 결과(성공 · 202 · 오류)를 센다(명령 1건 = 1). publish 뒤 drain은 grp:ingest 적체가 시작 전 수준으로 돌아올 때까지(상한 30초 — 넘으면 done + timedOut) 기다린다. flow 프레임 계약은 바꾸지 않는다 | 리드 판정 EXP-FLOW · REQ-GEN-07 · REQ-GLB-10 · 21 · [../06_pipeline/07_business_crud.md](../06_pipeline/07_business_crud.md) | 적체 검사 없이 발행하면 실행이 MAXLEN이 막으려던 "우회한 발행자"가 되어 미소비 엔트리가 조용히 잘린다 · 명령을 HTTP로 보내면 BFF · 인가 · 레이트 리밋이 섞여 명령 경로가 아니라 표면 비용을 보인다 · **운영 설비에 명령을 보내면 시연이 운영 마스터를 바꾼다** — 바꿨다 되돌리는 짝은 중단 · 되돌림 실패 · 짝 가운데 재기동에서 바뀐 값을 남긴다 | pps 50000 실행 중 stream_trimmed_unacked **0** · backpressurePauses 계수 · **실행 뒤 시연 전용 행 밖의 마스터 행 불변**(site · production_line · device · modbus_config 전 행 대조 — 중단 · 실패 실행 포함) · 원장 biz_command_log의 실행 구간 APPLIED 수 = result.commandsOk · drain 뒤 grp:ingest 적체 ≤ 시작 전 | GEN-12 | F-02 · F-05 · F-09 | common.validation_failed/400 |
+| **REQ-GEN-19** | 중단 요청은 status를 stopping으로 바꾸고 진행 중 단계에 **실제 취소**(ClickHouse 실행 query_id로 KILL QUERY · PostgreSQL은 다른 연결에서 실행 전용 연결(풀 밖 1 · prepare가 pg_backend_pid 기록)에 pg_cancel_backend · 발행 루프 정지)를 건 뒤, perf 정리 단계를 **중단이어도 돌려** stopped로 끝낸다 — 끝난 단계 done 유지 · 미실행 단계 skipped · 진행 중이던 단계 0~1개 stopped · 정리 실패는 error에 담고 stopped 유지. 정상 경로의 정리 실패는 failed이고, 정리 중 중단 요청은 무시한다(completed). 끝난 실행의 중단은 200 + 그대로다. elapsedMs는 서버가 계산하고(종결 endedAt − startedAt · 진행 중 응답 시각 − startedAt) 시각은 UTC ISO 8601 Z다. 종결 3값(completed · stopped · failed)은 다음 시작 전까지 현재 실행으로 남아 완료 표시 · 총 소요를 보인다. 단계 예외는 정리 뒤 failed + error {code 또는 null, message}이며 에러 코드를 새로 만들지 않는다 | 사용자 요구 2026-09-28 · 리드 판정 5 · 6 · 7 · [../07_api/01_conventions.md](../07_api/01_conventions.md) §시각 직렬화 | status만 바꾸고 취소하지 않으면 KILL 되지 않은 10^8 쿼리가 다음 실행 · 다른 화면의 측정에 섞인다 · 화면이 브라우저 시계로 경과를 계산하면 시계 차만큼 틀리고 완료 순간 표시 시간이 뒤로 뛴다 · 종결 실행을 바로 지우면 완료 표시가 폴링 한 번 뒤 사라진다 | perf 10^8 실행 중 중단 → 수 초 안 system.processes에 실행 query_id **0** · pg_stat_activity에 실행 쿼리 **0** · run_perf_raw **0** · status stopped · 종결 실행의 elapsedMs = endedAt − startedAt(ms 정확 일치) · 끝난 runId 중단 → 200 | GEN-11 · GEN-12 | F-09 | common.not_found/404 · common.validation_failed/400 |
+
+- 검산: 라이브 실행 요구 = REQ-GEN-16~19 = **4**
+
 ## 주입 모드별 요구 적용
 
 | 요구 축 | 모드 A | 모드 B | 모드 C | 모드 D |
@@ -76,16 +92,18 @@
 | GEN-08 | 모드 D 백필 | REQ-GEN-05 · 10 · 11 | 3 |
 | GEN-09 | 생성기 단독 처리량 실측 | REQ-GEN-12 · 13 | 2 |
 | GEN-10 | 대조군 동일 행 백필 | REQ-GEN-14 | 1 |
+| GEN-11 | 성능 비교 라이브 실행 | REQ-GEN-16 · 17 · 19 | 3 |
+| GEN-12 | 흐름 시연 실행 | REQ-GEN-16 · 18 · 19 | 3 |
 
 ### 검산
 
-- 기능 = GEN-01~10 = **10** · 대응 없는 기능 **0**
-- 대응 수 합(중복 허용) = 2 + 1 + 1 + 1 + 2 + 2 + 4 + 3 + 2 + 1 = **19**
-- REQ-GEN 채번 = 01~15 = **15** · 기능에 대응하지 않는 REQ **0**
+- 기능 = GEN-01~12 = **12** · 대응 없는 기능 **0**
+- 대응 수 합(중복 허용) = 2 + 1 + 1 + 1 + 2 + 2 + 4 + 3 + 2 + 1 + 3 + 3 = **25**
+- REQ-GEN 채번 = 01~19 = **19** · 기능에 대응하지 않는 REQ **0**
 
 ## 에러 코드
 
-GEN-07 표면만 코드를 낸다. 인용 코드는 [../11_glossary/02_error_codes.md](../11_glossary/02_error_codes.md)의 유효 코드뿐이다.
+GEN-07 · 11 · 12 표면만 코드를 낸다. 인용 코드는 [../11_glossary/02_error_codes.md](../11_glossary/02_error_codes.md)의 유효 코드뿐이다.
 
 | 코드 | 발생 REQ | 클라이언트(부하 도구) 대응 |
 |------|------|------|
@@ -94,8 +112,11 @@ GEN-07 표면만 코드를 낸다. 인용 코드는 [../11_glossary/02_error_cod
 | common.validation_failed/400 | REQ-GEN-09 | 요청 본문 수정 |
 | auth.unauthenticated/401 | REQ-GEN-08 | S7 이후 토큰 첨부 |
 | common.rate_limited/429 | REQ-GEN-08 | 다음 분 창까지 대기 — 레이트 리밋 거절도 측정 기록에 따로 센다 |
+| datagen.run_in_progress/409 | REQ-GEN-16 | 실행 화면 — details.runId로 진행 중 실행을 읽어 패널을 맞춘다 · 즉시 재시도 금지 |
+| common.not_found/404 | REQ-GEN-19 | 실행 화면 — 현재 실행(09_datagen #3)을 다시 읽는다(재기동으로 사라진 실행) |
+| common.validation_failed/400 | REQ-GEN-17 · 18 · 19 | 실행 화면 — 매개변수를 값 집합 안에서 고른다 · runId 형식 확인 |
 
-- 검산: 인용 코드 **5** · 채번 제안 **0**
+- 검산: 인용 행 **8** · 서로 다른 코드 7(common.validation_failed가 두 표면에서 두 행) · 채번 **1**(datagen.run_in_progress — 정본 11_glossary/02에서 채번 · 이 문서는 인용만)
 - **B형 — stream_full은 실패가 아니라 관측 대상이다.** 모드 C 실험에서 503 발생률이 HTTP 경유 수집 상한의 신호다. 재시도로 덮으면 이 신호를 잃는다.
 
 ## 인계 판정
@@ -113,7 +134,8 @@ GEN-07 표면만 코드를 낸다. 인용 코드는 [../11_glossary/02_error_cod
 |------|------|------|
 | 모드 B 적체 검사의 기전 · 발행 중단 계수 메트릭 이름 | 기전 **W4 판정**(XADD + XINFO GROUPS 파이프라인 · 위험이면 중단 · 주의 임계 미만 재개) · 메트릭 이름 **W6 판정** — gen_publish_halted_entries_total · gen_publish_halted_points_total · backpressure_stage{publisher} | [../06_pipeline/10_datagen_inject.md](../06_pipeline/10_datagen_inject.md)(W4) · [../10_observability/01_metrics_catalog.md](../10_observability/01_metrics_catalog.md) |
 | 모드 D 대조군 동일 행 절차 | 닫힘 — §모드 D 백필과 대조군 동일 행 — [../06_pipeline/10_datagen_inject.md](../06_pipeline/10_datagen_inject.md) | [../06_pipeline/10_datagen_inject.md](../06_pipeline/10_datagen_inject.md)(W4) |
-| 생성기 실행 제어 표면 | 원본 API 표에 없다 — 이 문서는 표면을 요구하지 않는다 | [../07_api/09_datagen.md](../07_api/09_datagen.md)(W5) · 리드 판정 |
+| 생성기 실행 제어 표면 | 모드 A~D는 원본 API 표에 없다 — 표면을 요구하지 않는다(W5 판정 유지) · 시연 실행은 **REQ-GEN-16~19가 요구한다**(사용자 요구 2026-09-28) | [../07_api/09_datagen.md](../07_api/09_datagen.md) §원본에 없는 표면 판정 |
+| 라이브 실행 소요 시간 · 규모별 결과 수치 | 3계층 미확인 — 시연값이라 확정 대상이 아니다 · 기록 정본은 측정 실험(EXP-01~05)이다 | [../07_api/09_datagen.md](../07_api/09_datagen.md) §미확인 · 미설계 등재 |
 | 부하 주입 표면 게이트 환경변수 이름 · 요청 본문 | 닫힘 — 게이트 DATAGEN_BULK_ENABLED(기본 false) · §요청 본문 — [../07_api/09_datagen.md](../07_api/09_datagen.md) | [../07_api/09_datagen.md](../07_api/09_datagen.md)(W5) |
 | 생성 모드의 과거 ts와 STALE | 닫힘 — 실시간 화면 · STALE · E2E를 읽는 실험은 현재 시각 생성만 쓴다 · 실험 프로토콜 조건 분리 규칙으로 강제 | [../10_observability/04_experiment_protocol.md](../10_observability/04_experiment_protocol.md) §조건 분리 강제 |
 | 생성기 단독 처리량 · 프로파일별 압축률 | 생성기 단독 처리량은 **닫힘**(워커 1 약 590만 pps · 기록 006 · 410a146 · 부하 실험 · M · 스위치 기본값) · 프로파일별 압축률은 3계층 미확인 — 확정 전 임의 값 고정 금지 | [13_nonfunctional.md](./13_nonfunctional.md) REQ-NFR-14 · 17 · EXP-35 · EXP-21 |
@@ -124,5 +146,5 @@ GEN-07 표면만 코드를 낸다. 인용 코드는 [../11_glossary/02_error_cod
 - [01_global_rules.md](./01_global_rules.md) — REQ-GLB-10 백프레셔 명시화 · REQ-GLB-18 생성 데이터 구분 · REQ-GLB-21 데이터 계약
 - [07_ingest.md](./07_ingest.md) — 모드 B · C의 받는 쪽 · 대조군 동시 적재
 - [../06_pipeline/10_datagen_inject.md](../06_pipeline/10_datagen_inject.md) — F-09 주입 기전
-- [../07_api/09_datagen.md](../07_api/09_datagen.md) — 부하 주입 표면
+- [../07_api/09_datagen.md](../07_api/09_datagen.md) — 부하 주입 표면 · 라이브 실행 제어 표면
 - [../05_data_stores/10_olap_vs_rdb_control.md](../05_data_stores/10_olap_vs_rdb_control.md) — 대조군 설계

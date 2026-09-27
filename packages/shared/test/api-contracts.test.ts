@@ -13,13 +13,13 @@ import {
 import { docSectionRows, docTable } from './doc-table';
 
 describe('API 계약 — 정본 문서와 같다', () => {
-  it('에러 코드 22 · HTTP 상태(11_glossary/02 §에러 코드 전수)', () => {
+  it('에러 코드 23 · HTTP 상태(11_glossary/02 §에러 코드 전수)', () => {
     const rows = docSectionRows('11_glossary/02_error_codes.md', '에러 코드 전수').filter((r) =>
       /^[a-z_]+\.[a-z_]+$/.test(r[0] ?? ''),
     );
     const fromDoc = Object.fromEntries(rows.map((r) => [r[0], Number(r[1])]));
     expect(fromDoc).toEqual(ERROR_HTTP_STATUS);
-    expect(Object.keys(fromDoc)).toHaveLength(22);
+    expect(Object.keys(fromDoc)).toHaveLength(23);
   });
 
   it('스위치 11 — 포트 · 구현 이름(04_architecture/02 확정 표)', () => {

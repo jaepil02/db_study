@@ -1,7 +1,8 @@
 # 모듈 경계
 
-> **대상**: api 프로세스 안 모듈 사이의 경계 — Stream 경계 원칙과 근거 4 · **업무 명령 경계(stream:biz:cmd · 워커 적용)** · 경계 예외(알람 직접 호출)의 근거 · APP_ROLE 5값과 모듈 배정 · worker_threads 격리 대상 · **스위치 = DI 포트 확정 표(포트 · 구현 이름 정본)** · 리포지터리 구조
+> **대상**: api 프로세스 안 모듈 사이의 경계 — Stream 경계 원칙과 근거 4 · **업무 명령 경계(stream:biz:cmd · 워커 적용)** · 경계 예외(알람 직접 호출)의 근거 · APP_ROLE 5값과 모듈 배정 · worker_threads 격리 대상 · **스위치 = DI 포트 확정 표(포트 · 구현 이름 정본)** · 리포지터리 구조 · **라이브 실행 RunControlModule(GEN)의 역할 배치**
 > **작성일**: 2026-09-24
+> **개정일**: 2026-09-28 — 라이브 실행 제어 반영(사용자 요구 2026-09-28 · 리드 판정) — APP_ROLE api 행에 **GEN 라이브 실행(RunControlModule — 09_datagen #2~#5 · 실행 주체)** · 판정 행 5 → **6**(GEN 라이브 실행 → api · all) · Stream 경계 간선에 라이브 흐름 실행 · 명령 스트림 경계 간선에 GEN → MST(04_domain_map 간선 21 → 22와 같게) · RunControlModule은 포트 없음(스위치 아님) 불릿 — APP_ROLE 값 · GEN 역할 수 · 스위치 · 포트 · 구현 수 불변
 > **개정일**: 2026-09-28 — 웨이브 1 검수 반영(B-H5) — SW-12 BizWritePort 사용 모듈 master · alarms · work-orders · auth → **master · alarms · work-orders(업무 쓰기 표면 — auth의 로그인 · 토큰은 대상 아님)** — 스위치 · 포트 · 구현 수 불변
 > **개정일**: 2026-09-28 — 리드 정정(d-biz-b 대조) — 명령 스트림 경계 · worker 명령 적용의 도메인에서 AUT 제외(로그인 · 토큰은 업무 쓰기 아님 · 지침 §10) — 04_domain_map 자기 간선 3과 일치 · "반영 대기" 문구 해소
 > **개정일**: 2026-09-28 — 업무 쓰기 Redis 경유 개정(사용자 결정 2026-09-27 · ADR-26) — 경계 유형 표에 **명령 스트림 경계**(stream:biz:cmd · grp:biz-writer · ch:bizreply) — 유형 4 → **5** · APP_ROLE worker에 업무 명령 적용 · 확정 표 **SW-12 BizWritePort · StreamBizWriter(stream · 기본) · DirectBizWriter(direct)** 신설 — 스위치 11 → **12** · 포트 11 → **12** · 구현 22 → **24**
@@ -32,13 +33,13 @@
 
 | 경계 유형 | 매체 | 간선 | 이 문서가 강제하는 것 |
 |------|------|------|------|
-| Stream 경계 | stream:plc:raw · 컨슈머 그룹 | COL → ING · GEN(모드 B · C) → ING | 발행자는 Stream 페이로드 계약(스키마 버전 v) 하나로만 결합한다 |
+| Stream 경계 | stream:plc:raw · 컨슈머 그룹 | COL → ING · GEN(모드 B · C · 라이브 흐름 실행) → ING | 발행자는 Stream 페이로드 계약(스키마 버전 v) 하나로만 결합한다 |
 | Pub/Sub 경계 | ch:rt · ch:alarm · ch:cacheinv | ING → RLT · ALM → RLT · MST → 다른 api 인스턴스 | 발행자는 구독자를 모른다 |
 | Modbus 경계 | 루프백 TCP 소켓 | SIM → COL | 같은 프로세스여도 소켓을 지난다 |
-| 명령 스트림 경계 | stream:biz:cmd · 컨슈머 그룹 grp:biz-writer(소비자 1) · 결과 biz:result · ch:bizreply | 업무 쓰기 표면(MST · ALM · WRK — AUT의 로그인 · 토큰은 대상 아님) → 명령 적용 워커 | 표면은 명령 봉투(cmdId · kind · payload · actor · requestedAt) 하나로만 결합하고 결과를 기다린다 · 수집 스트림과 키 · 그룹을 공유하지 않는다(ADR-26 · [../06_pipeline/07_business_crud.md](../06_pipeline/07_business_crud.md) §업무 명령 경로) |
+| 명령 스트림 경계 | stream:biz:cmd · 컨슈머 그룹 grp:biz-writer(소비자 1) · 결과 biz:result · ch:bizreply | 업무 쓰기 표면(MST · ALM · WRK — AUT의 로그인 · 토큰은 대상 아님) → 명령 적용 워커 · GEN 라이브 흐름 실행 → MST(시연 명령 master.device.patch — BizWritePort 프로세스 안 호출) | 표면은 명령 봉투(cmdId · kind · payload · actor · requestedAt) 하나로만 결합하고 결과를 기다린다 · 수집 스트림과 키 · 그룹을 공유하지 않는다(ADR-26 · [../06_pipeline/07_business_crud.md](../06_pipeline/07_business_crud.md) §업무 명령 경로) |
 | 직접 호출(예외) | 프로세스 안 호출 | ING → ALM | §경계 예외 — 알람 판정 직접 호출 |
 
-- 경계 유형 전수 · 간선 검산의 정본은 [../01_overview/04_domain_map.md](../01_overview/04_domain_map.md) §경계 유형이다. 이 표는 데이터가 모듈을 건너는 다섯 유형만 다시 적고(명령 스트림 경계는 04_domain_map의 자기 간선 3 — MST · ALM · WRK) 저장소 경유 · 트랜잭션 공유 · 인가 · 시뮬레이션 결합은 다루지 않는다.
+- 경계 유형 전수 · 간선 검산의 정본은 [../01_overview/04_domain_map.md](../01_overview/04_domain_map.md) §경계 유형이다. 이 표는 데이터가 모듈을 건너는 다섯 유형만 다시 적고(명령 스트림 경계는 04_domain_map의 자기 간선 3 — MST · ALM · WRK + 도메인 사이 1 — GEN → MST) 저장소 경유 · 트랜잭션 공유 · 인가 · 시뮬레이션 결합은 다루지 않는다.
 
 ## 경계 예외 — 알람 판정 직접 호출
 
@@ -62,14 +63,14 @@ APP_ROLE은 한 이미지에서 기동할 모듈 범위를 고르는 환경변�
 | APP_ROLE | 기동하는 모듈 · 기능 | 이 역할만의 이유 |
 |------|------|------|
 | all | 11모듈 전부 | 기본값 — 컨테이너 4 구성 |
-| api | AUT · MST · TSQ · RLT · WRK · ALM(규칙 · 조회 · 확인 표면) · GEN(모드 C 수신 표면 /api/v1/ingest/bulk) · OBS | 사람과 k6가 부르는 HTTP · WebSocket 표면이 전부 여기 있다 |
+| api | AUT · MST · TSQ · RLT · WRK · ALM(규칙 · 조회 · 확인 표면) · GEN(모드 C 수신 표면 /api/v1/ingest/bulk · **라이브 실행 RunControlModule** — 09_datagen #2~#5 · 실행 주체) · OBS | 사람과 k6가 부르는 HTTP · WebSocket 표면이 전부 여기 있다 |
 | worker | ING · ALM(디바운스 판정 · 세 쓰기 · ch:alarm 발행) · **업무 명령 적용(grp:biz-writer — MST · ALM · WRK의 쓰기 서비스 호출)** · OBS | 판정이 ingest 배치의 후처리라 직접 호출이 프로세스를 건너지 않는다 · 명령 적용은 표면과 명령 스트림으로만 이어져 api와 떨어져도 호출부가 그대로다 |
 | collector | COL · **SIM** · **GEN(모드 A 레지스터 갱신)** · OBS | PlcSim이 루프백에만 바인드하고 모드 A 갱신이 프로세스 안 호출이라 셋이 한 프로세스여야 한다 |
 | datagen | GEN(모드 B 발행 · 모드 C 발신 · 모드 D 백필 · 대조군 동일 행 백필 · 단독 처리량 실측) · OBS | 생성기가 대상과 CPU를 다투지 않게 떼어내는 자리(원본 tech_stack.md §3.4) |
 
 - 검산: APP_ROLE 값 = **5** · all을 뺀 역할 4
 - **업무 명령 적용은 도메인이 아니라 공통 명령 기전의 기능이다(ADR-26).** worker 역할이 이 기능을 켜면 그 안에서 MST · ALM · WRK의 쓰기 서비스(트랜잭션 · 감사 · 무효화 체인)를 부른다 — 쓰기 서비스의 소유는 각 모듈 그대로이고, api 역할의 같은 모듈은 검증 · XADD · 결과 대기만 한다. SW-12 direct면 api 역할이 쓰기 서비스를 직접 부른다. 아래 도메인 배정 셈은 이 공통 기능을 빼고 센다.
-- **모듈이 아니라 기능 단위로 배정되는 도메인이 셋이다** — ALM(표면 api · 판정 worker) · GEN(모드 C 수신 api · 모드 A collector · 나머지 datagen) · OBS(전 역할). 검산: ALM 2역할 + GEN 3역할 + OBS 4역할 · 나머지 8도메인은 역할 하나. 모듈 하나를 여러 역할에서 기동하되 역할마다 켜는 기능이 다르다 — 기능 선택은 APP_ROLE을 읽는 모듈 초기화가 하고 경로 안 분기로 하지 않는다(ADR-08과 같은 원리).
+- **모듈이 아니라 기능 단위로 배정되는 도메인이 셋이다** — ALM(표면 api · 판정 worker) · GEN(모드 C 수신 · 라이브 실행 api · 모드 A collector · 나머지 datagen) · OBS(전 역할). 검산: ALM 2역할 + GEN 3역할 + OBS 4역할 · 나머지 8도메인은 역할 하나. 모듈 하나를 여러 역할에서 기동하되 역할마다 켜는 기능이 다르다 — 기능 선택은 APP_ROLE을 읽는 모듈 초기화가 하고 경로 안 분기로 하지 않는다(ADR-08과 같은 원리).
 
 ### SIM · OBS · GEN 모드 A 판정
 
@@ -81,9 +82,11 @@ APP_ROLE은 한 이미지에서 기동할 모듈 범위를 고르는 환경변�
 | GEN 모드 A | **collector 역할**에서 기동한다 | 모드 A의 레지스터 Buffer 갱신은 프로세스 안 호출이다(GEN → SIM 시뮬레이션 결합) | 모드 A를 datagen에 두면 Buffer가 다른 프로세스에 있어 갱신이 닿지 않는다 — 모드 A만 끊기고 B · C · D는 동작해 **결함이 늦게 드러난다** |
 | GEN 모드 B · D · 실측 | **datagen 역할**에서 기동한다 | 생성기 CPU를 대상과 가르는 것이 분리 목적이다 | collector에 두면 생성기와 폴링 루프가 같은 이벤트 루프를 다퉈 모드 A 지연이 생성 부하에 오염된다 |
 | GEN 모드 C 수신 | **api 역할**에 둔다 · 발신 생성기는 datagen | /api/v1/ingest/bulk는 HTTP 표면이다 — 측정 대상이 HTTP 계층 비용이다 | 수신을 datagen에 두면 HTTP 표면이 api 밖에 생겨 인가 · 레이트 리밋 방어 지점이 둘이 된다 |
+| GEN 라이브 실행(RunControlModule) | **api 역할**(all 포함)에서 기동한다 · 실행 상태는 그 인스턴스 메모리 | 시작 · 조회 · 중단 표면을 받는 프로세스가 실행을 들고 있어야 중단이 같은 메모리의 취소 수단(query_id · 연결 · 발행 루프)에 닿는다 | ① datagen에 두면 표면(api)과 실행(datagen) 사이에 중단 · 진행 조회를 나르는 새 제어 채널이 필요하다 — 경계 유형이 하나 는다. ② worker에 두면 flow 실행의 발행 부하가 같은 프로세스의 ING 소진과 이벤트 루프를 다퉈 흐름도가 실행 자신의 간섭을 보인다 |
 | OBS | **전 역할에서 기동한다.** 역할마다 자기 /metrics · /api/v1/health를 낸다. 저장소 통계 수집(Redis INFO · pg_stat · system.*)은 **api 역할 한 곳에서만** 한다 | 계측은 모듈이 자기 카운터를 등록하는 방식이라 카운터가 있는 프로세스마다 창구가 있어야 한다. 저장소 통계는 프로세스와 무관한 값이다 | ① OBS를 api에만 — worker · collector의 컨슈머 랙 · 폴링 지연 카운터가 창구를 잃어 분리 직후 파이프라인이 계측 공백이 된다. ② 저장소 통계를 역할마다 수집 — 같은 값을 세 번 조회해 pg_stat_statements · system.query_log에 관측 쿼리가 세 배로 섞인다 |
 
-- 검산: 판정 행 = **5**
+- 검산: 판정 행 = **6**
+- **라이브 실행이 api 역할에 부하를 싣는 것은 설계된 동작이다(B형).** 결론 — perf 쿼리 · flow 발행은 api 프로세스에서 돈다. 반대 시나리오 — 생성기 CPU를 대상과 가르는 datagen 원칙(GEN 모드 B · D 행)을 여기에도 적용하면 ①의 제어 채널이 생기는데, 라이브 실행은 측정이 아니라 시연이라 CPU 분리가 지킬 측정값이 없다. 파생 지침 — 라이브 실행과 부하 · 대조 실험을 겹치지 않는다([../06_pipeline/10_datagen_inject.md](../06_pipeline/10_datagen_inject.md) §한 번에 한 계층) · 생성은 worker_threads에서 한다(§worker_threads 격리 대상).
 - **B형 — 분리 뒤 /metrics가 여러 개인 것은 "창구는 /metrics 하나"(ADR-20)의 위반이 아니다.** 그 원칙은 exporter 컨테이너를 따로 두지 않는다는 뜻이며 창구는 **프로세스당 하나**다. 반대로 창구를 한 프로세스로 모으려고 역할 간 메트릭 중계를 만들면 계측 경로가 새 경계가 되어 계측 자체가 측정 대상을 바꾼다. all 기동에서는 창구가 여전히 하나다.
 - **역할 분리 시 PlcSim도 함께 멈추고 함께 뜬다.** collector 컨테이너 재기동은 SIM까지 재기동해 결측 구간을 남긴다 — 시뮬레이션 환경에서는 장애가 아니라 정상 동작이다(원본 data_flow.md §12.4).
 
@@ -145,6 +148,7 @@ CPU 바운드 작업은 piscina worker_threads 풀에서 돈다(ADR-25 · REQ-GL
 | PointSourcePort | RedisStreamSource(현행) | 단일 구현 | ADR-04 | Kafka 전환(확장 4단계) 대비 추상화 — 두 번째 구현은 그 단계에서만 만든다 |
 
 - 검산: 스위치 아닌 교체 포트 = **1**(PointSourcePort) — LatestValueWritePort는 SW-11로 채번되어 확정 표로 옮겼다
+- **RunControlModule은 포트가 없다 — 스위치가 아니다.** 실행 두 종류(perf · flow)는 실험 손잡이가 아니라 시연이라 교체 구현을 두지 않고 스위치 번호도 받지 않는다. flow 실행의 업무 명령은 기존 SW-12 BizWritePort를 프로세스 안에서 부를 뿐이다 — 주입된 구현을 따르므로 stream이면 명령 스트림 · 워커를 지나고 direct면 api가 직접 적용한다.
 - **키 계열별 래퍼 3종(CacheKeyClient · DurableKeyClient · FanoutPublisher)은 포트가 아니다.** 스위치로 바꾸지 않는 강제 수단이며 정본은 [../05_data_stores/05_redis_keyspace.md](../05_data_stores/05_redis_keyspace.md)다(ADR-13).
 
 ## 리포지터리 구조

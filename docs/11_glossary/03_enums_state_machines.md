@@ -1,7 +1,9 @@
 # enum과 상태 머신 (03_enums_state_machines)
 
-> **대상**: db_study가 저장 · 전송 · 설정에 쓰는 닫힌 값 집합(enum) 전수와 상태 머신 4종(배치 재시도 · 알람 · 백프레셔 · 작업지시) — enum 값 정본
+> **대상**: db_study가 저장 · 전송 · 설정에 쓰는 닫힌 값 집합(enum) 전수와 상태 머신 5종(배치 재시도 · 알람 · 백프레셔 · 작업지시 · 라이브 실행) — enum 값 정본
 > **작성일**: 2026-09-24
+> **개정일**: 2026-09-28 — 라이브 실행 검수 반영(리드 재판정 2026-09-28) — 실행 단계 status 짝 서술 "stopped면 취소된 1이 stopped" → **끝난 단계 done 유지 · 미시작 skipped · 진행 중 0~1개 stopped**(flow prepare 중 중단도 같다) · failed 짝에 정상 경로 정리 실패(cleanup 1 failed · 나머지 done) · 상태 머신 5 running → failed 전이 뜻에 정상 경로 정리 실패 · 정리 중 중단 요청은 전이가 아니다(completed) · 주입 모드 표 뒤 **메트릭 mode 레이블 = 주입 모드 4 + standalone · run** 한 줄 — enum · 값 · 전이 수 불변
+> **개정일**: 2026-09-28 — 라이브 실행 제어 신설(사용자 요구 2026-09-28 · 리드 판정 5) — 전송 enum 신설 2 — **#21 실행 status 5값**(running · stopping · completed · stopped · failed) · **#22 실행 단계 status 6값**(pending · running · done · skipped · stopped · failed) · 표면 정본 07_api/09_datagen — 전수 20 → **22** · **상태 머신 5 — 라이브 실행** 신설(상태 머신 4 → **5**종 · 전이 4)
 > **개정일**: 2026-09-28 — 웨이브 1 검수 반영(B-M8 · B-M9) — #20 명령 조회 status 사용처에 **202 본문 expired(만료 키 재요청)** · failed 뜻에 **적용 여부 미확정** — enum 수 · 값 수 불변
 > **개정일**: 2026-09-28 — 업무 쓰기 Redis 경유 개정(사용자 결정 2026-09-27) — enum 신설 2 — **biz_command_log.status 3값**(APPLIED · REJECTED · EXPIRED · 저장 enum · 정본 컬럼 05_data_stores/01) · **명령 조회 status 5값**(pending · applied · rejected · expired · failed · 전송 enum · 표면 정본 07_api/01) — 전수 18 → **20** · 저장 enum 값 14 → **17**
 > **개정일**: 2026-09-24 — 최종 정밀 검수 — 복구 해설의 길이 대역 → 적체 대역(ADR-21 표기)
@@ -41,8 +43,10 @@
 | 18 | role.role_code | role.role_code | 3 | 저장 enum(W2 확정) |
 | 19 | biz_command_log.status | biz_command_log.status · biz:result 결과 | 3 | 저장 enum(업무 쓰기 Redis 경유) |
 | 20 | 명령 조회 status | GET /api/v1/commands/{cmdId} 응답 status · 202 본문 status(pending · 만료 키 재요청 expired) | 5 | 기타 enum |
+| 21 | 실행 status | 라이브 실행 객체 status(07_api/09_datagen #2~#5) · 메트릭 gen_runs_total의 status 레이블(종결 3값) — **저장 컬럼 없음**(api 메모리) | 5 | 기타 enum · 상태 머신 5 |
+| 22 | 실행 단계 status | 라이브 실행 객체 steps[].status — **저장 컬럼 없음** | 6 | 기타 enum |
 
-검산: 값 확정 20(#1~#20) + 미설계 0 = **20**
+검산: 값 확정 22(#1~#22) + 미설계 0 = **22**
 
 - **실험 축 중 용량 티어 · 메모리 프로파일 · 부하 시나리오는 enum이 아니다.** 코드가 분기하는 값이 아니라 측정 조건이며, 정본은 [../04_architecture/07_capacity_planning.md](../04_architecture/07_capacity_planning.md) · [../04_architecture/03_execution_topology.md](../04_architecture/03_execution_topology.md) · [../10_observability/05_load_scenarios.md](../10_observability/05_load_scenarios.md)다. 역할 스위치 SW-NN도 여기 두지 않는다 — 정본 [../02_features/13_switch_matrix.md](../02_features/13_switch_matrix.md).
 
@@ -148,6 +152,7 @@
 | last | argMax(value, ts) | last_v · argMaxMerge | 정확 — 같은 ts가 둘이면 어느 값인지 정하지 않는다 |
 | p95 | quantile 계열 | p95_v · quantilesTDigestMerge(0.95) | **근사** — 원시 정확 분위수와 다르다 |
 
+- **메트릭 mode 레이블 = 주입 모드 4 + standalone · run**(값 6). standalone은 생성기 단독 실행 경로(파이프라인 없음 · GEN-09), run은 라이브 흐름 실행(api 안 생성기 · GEN-12)이다 — 둘은 주입 모드가 아니라서 위 표와 enum #6 값 수(4)에 들지 않는다(메트릭 정본 [../10_observability/01_metrics_catalog.md](../10_observability/01_metrics_catalog.md)).
 - **주입 모드는 한 번에 하나만 쓴다.** A와 B를 동시에 돌리면 어느 계층이 병목인지 가를 수 없다(원본 data_flow.md §11.1). 주입 경로의 기전 정본은 [../06_pipeline/10_datagen_inject.md](../06_pipeline/10_datagen_inject.md)다.
 - **interval 경계값(1시간 · 7일 · 90일)은 1계층 구조값이다.** 경계가 바뀌면 캐시 키 정규화와 롤업 보존 기간이 함께 움직인다. 미지정 시 서버가 선택하고, maxPoints를 넘으면 서버가 한 단계 올린다 — 에러가 아니다([02_error_codes.md](./02_error_codes.md) "에러 코드가 아닌 것").
 - **p95를 원시와 롤업에서 대조할 때 부동소수 허용 오차를 쓰지 않는다.** TDigest의 근사 오차는 부동소수 오차보다 크다 — 비교 규칙은 [05_units_and_time.md](./05_units_and_time.md).
@@ -276,7 +281,12 @@ stateDiagram-v2
 | alarm_eval.breached | 0 · 1 | 이번 판정에서 조건 위반 여부 | 판정 전수 분석(임계값 튜닝 · 오탐 분석)에 쓴다. 상태 머신 상태가 아니라 한 행의 판정 결과다 |
 | 명령 조회 status | pending · applied · rejected · expired · failed | 결과 없음(적용 전 또는 트리밍) · 원장 APPLIED · 원장 REJECTED · 원장 EXPIRED · 결과 키에 PostgreSQL 불가 503(원장 행 없음 — **적용 여부 미확정**: 이미 커밋된 재전달도 failed일 수 있어 같은 키 재요청으로 확정) | 저장 enum #19의 세 값에 저장 없는 둘(pending · failed)을 더한 전송 값이다 — 표면 정본 [../07_api/01_conventions.md](../07_api/01_conventions.md) · 기전 [../06_pipeline/07_business_crud.md](../06_pipeline/07_business_crud.md) §시간 초과 · 명령 조회 |
 
-검산: APP_ROLE 1 + 4 = **5** · breached **2** · 명령 조회 status = 원장 3 + 저장 없음 2 = **5**
+| 실행 status | running · stopping · completed · stopped · failed | 단계가 도는 중 · 중단 요청을 받아 취소와 정리 중 · 전 단계 끝남 · 중단으로 끝남 · 단계 예외로 끝남 | 종결 3(completed · stopped · failed)이면 화면 폴링이 멈추고 완료 표시를 다음 시작 전까지 유지한다 — 전이는 상태 머신 5 · 표면 정본 [../07_api/09_datagen.md](../07_api/09_datagen.md) §실행 객체 |
+| 실행 단계 status | pending · running · done · skipped · stopped · failed | 시작 전 · 도는 중 · 끝남(flow drain 상한 초과도 done + timedOut) · 중단 · 실패로 건너뜀 · 도는 중 중단으로 취소 · 도는 중 예외 | 실행 status와 짝이 정해져 있다 — completed면 전부 done · stopped면 끝난 단계 done 유지 · 미시작 skipped · 진행 중이던 단계 0~1개 stopped(단계 경계에서 받으면 0 · flow prepare 중이어도 같다 · perf cleanup은 done 또는 failed) · failed면 예외 1이 failed · 끝난 단계 done · 나머지 skipped(perf cleanup은 돈다) — 정상 경로 정리 실패면 cleanup 1이 failed · 나머지 done |
+
+검산: APP_ROLE 1 + 4 = **5** · breached **2** · 명령 조회 status = 원장 3 + 저장 없음 2 = **5** · 실행 status = 진행 2 + 종결 3 = **5** · 실행 단계 status = 시작 전 1 + 진행 1 + 끝 4(done · skipped · stopped · failed) = **6**
+
+- **실행 status의 stopped와 단계 status의 stopped는 다른 층이다.** 실행 stopped는 실행 전체가 중단으로 끝났다는 뜻이고, 단계 stopped는 그 순간 돌던 단계 하나다 — 중단된 실행에서도 perf cleanup 단계는 done이다(중단이어도 정리는 돈다).
 
 ## 저장 enum(W3 확정)
 
@@ -320,6 +330,37 @@ stateDiagram-v2
 
 - **종결에서 나가는 전이가 없다.** 잘못 종결한 지시는 새 작업지시로 다시 등록한다 — 되돌리면 production_log 실적이 재개분인지 추가분인지 가를 수 없다.
 - 현재 상태 확인과 쓰기는 조건부 갱신 하나로 묶는다(REQ-WRK-04). DB CHECK는 값 집합만 막고 전이 쌍은 서비스가 막는다 — 한계 등재 [../05_data_stores/02_postgresql_constraints.md](../05_data_stores/02_postgresql_constraints.md) #8.
+
+## 상태 머신 5 — 라이브 실행
+
+라이브 실행 객체 status의 전이다(사용자 요구 2026-09-28 · 표면 정본 [../07_api/09_datagen.md](../07_api/09_datagen.md) · 기전 정본 [../06_pipeline/10_datagen_inject.md](../06_pipeline/10_datagen_inject.md) §라이브 실행). 상태는 api 인스턴스 메모리에만 있고 재기동이면 실행 자체가 사라진다 — 재기동은 전이가 아니다.
+
+```mermaid
+stateDiagram-v2
+    [*] --> running: 시작(09_datagen #2)
+    running --> completed: 전 단계 끝
+    running --> stopping: 중단 요청(#5)
+    running --> failed: 단계 예외 → 정리 · 정상 경로 정리 실패
+    stopping --> stopped: 취소 · 정리 끝
+    completed --> [*]
+    stopped --> [*]
+    failed --> [*]
+```
+
+| 상태 | 초기 · 종결 | 나가는 전이 |
+|------|------|------|
+| running | 초기 | completed · stopping · failed |
+| stopping | 중간 | stopped |
+| completed | 종결 | 없음 |
+| stopped | 종결 | 없음 |
+| failed | 종결 | 없음 |
+
+검산: 전이 3 + 1 = **4** · 시작 1 포함 **5** · 초기 1 + 중간 1 + 종결 3 = **5**상태
+
+- **stopping에서 failed로 가는 전이가 없다.** 중단 중 정리가 실패해도 status는 stopped를 유지하고 실패는 error에 담는다 — 사용자가 누른 것은 중단이고, failed로 바꾸면 "중단 버튼이 실패를 일으켰다"로 읽힌다.
+- **정리 중 중단 요청은 전이가 아니다.** perf cleanup이 도는 동안 #5가 오면 무시하고 running 그대로 두며 정리가 끝나면 completed(정리 실패면 failed)다 — 정리는 마지막 단계라 취소할 것이 없고, stopping으로 바꾸면 전 단계를 마친 실행이 "중단됨"으로 보인다.
+- **종결에서 나가는 전이가 없다.** 같은 매개변수로 다시 돌리면 새 runId의 새 실행이다 — 종결 실행을 되살리면 elapsedMs = endedAt − startedAt이 두 구간을 합쳐 완료 표시의 총 소요가 거짓이 된다.
+- 동시에 running · stopping인 실행은 최대 하나다(REQ-GEN-16) — 두 번째 시작은 전이가 아니라 datagen.run_in_progress/409 거절이다([02_error_codes.md](./02_error_codes.md)).
 
 ## 관련 문서
 

@@ -1,14 +1,15 @@
 # 기능 → 화면 추적성 (02_traceability)
 
-> **대상**: 기능 91 → 화면 매핑 전수 · 화면 없는 기능의 닫힌 어휘(내부 모듈 · 표면 없음 · 화면 없음(API 전용)) · 주 화면별 파생 집계 · 권한 매트릭스와의 교차 검산 · 화면 → 표면 인용 목록 · 누락 0 · 유령 0 검산
+> **대상**: 기능 93 → 화면 매핑 전수 · 화면 없는 기능의 닫힌 어휘(내부 모듈 · 표면 없음 · 화면 없음(API 전용)) · 주 화면별 파생 집계 · 권한 매트릭스와의 교차 검산 · 화면 → 표면 인용 목록 · 누락 0 · 유령 0 검산
 > **작성일**: 2026-09-24
+> **개정일**: 2026-09-28 — 라이브 실행 제어 반영(사용자 요구 2026-09-28 · 리드 지침 .omc/run-control-brief.md) — 기능 **GEN-11**(성능 비교 라이브 실행 → 주 화면 EXP-PERF) · **GEN-12**(흐름 시연 실행 → 주 화면 EXP-FLOW) 2행 · 기능 91 → **93** · 분류 화면 42 → **44** · 주 화면 합 42 → **44**(EXP-PERF 0 → **1** · EXP-FLOW 0 → **1**) · **두 화면 분류 재판정 — 주 기능 없는 실증 화면(OBS 보조) 2 → 0**(실행 패널의 주 화면 = 각 화면 · 기록 판독 · 흐름 이벤트 요소는 보조 · 산출 표시 그대로 — 리드 판정) · 도메인 GEN 10 → **12**(화면 2) · 화면 공백 도메인 4 → **3**(GEN 빠짐) · 권한 교차 검산 역할 판정 31 → **33** · AUT-05 보조 화면에 두 실행 패널 · 화면 → 표면 인용 09_datagen 0 → **4**(#2~#5) · 인용 표면 43 → **47**(+ 화면 없는 1 = 07_api 48)
 > **개정일**: 2026-09-28 — 07_api/01 확정 값 반영 — 명령 조회 GET /api/v1/commands/{cmdId}를 기능 11행(MST-01~06 · ALM-01 · ALM-08 · WRK-01~03) 호출 표면 열에 · 화면 → 표면 인용에 01_conventions 행 — 인용 표면 42 → **43**(+ 화면 없는 1 = 07_api 44) · 미확인 1행 닫힘 — 기능 · 분류 · 주 화면 수 불변
 > **개정일**: 2026-09-28 — 업무 쓰기 명령 경로 반영 — 미확인 등재에 명령 조회 표면(07_api/01 확정 대기) 1행 — 인용 표면 · 매핑 수 불변(확정 뒤 다시 센다)
 > **개정일**: 2026-09-28 — 리드 판정 1 — 주 기능 없는 두 화면을 **주 기능 없는 실증 화면(OBS 보조)** 분류로 닫는다(새 기능 ID 없음) · 고아 검산을 이 분류 밖 화면으로 · 미확인 1행 닫힘 — 기능 · 분류 · 주 화면 합 불변
 > **개정일**: 2026-09-27 — 새 화면 2(EXP-PERF · EXP-FLOW · 08_evidence_screens) — 보조 화면 4행(RLT-05 · OBS-01 · 02 · 03 → EXP-FLOW) · 산출이 보이는 자리 6행(MST-08 · GEN-08~10 · ING-01~13 · ALM-04 · 05 · 06) · 주 화면별 화면 코드 행 10 → **12**(두 화면 주 기능 0 — 고아 2 판정 대기) · 화면 → 표면 인용 호출 화면 2행 — 기능 91 · 분류 · 주 화면 합 42 · 인용 표면 42 불변
 > **개정일**: 2026-09-24 — 최종 정밀 검수 — GEN · OBS 귀속 제안 행 닫힘(README 반영)
 > **개정일**: 2026-09-24 — W7 검수 반영 — 미확인 1행 닫힘(전 축 정합 — 15_traceability 완성) — 매핑 수 불변
-> **원천**: [../02_features/12_permission_matrix.md](../02_features/12_permission_matrix.md) 역할 × 기능 매트릭스 · §검산 · 도메인 파일 11본 [../02_features/01_auth.md](../02_features/01_auth.md) ~ [../02_features/11_metrics.md](../02_features/11_metrics.md) 기능 목록 · [README.md](./README.md) 화면 인벤토리 · 화면 문서 6본의 요소 표 · [01_standards.md](./01_standards.md) 공통 셸 요소 표 · 07_api 도메인 문서의 표면 요약 · 원본 architecture.md §11(커밋 ff66a37)
+> **원천**: 리드 지침 .omc/run-control-brief.md(2026-09-28 · GEN-11 · GEN-12 · 분류 재판정) · [../02_features/12_permission_matrix.md](../02_features/12_permission_matrix.md) 역할 × 기능 매트릭스 · §검산 · 도메인 파일 11본 [../02_features/01_auth.md](../02_features/01_auth.md) ~ [../02_features/11_metrics.md](../02_features/11_metrics.md) 기능 목록 · [README.md](./README.md) 화면 인벤토리 · 화면 문서 6본의 요소 표 · [01_standards.md](./01_standards.md) 공통 셸 요소 표 · 07_api 도메인 문서의 표면 요약 · 원본 architecture.md §11(커밋 ff66a37)
 
 이 문서는 **기능 → 화면 매핑과 파생 집계의 정본**이다. 기능 ID와 기능명의 정본은 02_features 도메인 파일 11본이고, 화면 코드의 정본은 [README.md](./README.md) 화면 인벤토리다. 이 문서는 둘을 잇기만 하며 기능도 화면도 새로 만들지 않는다.
 
@@ -27,7 +28,7 @@
 
 - 검산: 분류 = **4** · 화면 없는 분류 = 내부 모듈 · 표면 없음 · 화면 없음(API 전용) = **3**
 - **간접 표시는 매핑이 아니다.** 내부 기능의 산출이 화면에 보이는 자리(예: ING의 컨슈머 랙이 EXP-CONSOLE 카드에 보인다)는 아래 표의 "산출이 보이는 자리" 열에 적되 분류를 바꾸지 않는다 — 화면이 부르는 것은 OBS 표면이지 ING가 아니다.
-- **주 화면은 기능 하나에 하나다.** 여러 화면이 같은 표면을 부르면 기능의 목적과 페르소나가 같은 화면을 주 화면으로, 나머지를 보조로 적는다. 집계는 주 화면으로만 센다 — 보조까지 세면 기능 수가 화면 수만큼 부풀어 91과 맞지 않는다.
+- **주 화면은 기능 하나에 하나다.** 여러 화면이 같은 표면을 부르면 기능의 목적과 페르소나가 같은 화면을 주 화면으로, 나머지를 보조로 적는다. 집계는 주 화면으로만 센다 — 보조까지 세면 기능 수가 화면 수만큼 부풀어 기능 총수와 맞지 않는다.
 
 ## 기능 → 화면 매핑
 
@@ -39,7 +40,7 @@
 | AUT-02 | 토큰 갱신 | 화면 | AUTH-LOGIN | 공통 셸(인증 가드) | POST /api/v1/auth/refresh | 표시 없음 — 조용한 갱신 |
 | AUT-03 | 로그아웃 | 화면 | AUTH-LOGIN | 공통 셸(사용자 메뉴) | POST /api/v1/auth/logout | 해당 없음 |
 | AUT-04 | 신원 확인 | 화면 | 공통 셸 | 전 인증 화면 | 인증이 필요한 전 표면 · WS /ws/realtime | 로그인 유도 |
-| AUT-05 | 역할 기반 인가 | 화면 | 공통 셸 | 역할 판정 화면(ALM-CONSOLE · ALM-RULES · ANL-TREND 내보내기 · ADM 3) | 인가 대상 전 표면 | 버튼 활성 · 403 제자리 안내 |
+| AUT-05 | 역할 기반 인가 | 화면 | 공통 셸 | 역할 판정 화면(ALM-CONSOLE · ALM-RULES · ANL-TREND 내보내기 · ADM 3 · EXP-PERF · EXP-FLOW 실행 패널) | 인가 대상 전 표면 | 버튼 활성 · 403 제자리 안내 |
 | AUT-06 | 레이트 리밋 | 화면 | 공통 셸 | 전 인증 화면 | 인증이 필요한 전 REST 표면 | 429 띠 |
 | AUT-07 | 요청 출처 방어 | 화면 | 공통 셸 | DSH-REALTIME · ALM-CONSOLE(WS) | 직결 표면 · WS /ws/realtime | WS 끊김 표지 |
 | MST-01 | 사이트 · 라인 관리 | 화면 | ADM-MASTER | DSH-REALTIME · ANL-TREND · ALM-RULES · ADM-WORKORDER(선택 목록) | GET · POST /api/v1/sites · PATCH /api/v1/sites/{id} · GET · POST /api/v1/lines · PATCH /api/v1/lines/{id} · GET /api/v1/commands/{cmdId}(202 뒤 — 명령 조회) | 해당 없음 |
@@ -56,6 +57,8 @@
 | GEN-01~06 | 생성 · 모드 A · B(6) | 표면 없음 | 해당 없음 | 해당 없음 | 해당 없음 — 실행 인자 | EXP-CONSOLE 생성기 pps 카드 · DSH-REALTIME 품질 9 |
 | GEN-07 | 모드 C 부하 주입 표면 | 화면 없음(API 전용) | 해당 없음 | 해당 없음 | POST /api/v1/ingest/bulk — k6 · datagen 컨테이너가 부른다 | EXP-CONSOLE 모드 C 거절 수 카드 |
 | GEN-08~10 | 모드 D · 단독 실측 · 대조군 백필(3) | 표면 없음 | 해당 없음 | 해당 없음 | 해당 없음 — 실행 인자 | EXP-COMPARE 역전 지점 패널 · EXP-PERF(BFF가 docs/measurements 기록을 읽는다) |
+| GEN-11 | 성능 비교 라이브 실행 | 화면 | EXP-PERF | 해당 없음 | POST /api/v1/runs · GET /api/v1/runs/current · GET /api/v1/runs/{runId} · POST /api/v1/runs/{runId}/stop | EXP-PERF 라이브 결과 표 · 라이브 곡선 계열(시연값) |
+| GEN-12 | 흐름 시연 실행 | 화면 | EXP-FLOW | 해당 없음 | POST /api/v1/runs · GET /api/v1/runs/current · GET /api/v1/runs/{runId} · POST /api/v1/runs/{runId}/stop | EXP-FLOW 흐름도 · 배치 타임라인 · 업무 명령 목록(실행이 늘린 발행 · 명령이 flow 프레임으로 보인다) · 발생원 초당 포인트(mode run) |
 | ING-01~13 | 적재 · 분기(13) | 내부 모듈 | 해당 없음 | 해당 없음 | 해당 없음 | EXP-CONSOLE 랙 · 백프레셔 · DLQ 카드 · DSH-REALTIME 최신값(ING-08) · ALM 화면(ING-09 · 10) · EXP-FLOW 흐름도 · 배치 타임라인(flow 프레임 — 분기 ING-10 · 대조군 ING-11) |
 | TSQ-01 | 시계열 조회 | 화면 | ANL-TREND | DSH-REALTIME(트렌드 채움) | POST /api/v1/timeseries/query | 해당 없음 |
 | TSQ-02 | 해상도 자동 선택 | 화면 | ANL-TREND | 해당 없음 | POST /api/v1/timeseries/query(meta.interval) | 해당 없음 |
@@ -96,7 +99,8 @@
 | OBS-05 | 헬스체크 | 화면 | EXP-CONSOLE | 해당 없음 | GET /api/v1/health | 해당 없음 |
 | OBS-06 | 스위치 상태 노출 | 화면 | EXP-CONSOLE | EXP-COMPARE · 공통 셸(실험 조건 배지) · DSH-REALTIME(구성 배지) | GET /api/v1/health · GET /metrics | 해당 없음 |
 
-- 검산: 표 행 = AUT 7 + MST 9 + COL 1 + SIM 1 + GEN 3 + ING 1 + TSQ 9 + RLT 9 + ALM 9 + WRK 5 + OBS 6 = **60** · 범위 행이 담는 기능 = COL 9 + SIM 5 + GEN 6 + GEN 3 + ING 13 = **36** · 기능 = 60 − 범위 행 5 + 36 = **91**
+- 검산: 표 행 = AUT 7 + MST 9 + COL 1 + SIM 1 + GEN 5 + ING 1 + TSQ 9 + RLT 9 + ALM 9 + WRK 5 + OBS 6 = **62** · 범위 행이 담는 기능 = COL 9 + SIM 5 + GEN 6 + GEN 3 + ING 13 = **36** · 기능 = 62 − 범위 행 5 + 36 = **93**
+- **GEN-11 · GEN-12는 같은 표면 4를 나눠 쓴다.** 실행 표면은 본문의 type(perf · flow)으로 종류를 가르므로 표면이 기능마다 따로 있지 않다 — 두 화면이 상대 종류의 실행을 current · 단건 조회로 보는 것(시작 비활성 · "다른 실행 진행 중" 링크)은 상대 기능의 보조 매핑이 아니라 동시 실행 1 규칙의 표시다([08_evidence_screens.md](./08_evidence_screens.md) §실행 패널 — 두 화면 공통 규칙).
 - **GEN-07이 화면 없음인 것은 누락이 아니다.** 부하 주입 표면의 호출 주체는 k6 · datagen 컨테이너이고, 켜는 권한은 머신 접근이다(권한 매트릭스 §GEN · OBS 표면 인가). 콘솔에서 부르게 하면 부하 도구가 아닌 브라우저가 측정 부하에 섞인다 — 화면은 거절 수를 메트릭으로만 본다.
 - **TSQ-08의 주 화면이 DSH-REALTIME인 이유** — 진행 구간 분할은 "끝이 현재인 조회"의 기전이고, 그 조회를 상시 하는 화면은 대시보드 트렌드다. ANL-TREND는 끝이 현재일 때만 같은 기전을 쓴다.
 
@@ -106,13 +110,13 @@
 
 | 분류 | 기능 수 | 내역 |
 |------|------|------|
-| 화면 | **42** | AUT 7 · MST 6(01~06) · TSQ 6(01 · 02 · 06 · 07 · 08 · 09) · RLT 9 · ALM 4(01 · 07 · 08 · 09) · WRK 4(01 · 02 · 03 · 05) · OBS 6 |
+| 화면 | **44** | AUT 7 · MST 6(01~06) · GEN 2(11 · 12) · TSQ 6(01 · 02 · 06 · 07 · 08 · 09) · RLT 9 · ALM 4(01 · 07 · 08 · 09) · WRK 4(01 · 02 · 03 · 05) · OBS 6 |
 | 내부 모듈 | **27** | COL 9 · SIM 5 · ING 13 |
-| 표면 없음 | **21** | MST 3(07 · 08 · 09) · GEN 9(07 제외) · TSQ 3(03 · 04 · 05) · ALM 5(02~06) · WRK 1(04) |
+| 표면 없음 | **21** | MST 3(07 · 08 · 09) · GEN 9(01~06 · 08~10) · TSQ 3(03 · 04 · 05) · ALM 5(02~06) · WRK 1(04) |
 | 화면 없음(API 전용) | **1** | GEN-07 |
 
-- 검산: 화면 7 + 6 + 6 + 9 + 4 + 4 + 6 = **42** · 내부 모듈 9 + 5 + 13 = **27** · 표면 없음 3 + 9 + 3 + 5 + 1 = **21** · 42 + 27 + 21 + 1 = **91** — 누락 0
-- **권한 매트릭스와의 교차 검산**([../02_features/12_permission_matrix.md](../02_features/12_permission_matrix.md) §검산) — 화면 42 = 역할 판정 31 + 공개 7 + 횡단 4 · 내부 모듈 27 + 표면 없음 21 = 내부 48 · 화면 없음(API 전용) 1 = 게이트 1. **세 등식이 모두 성립한다** — 인가 대상 기능은 전부 화면이 있고, 인가 밖 기능은 하나도 화면이 없다. 이 등식이 깨지면 화면이 인가 판정 없는 기능을 부르거나, 인가된 기능이 화면 없이 남은 것이다.
+- 검산: 화면 7 + 6 + 2 + 6 + 9 + 4 + 4 + 6 = **44** · 내부 모듈 9 + 5 + 13 = **27** · 표면 없음 3 + 9 + 3 + 5 + 1 = **21** · 44 + 27 + 21 + 1 = **93** — 누락 0
+- **권한 매트릭스와의 교차 검산**([../02_features/12_permission_matrix.md](../02_features/12_permission_matrix.md) §검산) — 화면 44 = 역할 판정 33(GEN-11 · 12는 S7 뒤 ENGINEER · ADMIN — 실험 수행) + 공개 7 + 횡단 4 · 내부 모듈 27 + 표면 없음 21 = 내부 48 · 화면 없음(API 전용) 1 = 게이트 1. **세 등식이 모두 성립한다** — 인가 대상 기능은 전부 화면이 있고, 인가 밖 기능은 하나도 화면이 없다. 이 등식이 깨지면 화면이 인가 판정 없는 기능을 부르거나, 인가된 기능이 화면 없이 남은 것이다.
 
 ### 주 화면별
 
@@ -128,13 +132,14 @@
 | ADM-AUDIT | 1 | WRK-05 |
 | EXP-CONSOLE | 5 | OBS-02 · 03 · 04 · 05 · 06 |
 | EXP-COMPARE | 1 | OBS-01 |
-| EXP-PERF | 0 | 없음 — 측정 기록 읽기(api 표면 없음) |
-| EXP-FLOW | 0 | 없음 — 보조 4(RLT-05 · OBS-01 · 02 · 03) · 흐름 이벤트는 기능 ID 없음 |
+| EXP-PERF | 1 | GEN-11(실행 패널) — 기록 곡선 · 표는 측정 기록 읽기(기능 없음) |
+| EXP-FLOW | 1 | GEN-12(실행 패널) — 보조 4(RLT-05 · OBS-01 · 02 · 03) · 흐름 이벤트는 기능 ID 없음 |
 | 공통 셸 | 5 | AUT-04 · 05 · 06 · 07 · RLT-09 |
 
-- 검산: 3 + 8 + 5 + 3 + 2 + 6 + 3 + 1 + 5 + 1 + 0 + 0 + 5 = **42** = 분류 "화면" · 화면 코드 행 = **12** — 인벤토리 12와 같다
-- **유령 0 · 고아 0 · 주 기능 없는 실증 화면 2** — 주 화면 열의 화면 코드는 전부 인벤토리에 있다(유령 0). 인벤토리 12 중 EXP-PERF · EXP-FLOW는 **주 기능 없는 실증 화면(OBS 보조)**으로 분류하고(리드 판정 1 · 2026-09-28 — 새 기능 ID를 만들지 않는다), 나머지 10은 전부 주 기능을 1개 이상 갖는다(고아 0). EXP-PERF는 원천이 api 표면이 아닌 BFF 기록 읽기라(EXP-COMPARE 역전 지점 패널과 같은 사정) 붙일 기능이 없고, EXP-FLOW의 흐름 이벤트(ch:flow 발행 · flow 중계)는 관찰 보조 채널이라 기능으로 세지 않는다 — 두 화면의 기능 매핑은 보조 화면 열과 산출이 보이는 자리 열에만 있다. 이 분류 밖의 화면이 주 기능 0이면 그것은 고아다.
-- **추가 화면 2(2026-09-27 · 사용자 요구 · 리드 채번)** — EXP-PERF · EXP-FLOW. 화면 있는 기능 42는 선점 10이 이미 담으므로 두 화면은 주 기능 없이 보조 매핑 · 산출 표시만 늘린다 — 기능 수 · 분류 · 주 화면 합은 불변이다.
+- 검산: 3 + 8 + 5 + 3 + 2 + 6 + 3 + 1 + 5 + 1 + 1 + 1 + 5 = **44** = 분류 "화면" · 화면 코드 행 = **12** — 인벤토리 12와 같다
+- **유령 0 · 고아 0** — 주 화면 열의 화면 코드는 전부 인벤토리에 있고(유령 0), 인벤토리 12가 전부 주 기능을 1개 이상 갖는다(고아 0). 주 기능 0인 화면이 생기면 그것은 고아다 — 예외 분류를 두지 않는다.
+- **두 실증 화면의 분류 재판정(리드 판정 2026-09-28)** — EXP-PERF · EXP-FLOW는 2026-09-28 앞선 판정에서 "주 기능 없는 실증 화면(OBS 보조)"이었다. 실행 패널(GEN-11 · GEN-12)의 주 화면이 각 화면이 되면서 두 화면은 **주 기능 있는 화면**으로 바뀌고 그 분류는 비었다. 나머지 요소의 매핑은 그대로다 — EXP-PERF의 기록 곡선 · 표는 원천이 api 표면이 아닌 BFF 기록 읽기라 기능이 붙지 않고, EXP-FLOW의 흐름 이벤트(ch:flow 발행 · flow 중계)는 관찰 보조 채널이라 기능으로 세지 않으며, 보조 화면 열(RLT-05 · OBS-01 · 02 · 03)과 산출이 보이는 자리 열에만 남는다.
+- **추가 화면 2(2026-09-27 · 사용자 요구 · 리드 채번)** — EXP-PERF · EXP-FLOW. 추가 때는 화면 있는 기능을 선점 10이 이미 담아 기능 수 · 분류 · 주 화면 합이 불변이었고, 2026-09-28 실행 제어 기능 2(GEN-11 · 12)가 새로 생기며 두 화면의 주 기능이 됐다.
 
 ### 도메인별
 
@@ -144,7 +149,7 @@
 | MST | 9 | 6 | 0 | 3 | 0 | ADM-MASTER 6 |
 | COL | 9 | 0 | 9 | 0 | 0 | 해당 없음 |
 | SIM | 5 | 0 | 5 | 0 | 0 | 해당 없음 |
-| GEN | 10 | 0 | 0 | 9 | 1 | 해당 없음 |
+| GEN | 12 | 2 | 0 | 9 | 1 | EXP-PERF 1 · EXP-FLOW 1 |
 | ING | 13 | 0 | 13 | 0 | 0 | 해당 없음 |
 | TSQ | 9 | 6 | 0 | 3 | 0 | ANL-TREND 5 · DSH-REALTIME 1 |
 | RLT | 9 | 9 | 0 | 0 | 0 | DSH-REALTIME 7 · ALM-CONSOLE 1 · 공통 셸 1 |
@@ -152,8 +157,8 @@
 | WRK | 5 | 4 | 0 | 1 | 0 | ADM-WORKORDER 3 · ADM-AUDIT 1 |
 | OBS | 6 | 6 | 0 | 0 | 0 | EXP-CONSOLE 5 · EXP-COMPARE 1 |
 
-- 검산: 기능 7 + 9 + 9 + 5 + 10 + 13 + 9 + 9 + 9 + 5 + 6 = **91** · 화면 열 합 7 + 6 + 6 + 9 + 4 + 4 + 6 = **42** · 행마다 화면 + 내부 모듈 + 표면 없음 + API 전용 = 기능
-- **화면 공백 도메인은 넷이다 — COL · SIM · ING(내부 모듈) · GEN(표면 없음 + API 전용).** 앞 셋은 07_api 표면 없음 3과 같은 도메인이고, GEN은 표면(부하 주입) 하나를 갖지만 호출 주체가 기계라 화면이 없다. README 도메인 공백 행의 "GEN(생성기 실행)은 잠정 07_experiment_console 귀속"은 **화면 없음 · 산출은 EXP-CONSOLE 메트릭으로만 보인다**로 확정할 것을 제안한다(생성기 실행 · 상태 표면을 두지 않는 판정 — [../07_api/09_datagen.md](../07_api/09_datagen.md)). OBS는 EXP-CONSOLE · EXP-COMPARE 귀속으로 확정된다.
+- 검산: 기능 7 + 9 + 9 + 5 + 12 + 13 + 9 + 9 + 9 + 5 + 6 = **93** · 화면 열 합 7 + 6 + 2 + 6 + 9 + 4 + 4 + 6 = **44** · 행마다 화면 + 내부 모듈 + 표면 없음 + API 전용 = 기능
+- **화면 공백 도메인은 셋이다 — COL · SIM · ING(내부 모듈).** 07_api 표면 없음 3과 같은 도메인이다. GEN은 2026-09-28부터 공백이 아니다 — 라이브 실행 기능 2(GEN-11 · 12)가 EXP-PERF · EXP-FLOW를 주 화면으로 갖는다([../07_api/09_datagen.md](../07_api/09_datagen.md) 실행 표면 #2~#5). 부하 주입 표면(GEN-07)은 여전히 호출 주체가 기계라 화면이 없고, 생성기 모드 A~D(GEN-01~06 · 08~10)는 실행 인자라 산출이 EXP-CONSOLE 메트릭 · EXP-PERF 기록 곡선으로만 보인다. OBS는 EXP-CONSOLE · EXP-COMPARE 귀속이다.
 
 ## 화면 → 표면 인용
 
@@ -168,12 +173,12 @@
 | [../07_api/06_realtime.md](../07_api/06_realtime.md) | GET /api/v1/realtime/devices/{id}/tags · GET /api/v1/realtime/tags/{id} | 2 | DSH-REALTIME |
 | [../07_api/07_alarms.md](../07_api/07_alarms.md) | GET /api/v1/alarms/events · POST /api/v1/alarms/events/{id}/ack · GET · POST /api/v1/alarms/rules · PATCH /api/v1/alarms/rules/{id} · GET /api/v1/alarms/evaluations | 6 | ALM-CONSOLE · ALM-RULES |
 | [../07_api/08_work_orders.md](../07_api/08_work_orders.md) | GET · POST /api/v1/work-orders · GET · PATCH /api/v1/work-orders/{id} · POST /api/v1/work-orders/{id}/status · GET · POST /api/v1/work-orders/{id}/production-logs · GET /api/v1/audit-logs · GET /api/v1/audit-logs/tag-reissues | 9 | ADM-WORKORDER · ADM-AUDIT · ANL-TREND |
-| [../07_api/09_datagen.md](../07_api/09_datagen.md) | 없음 — POST /api/v1/ingest/bulk는 화면 없음(API 전용) | 0 | 해당 없음 |
+| [../07_api/09_datagen.md](../07_api/09_datagen.md) | POST /api/v1/runs · GET /api/v1/runs/current · GET /api/v1/runs/{runId} · POST /api/v1/runs/{runId}/stop(#2~#5 · BFF 경유 no-store) — POST /api/v1/ingest/bulk(#1)는 화면 없음(API 전용) | 4 | EXP-PERF · EXP-FLOW |
 | [../07_api/10_metrics.md](../07_api/10_metrics.md) | GET /api/v1/health · GET /metrics(화면은 BFF 경유) | 2 | EXP-CONSOLE · EXP-COMPARE · EXP-FLOW(metrics만) · 공통 셸 |
 | [../07_api/11_websocket.md](../07_api/11_websocket.md) | WS /ws/realtime | 1 | DSH-REALTIME · ALM-CONSOLE · EXP-FLOW(subscribe_flow · flow) · 공통 셸 |
 
-- 검산: 인용 표면 = 1 + 3 + 17 + 2 + 2 + 6 + 9 + 0 + 2 + 1 = **43** · 화면이 인용하지 않은 표면 = POST /api/v1/ingest/bulk **1** · 43 + 1 = 44 = [../07_api/README.md](../07_api/README.md) 표면 총수와 같다
-- **EXP-COMPARE 역전 지점 패널과 EXP-PERF의 원천은 이 표에 없다** — api 표면이 아니라 BFF가 docs/measurements를 읽기 전용으로 읽는다(W5 리드 판정 · [07_experiment_console.md](./07_experiment_console.md) · [08_evidence_screens.md](./08_evidence_screens.md)). EXP-FLOW의 flow 프레임은 새 표면이 아니라 WS /ws/realtime 한 표면의 메시지 type이다 — 표면이 늘지 않으므로 인용 수도 늘지 않는다. 명령 조회(01_conventions)는 업무 쓰기 명령 경로가 더한 새 표면이라 따로 센다.
+- 검산: 인용 표면 = 1 + 3 + 17 + 2 + 2 + 6 + 9 + 4 + 2 + 1 = **47** · 화면이 인용하지 않은 표면 = POST /api/v1/ingest/bulk **1** · 47 + 1 = 48 = [../07_api/README.md](../07_api/README.md) 표면 총수와 같다
+- **EXP-COMPARE 역전 지점 패널과 EXP-PERF 기록 곡선의 원천은 이 표에 없다** — api 표면이 아니라 BFF가 docs/measurements를 읽기 전용으로 읽는다. EXP-PERF의 실행 패널은 09_datagen 행에 있다(W5 리드 판정 · [07_experiment_console.md](./07_experiment_console.md) · [08_evidence_screens.md](./08_evidence_screens.md)). EXP-FLOW의 flow 프레임은 새 표면이 아니라 WS /ws/realtime 한 표면의 메시지 type이다 — 표면이 늘지 않으므로 인용 수도 늘지 않는다. 명령 조회(01_conventions)는 업무 쓰기 명령 경로가 더한 새 표면이라 따로 센다.
 - **원본 표면 중 화면이 부르지 않는 것은 부하 주입 하나뿐이다.** 원본 API 표(원본 architecture.md §11)의 나머지는 전부 화면 요소에 걸려 있다 — 화면 없는 표면이 늘면 그 표면의 호출 주체를 이 표에 적는다.
 - 07_api README의 표면 총수와 이 표의 합이 다르면 차이는 화면 없는 표면이다 — 표면 총수의 정본은 [../07_api/README.md](../07_api/README.md)이고 이 표는 그것을 세지 않는다.
 
@@ -182,15 +187,16 @@
 | 항목 | 상태 | 확정 자리 |
 |------|------|------|
 | README 도메인 공백 행의 GEN · OBS 잠정 귀속 | 닫힘 — README 도메인 공백 행 반영(GEN 화면 없음 · OBS는 EXP-CONSOLE · EXP-COMPARE) · 인벤토리 EXP-CONSOLE 주 도메인도 OBS로 맞춤 | [README.md](./README.md) |
-| 주 기능 없는 화면 2(EXP-PERF · EXP-FLOW) · 흐름 이벤트 기능 ID | **닫힘(리드 판정 1 · 2026-09-28)** — 새 기능 ID 없음 · 주 기능 없는 실증 화면(OBS 보조) 분류 인정 · 기능 91 · 42 등식과 권한 매트릭스 교차 검산은 기능을 늘리지 않으므로 그대로 성립 | 이 문서 |
+| 주 기능 없는 화면 2(EXP-PERF · EXP-FLOW) · 흐름 이벤트 기능 ID | **닫힘(리드 판정 1 · 2026-09-28)** — 새 기능 ID 없음 · 주 기능 없는 실증 화면(OBS 보조) 분류 인정 · 기능 91 · 42 등식과 권한 매트릭스 교차 검산은 기능을 늘리지 않으므로 그대로 성립 · **같은 날 재판정으로 대체**(아래 분류 재판정 행 — GEN-11 · 12 신설로 분류 2 → 0) | 이 문서 |
 | 명령 조회 표면(GET /api/v1/commands/{cmdId}) | **닫힘(2026-09-28)** — 07_api/01 확정(횡단 표면 #1 · 기능 MST-01~06 · ALM-01 · ALM-08 · WRK-01~03) · 해당 기능 행의 호출 표면 열과 화면 → 표면 인용 표에 반영 · 화면 처리는 [01_standards.md](./01_standards.md) §업무 쓰기 응답 — 명령 경로 | 이 문서 |
+| 두 실증 화면의 분류 재판정(GEN-11 · GEN-12 신설) | **닫힘(리드 판정 2026-09-28)** — 실행 패널의 주 화면 = 각 화면 · 주 기능 없는 실증 화면 분류 2 → 0 · 기능 93 · 44 등식은 권한 매트릭스가 GEN-11 · 12를 역할 판정(S7 뒤 ENGINEER · ADMIN)으로 셀 때 성립한다 | 이 문서 · [../02_features/12_permission_matrix.md](../02_features/12_permission_matrix.md) |
 | 기능 ↔ REQ ↔ 흐름 ↔ 화면 ↔ API ↔ 테이블 전 축 정합 | 닫힘 — 전 축 매핑 완성(미매핑 0 · 유령 0) — [../03_requirements/15_traceability.md](../03_requirements/15_traceability.md) | [../03_requirements/15_traceability.md](../03_requirements/15_traceability.md) |
 
 ## 관련 문서
 
 - [README.md](./README.md) — 화면 인벤토리 · 화면 코드 채번
 - [01_standards.md](./01_standards.md) — 명세 템플릿 · 공통 셸 요소 표
-- [08_evidence_screens.md](./08_evidence_screens.md) — EXP-PERF · EXP-FLOW 요소 표
+- [08_evidence_screens.md](./08_evidence_screens.md) — EXP-PERF · EXP-FLOW 요소 표 · 실행 패널
 - [../02_features/12_permission_matrix.md](../02_features/12_permission_matrix.md) — 역할 × 기능 · 교차 검산 상대
 - [../03_requirements/15_traceability.md](../03_requirements/15_traceability.md) — 전 축 추적성
 - [../07_api/README.md](../07_api/README.md) — 표면 목차 · 표면 총수

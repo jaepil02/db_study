@@ -2,6 +2,10 @@
 
 > **대상**: PostgreSQL 업무 테이블 15의 컬럼 · 타입 · 컬럼 제약 · 도메인 소유 · tag_master_history 설계 · **biz_command_log 설계(업무 명령 멱등 원장)** · 저장 enum 값 집합 확정(condition_type · severity · work_order.status) · 인계 판정(site.timezone · 알람 담당자 · 무인증 기간 감사 행위자) · 튜닝 파라미터와 조정값 소유처 — 테이블명 · 컬럼명 채번 정본
 > **작성일**: 2026-09-24
+> **개정일**: 2026-09-28 — 최종 검증 반영(v-wave2 L) — 인증 뒤 NULL 감사 행 예외 문구 "행 하나" → **예외 부류 하나(시연 전용 행 대상 감사 행 · 명령마다)**
+> **개정일**: 2026-09-28 — UTC 검수 반영(r-utc L1) — site.timezone 판정 칸의 옛 문장에 "(W3 원문)" 표지 · 원문의 파티션 경계는 이 값을 따르지 않는다(ADR-27)
+> **개정일**: 2026-09-28 — 라이브 실행 검수 반영(리드 재판정 2026-09-28) — 인계 판정 audit_log.user_id NULL의 뜻 "무인증 기간의 행위" → **무인증 기간의 행위 또는 시스템 시연(라이브 flow — 시연 전용 행)** · 인증 도입 뒤 NULL 결함 불릿에 시연 전용 행 대상 행 제외 — 판정 수 불변
+> **개정일**: 2026-09-28 — DB 시각 UTC(ADR-27 · 사용자 요구 2026-09-28) — site.timezone 뜻 표시 · 달력 경계 시스템 단일 시간대 → **표시 · 달력 의미 시간대**(DB 처리 시간대 아님 · CHECK 'Asia/Seoul' 불변) · 튜닝 파라미터 timezone(DB 기본) Asia/Seoul → **UTC** · log_timezone 병기 · 실행 수명 객체 포인터 한 줄 — 테이블 · 파라미터 수 불변
 > **개정일**: 2026-09-28 — 웨이브 1 검수 반영(B-H4 — actor ⓐ 채택) — biz_command_log에 **actor**(bigint · NULL 허용 · FK 없음 — 명령 조회 요청자 대조 기준) 신설 — 컬럼 7 → **8** · "actor 컬럼을 두지 않는다" 불릿 → **actor는 요청자 · 감사 행위자 정본은 audit_log.user_id 그대로** — 테이블 수 불변
 > **개정일**: 2026-09-28 — 업무 쓰기 Redis 경유 개정(사용자 결정 2026-09-27 · D-04 · REQ-GLB-12 개정) — **biz_command_log 신설**(업무 명령 멱등 원장 · 소유 WRK — audit_log 선례 · 명령 적용과 같은 트랜잭션) — 업무 테이블 14 → **15** · WRK 3 → **4** · 합계 15 → **16** · 식별자 발급 규약에 cmd_id(요청이 정하는 UUID) 예외 · enum 값 11 → **14**(status 3 — 11_glossary/03 반영 제안) · "업무 쓰기는 Stream을 거치지 않는다" → **명령 스트림을 거쳐 워커가 트랜잭션으로 커밋한다**
 > **개정일**: 2026-09-26 — W1 재검수 반영 — 무인증 기간 감사 행위자 판정 근거 칸 "인증은 S7" → **인증 도입은 S7 ②**(S7 ① 알람도 무인증) · 버린 대안 칸 S7 이후 → **인증 도입(S7 ②) 이후**
@@ -10,7 +14,7 @@
 > **개정일**: 2026-09-24 — 최종 정밀 검수 — 빈 표 칸을 닫힌 어휘 해당 없음으로 채움(표 열 규약) · 미확인 등재 3행 닫힘(enum 반영 · RATE_OF_CHANGE 경계 · 비활성 태그 규칙)
 > **개정일**: 2026-09-24 — W7 검수 반영 — 미확인 1행 닫힘(실적 기록 상태 조건) — 테이블 수 불변
 > **개정일**: 2026-09-24 — W7 보안 판정 반영 — password_hash 알고리즘 미기재 → **Argon2id**(PHC 자기 기술 문자열 · 컬럼 형 불변)(정본 12_security/01)
-> **원천**: 원본 architecture.md §5 · §6 · §12 · §13 · §18(커밋 ff66a37) · 원본 tech_stack.md §5.1 · §10.2(커밋 ff66a37) · 원본 data_flow.md §7 · §8 · §8.2(커밋 ff66a37) · 원본 implementation_plan.md §2.3(커밋 ff66a37) · docs_plan.md 보정 #15 · 웨이브 인계 W3 05_data_stores/01 행 · ADR-16 · ADR-19 · D-04 · D-11 · 사용자 결정 2026-09-27(업무 쓰기 Redis 경유) · [../06_pipeline/07_business_crud.md](../06_pipeline/07_business_crud.md) §업무 명령 경로 · [../README.md](../README.md) 고정 기준 PostgreSQL 테이블
+> **원천**: ADR-27(사용자 요구 2026-09-28) · 원본 architecture.md §5 · §6 · §12 · §13 · §18(커밋 ff66a37) · 원본 tech_stack.md §5.1 · §10.2(커밋 ff66a37) · 원본 data_flow.md §7 · §8 · §8.2(커밋 ff66a37) · 원본 implementation_plan.md §2.3(커밋 ff66a37) · docs_plan.md 보정 #15 · 웨이브 인계 W3 05_data_stores/01 행 · ADR-16 · ADR-19 · D-04 · D-11 · 사용자 결정 2026-09-27(업무 쓰기 Redis 경유) · [../06_pipeline/07_business_crud.md](../06_pipeline/07_business_crud.md) §업무 명령 경로 · [../README.md](../README.md) 고정 기준 PostgreSQL 테이블
 
 이 문서는 PostgreSQL에 앉는 **업무 데이터의 모양**을 고정한다. 테이블 수는 루트 고정 기준(업무 15 + 대조군 1)을 그대로 따르고, 이 문서가 채번하는 것은 **컬럼 이름 · 타입 · 컬럼 단위 제약**이다. 테이블 사이의 제약 · 인덱스 · 파티션 · 커넥션 · 한계 등재는 [02_postgresql_constraints.md](./02_postgresql_constraints.md)가, 대조군 plc_tag_raw_control의 명세는 [10_olap_vs_rdb_control.md](./10_olap_vs_rdb_control.md)가 갖는다.
 
@@ -45,6 +49,7 @@
 - **biz_command_log를 WRK가 소유하는 것은 audit_log와 같은 판정이다.** 쓰기는 모든 업무 명령에서 오지만 기준(상태 값 · 보존 · 추가 전용)은 한 도메인이 정한다 — 소유 도메인이 없는 테이블을 만들면 도메인 공백 매트릭스에 없는 주체가 생긴다. 번호 #16은 식별자이지 순서가 아니다(말미 채번).
 - **소유 테이블이 없는 도메인은 6이다** — COL · SIM · GEN · TSQ · RLT · OBS. ING는 PostgreSQL에서 대조군 하나만 소유한다(ING-11). 도메인 공백의 정본 매트릭스는 [../01_overview/04_domain_map.md](../01_overview/04_domain_map.md)다.
 - 도구가 스스로 만드는 관리 테이블(마이그레이션 이력 · pg_partman 설정 · 확장 카탈로그)은 업무 테이블이 아니며 위 합계에 넣지 않는다 — 판정 근거는 [09_migrations_seed.md](./09_migrations_seed.md)다.
+- **라이브 실행(perf)의 실행 수명 객체 plc.run_perf_raw · run_perf_raw는 이 문서의 객체 수에 세지 않는다 — 모양 · 수명의 정본은 [10_olap_vs_rdb_control.md](./10_olap_vs_rdb_control.md) §실행 수명 객체다.**
 
 ## 공통 규약
 
@@ -246,13 +251,13 @@ REQ-WRK-04가 요구한 허용 전이 표다. 표 밖 전이는 work_orders.inva
 
 | 인계 항목 | 판정 | 근거 | 버린 대안의 실패 |
 |------|------|------|------|
-| site.timezone 용도 vs 표시 Asia/Seoul 고정 | **컬럼을 유지하되 값은 'Asia/Seoul' 하나로 CHECK 고정한다.** 표시 · 달력 경계(tag_1d 하루 · 파티션 경계)는 시스템 단일 시간대이며 이 컬럼이 바꾸지 않는다 | 달력 경계 시간대 판정 [04_clickhouse_rollup.md](./04_clickhouse_rollup.md) · [03_clickhouse_schema.md](./03_clickhouse_schema.md) — 모든 사이트가 한 tag_1d를 공유한다 | ① 컬럼 삭제 — 원본 ERD와 어긋나고 다중 시간대 확장의 자리까지 지운다. ② 자유 값 허용 — 다른 값이 들어오는 순간 사이트의 하루와 tag_1d의 하루가 **조용히** 어긋난다 |
+| site.timezone 용도 vs 표시 Asia/Seoul 고정 | **컬럼을 유지하되 값은 'Asia/Seoul' 하나로 CHECK 고정한다.** (W3 원문) 표시 · 달력 경계(tag_1d 하루 · 파티션 경계)는 시스템 단일 시간대이며 이 컬럼이 바꾸지 않는다 — **뜻 개정(ADR-27 · 2026-09-28 · 원문의 파티션 경계는 이 값을 따르지 않는다)**: 이 값은 **표시 · 달력 의미 시간대**(화면 변환 · tag_1d 하루)이고 DB 처리 · 저장 운영 경계(파티션 · TTL)는 UTC다 · CHECK 값은 불변 | 달력 경계 시간대 판정 [04_clickhouse_rollup.md](./04_clickhouse_rollup.md) · [03_clickhouse_schema.md](./03_clickhouse_schema.md) — 모든 사이트가 한 tag_1d를 공유한다 · 달력 의미 경계 닫힌 목록 [../11_glossary/05_units_and_time.md](../11_glossary/05_units_and_time.md) | ① 컬럼 삭제 — 원본 ERD와 어긋나고 다중 시간대 확장의 자리까지 지운다. ② 자유 값 허용 — 다른 값이 들어오는 순간 사이트의 하루와 tag_1d의 하루가 **조용히** 어긋난다 |
 | 알람 담당자 배정 컬럼 | **두지 않는다.** alarm_event의 갱신은 확인(acked_by · acked_at)과 해제(state · cleared_at) 둘로 닫는다 | ALM-01~09에 배정 기능이 없다. 원본 "담당자 배정 등"(원본 data_flow.md §8.2)은 PostgreSQL을 고르는 이유의 예시다 | 컬럼만 두기 — 쓰는 기능이 없는 컬럼은 구현이 임의 뜻(최초 확인자 · 규칙 소유자)으로 채워 두 뜻이 섞인다 |
-| 인증 도입(S7 ②) 전 무인증 기간 audit_log 행위자 | **user_id NULL을 허용하고 NULL = 무인증 기간의 행위로 정의한다.** 시드 계정으로 채우지 않는다 — 예외는 alarm_event.acked_by 하나다(결합 CHECK 때문에 시드 계정이 대리 · 판정 [../07_api/07_alarms.md](../07_api/07_alarms.md) §인증 전 확인 행위자 판정) · 확인의 audit_log.user_id는 NULL 유지 | 인증 도입은 S7 ②이고(S7 ① 알람도 무인증) 마스터 쓰기 감사는 S4부터다(REQ-MST-05 · REQ-WRK-12). 행위자를 모르는 사실을 그대로 기록한다 | 시드 계정 대입 — 인증 도입(S7 ②) 이후 같은 계정의 실제 행위와 **구분할 수 없어** 감사가 거짓 귀속을 담는다. 시스템 전용 계정 신설 — 계정 생성 표면이 없는 원칙(REQ-AUT-17)에 예외 계정을 만든다 |
+| 인증 도입(S7 ②) 전 무인증 기간 audit_log 행위자 | **user_id NULL을 허용하고 NULL = 무인증 기간의 행위 또는 시스템 시연(라이브 flow — 시연 전용 행 · actor null)으로 정의한다.** 시드 계정으로 채우지 않는다 — 예외는 alarm_event.acked_by 하나다(결합 CHECK 때문에 시드 계정이 대리 · 판정 [../07_api/07_alarms.md](../07_api/07_alarms.md) §인증 전 확인 행위자 판정) · 확인의 audit_log.user_id는 NULL 유지 | 인증 도입은 S7 ②이고(S7 ① 알람도 무인증) 마스터 쓰기 감사는 S4부터다(REQ-MST-05 · REQ-WRK-12). 행위자를 모르는 사실을 그대로 기록한다 | 시드 계정 대입 — 인증 도입(S7 ②) 이후 같은 계정의 실제 행위와 **구분할 수 없어** 감사가 거짓 귀속을 담는다. 시스템 전용 계정 신설 — 계정 생성 표면이 없는 원칙(REQ-AUT-17)에 예외 계정을 만든다 |
 | tag_master_history 컬럼 | §tag_master_history 설계 — 10컬럼 · new_tag_id UNIQUE | REQ-MST-07 기록 내용 | 일반 메타 변경까지 담기 — audit_log와 정본이 둘이 된다 |
 
 - 검산: 판정 = **4**
-- **인증 도입(S7 ②) 이후 user_id NULL은 결함이다.** 인증된 쓰기 표면만 감사 대상이므로(REQ-WRK-07) 인증 도입(S7 ②) 이후에 NULL 행이 생기면 인증 없이 열린 쓰기 표면이 있다는 뜻이다. DB는 단계를 모르므로 막지 못한다 — 한계 등재 [02_postgresql_constraints.md](./02_postgresql_constraints.md) · 검증은 인증 도입(S7 ②) 이후 구간의 NULL 행 수 0 조회다.
+- **인증 도입(S7 ②) 이후 user_id NULL은 결함이다.** 인증된 쓰기 표면만 감사 대상이므로(REQ-WRK-07) 인증 도입(S7 ②) 이후에 NULL 행이 생기면 인증 없이 열린 쓰기 표면이 있다는 뜻이다 — 예외는 하나 — 대상이 시연 전용 행(사이트 DEMO-FLOW · 라인 DEMO-FLOW-L · 설비 DEMO-FLOW-DEV)인 감사 행이다(명령마다 생긴다 · 라이브 flow의 시스템 시연 · [../06_pipeline/10_datagen_inject.md](../06_pipeline/10_datagen_inject.md) §시연 전용 행). DB는 단계를 모르므로 막지 못한다 — 한계 등재 [02_postgresql_constraints.md](./02_postgresql_constraints.md) · 검증은 인증 도입(S7 ②) 이후 구간의 NULL 행 중 대상이 시연 전용 행이 아닌 행 수 0 조회다.
 - 시드 쓰기는 감사하지 않는다 — 사람이 쓰기 표면으로 일으킨 변경이 아니다(REQ-WRK-07 기준 · [09_migrations_seed.md](./09_migrations_seed.md)).
 
 ## 튜닝 파라미터
@@ -269,7 +274,7 @@ REQ-WRK-04가 요구한 허용 전이 표다. 표 밖 전이는 work_orders.inva
 | wal_compression | 디스크 쓰기 절감 | zstd | 상동 | 상동 | 대조군 비교 축 VACUUM/WAL 증폭의 측정 조건 |
 | checkpoint_timeout | 체크포인트 스파이크 완화 | 15min | 상동 | 상동 | 해당 없음 |
 | random_page_cost | 로컬 SSD | 1.1 | 상동 | 상동 | 해당 없음 |
-| timezone(DB 기본) | 달력 경계 시간대와 같게 | Asia/Seoul | 상동 | 상동 | **신설** — 월 파티션 경계 계산이 세션 시간대를 따른다(02) |
+| timezone(DB 기본) | DB 처리 시간대 UTC(ADR-27) — 설정 파일 timezone · log_timezone과 DB 기본값(관리자 단계) 두 자리를 같게 | UTC | 상동 | 상동 | **신설** — 월 · 일 파티션 경계 계산이 세션 시간대를 따른다(02) · 옛 값 Asia/Seoul(달력 경계 시간대와 같게)은 ADR-27이 대체 |
 
 - 검산: 파라미터 = **9** · 원본 8 + 신설 1(timezone)
 - **대조군과 업무 테이블이 같은 인스턴스 · 같은 shared_buffers를 쓴다.** SW-09 on 실험 중에는 대조군 쿼리가 버퍼를 밀어내 업무 CRUD p95가 오른다 — 목표 ① 실험과 목표 ② 측정을 섞지 않는 조합 제약 #4([../02_features/13_switch_matrix.md](../02_features/13_switch_matrix.md))의 저장소 쪽 이유다.

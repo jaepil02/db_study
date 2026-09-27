@@ -1,7 +1,11 @@
 # F-09 테스트 데이터 주입 (10_datagen_inject)
 
-> **대상**: F-09 주입 흐름의 기전 정본 — 생성 엔진 → 모드 A~D · 한 번에 한 계층 원칙 · 모드 A 레지스터 갱신 · **모드 B 적체 검사 기전(판정량은 그룹 적체)** · 모드 C 표면 · 모드 D 백필 실행 · **모드 D 대조군 동일 행 절차** · 대조군 파티션 정리 · **SIM 지연 · 오류 주입 제어 수단** · 티어 시드 구성 · 생성기 포화 · 부하 실행 절차
+> **대상**: F-09 주입 흐름의 기전 정본 — 생성 엔진 → 모드 A~D · 한 번에 한 계층 원칙 · 모드 A 레지스터 갱신 · **모드 B 적체 검사 기전(판정량은 그룹 적체)** · 모드 C 표면 · 모드 D 백필 실행 · **모드 D 대조군 동일 행 절차** · 대조군 파티션 정리 · **SIM 지연 · 오류 주입 제어 수단** · 티어 시드 구성 · 생성기 포화 · 부하 실행 절차 · **라이브 실행 두 종류(perf · flow)의 단계 · 취소 · 정리 · 생성 규칙**
 > **작성일**: 2026-09-24
+> **개정일**: 2026-09-28 — 라이브 실행 검수 반영(리드 재판정 2026-09-28) — 흐름 시연 업무 명령 이름 토글 짝(운영 설비 이름을 바꿨다 되돌림 — 중단 · 되돌림 실패 · 짝 가운데 재기동에서 되돌림 보장 자리가 없다) → **시연 전용 설비 DEMO-FLOW-DEV에만 새 이름 명령**(사이트 DEMO-FLOW · 라인 DEMO-FLOW-L · 설비 비활성 · 태그 없음 · prepare가 없으면 명령으로 만든다 · 되돌림 없음 · 운영 행 불변 · 명령 1건 = 1) · §시연 전용 행 신설 · perf 생성 식 고정(행 번호 n · ts 오름차순 삽입 · 두 저장소 같은 식) · 규모 증가분 구간 k = 5는 [S, S + 10초) · flow 발행 식 고정((태그 · ts) 중복 없음) · 종결 규칙(정상 경로 cleanup 실패 → failed · cleanup 중 stop 무시 · flow prepare 중 stop → stopped) · perf 전용 PostgreSQL 연결 1(pg_backend_pid) · 취소 표 단계 5 → **6**(flow prepare) · 관련 문서 GEN-01~10 → **GEN-01~12**
+> **개정일**: 2026-09-28 — DB 시각 UTC(ADR-27) — 모드 D 일 단위 반복 KST 일 → **UTC 일(파티션 경계)** · 대조군 정리 기준 KST 일 파티션 → **UTC 날짜 일 파티션** · 정리 시점 KST 자정 뒤 → **UTC 자정(= 09:00 KST) 뒤** — 단계 · 행 수 불변
+> **개정일**: 2026-09-28 — 리드 정정(통합 확인) — 흐름 시연 업무 명령 "deviceName 현재 이름 그대로(순 변경 없음)" → **이름 토글 짝**(같은 설비에 "원래 이름 (시연)" → 원래 이름 · 중단이면 되돌림 1건 뒤 종결) — 기존 쓰기 서비스는 변경이 없으면 감사 · 체인을 건너뛰어(통합 확인 2026-09-28) 시연에서 무효화가 보이지 않았다
+> **개정일**: 2026-09-28 — 라이브 실행 제어 반영(사용자 요구 2026-09-28 · 리드 판정 — 시작 · 중단 · 완료 · 소요 시간) — §라이브 실행 — perf · flow 신설(실행 주체 RunControlModule · 동시 1 · 상태 5 · 단계 6 상태 · 중단 · 실패 · api 재기동 · 성능 비교 실행의 생성 규칙 · 단계 · 흐름 시연 실행의 발행 · 업무 명령 · 드레인 · 단계별 취소 수단) · §한 번에 한 계층 조합 5 → **6**(라이브 실행 + 부하 실험) · 미확인 등재 2행 신설 — 주입 모드 수 불변(라이브 실행은 주입 모드가 아니다)
 > **개정일**: 2026-09-25 — S3 구현 반영 — 모드 B를 S5 → **S3 최소분**으로 당김(EXP-13 · 19 · 31 · 34 · AC-12 · 20이 요구) · as-built 불릿 신설(단독 진입점 · 1초 격자 · pps ÷ 태그 = 1,000의 약수 · 묶음 파이프라인 XADD × n + XINFO 1 · 해독 불가 혼합 형식)
 > **개정일**: 2026-09-25 — S2 코드 판정 반영(fe64472 · 시작 위상 짝은 d32b09a) — 모드 A 레지스터 갱신에 시점 격자 행 신설(k = floor(now ÷ scan_rate_ms) · 벽시계 기준 — 02_collect 시작 위상의 짝 계약) — 항목 5 → **6**
 > **개정일**: 2026-09-24 — S1 실측 반영(EXP-21 기록 006 · 410a146 · EXP-39 기록 007~009 · 019e54d) — 미확인 "생성기 단독 처리량" 미확인 → **워커 1 약 590만 pps**
@@ -9,7 +13,7 @@
 > **개정일**: 2026-09-24 — W7 검수 반영 — 부하 절차 5단계 판정량의 산출식 "W6 확정 대상" → **닫힘**(consumer_lag = 그룹 lag + pending · 정본 10_observability/01)
 > **개정일**: 2026-09-24 — W6 실험 채번 반영 — 메트릭 이름 · EXP 번호 · 디스크 예산 반영(정본 10_observability/01 · 06)
 > **개정일**: 2026-09-24 — W6 판정 반영 — 주입 계획 파일 형식 → JSON + zod 검증 · infra/sim-plans · SIM_FAULT_PLAN(정본 09_tech_stack/05 · 04) · 노출 필드 이름만 미정
-> **원천**: 원본 data_flow.md §11 · §11.1 · §11.2 · §11.3 · §10.3 · §12.1(커밋 ff66a37) · 원본 architecture.md §4 · §9.3 · §11 · §17(커밋 ff66a37) · 원본 tech_stack.md §3.4(커밋 ff66a37) · docs_plan.md 웨이브 인계 W4 06_pipeline/10 행 전부 · SIM 지연 · 오류 주입 제어 수단 · D-05 · D-12 · ADR-17 · ADR-19 · ADR-21 · ADR-22 · ADR-23 · REQ-GEN-01~15 · REQ-SIM-08~11 · REQ-GLB-10 · 18 · 23 · REQ-TEC-08~13 · [../05_data_stores/10_olap_vs_rdb_control.md](../05_data_stores/10_olap_vs_rdb_control.md) · [../05_data_stores/08_retention_lifecycle.md](../05_data_stores/08_retention_lifecycle.md) §대조군 보존 정합 · [../04_architecture/07_capacity_planning.md](../04_architecture/07_capacity_planning.md) 티어
+> **원천**: 원본 data_flow.md §11 · §11.1 · §11.2 · §11.3 · §10.3 · §12.1(커밋 ff66a37) · 원본 architecture.md §4 · §9.3 · §11 · §17(커밋 ff66a37) · 원본 tech_stack.md §3.4(커밋 ff66a37) · docs_plan.md 웨이브 인계 W4 06_pipeline/10 행 전부 · SIM 지연 · 오류 주입 제어 수단 · D-05 · D-12 · ADR-17 · ADR-19 · ADR-21 · ADR-22 · ADR-23 · REQ-GEN-01~15 · REQ-SIM-08~11 · REQ-GLB-10 · 18 · 23 · REQ-TEC-08~13 · [../05_data_stores/10_olap_vs_rdb_control.md](../05_data_stores/10_olap_vs_rdb_control.md) · [../05_data_stores/08_retention_lifecycle.md](../05_data_stores/08_retention_lifecycle.md) §대조군 보존 정합 · [../04_architecture/07_capacity_planning.md](../04_architecture/07_capacity_planning.md) 티어 · 라이브 실행 제어 리드 판정(2026-09-28) · [../07_api/09_datagen.md](../07_api/09_datagen.md) #2~#5 · [07_business_crud.md](./07_business_crud.md) §업무 명령 경로 · [../05_data_stores/10_olap_vs_rdb_control.md](../05_data_stores/10_olap_vs_rdb_control.md) §실행 수명 객체
 
 F-09는 **생성기가 만든 값이 네 계층 중 하나에 들어가기까지**다. 주입 모드는 넷이고 각 모드는 다른 계층부터 부하를 준다 — A는 Modbus부터, B는 Stream부터, C는 HTTP 표면부터, D는 ClickHouse만. **측정 원칙은 한 번에 한 계층만 부하를 주는 것이다**(REQ-GEN-05) — 모드 A와 B를 동시에 돌리면 병목이 Modbus인지 적재인지 가를 수 없다.
 
@@ -53,8 +57,9 @@ F-09는 **생성기가 만든 값이 네 계층 중 하나에 들어가기까지
 | 모드 D + 정상 수집 | 금지 — 백필 ① 주입 정지 확인 | MV 분리 중 들어온 행은 롤업되지 않는다 |
 | 모드 C 인증 비용 비교 | S7 이후 수치끼리만 | S5 모드 C에는 인증이 없다(REQ-GEN-15) |
 | 생성기 포화 구간 | 버린다 | 생성기가 병목이면 대상 계층의 상한이 아니라 생성기 상한을 잰다 |
+| 라이브 실행(perf · flow) + 부하 실험 · 대조 실험 | 금지 — 실험 착수 전 gen_run_active 전부 0 확인 | 라이브 실행은 api 안에서 저장소 · Stream에 부하를 더한다 — 실험 기록의 지연 · 처리량에 실행 부하가 섞인다(§라이브 실행 — perf · flow) |
 
-- 검산: 조합 = **5**
+- 검산: 조합 = **6**
 
 ## 모드 A 레지스터 갱신
 
@@ -121,7 +126,7 @@ F-09는 **생성기가 만든 값이 네 계층 중 하나에 들어가기까지
 ① 조건 확정       구간(원시 보존 창 안) · 태그 집합 · 시드 · 프로파일 — 측정 기록에 적는다
 ② 주입 정지 확인   다른 모드 · 정상 수집이 멈췄는가
 ③ DETACH          mv_tag_1m
-④ 일 단위 반복     그 KST 일의 벡터 생성 → ClickHouse tag_raw INSERT → 대조군 COPY(전용 커넥션 · 트랜잭션 1)
+④ 일 단위 반복     그 UTC 일(파티션 경계 · ADR-27)의 벡터 생성 → ClickHouse tag_raw INSERT → 대조군 COPY(전용 커넥션 · 트랜잭션 1)
 ⑤ 롤업 채우기      tag_1m INSERT SELECT -State(백필 구간) → 상위 MV 연쇄
 ⑥ ATTACH          mv_tag_1m
 ⑦ 대조            일마다 count(tag_raw) = count(대조군) = countMerge(tag_1m) — 정확 일치
@@ -140,8 +145,8 @@ F-09는 **생성기가 만든 값이 네 계층 중 하나에 들어가기까지
 | 항목 | 판정 | 근거 | 버린 해석의 실패 |
 |------|------|------|------|
 | 실행 주체 | GEN — datagen 역할의 실험 도구 | 대조군은 실험 계측물이고 대조 실험은 GEN이 준비한다 | pg_partman 보존 타이머 — tag_raw의 실제 삭제 시점(머지)과 무관한 시계로 지워 경계 일이 어긋난다 |
-| 기준 | **tag_raw에 실제로 남은 KST 일 파티션 목록** — 보존 값이 아니다 | TTL은 파트 단위 머지라 실제 삭제가 보존 값보다 늦다 | 보존 값(7일)으로 자르면 tag_raw에 아직 남은 경계 일이 대조군에서 먼저 사라진다 |
-| 시점 | ① 대조 실험 착수 전 ② SW-09 on 운전 중에는 매일 KST 자정 뒤 1회 | SW-09 기본 off라 실험 밖에서는 대조군이 자라지 않는다 | 상시 타이머 — SW-09 off 기간에 할 일이 없다 |
+| 기준 | **tag_raw에 실제로 남은 일 파티션 목록(UTC 날짜 · ADR-27)** — 보존 값이 아니다 | TTL은 파트 단위 머지라 실제 삭제가 보존 값보다 늦다 | 보존 값(7일)으로 자르면 tag_raw에 아직 남은 경계 일이 대조군에서 먼저 사라진다 |
+| 시점 | ① 대조 실험 착수 전 ② SW-09 on 운전 중에는 매일 UTC 자정(= 09:00 KST) 뒤 1회 | SW-09 기본 off라 실험 밖에서는 대조군이 자라지 않는다 | 상시 타이머 — SW-09 off 기간에 할 일이 없다 |
 | 동작 | tag_raw 목록에 없는 대조군 일 파티션 DETACH · DROP | 행 단위 DELETE는 죽은 튜플 · WAL로 비교 축을 오염시킨다 | DELETE — VACUUM/WAL 증폭 축이 적재가 아니라 정리 비용을 잰다 |
 
 - 검산: 항목 = **4**
@@ -206,6 +211,138 @@ F-09는 **생성기가 만든 값이 네 계층 중 하나에 들어가기까지
 - **5단계의 판정량도 XLEN이 아니다.** 원본은 "컨슈머 랙"으로 적었고 그 산출식이 원본마다 다르다 — 백프레셔와 같은 그룹 적체로 본다 — 산출식은 consumer_lag = 그룹 lag + pending으로 닫혔다([../10_observability/01_metrics_catalog.md](../10_observability/01_metrics_catalog.md) §컨슈머 랙 판정).
 - **7단계의 차감 셋이 빠지면 거짓 유실이 난다.** 모드 B 발행 중단 · SW-10 on의 데드밴드 생략 · DROPOUT 행 생략은 생성했지만 적재되지 않는 것이 설계된 동작이다.
 
+## 라이브 실행 — perf · flow
+
+증거 화면 EXP-PERF · EXP-FLOW의 시작 버튼이 부르는 실행이다(표면 [../07_api/09_datagen.md](../07_api/09_datagen.md) #2~#5 · 화면 [../08_screen/08_evidence_screens.md](../08_screen/08_evidence_screens.md)). 종류는 둘 — **perf**(규모별 성능 비교 · 격자의 앞부분을 api가 다시 채우고 잰다) · **flow**(흐름 시연 · 생성기 발행과 업무 명령을 함께 흘린다). 이 절은 두 종류의 단계 · 취소 · 정리 · 생성 규칙을 고정하고, 실행 객체 모양 · 응답 코드는 표면 정본이 갖는다.
+
+**A형 — 라이브 실행의 값은 측정 기록이 아니다.** 통념은 화면에서 누른 실행의 시간이 격자 기록과 같은 종류의 수치라는 것이다. 부정 — 라이브 실행은 api 프로세스를 거쳐 재고(드라이버 · 이벤트 루프 · 풀 포함), 4요소 · 3회 중앙값 · 편차 판정을 갖추지 않는다. 격자 대조 쿼리는 앱을 거치지 않는다([../08_screen/07_experiment_console.md](../08_screen/07_experiment_console.md) §스위치별 비교 대상). 진짜 축은 **재는 경로와 기록 규칙**이다. 대체 경로 — 결과에는 항상 "라이브 실행 — 앱 경유 · 시연값 · 기록 정본 아님" 표지를 달고, docs/measurements 기록을 만들지 않으며, 정본 수치는 [../05_data_stores/10_olap_vs_rdb_control.md](../05_data_stores/10_olap_vs_rdb_control.md) §결과가 인용한 기록만이다.
+
+| 항목 | 계약 | 근거 | 어기면 |
+|------|------|------|------|
+| 실행 주체 | api 프로세스의 RunControlModule(GEN 소유) — APP_ROLE api · all에서만 기동 | 표면을 받는 프로세스가 실행을 들고 있어야 중단 · 조회가 같은 메모리를 본다 | 실행을 datagen 역할에 두면 중단 요청이 프로세스 경계를 건너는 새 제어 채널이 필요하다([../04_architecture/02_module_boundaries.md](../04_architecture/02_module_boundaries.md) §APP_ROLE 배정) |
+| 동시성 | **두 종류를 합쳐 한 번에 하나** — 진행 중(running · stopping) 시작 요청은 datagen.run_in_progress/409(details에 현재 runId · type) | 두 실행은 서로의 저장소 · Stream 부하가 되어 서로를 오염시킨다 | perf 쿼리 시간에 flow 발행 부하가 섞이고, 실행 수명 객체 DDL이 겹친다 |
+| 상태 보관 | **인스턴스 메모리** — 진행 중 실행 1 + 마지막으로 끝난 실행 1(다음 시작 전까지) | 로컬 단일 api(전역 불변식 로컬 전용) · 실행 기록은 측정 기록이 아니다 | 저장소에 두면 실행 이력이 테이블 · 키 계열로 늘어 고정 기준을 바꾼다 |
+| api 재기동 | 실행은 사라진다 — **실패로 세지 않고 "기록 없음"**(GET current가 null) · 부팅 때 남은 실행 수명 객체를 DROP | 재기동이 끊은 실행은 결과가 없다 · 객체만 디스크에 남는다 | 재기동 뒤 run_perf_raw가 남아 다음 perf 실행의 prepare가 "이미 있음"으로 실패하고 디스크를 계속 쓴다 |
+| 경과 시간 | elapsedMs는 **서버가 계산** — 종결이면 endedAt − startedAt · 진행 중이면 응답 시각 − startedAt | 화면은 진행 중에만 이 값에서 1초 틱으로 이어 센다 | 브라우저 시계로 startedAt을 빼면 두 시계의 차가 소요 시간에 섞인다 |
+| 계측 | gen_run_active{type}(시작 1 · 종결 0) · gen_runs_total{type, status}(종결 때 1) · flow 발행은 gen_points_generated_total{mode="run"} | [../10_observability/01_metrics_catalog.md](../10_observability/01_metrics_catalog.md) | 실험 착수 전 실행 여부를 확인할 자리가 없다(§한 번에 한 계층) |
+
+- 검산: 항목 = **6**
+- **B형 — 재기동이 끊은 실행이 "실패"로 남지 않는 것은 누락이 아니다.** 결론 — 상태가 메모리뿐이라 재기동 뒤에는 실행이 없던 것과 같다. 반대 시나리오 — 재기동을 failed로 남기려면 실행 상태를 저장소에 영속해야 하고, 그 순간 실행 이력이 설계 대상 테이블이 된다. 파생 지침 — 화면은 current null을 "기록 없음"으로 보이고, 남은 객체는 부팅 정리가 지운다.
+
+실행 하나의 상태 전이다. status 5값(running · stopping · completed · stopped · failed — 종결 3)과 단계 status 6값(pending · running · done · skipped · stopped · failed)의 정본은 [../11_glossary/03_enums_state_machines.md](../11_glossary/03_enums_state_machines.md)다.
+
+```plain
+시작(202) → running ─┬─ 단계 전부 done ────────────────────────── cleanup → completed
+                     ├─ stop 요청 → stopping ─ 진행 단계 취소 ─── cleanup → stopped
+                     └─ 단계 예외 ─────────────────────────────── cleanup → failed
+```
+
+- **cleanup은 세 갈래 모두 돈다.** 중단 · 실패여도 실행 수명 객체를 지우는 단계는 건너뛰지 않는다 — 정리 실패는 error에 담는다. 중단 · 실패 갈래는 status를 stopped · failed 그대로 두고, **정상 갈래의 정리 실패는 failed다** — 객체가 남은 실행을 완료로 보이면 다음 prepare가 남은 객체와 부딪힐 때까지 아무도 모른다.
+- **cleanup 중 stop은 무시한다.** 정리는 마지막 단계라 취소할 것이 없다 — status는 정리 결과대로 completed(정리 실패면 failed)이고 stop 응답은 그 뒤 종결 실행에 대한 200이다(표면 #5).
+- **중단의 단계 표지** — 끝난 단계는 done 유지 · 미시작 단계는 skipped · 진행 중이던 단계 0~1개는 stopped(단계 경계에서 받으면 0개) · cleanup은 done 또는 failed다. flow prepare 중 stop도 같다 — prepare stopped · publish · drain skipped · status stopped.
+- **실패의 error는 메시지 전용이다.** error.code는 원인이 기존 에러 코드(예 common.postgres_unavailable)일 때만 싣고 아니면 null이다 — 에러 카탈로그에 run_failed를 만들지 않는다. 실패 원인은 실행 객체 안의 관찰값이지 표면의 거절이 아니다.
+- **stop은 멱등이다.** 이미 종결된 실행에 stop이 오면 200으로 그대로 돌려준다 — 새 코드를 만들지 않는다(표면 #5).
+
+### 성능 비교 실행 — perf
+
+격자 단계 5의 앞부분(10^5 ~ 10^maxExponent)을 실행 수명 객체 위에 다시 채우고 동일 쿼리 5종을 잰다. 객체 · 쿼리 재사용 규칙의 정본은 [../05_data_stores/10_olap_vs_rdb_control.md](../05_data_stores/10_olap_vs_rdb_control.md) §실행 수명 객체이고, 이 절은 채우기 · 단계 · 취소를 갖는다.
+
+| 생성 규칙 | 계약 | 근거 | 어기면 |
+|------|------|------|------|
+| 매개변수 | maxExponent ∈ {5, 6, 7, 8}(기본 7) · 규모 = 10^5 · 10^6 · … · 10^maxExponent · 정밀화 점 없음 | 격자 단계 5(10^9)와 정밀화는 수 시간 · 수십 GB라 버튼 실행의 범위가 아니다 | 목록 밖 값은 common.validation_failed/400 — 화이트리스트가 디스크 소모의 상한이다 |
+| 분포 | **격자와 같다** — 태그 10,000(설비 50 × 태그 200) · 1 Hz · 행 수 N이면 기간 N ÷ 10,000초 · quality 9 · 행 번호 n(0부터)에서 sec = n div 10000 · ts = S + sec초 · idx = n mod 10000 · device_id = idx div 200 + 1(1~50) · tag_id = idx + 1(1~10000) · **ts 오름차순 삽입(ORDER BY n)** | [../05_data_stores/10_olap_vs_rdb_control.md](../05_data_stores/10_olap_vs_rdb_control.md) §역전 지점 탐색 설계(구성 고정 · 기간으로 키운다) | 태그 수로 키우면 Q3 결과 행 수가 규모마다 달라 역전이 데이터 폭과 섞인다 |
+| 시각 축 | 시작 S = 실행 시작 시각(초 내림) − 10^maxExponent ÷ 10,000초 · 규모 k까지의 누적 구간은 [S, S + 10^k ÷ 10,000초) · **마지막 규모의 끝 = 실행 시작 시각**(미래 ts 없음) · {end} = 그 규모의 데이터 끝 | 격자 2차가 시작 S를 고정하고 미래 방향으로 누적해 BRIN · 계획을 지켰다(기록 048~053) | 끝을 고정하고 과거로 늘리면 파티션 ts 상관이 무너져 PostgreSQL이 BRIN을 버리고 Seq Scan으로 간다(1차 기록 039 — 상관 0.027) |
+| 값 | **value = ((tag_id × 7 + sec × 13) mod 1000) ÷ 10** — 태그 번호 · 초의 결정적 정수 산술 식(난수 없음 · 두 저장소가 **같은 식**으로 만들어 비트 단위 같은 Float64) — 같은 규모면 같은 행 | 결과 행 수 · 값 일치(resultMatch)가 성립해야 두 저장소가 같은 질문에 답한 것이다 | 엔진별 수학 함수(sin 등)로 만들면 마지막 비트가 달라 avg 대조가 흔들린다 |
+| 생성 위치 | **서버 측 생성** — ClickHouse INSERT … SELECT FROM numbers · PostgreSQL INSERT … SELECT FROM generate_series | 앱 → 저장소 전송이 채우기 시간에 섞이지 않는다 | 앱이 행을 만들어 보내면 fillMs가 드라이버 · 직렬화 비용을 잰다 |
+| 규모 올림 | 앞 규모에 **이어 채운다** — 규모 k의 증가분은 k = 5면 [S, S + 10초)(n 0 ~ 10^5 − 1) · k > 5면 [S + 10^(k−1) ÷ 10^4초, S + 10^k ÷ 10^4초)(n 10^(k−1) ~ 10^k − 1)만 더 넣는다 · 잘라 다시 만들지 않는다 | 행 수 격자는 누적이다 · 채우기 총량이 10^max행에 묶인다 | 규모마다 TRUNCATE 후 재생성하면 채우기가 규모 합(약 1.11 × 10^max)으로 늘고 쌓이는 순서가 격자와 달라진다 |
+
+- 검산: 생성 규칙 = **6**
+- **A형 — 라이브 저장 바이트는 격자 결정적 값과 같지 않다.** 통념은 같은 분포면 같은 저장 크기라는 것이다. 부정 — 격자 값은 생성기 신호 프로파일(혼합)이고 라이브 값은 정수 산술 식이라 ClickHouse 압축이 다르다. 진짜 축은 **값 열의 엔트로피**다. 대체 경로 — storageBytes는 같은 실행 안의 두 저장소 대조로만 읽고 §결과 비교 축 6과 겹쳐 그리지 않는다.
+- **perf는 실행 수명 동안 전용 PostgreSQL 연결 1을 쓴다(풀 밖).** prepare가 그 연결의 pg_backend_pid를 기록하고, 중단은 다른 연결에서 그 pid에 pg_cancel_backend를 건다 — 풀 연결을 쓰면 문장마다 연결이 바뀌어 취소가 겨눌 pid가 없고, 다른 요청의 문장을 취소할 수 있다.
+- **PostgreSQL 채우기 단계는 ANALYZE로 끝난다.** 통계 없이 쿼리하면 계획기가 규모를 모른 채 계획을 고른다 — 격자는 안정화(③) 뒤에 쟀다.
+- 10^8은 시작 전에 화면이 예상 디스크(행당 저장 바이트 · 현행 참고 — [../05_data_stores/10_olap_vs_rdb_control.md](../05_data_stores/10_olap_vs_rdb_control.md) §대조군 용량 축 · §결과 비교 축 6)와 "수 분 이상" 경고를 보인다.
+
+단계(steps)의 순서다. key 형식의 정본은 [../07_api/09_datagen.md](../07_api/09_datagen.md) §실행 객체다. 규모마다 세 단계가 반복되므로 단계 수는 3 × 규모 수 + 2다.
+
+```plain
+① prepare     실행 수명 객체 생성(ClickHouse plc.run_perf_raw · PostgreSQL run_perf_raw + I2 인덱스) · 전용 PostgreSQL 연결의 pg_backend_pid 기록
+② fill-ch@k   규모 10^k의 증가분 INSERT … SELECT(numbers) · detail rows · ms · storageBytes
+③ fill-pg@k   규모 10^k의 증가분 INSERT … SELECT(generate_series) + ANALYZE · detail 상동
+④ query@k     Q1~Q5 × 두 저장소 · 웜만(워밍업 1회 버림 + 3회) · detail 완료 쿼리 수(done ÷ 10) — 3회 값 · 중앙값 · 빠른 쪽 · 배수 · 결과 일치는 result.scales[]
+   ②~④를 지수 k = 5 … maxExponent 순서로 반복 · 실행 시작 때 전 단계를 pending으로 만든다
+⑤ cleanup     두 객체 DROP — 완료 · 중단 · 실패 모두
+```
+
+- 검산: 단계 수 = 3 × (maxExponent − 4) + 2 — maxExponent 5 → 3 × 1 + 2 = 5단계 · 8 → 3 × 4 + 2 = 14단계 · 기본 7 → 3 × 3 + 2 = **11**단계
+- **Q5 문턱 {v}는 첫 규모(10^5) 채우기 직후 ClickHouse quantileExact(0.5)(value)로 한 번 정해 실행 끝까지 고정한다** — 격자와 같은 규칙(선택도 50%)이다. 규모마다 다시 정하면 선택도가 흔들려 PostgreSQL 병렬 스캔 계획이 규모마다 달라진다.
+- **쿼리 매개변수 device · tag는 (device_id, tag_id) 사전순 첫 쌍이다**(격자 기록 048 조건과 같다).
+- **result.scales[]는 끝난 규모만 싣는다.** 중단 · 실패 때 진행 중이던 규모는 싣지 않는다 — 반쪽 규모의 쿼리 시간은 채우기 중인 테이블의 값이다.
+
+### 흐름 시연 실행 — flow
+
+대용량 발행과 업무 명령을 함께 흘려 EXP-FLOW 흐름도를 움직인다. **흐름 계약은 바뀌지 않는다** — 실행은 발행 원천을 늘릴 뿐이고 화면은 기존 flow 프레임([../07_api/11_websocket.md](../07_api/11_websocket.md) §흐름 이벤트)으로 움직인다.
+
+| 발행 규칙 | 계약 | 근거 | 어기면 |
+|------|------|------|------|
+| 매개변수 | pps ∈ {1000, 5000, 10000, 20000, 50000}(기본 10000) · durationSec ∈ {30, 60, 120, 300}(기본 60) · bizPerSec ∈ {0, 0.5, 1, 2}(기본 1) | 화이트리스트가 발행량 · 명령량의 상한이다 | 목록 밖 값은 common.validation_failed/400 |
+| 대용량 발행 | api 안 생성기가 stream:plc:raw에 **엔트리 계약 v1 그대로** XADD — 시드의 설비 · 태그 · quality 9 · 현재 시각 · 시드 활성 태그 목록 T(길이 L)에서 발행 초 s마다 점 i = 0 … pps − 1 · 태그 = T[(i + s × pps) mod L] · ts = 초 시작 + ⌊i ÷ L⌋ × ⌊1000 ÷ ⌈pps ÷ L⌉⌋ ms — **(태그 · ts) 중복 없음** · 같은 설비 · 같은 ts는 한 엔트리 | 모드 B와 같은 계약이라 ING · 흐름 요약이 발행자를 가리지 않는다([12_data_contract.md](./12_data_contract.md)) | 계약을 바꾸면 흐름 시연이 운영 경로가 아닌 경로를 보인다 |
+| 백프레셔 | 모드 B와 **같은 판정량 · 같은 위험 임계**(§모드 B 적체 검사) — 위험이면 발행을 멈추고 주의 임계 아래로 내려오면 잇는다 · 정지 수는 detail.backpressurePauses | 검사하지 않는 발행자가 하나라도 있으면 MAXLEN 트리밍이 미소비 엔트리를 조용히 자른다(REQ-GLB-21) | 적체를 보지 않고 발행하면 시연이 수집 경로의 유실을 만든다 |
+| 발행 시계 | durationSec는 벽시계다 — 정지 동안의 시점은 발행하지 않고 지나간다 · 재개 뒤 ts는 현재 시각 | §모드 B 적체 검사의 "생성 시계는 멈추지 않는다" | 정지분을 몰아 발행하면 STALE 판정 · E2E가 과거 시각으로 오염된다 |
+| 업무 명령 | 1 ÷ bizPerSec초마다 **BizWritePort로 명령 하나**(HTTP가 아니라 프로세스 안 호출 — 같은 명령 스트림 · 같은 워커 · 같은 원장) · kind master.device.patch · **시연 전용 설비 DEMO-FLOW-DEV에만**(§시연 전용 행) · 본문 {deviceName: "시연 설비 {runId 앞 8자}-{명령 번호}"} — 매번 새 값 · **되돌림 없음** · actor null · bizPerSec 0이면 보내지 않는다 | 명령마다 실제 변경이 있어 트랜잭션 · 감사 · cache:devlist:{DEMO-FLOW의 site_id} DEL · ch:cacheinv가 돈다 — **변경 없는 본문은 기존 쓰기 서비스가 감사 · 체인을 건너뛰어 흐름도에 무효화가 보이지 않는다**(리드 통합 확인 2026-09-28) · 대상이 시연 전용 행뿐이라 **중단 · 실패 · 재기동 어느 경우에도 운영 행은 바뀌지 않는다**(리드 재판정 2026-09-28 — [07_business_crud.md](./07_business_crud.md) §업무 명령 경로) | 운영 설비에 명령을 보내면 시연이 운영 마스터를 바꾼다 — 바꿨다 되돌리는 짝(폐기)은 중단 · 되돌림 실패 · 짝 가운데 재기동에서 바뀐 이름을 남긴다 · 가짜 명령을 흉내 내면 흐름도의 biz 칸이 운영 경로가 아닌 것을 보인다 |
+| 명령 계수 | publish 명령 1건 = 1(짝 없음 — commandsSent = durationSec × bizPerSec의 정수 부분 · 중단이면 그때까지) · 결과마다 commandsOk(applied) · commandsPending(202 · 대기 상한 초과) · commandsFailed(rejected · failed · unavailable) · prepare의 시연 전용 행 생성 명령은 세지 않는다 | 명령 결과는 동기 응답이다 — 대기 상한을 넘으면 pending이다 | 결과를 기다리지 않고 세면 워커 적체가 성공으로 보인다 |
+
+- 검산: 발행 규칙 = **6**
+- **생성은 worker_threads에서 한다.** 신호 벡터 생성 · 대량 인코딩은 격리 대상이다([../04_architecture/02_module_boundaries.md](../04_architecture/02_module_boundaries.md) §worker_threads 격리 대상) — api 이벤트 루프에서 만들면 50,000 pps에서 조회 · WebSocket 표면이 틱마다 멈춘다.
+- **actor null은 거짓 귀속을 피한다.** 실행을 시작한 사용자를 명령 actor로 싣지 않는다 — 사람이 요청하지 않은 쓰기를 사람 이름으로 남기지 않는다. 귀속 없음 잔여는 [../12_security/04_threat_model.md](../12_security/04_threat_model.md) §잔여 위험 등재가 받는다.
+- **라이브 흐름 실행은 주입 모드가 아니다.** 주입 모드는 측정 원칙(한 번에 한 계층)의 손잡이이고, 이 실행은 대용량 발행과 업무 명령을 일부러 겹쳐 흐름을 보이는 시연이다 — mode 레이블 값 run이 둘을 가른다.
+
+단계의 순서다.
+
+```plain
+① prepare   시드 설비 · 활성 태그 로드 · 시연 전용 행 확인(없으면 명령으로 생성) · 시작 시점 grp:ingest 적체(lag + pending) 기록
+② publish   durationSec 동안 발행 + 명령 · detail pointsSent · entriesSent · commandsSent · backpressurePauses · progress(0~1)
+③ drain     grp:ingest 적체가 ①의 수준 이하로 돌아올 때까지 · 상한 30초 — 넘으면 done + detail.timedOut true · detail drainMs
+④ 종결      completed · 중단이면 진행 중 단계 stopped · 뒤 단계 skipped · prepare 실패면 failed
+```
+
+- 검산: 단계 = **3**(prepare · publish · drain) · 실행 수명 객체 없음 — cleanup 단계를 두지 않는다
+- **drain 상한 초과는 실패가 아니다(B형).** 결론 — 30초 안에 적체가 돌아오지 않아도 drain은 done이고 timedOut만 true다. 반대 시나리오 — failed로 두면 고 pps 시연이 매번 실패로 끝나 화면이 "완료"를 보이지 못하는데, 남은 적체는 ING가 계속 소진하므로 실행이 할 일은 없다. 파생 지침 — drainMs · timedOut을 결과에 싣고 상한(현행 참고 30초 · 소유 이 문서)은 2계층 조정값이다.
+- **중단하면 drain을 건너뛴다.** 이미 발행한 엔트리는 ING가 소진한다 — 중단을 누른 사람은 곧바로 끝나기를 기대하므로 적체 소진을 기다리지 않는다.
+- result = pointsSent · entriesSent · commandsSent · commandsOk · commandsPending · commandsFailed · backpressurePauses · drainMs(표면 정본 [../07_api/09_datagen.md](../07_api/09_datagen.md)).
+
+### 시연 전용 행
+
+흐름 시연의 업무 명령이 쓰는 마스터 행이다. **운영 행(시드 · 사람이 만든 행)을 바꾸지 않는다** — 실행이 쓰는 마스터 행은 이 셋뿐이다(리드 재판정 2026-09-28).
+
+| 행 | 코드 | 값 | 근거 |
+|------|------|------|------|
+| 사이트 | site_code **DEMO-FLOW** | site_name 시연 사이트 · timezone 기본값 | 설비 목록 캐시 키가 사이트 단위라(cache:devlist:{site_id}) 운영 사이트의 캐시를 지우지 않으려면 사이트부터 가른다 |
+| 라인 | line_code **DEMO-FLOW-L**(사이트 DEMO-FLOW 안) | line_name 시연 라인 | 설비는 라인 FK가 필수다 |
+| 설비 | device_code **DEMO-FLOW-DEV** | **is_active false** · modbus_config 루프백 127.0.0.1 기본값 · **태그 없음** | Collector가 폴링하지 않는다 — 비활성이고 읽을 레지스터(태그)가 없다 · 시계열 · 알람에 닿지 않는다 |
+
+- 검산: 시연 전용 행 = **3**
+- **prepare가 코드로 찾고 없는 것만 만든다.** 순서는 BizWritePort로 master.site.create → master.line.create → master.device.create → master.device.patch {isActive: false}(명령 경로 그대로라 흐름도에 보인다 · actor null) — 설비 생성 표면은 isActive를 받지 않아 비활성은 뒤따르는 patch가 한다 · 그 사이 창에도 태그가 없어 Collector가 읽을 것이 없다. 있으면 재사용한다. 만들다 실패하면(rejected · failed · 대기 상한 초과) 실행은 failed다.
+- **시연 전용 행은 첫 실행 뒤 남는다(재사용)** — 마스터 목록 화면에 보이고 이름("시연 설비 …")으로 식별한다. 사람이 같은 코드로 행을 만들면 시연이 그 행을 쓴다 — 두 잔여는 [../05_data_stores/02_postgresql_constraints.md](../05_data_stores/02_postgresql_constraints.md) 한계 등재 · [../12_security/04_threat_model.md](../12_security/04_threat_model.md) §잔여 위험 등재가 받는다.
+- **권한 근거** — 흐름 실행은 시연 전용 행에 한정한 마스터 쓰기를 actor null로 싣는다 · MST-02 ADMIN 단일 주체의 명시 예외다([../02_features/12_permission_matrix.md](../02_features/12_permission_matrix.md)).
+
+### 취소 · 정리
+
+stop을 받으면 status stopping으로 바꾸고 진행 중 단계에 아래 수단으로 취소를 건다. 취소가 끝나면 cleanup(perf)을 돌고 stopped로 닫는다.
+
+| 진행 중 단계 | 취소 수단 | 취소 뒤 남는 것 | 정리 |
+|------|------|------|------|
+| perf fill-ch@k · query@k(ClickHouse) | 실행이 문장마다 붙인 query_id로 KILL QUERY | 삽입 중이던 블록 일부 | cleanup이 plc.run_perf_raw를 DROP |
+| perf fill-pg@k · query@k(PostgreSQL) | 다른 연결에서 prepare가 기록한 전용 연결 pid에 pg_cancel_backend | 롤백된 트랜잭션 — 행 없음 | cleanup이 run_perf_raw를 DROP |
+| perf prepare | 생성 DDL이 끝나기를 기다린다(짧은 DDL — 취소하지 않는다) | 만들어진 객체 | cleanup이 DROP |
+| flow prepare | 보낸 생성 명령의 결과까지 기다린 뒤 멈춘다(명령은 취소할 수 없다) | 만들어진 시연 전용 행 — 다음 실행이 재사용한다 | 없음 |
+| flow publish | 발행 루프 정지 · 명령 발송 정지(보낸 명령은 결과까지 센다) | 이미 발행한 엔트리 · 시연 전용 설비에 적용된 명령 — 운영 행 변경 없음 | 없음 — 엔트리는 ING가 소진한다 · 되돌릴 것이 없다 |
+| flow drain | 대기 중지 | 남은 적체 | 없음 |
+
+- 검산: 단계 = **6**
+- **query_id는 실행이 정한다** — runId를 접두로 문장마다 붙여 KILL QUERY가 이 실행의 문장만 겨누게 한다. 서버가 붙인 id를 쓰면 다른 세션의 문장과 가를 수 없다.
+- **DROP은 IF EXISTS로 한다.** 부팅 정리 · 중단 · 실패가 같은 cleanup을 부르므로 객체가 이미 없어도 cleanup이 실패하지 않는다.
+- **부팅 정리는 이름으로 찾는다** — api 부팅 때 plc.run_perf_raw · run_perf_raw가 있으면 DROP한다. 실행은 한 번에 하나라 이름이 하나로 고정된다(실행마다 다른 이름을 쓰면 부팅 정리가 무엇을 지울지 목록을 가져야 한다).
+
 ## 미확인 · 미설계 등재
 
 | 항목 | 상태 | 확정 자리 |
@@ -215,14 +352,18 @@ F-09는 **생성기가 만든 값이 네 계층 중 하나에 들어가기까지
 | 주입 계획의 파일 형식 · 노출 필드 이름 | 형식 **W6 판정** — JSON 하나 · shared zod 검증 · 검증 실패 시 기동 거부 · 경로 SIM_FAULT_PLAN · 노출 이름도 W6 판정 — sim_fault_injection_active{kind} | [../09_tech_stack/05_tooling_devops.md](../09_tech_stack/05_tooling_devops.md) · [../10_observability/01_metrics_catalog.md](../10_observability/01_metrics_catalog.md) — 노출은 sim_fault_injection_active{kind}(W6) |
 | 실행 중 주입 제어 표면의 필요 여부 | 판정 — 두지 않는다 · 필요하면 표면 판정 | [../07_api/09_datagen.md](../07_api/09_datagen.md)(W5) |
 | bulk 본문 모양 | 닫힘 — Stream 페이로드 계약을 그대로 싣는 JSON 본문 · 요청당 엔트리 상한 | [../07_api/09_datagen.md](../07_api/09_datagen.md) §요청 본문 |
+| 라이브 실행의 소요 시간 · 디스크(perf 10^8 채우기 · 쿼리 시간 · flow 고 pps 드레인) | 3계층 미확인 — 화면 경고는 행당 저장 바이트(현행 참고)로만 예상한다 · 값은 시연값이라 정본에 올리지 않는다 | §라이브 실행 — perf · flow · [../05_data_stores/10_olap_vs_rdb_control.md](../05_data_stores/10_olap_vs_rdb_control.md) §실행 수명 객체 |
+| flow drain 상한 | 2계층 조정값 — 현행 참고 30초 · 소유 이 문서 · 넘으면 done + timedOut | 이 문서 §흐름 시연 실행 — flow |
 | 대조군 정리의 디스크 예산 · 중단 규칙 | **W6 판정** — 디스크 예산은 식 고정(여유 − 잔여 알림 문턱 − 다음 스냅샷 ≥ 다음 단계 도출 크기) · 적재 시간은 1계층 관계 | [../10_observability/06_experiment_catalog.md](../10_observability/06_experiment_catalog.md) §대조 실험 조정값 |
 
 ## 관련 문서
 
-- [../02_features/05_datagen.md](../02_features/05_datagen.md) — GEN-01~10 기능 정본
+- [../02_features/05_datagen.md](../02_features/05_datagen.md) — GEN-01~12 기능 정본
 - [../02_features/04_plc_sim.md](../02_features/04_plc_sim.md) — SIM 주입 기능
 - [../03_requirements/06_datagen.md](../03_requirements/06_datagen.md) — REQ-GEN 계약
 - [../05_data_stores/10_olap_vs_rdb_control.md](../05_data_stores/10_olap_vs_rdb_control.md) — 대조군 설계
 - [../05_data_stores/04_clickhouse_rollup.md](../05_data_stores/04_clickhouse_rollup.md) — 백필 절차
 - [../04_architecture/06_backpressure_failure.md](../04_architecture/06_backpressure_failure.md) — 적체 판정량 · 위험 임계
 - [02_collect.md](./02_collect.md) — 모드 A 수집 · 품질 판정
+- [../07_api/09_datagen.md](../07_api/09_datagen.md) — 라이브 실행 표면 #2~#5 · 실행 객체
+- [07_business_crud.md](./07_business_crud.md) — flow 실행의 업무 명령 경로

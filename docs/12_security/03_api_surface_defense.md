@@ -1,10 +1,12 @@
 # API 표면 방어 (03_api_surface_defense)
 
-> **대상**: api 표면 44개를 위협 관점에서 다시 읽는 리뷰 — 방어 지점 전수 · CORS 단일 오리진 · auth 표면 CORS 제외 판정 리뷰 · BFF 인증 경로의 출처 검사 · **레이트 리밋 등급(class 값 집합)과 한도 관계식(정본)** · 로그인 시도 제한 판정 · 조회 범위 강제 · **내보내기 범위 상한(정본)** · ClickHouse 파라미터 바인딩 · WebSocket Origin 검증과 종료 코드 8종 리뷰 · 보안 헤더 · 응답 비노출
+> **대상**: api 표면 48개를 위협 관점에서 다시 읽는 리뷰 — 방어 지점 전수 · CORS 단일 오리진 · auth 표면 CORS 제외 판정 리뷰 · BFF 인증 경로의 출처 검사 · **레이트 리밋 등급(class 값 집합)과 한도 관계식(정본)** · 로그인 시도 제한 판정 · 조회 범위 강제 · **내보내기 범위 상한(정본)** · ClickHouse 파라미터 바인딩 · WebSocket Origin 검증과 종료 코드 8종 리뷰 · 보안 헤더 · 응답 비노출 · **라이브 실행 표면(09_datagen #2~#5) 방어 — 동시 1 · 매개변수 화이트리스트 · 게이트 없음 판정**
 > **작성일**: 2026-09-24
+> **개정일**: 2026-09-28 — 라이브 실행 검수 반영(리드 재판정 2026-09-28) — R5 오른쪽 폴링 항 "1초 폴링이면 60" → **실행 패널 탭 수(현행 참고 2) × 60** · 게이트 판정 B형 "flow는 시드 설비 · quality 9로" → **flow 발행은 시드 설비 · quality 9 · 업무 명령은 시연 전용 행(DEMO-FLOW 계열)에만** · 인가 행 잔여에 ENGINEER가 시연 전용 행의 MST 쓰기 경로를 기동 — 관계 · 방어 수 불변
+> **개정일**: 2026-09-28 — 라이브 실행 제어 반영(사용자 요구 2026-09-28 · 리드 판정 — 표면 09_datagen #2~#5) — 대상 줄 api 표면 44 → **48** · 방어 지점 10 → **11**(실행 동시성 · 매개변수 화이트리스트 — 표면 생성 단계 4 → **5**) · 인증 이전 방어 7 → **8** · general 계수 표면에 09_datagen #2~#5 — general 34 → **38** · 계수 대상 38 → **42** · 검산 총수 44 → **48** · 관계식 R5 신설(실행 패널 1초 폴링) — 관계 4 → **5** · §라이브 실행 표면 신설(방어 6 · 게이트 판정 안 2) — class 수 불변
 > **개정일**: 2026-09-28 — 웨이브 1 검수 반영(B-M3) — 대상 줄 api 표면 43 → **44**(명령 조회 01_conventions #1) · 레이트 리밋 general 계수 표면에 01_conventions #1 — general 33 → **34** · 계수 대상 37 → **38** · 검산 총수 43 → **44** — class 수 불변
 > **개정일**: 2026-09-24 — 최종 정밀 검수 — Host 대조 거절 응답 모양 판정 — common.validation_failed/400(header.host · enum) · WS는 업그레이드 전 400
-> **원천**: 원본 architecture.md §2 · §11.2 · §18(커밋 ff66a37) · 원본 tech_stack.md §10.4(커밋 ff66a37) · REQ-AUT-04 · 07 · 11 · 12 · 13 · 14 · 16 · REQ-GLB-19 · REQ-TSQ-01 · 03 · 04 · 15 · 17 · REQ-ALM-13 · REQ-GEN-08 · 09 · 15 · REQ-RLT-09 · REQ-OBS-10 · ADR-02 · [../07_api/01_conventions.md](../07_api/01_conventions.md) · [../07_api/03_auth.md](../07_api/03_auth.md) · [../07_api/05_timeseries.md](../07_api/05_timeseries.md) · [../07_api/06_realtime.md](../07_api/06_realtime.md) · [../07_api/09_datagen.md](../07_api/09_datagen.md) · [../07_api/11_websocket.md](../07_api/11_websocket.md) · [../05_data_stores/05_redis_keyspace.md](../05_data_stores/05_redis_keyspace.md) rl 계열 · docs_plan.md 웨이브 인계 W3 05_data_stores/05 행 · W6 10_observability 행 · W7 12_security 행
+> **원천**: 원본 architecture.md §2 · §11.2 · §18(커밋 ff66a37) · 원본 tech_stack.md §10.4(커밋 ff66a37) · REQ-AUT-04 · 07 · 11 · 12 · 13 · 14 · 16 · REQ-GLB-19 · REQ-TSQ-01 · 03 · 04 · 15 · 17 · REQ-ALM-13 · REQ-GEN-08 · 09 · 15 · REQ-RLT-09 · REQ-OBS-10 · ADR-02 · [../07_api/01_conventions.md](../07_api/01_conventions.md) · [../07_api/03_auth.md](../07_api/03_auth.md) · [../07_api/05_timeseries.md](../07_api/05_timeseries.md) · [../07_api/06_realtime.md](../07_api/06_realtime.md) · [../07_api/09_datagen.md](../07_api/09_datagen.md) · [../07_api/11_websocket.md](../07_api/11_websocket.md) · [../05_data_stores/05_redis_keyspace.md](../05_data_stores/05_redis_keyspace.md) rl 계열 · docs_plan.md 웨이브 인계 W3 05_data_stores/05 행 · W6 10_observability 행 · W7 12_security 행 · 라이브 실행 제어 리드 판정(2026-09-28 — 표면 09_datagen #2~#5 · 게이트 없음)
 
 **방어 지점은 NestJS 한 곳이다.** 프록시 · 로드 밸런서가 없으므로 CORS · 보안 헤더 · 레이트 리밋 · Origin 검증 · 입력 검증이 전부 api 코드 안에서 일어난다(원본 architecture.md §11.2 · §18). 앞단에 무언가를 끼워 넣었다가 걷어낼 일이 없다는 뜻이고, 동시에 이 계층이 빠지면 대신 막을 곳이 없다는 뜻이다.
 
@@ -18,7 +20,7 @@
 |------|------|------|------|------|------|
 | CORS 단일 오리진 | 브라우저 직결 표면 | S2 | api 전역 CORS 설정 | REQ-AUT-12 | 같은 머신 브라우저의 임의 페이지가 응답을 읽는다 |
 | 액세스 토큰 검증 · 역할 대조 | 인증 표면 전부 | S7 | Guard | REQ-AUT-07 · 09 · [01_authn_authz.md](./01_authn_authz.md) | 무인증 기간이 끝나지 않는다 |
-| 레이트 리밋 | 인증 REST 표면(계수 대상 38) | S7 | Guard 뒤 계수기 | REQ-AUT-11 | 한 사용자 · 한 스크립트가 ClickHouse 대량 스캔을 반복한다 |
+| 레이트 리밋 | 인증 REST 표면(계수 대상 42) | S7 | Guard 뒤 계수기 | REQ-AUT-11 | 한 사용자 · 한 스크립트가 ClickHouse 대량 스캔을 반복한다 |
 | WebSocket Origin 검증 | /ws/realtime | S2 — §Origin 검증 | 게이트웨이 핸드셰이크 | REQ-AUT-13 · REQ-RLT-09 | CORS가 막는 오리진이 실시간 프레임을 받는다 |
 | 보안 헤더 | 모든 HTTP 응답 | S7 | helmet 계열 플러그인 | REQ-AUT-13 | 응답 형식 추측(MIME 스니핑) · 참조 URL 누출 |
 | Host 헤더 대조 | api 전 HTTP 요청 · WebSocket 핸드셰이크 | S2 | api 전역 | REQ-AUT-13 · [../07_api/01_conventions.md](../07_api/01_conventions.md) | DNS 재바인딩 페이지가 브라우저에게 같은 오리진으로 보여 CORS 없이 응답을 읽는다 |
@@ -26,9 +28,10 @@
 | 파라미터 바인딩 | ClickHouse · PostgreSQL을 읽고 쓰는 표면 | 표면이 생기는 단계 | 조회 모듈 · 쿼리 조립 | REQ-GLB-24 · 원본 architecture.md §18 | 요청 값이 SQL 문장이 된다 |
 | 조회 범위 강제 | 시계열 · 판정 이력 · 목록 · 내보내기 | 상동 | 도메인 서비스 | REQ-TSQ-01 · 03 · 04 · REQ-ALM-13 · §내보내기 범위 상한 | 범위 하나가 ClickHouse를 메모리 한계로 몬다 |
 | 응답 비노출 | REST 전부 · 공개 표면 | 상동 | 에러 필터 · health · metrics 조립 | REQ-OBS-10 · [../07_api/01_conventions.md](../07_api/01_conventions.md) §에러 봉투 | 스택 · SQL · 접속 문자열이 응답으로 나간다 |
+| 실행 동시성 · 매개변수 화이트리스트 | 09_datagen #2~#5(라이브 실행) | 상동 | RunControlModule · 스키마 검증 | §라이브 실행 표면 · [../07_api/09_datagen.md](../07_api/09_datagen.md) | 버튼 연타 · 스크립트가 실행을 겹치거나 목록 밖 규모를 넣어 디스크 · Stream 적체를 소모한다 |
 
-- 검산: 방어 = **10** · S2 시작 3(CORS · WebSocket Origin · Host) + S7 시작 3(토큰 · 레이트 리밋 · 보안 헤더) + 표면 생성 단계 4 = **10**
-- **인증 이전(S2~S6)에 살아 있는 방어는 일곱이다** — CORS · WebSocket Origin · Host 대조 · 스키마 검증 · 파라미터 바인딩 · 조회 범위 강제 · 응답 비노출. 신원을 묻는 방어가 하나도 없는 기간이며 그 잔여는 [04_threat_model.md](./04_threat_model.md) §무인증 기간이 받는다.
+- 검산: 방어 = **11** · S2 시작 3(CORS · WebSocket Origin · Host) + S7 시작 3(토큰 · 레이트 리밋 · 보안 헤더) + 표면 생성 단계 5 = **11**
+- **인증 이전(S2~S6)에 살아 있는 방어는 여덟이다** — CORS · WebSocket Origin · Host 대조 · 스키마 검증 · 파라미터 바인딩 · 조회 범위 강제 · 응답 비노출 · 실행 동시성 · 매개변수 화이트리스트. 신원을 묻는 방어가 하나도 없는 기간이며 그 잔여는 [04_threat_model.md](./04_threat_model.md) §무인증 기간이 받는다.
 
 ## CORS
 
@@ -80,12 +83,12 @@
 
 | class | 묶음 | 표면 | 계수 표면 수 | 한도 현행 참고 | 한도 관계(1계층) |
 |------|------|------|:-:|------|------|
-| **general** | 일반 | 아래 셋을 뺀 계수 대상 전부 — 01_conventions #1(명령 조회) · 04_master #1~#17 · 06_realtime #1 · #2 · 07_alarms #1~#5 · 08_work_orders #1~#9 | 34 | 미정 | ≥ bulk_read 한도 · ≥ 재연결 동기화 폭(§관계식 R3) |
+| **general** | 일반 | 아래 셋을 뺀 계수 대상 전부 — 01_conventions #1(명령 조회) · 04_master #1~#17 · 06_realtime #1 · #2 · 07_alarms #1~#5 · 08_work_orders #1~#9 · 09_datagen #2~#5(라이브 실행) | 38 | 미정 | ≥ bulk_read 한도 · ≥ 재연결 동기화 폭(§관계식 R3) · ≥ 실행 패널 폴링(R5) |
 | **bulk_read** | 대량 조회 | 05_timeseries #1 · 07_alarms #6 | 2 | 미정 | ≥ export 한도 · ≤ general 한도 |
 | **export** | 내보내기 | 05_timeseries #2 | 1 | 미정 | ≤ bulk_read 한도 |
 | **bulk_ingest** | 부하 주입 | 09_datagen #1 | 1 | 미정 | **≥ 실험 부하의 분당 요청 수**(§관계식 R2) |
 
-- 검산: class = **4** · 계수 표면 = 34 + 2 + 1 + 1 = **38** · 계수 밖 표면 = 03_auth 3 + 10_metrics 2 + 11_websocket 1 = **6** · 38 + 6 = **44** = API 표면 총수([../07_api/README.md](../07_api/README.md))
+- 검산: class = **4** · 계수 표면 = 38 + 2 + 1 + 1 = **42** · 계수 밖 표면 = 03_auth 3 + 10_metrics 2 + 11_websocket 1 = **6** · 42 + 6 = **48** = API 표면 총수([../07_api/README.md](../07_api/README.md))
 - **엔드포인트별 제한은 class 단위 판정으로 해소한다 — 키 패턴을 바꾸지 않는다.** 원본 "사용자별 + 엔드포인트별"(원본 architecture.md §18)의 목적은 "timeseries/query와 export에 엄격히"였고, 그 목적은 표면을 묶은 class로 충족된다. 키는 이미 rl:{class}:{user_id}:{unix_minute}다(W3 판정 · [../05_data_stores/05_redis_keyspace.md](../05_data_stores/05_redis_keyspace.md)). 엔드포인트 경로를 키에 넣으면 경로 파라미터마다 키가 생겨 한도가 식별자 단위로 쪼개진다 — 설비 100개를 한 번씩 부르면 한도가 100배가 된다.
 - **class 값은 소문자 · 밑줄 문자열이다.** 키 · 메트릭 레이블 · 로그에 같은 문자열이 그대로 들어간다 — 표시 이름(일반 · 대량 조회 · 내보내기 · 부하 주입)은 문서와 화면에만 쓴다.
 - **한도 값을 정하지 않은 것은 누락이 아니다.** 원본은 값이 없고(원본 architecture.md §11.2 "분당 요청 수" · §18 "엄격히"), 값은 관계식의 오른쪽 항(실험 부하 · 구독 상한)이 정해져야 정할 수 있다. 값은 2계층 조정값이며 소유는 이 문서다 — **관계식이 값보다 먼저 고정된다.**
@@ -100,8 +103,9 @@
 | R2 | bulk_ingest ≥ 모드 C 실험 부하의 분당 요청 수 — 분당 요청 수 = 목표 행/초 × 60 ÷ 요청당 행 수 | 목표 행/초 — 용량 티어([../04_architecture/07_capacity_planning.md](../04_architecture/07_capacity_planning.md)) · 요청당 엔트리 상한 — [../07_api/09_datagen.md](../07_api/09_datagen.md) | **429가 datagen.stream_full보다 먼저 와 HTTP 경유 수집 상한 측정(EXP-37)이 레이트 리밋 측정이 된다 — 측정 무효** |
 | R3 | general ≥ 사용자당 동시 연결 수 × 연결당 구독 설비 상한 + 화면 첫 로드 호출 수 | 구독 설비 상한 — [../07_api/11_websocket.md](../07_api/11_websocket.md) | api 재기동 뒤 재연결 동기화가 구독 설비 수만큼 06_realtime #1을 몰아 불러 **정상 사용자가 429로 대시보드를 못 채운다** |
 | R4 | 측정 중인 class의 한도 ≥ 그 실험의 k6 분당 요청 수 | 실험 조건 — [../10_observability/06_experiment_catalog.md](../10_observability/06_experiment_catalog.md) | S7 이후 부하 실험(EXP-36 · 37)의 지연 분포가 429 거절을 섞어 짧아진다 |
+| R5 | general ≥ R3의 오른쪽 항 + 실행 패널 탭 수(현행 참고 2 — EXP-PERF · EXP-FLOW) × 탭당 폴링 분당 요청 수(1초 폴링이면 60) | 폴링 주기 — [../08_screen/08_evidence_screens.md](../08_screen/08_evidence_screens.md) 실행 패널 | 긴 실행(perf 10^8 · flow 300초) 도중 폴링이 429로 끊겨 **경과 시간 · 완료 표시가 멈추고** 화면이 실행을 잃는다 |
 
-- 검산: 관계 = **4**
+- 검산: 관계 = **5**
 - **R2 · R4의 검증은 측정 기록의 유효 조건이다.** 실험 구간의 aut_ratelimit_rejected_total{class} 증가가 0이 아니면 그 기록은 무효다 — 설계된 거절(stream_full)과 방어 거절(429)을 가를 방법이 이 계수뿐이다([../10_observability/04_experiment_protocol.md](../10_observability/04_experiment_protocol.md) 조건 칸).
 - **R3은 두 조정값을 같은 변경 단위에 묶는다.** 구독 설비 상한(11_websocket 소유)을 올리면 general 한도를 함께 다시 계산한다([../07_api/06_realtime.md](../07_api/06_realtime.md) 미설계 등재 "재연결 폭주와 일반 등급 한도의 관계"를 이 관계로 닫는다).
 - **S5 모드 C 측정에는 계수가 없다**(무인증 · REQ-GEN-15). R2는 S7 이후 기록에만 걸린다 — S5 수치와 S7 수치는 같은 조건이 아니다.
@@ -118,7 +122,7 @@
 | 계정 공유 | 학습자 계정이 하나다(REQ-AUT-17) — k6와 브라우저가 한 계수를 나눈다 | [../05_data_stores/09_migrations_seed.md](../05_data_stores/09_migrations_seed.md) | 측정 중 같은 class를 부르는 화면을 열면 R4가 조용히 깨진다 |
 
 - 검산: 항목 = **6**
-- **고정 창의 2배 통과는 받아들인다(B형).** 결론 — 한도는 분당 평균을 묶을 뿐 60초 구간의 최대를 묶지 않는다. 반대 시나리오 — 이동 창으로 바꾸면 요청마다 정렬 집합 쓰기가 생겨 계수 비용이 INCR 한 번에서 여러 명령으로 늘고, 키 모양 정본을 바꿔야 한다. 파생 지침 — 한도 값을 정할 때 "60초 안에 2배까지"를 전제로 R1~R4의 오른쪽 항과 비교한다.
+- **고정 창의 2배 통과는 받아들인다(B형).** 결론 — 한도는 분당 평균을 묶을 뿐 60초 구간의 최대를 묶지 않는다. 반대 시나리오 — 이동 창으로 바꾸면 요청마다 정렬 집합 쓰기가 생겨 계수 비용이 INCR 한 번에서 여러 명령으로 늘고, 키 모양 정본을 바꿔야 한다. 파생 지침 — 한도 값을 정할 때 "60초 안에 2배까지"를 전제로 R1~R5의 오른쪽 항과 비교한다.
 - 헤더 규약(RateLimit-* · Retry-After · 헤더 없음 = 계수 안 됨)의 정본은 [../07_api/01_conventions.md](../07_api/01_conventions.md) §레이트 리밋 헤더다.
 
 ## 로그인 시도 제한 판정
@@ -238,6 +242,35 @@ Origin 검증과 종료 코드 8종을 방어 관점에서 다시 읽는다. 종
 - 검산: 항목 = **6**
 - 헤더 플러그인의 부 버전 · 기본 헤더 집합은 [../09_tech_stack/03_data_infra.md](../09_tech_stack/03_data_infra.md) 버전 고정표 · [../03_requirements/16_official_references.md](../03_requirements/16_official_references.md)에서 착수 시 확인한다.
 
+## 라이브 실행 표면
+
+증거 화면 EXP-PERF · EXP-FLOW의 시작 · 중단 버튼이 부르는 표면 넷(09_datagen #2~#5 · 브라우저 → BFF → api · no-store)을 방어 관점에서 읽는다. 표면 계약의 정본은 [../07_api/09_datagen.md](../07_api/09_datagen.md), 실행 기전의 정본은 [../06_pipeline/10_datagen_inject.md](../06_pipeline/10_datagen_inject.md) §라이브 실행 — perf · flow다. 이 표면은 **저장소에 수 GB를 쓰고 Stream에 수백만 포인트를 싣는 일을 버튼 하나로 시작한다** — 방어가 막아야 하는 것은 정보 유출보다 자원 소모와 측정 오염이다.
+
+| 방어 | 계약 | 막는 것 | 못 막는 것(잔여) |
+|------|------|------|------|
+| 동시 1 | 두 종류를 합쳐 진행 중 실행 하나 — 겹친 시작은 datagen.run_in_progress/409(details 현재 runId · type) | 버튼 연타 · 두 화면 동시 시작 · 스크립트 반복 호출이 실행을 겹쳐 디스크 · 적체를 곱으로 쓰는 것 | 실행을 순차로 반복하는 것 — 한 실행이 끝나면 다음이 곧바로 시작된다 |
+| 매개변수 화이트리스트 | perf maxExponent ∈ {5, 6, 7, 8} · flow pps · durationSec · bizPerSec 각 목록 — 밖이면 common.validation_failed/400 | 10^9 이상 규모 · 목록 밖 pps · 무한 지속 — 실행 하나의 자원 상한이 목록 최대값에 묶인다 | 목록 최대값 자체의 비용(perf 10^8의 수 GB · flow 50,000 pps × 300초) |
+| 실행 수명 객체 정리 | 종결 세 갈래 모두 cleanup · api 부팅 때 이름으로 DROP | 중단 · 실패 · 재기동 뒤 고아 테이블이 디스크를 계속 쓰는 것 | 실행 도중 저장소가 멈춰 DROP이 실패하면 다음 부팅까지 남는다 — error에 싣는다 |
+| 레이트 리밋 | general class(S7부터) · 관계식 R5 | 인증 뒤 한 사용자의 폴링 · 조회 폭주 | 무인증 기간(S2~S6)에는 계수 없음 — 동시 1과 화이트리스트만 산다 |
+| 인가 | S7 ② 전 무인증 · 뒤에는 ENGINEER · ADMIN([../02_features/12_permission_matrix.md](../02_features/12_permission_matrix.md) §GEN · OBS 표면 인가) | OPERATOR 권한의 대량 적재 시작 | 무인증 기간의 같은 머신 프로세스 · **ENGINEER가 시연 전용 행의 MST 쓰기 경로를 기동한다**(MST-02 ADMIN 단일 주체의 명시 예외 · actor null) |
+| 입력 검증 | runId는 UUID 형식만 — 아니면 400 · 없는 runId는 common.not_found/404 · stop은 멱등(종결 실행에 200) | 경로 값이 실행 조회 · 취소 대상 선택을 흔드는 것 | 해당 없음 |
+
+- 검산: 방어 = **6**
+- **동시 1은 실행끼리만 막는다.** 부하 실험(k6 · 모드 B)과 라이브 실행이 겹치는 것은 표면이 모른다 — 실험 착수 전 gen_run_active 0 확인이 절차 쪽 방어다([../06_pipeline/10_datagen_inject.md](../06_pipeline/10_datagen_inject.md) §한 번에 한 계층). 잔여는 [04_threat_model.md](./04_threat_model.md)가 받는다.
+
+### 게이트 판정
+
+부하 주입 bulk 표면(09_datagen #1)은 환경변수 게이트 DATAGEN_BULK_ENABLED(기본 false)로 닫혀 있다([02_secrets_config.md](./02_secrets_config.md) §부하 주입 표면 게이트). 라이브 실행 표면에 같은 게이트를 둘지 판정한다. **판정 — 게이트 환경변수를 두지 않는다.**
+
+| 안 | 동작 | 실패 시나리오 | 판정 |
+|------|------|------|------|
+| ① bulk와 같은 게이트(기본 false) | 환경변수 + 재기동으로만 표면이 열린다 | 기본 기동에서 시작 버튼이 404가 된다 — 사용자가 요구한 "각 화면의 시작 버튼"이 설정을 바꾸기 전에는 동작하지 않고, 켜 둔 게이트는 health에서 보이지 않아 bulk와 같은 게이트 방치 잔여를 하나 더 만든다 | 버림 |
+| ② **게이트 없음** | 표면은 늘 열려 있고 방어는 위 표 6 | 로컬 사용자가 버튼으로 대량 적재 · 디스크 소모를 시작할 수 있다 | **채택** — 잔여 등재 |
+
+- 검산: 안 = **2**
+- **bulk와 다른 이유는 입력의 모양이다(B형).** 결론 — bulk는 요청 본문이 곧 적재 행이라 요청자가 임의 설비 · 임의 양을 tag_raw에 넣지만, 라이브 실행은 요청이 목록 값 몇 개뿐이고 행은 서버가 정해진 규칙으로 만든다(perf는 실행 수명 객체에만 · flow 발행은 시드 설비 · quality 9로 · flow 업무 명령은 시연 전용 행(사이트 DEMO-FLOW · 라인 DEMO-FLOW-L · 설비 DEMO-FLOW-DEV)에만 — 운영 행은 바뀌지 않는다). 반대 시나리오 — 게이트로 막으면 방어는 늘지 않고 기본 기동의 화면 기능만 사라진다. 파생 지침 — 라이브 실행에 요청 본문이 행을 싣는 매개변수가 생기면 이 판정을 다시 한다.
+- 127.0.0.1 바인드가 바깥 경계를 긋는다([05_local_exposure.md](./05_local_exposure.md)) — 게이트 없음이 LAN 노출이 되지 않는 전제다.
+
 ## 원본 대조
 
 | 원본 자리 | 사실 | 이 문서의 자리 |
@@ -262,7 +295,7 @@ Origin 검증과 종료 코드 8종을 방어 관점에서 다시 읽는다. 종
 
 | 항목 | 상태 | 확정 자리 |
 |------|------|------|
-| class별 한도 값 4 | 2계층 미정 — 관계식 R1~R4 고정 · 오른쪽 항 확정 뒤 이 문서에서 정한다 | 이 문서 · 오른쪽 항 [../07_api/09_datagen.md](../07_api/09_datagen.md) · [../07_api/11_websocket.md](../07_api/11_websocket.md) · EXP-37 |
+| class별 한도 값 4 | 2계층 미정 — 관계식 R1~R5 고정 · 오른쪽 항 확정 뒤 이 문서에서 정한다 | 이 문서 · 오른쪽 항 [../07_api/09_datagen.md](../07_api/09_datagen.md) · [../07_api/11_websocket.md](../07_api/11_websocket.md) · EXP-37 |
 | WebSocket 연결 수 상한 | 3계층 미확인 — 확정 전 임의 값 고정 금지 | [../07_api/11_websocket.md](../07_api/11_websocket.md) · [../03_requirements/13_nonfunctional.md](../03_requirements/13_nonfunctional.md) |
 | 한도 기동 검사(관계식 위반 거부) | 계약만 — 검사 자리 미설계 | 구현 착수 시 |
 | Host 대조 거절의 응답 모양 | 닫힘(최종 검수 판정) — 새 코드 없이 common.validation_failed/400 · fields [path header.host · reason enum(허용값 밖)] · WebSocket 핸드셰이크는 업그레이드 전에 같은 HTTP 400으로 거절한다(정상 클라이언트는 도달하지 않는 경로라 종료 코드로 원인을 알릴 대상이 없다) | [../07_api/01_conventions.md](../07_api/01_conventions.md) · [../11_glossary/02_error_codes.md](../11_glossary/02_error_codes.md) |
@@ -275,6 +308,7 @@ Origin 검증과 종료 코드 8종을 방어 관점에서 다시 읽는다. 종
 - [05_local_exposure.md](./05_local_exposure.md) — 경계 밖 노출
 - [../07_api/01_conventions.md](../07_api/01_conventions.md) — BFF 배정 · 헤더 · 봉투 · 한도 등급 묶음
 - [../07_api/11_websocket.md](../07_api/11_websocket.md) — 종료 코드 정본
-- [../07_api/09_datagen.md](../07_api/09_datagen.md) — 부하 주입 등급 조건
+- [../07_api/09_datagen.md](../07_api/09_datagen.md) — 부하 주입 등급 조건 · 라이브 실행 표면 #2~#5
+- [../06_pipeline/10_datagen_inject.md](../06_pipeline/10_datagen_inject.md) — 라이브 실행 기전(동시 1 · 정리)
 - [../05_data_stores/05_redis_keyspace.md](../05_data_stores/05_redis_keyspace.md) — rl 키 모양
 - [../10_observability/01_metrics_catalog.md](../10_observability/01_metrics_catalog.md) — aut_ratelimit 계수
