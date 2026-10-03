@@ -254,6 +254,7 @@ describe('표면 #2~#5 — 상태 코드 · 에러 봉투 · no-store', () => {
       { type: 'perf', params: { maxExponent: 9 } },
       { type: 'flow', params: { pps: 1234 } },
       { type: 'flow', params: { rate: 1 } },
+      { type: 'flow', params: { readsPerSec: 10 } },
       {},
     ]) {
       const r = await call('POST', '/api/v1/runs', body);
@@ -269,7 +270,7 @@ describe('표면 #2~#5 — 상태 코드 · 에러 봉투 · no-store', () => {
     expect(r.headers['cache-control']).toBe('no-store');
     const o = RunObject.parse(r.json());
     expect(o.status).toBe('running');
-    expect(o.params).toEqual({ pps: 10000, durationSec: 60, bizPerSec: 1 });
+    expect(o.params).toEqual({ pps: 10000, durationSec: 60, bizPerSec: 1, readsPerSec: 20 });
     runId = o.runId;
   });
 

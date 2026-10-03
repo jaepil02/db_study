@@ -2,6 +2,8 @@
 // 표면을 받는 프로세스가 실행을 들고 있어야 중단 · 조회가 같은 메모리를 본다(06_pipeline/10 §라이브 실행).
 // 부팅 정리: 남은 실행 수명 객체(plc.run_perf_raw · run_perf_raw)를 이름으로 찾아 DROP IF EXISTS — 크래시가 정리를 못 한 경우의 안전장치.
 // 의존: ClickHouse · Postgres · DurableKeyClient(전역 저장소 모듈) · BIZ_WRITE_PORT(BizWriteModule @Global).
+// 조회 섞기: TimeseriesService · RealtimeService · MasterReadService를 ModuleRef(strict false)로 같은 인스턴스를 찾아 부른다 —
+// 표면 모듈(TSQ · RLT)이 서비스를 내보내지 않아도 표면과 같은 싱글턴 · 같은 스위치 포트 구현을 탄다(api · all 역할에 함께 실린다).
 import { type ClickHouseClient, createClient } from '@clickhouse/client';
 import { DEMO_FLOW } from '@db-study/shared';
 import {
@@ -11,7 +13,9 @@ import {
   Module,
   type OnApplicationBootstrap,
   type OnApplicationShutdown,
+  type Type,
 } from '@nestjs/common';
+import { ModuleRef } from '@nestjs/core';
 import { Postgres } from '../../common/postgres/postgres.module';
 import { DurableKeyClient } from '../../common/redis/durable-key-client';
 import { WorkerPool } from '../../common/workers/worker-pool';
@@ -21,8 +25,11 @@ import { BIZ_WRITE_PORT, type BizWritePort } from '../biz/biz-contracts';
 import { INGEST_GROUP, RAW_STREAM } from '../collector/redis-stream-buffer';
 import { thresholdsFor } from '../datagen/mode-b/backpressure-gate';
 import { groupTags, MODE_B_TAG_SELECT } from '../datagen/mode-b/mode-b-options';
+import { MasterReadService } from '../master/master-read.service';
+import { RealtimeService } from '../realtime/realtime.service';
+import { TimeseriesService } from '../timeseries/timeseries.service';
 import type { FlowSecondResult, FlowSecondTask, FlowTag } from './flow-gen';
-import { type DemoRows, type FlowDeps, FlowRunExecutor } from './flow-runner';
+import { type DemoRows, type FlowDeps, type FlowReads, FlowRunExecutor } from './flow-runner';
 import { PerfRunExecutor } from './perf-runner';
 import { dropPerfObjects, LivePerfStores } from './perf-stores';
 import { RunRegistry } from './run-registry';
@@ -89,12 +96,26 @@ export function workerFlowEncoder(workers: WorkerPool): (task: FlowSecondTask) =
   };
 }
 
+/**
+ * 조회 섞기 — 표면 컨트롤러가 부르는 메서드 그대로(시계열 #1 · 최신값 #1 · 설비 목록 #2). 찾기는 호출 때 한다 —
+ * 팩토리 시점에는 다른 모듈의 인스턴스가 아직 없을 수 있다. 설비 목록은 비활성 포함(시연 설비가 비활성이다 · 사본 키는 같다).
+ */
+export function flowReadsFor(ref: ModuleRef): FlowReads {
+  const get = <T>(t: Type<T>): T => ref.get(t, { strict: false });
+  return {
+    series: (q) => get(TimeseriesService).query(q),
+    latest: (deviceId) => get(RealtimeService).deviceLatest(deviceId),
+    devices: (siteId) => get(MasterReadService).listDevices(siteId, true),
+  };
+}
+
 export function flowDepsFor(
   cfg: AppConfig,
   pg: Postgres,
   durable: DurableKeyClient,
   port: BizWritePort,
   workers: WorkerPool,
+  reads: FlowReads,
 ): FlowDeps {
   return {
     async loadTags(): Promise<FlowTag[]> {
@@ -108,6 +129,7 @@ export function flowDepsFor(
       durable.xaddBatchWithBacklog(RAW_STREAM, payloads, requireStreamMaxlen(cfg), INGEST_GROUP),
     thresholds: () => thresholdsFor(requireStreamMaxlen(cfg)),
     encode: workerFlowEncoder(workers),
+    reads,
   };
 }
 
@@ -151,12 +173,13 @@ export class RunsLifecycle implements OnApplicationBootstrap, OnApplicationShutd
         durable: DurableKeyClient,
         port: BizWritePort,
         workers: WorkerPool,
+        ref: ModuleRef,
       ) =>
         new RunRegistry([
           new PerfRunExecutor(new LivePerfStores(ch, requireStoreUrls(cfg).postgresUrl, pg.pool)),
-          new FlowRunExecutor(flowDepsFor(cfg, pg, durable, port, workers)),
+          new FlowRunExecutor(flowDepsFor(cfg, pg, durable, port, workers, flowReadsFor(ref))),
         ]),
-      inject: [APP_CONFIG, PERF_CH_CLIENT, Postgres, DurableKeyClient, BIZ_WRITE_PORT, WorkerPool],
+      inject: [APP_CONFIG, PERF_CH_CLIENT, Postgres, DurableKeyClient, BIZ_WRITE_PORT, WorkerPool, ModuleRef],
     },
     RunsLifecycle,
   ],

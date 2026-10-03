@@ -10,7 +10,9 @@ import type {
   TagObjectBody,
 } from '@db-study/shared';
 import { Injectable } from '@nestjs/common';
+import { Counter } from 'prom-client';
 import { ApiError } from '../../common/http/api-error';
+import { appRegistry } from '../../common/metrics/registry';
 import { Postgres } from '../../common/postgres/postgres.module';
 import { CacheKeyClient } from '../../common/redis/cache-key-client';
 import { rowToDevice, rowToLine, rowToModbus, rowToSite } from './master-write.service';
@@ -25,6 +27,18 @@ import {
 
 /** cache:devlist:{site_id} TTL — 현행 참고 600초(05_data_stores/05 §TTL 조회 계약) */
 export const DEVLIST_TTL_SECONDS = 600;
+/**
+ * 마스터 목록 사본(cache:devlist) 조회 결과 — 표면 #2와 흐름 실행의 조회 섞기가 같은 listDevices를 거쳐 둘 다 센다.
+ * 호출 실패(degrade)는 error — miss에 섞으면 히트율 분모가 Redis 장애만큼 부푼다(tsq_cache_requests_total과 같은 규칙).
+ */
+const mstCacheRequests = new Counter({
+  name: 'mst_cache_requests_total',
+  help: '마스터 목록 사본(cache:devlist) 조회 결과',
+  labelNames: ['result'],
+  registers: [appRegistry],
+});
+// 닫힌 레이블 값 0 초기화 — 첫 사건이 시계열에 처음 나타나며 increase()가 0을 내는 것을 막는다
+for (const result of ['hit', 'miss', 'error']) mstCacheRequests.inc({ result }, 0);
 const PG_DOWN = () => new ApiError('common.postgres_unavailable', 'PostgreSQL에 접속할 수 없다');
 
 @Injectable()
@@ -132,8 +146,9 @@ export class MasterReadService {
    */
   async listDevices(siteId: number, includeInactive: boolean): Promise<DeviceObjectBody[]> {
     const cached = await this.cache.getDevList(siteId);
+    mstCacheRequests.inc({ result: cached.value !== null ? 'hit' : cached.failed ? 'error' : 'miss' });
     let all: DeviceObjectBody[];
-    if (cached !== null) all = JSON.parse(cached) as DeviceObjectBody[];
+    if (cached.value !== null) all = JSON.parse(cached.value) as DeviceObjectBody[];
     else {
       const site = await this.q('SELECT 1 AS x FROM site WHERE site_id = $1', [siteId], (r) => r);
       if (site.length === 0) throw new ApiError('common.not_found', '사이트가 없다');

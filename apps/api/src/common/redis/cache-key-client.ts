@@ -200,10 +200,10 @@ export class CacheKeyClient {
     return this.del(`cache:tagmeta:${tagId}`);
   }
 
-  /** cache:devlist:{site_id} — 사이트의 설비 목록 JSON 사본(MST-02 #2) */
-  async getDevList(siteId: number): Promise<string | null> {
+  /** cache:devlist:{site_id} — 사이트의 설비 목록 JSON 사본(MST-02 #2) · failed는 degrade(부르는 쪽이 mst_cache_requests_total error로 센다) */
+  async getDevList(siteId: number): Promise<{ value: string | null; failed: boolean }> {
     const r = await this.getBuffer(`cache:devlist:${siteId}`);
-    return r.value ? r.value.toString('utf8') : null;
+    return { value: r.value ? r.value.toString('utf8') : null, failed: r.failed };
   }
 
   setDevList(siteId: number, json: string, ttlSeconds: number): Promise<void> {

@@ -52,6 +52,20 @@ const served = new Counter({
 // 닫힌 레이블 값 0 초기화 — 기록 규칙 STALE 비율이 첫 사건을 놓치지 않게 한다(S5)
 for (const freshness of ['fresh', 'stale']) served.inc({ freshness }, 0);
 
+/**
+ * 설비 전체 최신값 조회 요청 수(deviceLatest 1회 = 1) — served는 점 단위라 요청 수로 읽을 수 없다(설비당 태그 수만큼 오른다).
+ * hit = Redis rt:latest에서 답함(남의 복원을 기다린 뒤 재읽기 포함) · restored = 빈 키 복원 경로(06_pipeline/05) ·
+ * bypass = SW-02 off로 ClickHouse 리더가 답함(Redis를 건너뜀) · error = 예외로 끝남(503 · 404 등) 또는 락 대기 소진 뒤 빈 응답.
+ * 표면 #1과 흐름 실행의 조회 섞기가 같은 메서드라 둘 다 센다(리드 판정 2026-10-03).
+ */
+const latestRequests = new Counter({
+  name: 'rlt_latest_requests_total',
+  help: '설비 최신값 조회 요청 결과',
+  labelNames: ['result'],
+  registers: reg,
+});
+for (const result of ['hit', 'restored', 'bypass', 'error']) latestRequests.inc({ result }, 0);
+
 const unresolved = new Counter({
   name: 'rlt_tag_unresolved_total',
   help: '단일 태그 해석 실패(503 common.postgres_unavailable)',
@@ -59,6 +73,14 @@ const unresolved = new Counter({
 });
 
 type Source = LatestDeviceBody['meta']['source'];
+/** 요청 계수 결과 — 응답 모양과 별개(rlt_latest_requests_total) */
+type Outcome = 'hit' | 'restored' | 'bypass' | 'error';
+interface Resolved {
+  points: LatestPoint[];
+  source: Source;
+  restored: boolean;
+  outcome: Outcome;
+}
 
 @Injectable()
 export class RealtimeService {
@@ -72,8 +94,15 @@ export class RealtimeService {
   ) {}
 
   async deviceLatest(deviceId: number): Promise<LatestDeviceBody> {
-    const { points, source, restored } = await this.resolve(deviceId);
-    return this.present(deviceId, points, source, restored);
+    try {
+      const { points, source, restored, outcome } = await this.resolve(deviceId);
+      const body = await this.present(deviceId, points, source, restored);
+      latestRequests.inc({ result: outcome });
+      return body;
+    } catch (e) {
+      latestRequests.inc({ result: 'error' });
+      throw e;
+    }
   }
 
   /**
@@ -119,9 +148,7 @@ export class RealtimeService {
     };
   }
 
-  private async resolve(
-    deviceId: number,
-  ): Promise<{ points: LatestPoint[]; source: Source; restored: boolean }> {
+  private async resolve(deviceId: number): Promise<Resolved> {
     const viaRedis = this.reader.implName === 'RedisLatestValueReader';
     let points: LatestPoint[];
     try {
@@ -133,7 +160,10 @@ export class RealtimeService {
       }
       throw e;
     }
-    if (points.length > 0) return { points, source: viaRedis ? 'redis' : 'clickhouse', restored: false };
+    if (points.length > 0)
+      return viaRedis
+        ? { points, source: 'redis', restored: false, outcome: 'hit' }
+        : { points, source: 'clickhouse', restored: false, outcome: 'bypass' };
     // 키 없음 — 404는 마스터 기준이다(REQ-RLT-07). PostgreSQL 불가면 존재로 보고 복원 경로를 탄다 —
     // 설비 전체 조회의 503은 Redis 불가 하나뿐이다(06_pipeline/05 판정 트리 · 07_api/06 #1)
     const exists = await this.master.deviceExists(deviceId).catch(() => {
@@ -141,14 +171,12 @@ export class RealtimeService {
       return true;
     });
     if (!exists) throw new ApiError('common.not_found', '마스터에 없는 설비');
-    if (!viaRedis) return { points: [], source: 'clickhouse', restored: false };
+    if (!viaRedis) return { points: [], source: 'clickhouse', restored: false, outcome: 'bypass' };
     return this.restore(deviceId);
   }
 
   /** 빈 키 복원 — 설비당 락 1 · 락을 잃은 요청은 대기 뒤 재읽기만 하고 원천을 부르지 않는다 */
-  private async restore(
-    deviceId: number,
-  ): Promise<{ points: LatestPoint[]; source: Source; restored: boolean }> {
+  private async restore(deviceId: number): Promise<Resolved> {
     const lock = await this.cache.acquireRtRebuildLock(deviceId, RESTORE_LOCK_TTL_MS);
     if (lock.token || lock.failed) {
       let rows: LatestPoint[];
@@ -161,12 +189,12 @@ export class RealtimeService {
         // ClickHouse 불가는 일시적이라 락을 즉시 푼다 — 복구 직후 첫 요청이 복원해야 한다
         if (lock.token) await this.cache.releaseRtRebuildLock(deviceId, lock.token);
         restores.inc({ result: 'failed' });
-        return { points: [], source: 'restored', restored: true };
+        return { points: [], source: 'restored', restored: true, outcome: 'restored' };
       }
       if (rows.length === 0) {
         // 신규 설비 — 락을 풀지 않고 만료에 맡긴다: 새 키 없이 부정 캐시를 얻는다(§신규 설비 판정)
         restores.inc({ result: 'empty' });
-        return { points: [], source: 'restored', restored: true };
+        return { points: [], source: 'restored', restored: true, outcome: 'restored' };
       }
       const tuples: LatestTuple[] = rows.map((r) => [r.tagId, r.ts, r.value, r.quality]);
       try {
@@ -176,7 +204,7 @@ export class RealtimeService {
       }
       if (lock.token) await this.cache.releaseRtRebuildLock(deviceId, lock.token);
       restores.inc({ result: 'success' });
-      return { points: rows, source: 'restored', restored: true };
+      return { points: rows, source: 'restored', restored: true, outcome: 'restored' };
     }
     for (let i = 0; i < LOCK_WAIT_TRIES; i++) {
       await sleep(LOCK_WAIT_MS);
@@ -189,10 +217,11 @@ export class RealtimeService {
           throw new ApiError('realtime.latest_unavailable', '최신값 원천에 접속할 수 없다');
         throw e;
       }
-      if (again.length > 0) return { points: again, source: 'redis', restored: false };
+      if (again.length > 0) return { points: again, source: 'redis', restored: false, outcome: 'hit' };
     }
     waitExhausted.inc();
-    return { points: [], source: 'redis', restored: false };
+    // 대기 소진 빈 응답 — 200이지만 값을 못 준 요청이라 error로 센다(리드 판정)
+    return { points: [], source: 'redis', restored: false, outcome: 'error' };
   }
 
   /** STALE 판정 · 메타 부착 — 판정은 응답 직전 · 저장값은 바꾸지 않는다 */
