@@ -58,6 +58,8 @@ test('두 화면 모두 한 장 — 문서 · 본문 스크롤 없음 · 머리�
           .length + document.querySelectorAll('details').length,
     );
     expect(expanders, `${item.label} 서랍 · 아코디언 없음`).toBe(0);
+    // 공통 글꼴 — 두 화면 모두 Pretendard(셸 · 본문이 같은 글꼴)
+    expect(await page.evaluate(() => getComputedStyle(document.body).fontFamily)).toMatch(/pretendard/i);
     await shot(page, info, `one-screen-${item.href.slice(1)}`);
   }
 });

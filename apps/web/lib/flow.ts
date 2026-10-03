@@ -1104,6 +1104,51 @@ function sumAvgs(stages: readonly { avg: number | null }[]): number | null {
   return v.length === 0 ? null : v.reduce((a, b) => a + b, 0);
 }
 
+/** 대기줄에서 기다리는 단계 — 센서는 스트림 대기 · 업무는 대기(BATCH_STAGES · BIZ_STAGES의 첫 단계) */
+export const BATCH_WAIT_STAGE: BatchStageKey = 'streamWaitMs';
+export const BIZ_WAIT_STAGE: BizStageKey = 'queueWaitMs';
+
+/**
+ * 처리 시간 · 대기 시간 — 단계 평균을 대기 단계와 나머지(처리)로 가른다(.omc/plans/web-ux-polish.md §7.1 R17).
+ * 대기줄이 밀리면(예: ClickHouse가 멈춘 사이 쌓인 줄을 따라잡는 중) 대기만 수천 초로 커져 처리 방식 비교가 묻힌다 — 막대는 처리만,
+ * 대기는 따로 한 줄. 둘 다 원천 단계 평균 그대로다(지어내지 않는다) · 그 단계 표본이 없으면 null.
+ */
+export function workAndWait<K extends string>(
+  stages: readonly StageAvg<K>[],
+  waitKey: K,
+): { work: number | null; wait: number | null } {
+  return {
+    work: sumAvgs(stages.filter((s) => s.key !== waitKey)),
+    wait: stages.find((s) => s.key === waitKey)?.avg ?? null,
+  };
+}
+
+/**
+ * 사람이 읽는 시간 — 1초 미만 "120ms"(10ms 미만은 소수 1자리 "7.9ms") · 1분 미만 "1.2초" · 1시간 미만 "46분 28초" · 그 위 "3시간 2분".
+ * 반올림한 뒤의 값으로 단위를 다시 고른다 — 999.6ms는 "1,000ms"가 아니라 "1.0초" · 59.96초는 "60.0초"가 아니라 "1분 0초".
+ */
+export function durationText(ms: number | null | undefined): string {
+  if (ms === null || ms === undefined || !Number.isFinite(ms) || ms < 0) return '—';
+  if (ms < 9.95) return `${ms.toFixed(1)}ms`;
+  if (Math.round(ms) < 1_000) return `${Math.round(ms)}ms`;
+  if (Math.round(ms / 100) < 600) return `${(ms / 1000).toFixed(1)}초`;
+  const s = Math.round(ms / 1000);
+  if (s < 3_600) return `${Math.floor(s / 60)}분 ${s % 60}초`;
+  const m = Math.round(s / 60);
+  return `${Math.floor(m / 60)}시간 ${m % 60}분`;
+}
+
+/**
+ * 움직임 줄이기(prefers-reduced-motion) — 점을 움직이지 않고 한 자리에 멈춰 보인다: 그 점이 가장 오래 머무는 다리의 도착 노드.
+ * 대기줄이 밀리면 ① 대기줄 · 평소엔 ClickHouse 저장 · 업무는 트랜잭션처럼 "시간이 어디서 갔나"가 그 자리다(단계 ms 원천 그대로).
+ * 모든 다리가 0이면 출발 노드.
+ */
+export function restNode<N extends string>(plan: DotPlan<N>): N {
+  let best: Leg<N> | null = null;
+  for (const leg of plan.legs) if (leg.ms > 0 && (best === null || leg.ms > best.ms)) best = leg;
+  return best ? best.to : plan.start;
+}
+
 /**
  * 캐시 무효화 키/초 — 링 버퍼 biz[] 중 최근 10초(게이트웨이 시계) invalidatedKeys 합 ÷ 10초.
  * totals에 없는 값이라 병합 창 상한으로 버려진 업무 요약(dropped.biz)이 있으면 실제보다 작다 — lowerBound 표지.

@@ -224,13 +224,14 @@ describe('팝오버 — 시작 202를 받은 뒤에만 닫힌다', () => {
     const h = open({ ...PANEL_IDLE, starting: true });
     expect(h).toContain('role="dialog"');
     expect(h).toMatch(
-      /<button[^>]*disabled=""[^>]*><span aria-hidden="true">▶ <\/span>시작하는 중이에요…<\/button>/,
+      /<button[^>]*disabled=""[^>]*><svg[^>]*>(?:<path[^>]*><\/path>)+<\/svg>시작하는 중이에요…<\/button>/,
     );
     const bad = open({ ...PANEL_IDLE, paramError: '매개변수가 서버 허용값과 다르다' });
     expect(bad).toMatch(/role="dialog"[\s\S]*매개변수가 서버 허용값과 다르다/);
   });
 });
 
+/** 진행 띠 — 종결 실행은 "이 화면에서 방금 끝난" 실행으로 본다(recentEndId — 30초 동안 띠가 결말을 그린다) */
 const band = (type: 'perf' | 'flow', run: RunObjectBody | null) =>
   renderToStaticMarkup(
     createElement(RunProgressView, {
@@ -239,6 +240,7 @@ const band = (type: 'perf' | 'flow', run: RunObjectBody | null) =>
       pollFailed: false,
       local: PANEL_IDLE,
       now: 100,
+      recentEndId: run?.runId ?? null,
       onStop: () => {},
     }),
   );
@@ -272,7 +274,9 @@ describe('정적 렌더', () => {
     expect(h).toContain('실행 중');
     expect(h).not.toContain('run-large-warning');
     expect(h).not.toContain('중단');
-    expect(band('perf', perf())).toMatch(/<button[^>]*>(?:<span[^>]*>■ <\/span>)중단<\/button>/);
+    expect(band('perf', perf())).toMatch(
+      /<button[^>]*>(?:<svg[^>]*>(?:<path[^>]*><\/path>)+<\/svg>)중단<\/button>/,
+    );
   });
   it('진행 띠 — 단계 n/m · flow 진행 막대 · 종결 띠', () => {
     expect(band('perf', perf())).toContain('단계 2/3');

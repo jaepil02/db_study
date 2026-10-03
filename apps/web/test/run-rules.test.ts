@@ -17,7 +17,11 @@ import {
   expectedDisk,
   flowProgress,
   formatElapsed,
+  headerLastRun,
+  justEndedRunId,
   largeRunWarning,
+  lastRunText,
+  lastRunTip,
   liveElapsedMs,
   liveSeries,
   PANEL_IDLE,
@@ -35,6 +39,7 @@ import {
   runScopeText,
   SAME_RUN_TEXT,
   stepPlainText,
+  stripShowsRun,
   VANISHED_TEXT,
   vanished,
 } from '../lib/runs';
@@ -251,6 +256,52 @@ describe('상태 칩과 종결 띠 — 한 줄 쉬운 말', () => {
     expect(runBand(perfRun({ status: 'stopping' }))?.text).toBe(
       '멈추는 중이에요… — 하던 단계를 멈추고 정리하고 있어요',
     );
+  });
+});
+
+describe('지난 실행 자리 — 띠는 실행 중 · 방금 끝난 30초만 · 그 뒤 셸 머리 "지난번" 글자(web-ux-polish §2.1)', () => {
+  it('방금 끝남 — 같은 실행이 running · stopping → 종결로 바뀐 응답만 · 이 화면 종류만', () => {
+    const done = completedPerf();
+    expect(justEndedRunId(snap(perfRun()), snap(done), 'perf')).toBe(PERF_ID);
+    expect(justEndedRunId(snap(perfRun({ status: 'stopping' })), snap(done), 'perf')).toBe(PERF_ID);
+    // 처음 받은 응답이 이미 종결 · 종결 → 종결 · 다른 실행 · 다른 종류 · 실행 사라짐은 아님
+    expect(justEndedRunId(undefined, snap(done), 'perf')).toBeNull();
+    expect(justEndedRunId(snap(done), snap(done), 'perf')).toBeNull();
+    expect(justEndedRunId(snap(perfRun({ runId: 'old' })), snap(done), 'perf')).toBeNull();
+    expect(justEndedRunId(snap(perfRun()), snap(done), 'flow')).toBeNull();
+    expect(justEndedRunId(snap(perfRun()), snap(null), 'perf')).toBeNull();
+  });
+
+  it('띠와 머리 글자는 같은 실행을 동시에 말하지 않는다', () => {
+    const done = completedPerf();
+    expect(stripShowsRun(perfRun(), null)).toBe(true);
+    expect(stripShowsRun(done, PERF_ID)).toBe(true);
+    expect(stripShowsRun(done, null)).toBe(false);
+    expect(stripShowsRun(null, PERF_ID)).toBe(false);
+    expect(headerLastRun(done, null)).toBe(done);
+    expect(headerLastRun(done, PERF_ID)).toBeNull();
+    expect(headerLastRun(perfRun(), null)).toBeNull();
+    for (const [run, id] of [
+      [perfRun(), null],
+      [done, PERF_ID],
+      [done, null],
+    ] as const)
+      expect(stripShowsRun(run, id) && headerLastRun(run, id) !== null).toBe(false);
+  });
+
+  it('머리 글자 — perf 완료는 걸린 시간 · flow 완료는 "완료"(보낸 시간은 범위에 있다) · 중단 · 실패는 상태 낱말', () => {
+    expect(lastRunText(completedPerf())).toBe('지난번 100만 행까지 · 3분 12.4초');
+    const flowDone = flowRun({ status: 'completed', endedAt: '2026-09-28T01:31:05.000Z', elapsedMs: 65_000 });
+    expect(lastRunText(flowDone)).toBe('지난번 초당 10,000개 · 60초 · 완료');
+    expect(lastRunText(flowRun({ status: 'stopped', endedAt: '2026-09-28T01:30:50.000Z' }))).toBe(
+      '지난번 초당 10,000개 · 60초 · 중단됨',
+    );
+    expect(lastRunText(perfRun({ status: 'failed', endedAt: '2026-09-28T01:20:17.400Z' }))).toBe(
+      '지난번 100만 행까지 · 실패',
+    );
+    // 범위를 모르면 머리 낱말로
+    expect(lastRunText({ ...completedPerf(), params: {} })).toBe('지난번 직접 재 보기 · 3분 12.4초');
+    expect(lastRunTip(flowDone)).toContain('완료 — 걸린 시간 1분 5.0초');
   });
 });
 
@@ -652,7 +703,7 @@ describe('머리 조작부 — 버튼 · 상태 칩 · 팝오버(08_screen/08 §
     const html = render({ snapshot: undefined });
     expect(html).toContain('data-testid="run-control-perf"');
     expect(html).toMatch(
-      /<button[^>]*disabled=""[^>]*><span aria-hidden="true">▶ <\/span>내 컴퓨터에서 직접 재 보기<\/button>/,
+      /<button[^>]*disabled=""[^>]*><svg[^>]*>(?:<path[^>]*><\/path>)+<\/svg>내 컴퓨터에서 직접 재 보기<\/button>/,
     );
     expect(html).not.toContain('role="dialog"');
     expect(html).toContain('data-testid="run-status-pending"');
@@ -669,23 +720,60 @@ describe('머리 조작부 — 버튼 · 상태 칩 · 팝오버(08_screen/08 §
     expect(html).not.toContain('10^');
     expect(html).toContain('아직 재 보지 않았어요(서버가 다시 켜지면 지난 결과는 사라져요)');
     expect(html).toMatch(
-      /<button type="button" class="[^"]*"><span aria-hidden="true">▶ <\/span>시작<\/button>/,
+      /<button type="button" class="[^"]*"><svg[^>]*>(?:<path[^>]*><\/path>)+<\/svg>시작<\/button>/,
     );
   });
 
   it('진행 중 — 칩 "실행 중" · 시작 비활성 · 중단은 머리에 없다(진행 띠 오른쪽)', () => {
     const html = render({ snapshot: snap(perfRun()) });
     expect(html).toContain('실행 중');
-    expect(html).toMatch(/<button[^>]*disabled=""[^>]*><span aria-hidden="true">▶ <\/span>시작<\/button>/);
+    // 칩 점 · 로딩 자리의 깜빡임은 움직임 줄이기 설정이면 멈춘다(R7)
+    expect(html).toContain('motion-safe:animate-pulse');
+    expect(html).not.toMatch(/(?<![\w:])animate-pulse/);
+    expect(render({ snapshot: undefined })).toContain('motion-safe:animate-pulse');
+    expect(html).toMatch(
+      /<button[^>]*disabled=""[^>]*><svg[^>]*>(?:<path[^>]*><\/path>)+<\/svg>시작<\/button>/,
+    );
     expect(html).not.toContain('중단');
   });
 
   it('완료 — 종결 뒤에는 칩을 숨긴다(띠가 같은 말을 한다)', () => {
-    const html = render({ snapshot: snap(completedPerf()) });
+    const html = render({ snapshot: snap(completedPerf()), recentEndId: PERF_ID });
     expect(html).not.toContain('data-testid="run-status"');
     expect(html).not.toContain('bg-emerald-100');
+    // 방금 끝나 띠가 결말을 그리는 동안은 머리 "지난번" 글자를 쓰지 않는다(같은 말 두 곳 금지)
+    expect(html).not.toContain('data-testid="run-last"');
     // 멈추는 중(stopping)은 아직 진행 중이라 칩이 남는다
     expect(render({ snapshot: snap(perfRun({ status: 'stopping' })) })).toContain('>멈추는 중<');
+  });
+
+  it('지난 실행(띠가 접힌 뒤 · 이미 끝난 실행을 열었을 때) — 머리 버튼 왼쪽 작은 글자 "지난번 …" · 상세는 툴팁 · 키보드 · 낭독기로도 닿는다(R12)', () => {
+    const html = render({ snapshot: snap(completedPerf()), recentEndId: null, defaultOpen: false });
+    expect(html).toMatch(
+      /data-testid="run-last" title="[^"]*" tabindex="0" aria-describedby="[^"]+" class="[^"]*text-xs tabular-nums text-slate-500">지난번 100만 행까지 · 3분 12\.4초<\/span><span id="[^"]+" class="sr-only">[^<]*<\/span><button/,
+    );
+    const tip = /data-testid="run-last" title="([^"]*)"/.exec(html)?.[1] ?? '';
+    const lines = [
+      '지난번 직접 재 보기',
+      '완료 — 걸린 시간 3분 12.4초',
+      '종료 10:23:17 KST',
+      '시작 10:20:05 KST',
+      'prepare done 0.4초',
+      'cleanup done 0.4초',
+      '내 측정(참고용) — 라이브 실행 — 앱 경유 · 시연값 · 기록 정본 아님',
+    ];
+    expect(tip.split('\n')).toEqual(lines);
+    // 툴팁과 같은 상세를 sr-only 설명으로 — aria-describedby가 그 id를 가리킨다(키보드 초점 · 낭독기)
+    const described = /aria-describedby="([^"]+)"/.exec(html)?.[1] ?? '';
+    expect(html).toContain(`<span id="${described}" class="sr-only">${lines.join(' · ')}</span>`);
+    // 실패는 빨간 글자 · 진행 중 · 실행 없음 · 다른 종류 실행이면 글자 없음
+    const failed = render({
+      snapshot: snap(perfRun({ status: 'failed', endedAt: '2026-09-28T01:20:17.400Z', elapsedMs: 12_400 })),
+      defaultOpen: false,
+    });
+    expect(failed).toMatch(/class="[^"]*text-red-700">지난번 100만 행까지 · 실패</);
+    for (const r of [perfRun(), null, flowRun({ status: 'completed', endedAt: '2026-09-28T01:31:00.000Z' })])
+      expect(render({ snapshot: snap(r), defaultOpen: false })).not.toContain('data-testid="run-last"');
   });
 
   it('다른 종류 진행 중 — 팝오버에 그 화면 링크(화면 이름) · 이 화면 칩 없음', () => {
@@ -740,20 +828,25 @@ describe('진행 띠 한 줄 — 상태 · 지금 단계 쉬운 문장 · 단계
     expect(html).toContain('경과 <span data-testid="run-elapsed">44초</span>'); // 41,250 + 2,900
     expect(html).not.toContain('aria-expanded');
     expect(html).toMatch(
-      /<button type="button" class="ml-auto[^"]*"><span aria-hidden="true">■ <\/span>중단<\/button>/,
+      /<button type="button" class="ml-auto[^"]*"><svg[^>]*>(?:<path[^>]*><\/path>)+<\/svg>중단<\/button>/,
     );
+    // 이 줄은 overflow-hidden(한 줄 높이) — 중단 버튼 포커스 링은 안쪽으로 그려 잘리지 않게(R6)
+    expect(html).toMatch(/<button type="button" class="ml-auto[^"]*focus-visible:-outline-offset-2[^"]*">/);
+    // 움직임 줄이기 설정이면 깜빡임을 멈춘다(R7)
+    expect(html).toContain('motion-safe:animate-pulse');
+    expect(html).not.toMatch(/(?<![\w:])animate-pulse/);
     expect(html).not.toContain('role="progressbar"'); // perf는 진행 막대 없음(EXP-FLOW만)
   });
 
   it('중단을 눌렀다 — "멈추는 중이에요…" 비활성', () => {
     const html = render({ snapshot: snap(perfRun()), local: { ...PANEL_IDLE, stopRequested: true } });
     expect(html).toMatch(
-      /<button[^>]*disabled=""[^>]*><span aria-hidden="true">■ <\/span>멈추는 중이에요…<\/button>/,
+      /<button[^>]*disabled=""[^>]*><svg[^>]*>(?:<path[^>]*><\/path>)+<\/svg>멈추는 중이에요…<\/button>/,
     );
   });
 
-  it('완료 — "지난번 직접 재 보기" · 완료 띠 · 무엇을 쟀나 · 라이브 표지 · 단계 문장 · 중단 버튼 없음', () => {
-    const html = render({ snapshot: snap(completedPerf()) });
+  it('완료 직후(이 화면에서 지켜보던 실행 · 30초) — "지난번 직접 재 보기" · 완료 띠 · 무엇을 쟀나 · 라이브 표지 · 단계 문장 · 중단 버튼 없음', () => {
+    const html = render({ snapshot: snap(completedPerf()), recentEndId: PERF_ID });
     expect(html).toContain('지난번 직접 재 보기');
     expect(html).toContain('완료 — 걸린 시간 3분 12.4초');
     expect(html).toContain('title="종료 10:23:17 KST"');
@@ -763,6 +856,18 @@ describe('진행 띠 한 줄 — 상태 · 지금 단계 쉬운 문장 · 단계
     );
     expect(html).not.toContain('data-testid="run-stage"');
     expect(html).not.toContain('중단</button>');
+  });
+
+  it('30초가 지났거나 이미 끝난 실행을 열었다 — 띠 자체가 없다(셸 머리 "지난번" 글자가 같은 말을 한다)', () => {
+    expect(render({ snapshot: snap(completedPerf()) })).toBe('');
+    expect(render({ snapshot: snap(completedPerf()), recentEndId: 'other-run' })).toBe('');
+    // 띠 문구(요청 사건)는 실행 줄과 따로 남는다
+    expect(
+      render({
+        snapshot: snap(completedPerf()),
+        local: { ...PANEL_IDLE, notice: { tone: 'neutral', text: VANISHED_TEXT } },
+      }),
+    ).not.toContain('data-testid="run-band"');
   });
 
   it('다른 종류 진행 중 — 그 화면 링크 한 줄', () => {
@@ -903,6 +1008,7 @@ describe('종결 띠 — 오류 전문은 툴팁 · 띠는 한 줄로 자른다'
         pollFailed: false,
         local: PANEL_IDLE,
         now: 0,
+        recentEndId: PERF_ID,
         onStop: () => {},
       }),
     );
@@ -960,21 +1066,24 @@ describe('perf 내 측정 점', () => {
     expect(liveSeries(null, 'Q2')).toEqual({ ch: [], pg: [] });
   });
 
-  it('그림 2 — 내 측정은 마름모 점(CH ◇ · PG ◆ · 선 없음) · 범례 "내 측정(참고용)" 하나 · 없으면 계열도 범례도 없다', () => {
+  it('그림 2 — 내 측정은 속 찬 마름모 점(CH · PG 모두 · 색이 저장소를 가른다 · 선 없음) · 범례 "내 측정(참고용)" 하나 · 없으면 계열도 범례도 없다', () => {
+    // 범례는 배열(색 범례 · 모양 범례) · 내 측정 항목은 { name, itemStyle }(범례 마름모 중립 slate)라 이름만 견준다
+    type Legend = { data: (string | { name: string })[] }[];
+    const names = (l: Legend) => l.map((x) => x.data.map((d) => (typeof d === 'string' ? d : d.name)));
     const opt = curveOption({ lines: [], range: undefined, live: liveSeries(run, 'Q2') }) as unknown as {
       series: { id: string; name: string; symbol?: string; lineStyle?: { width: number } }[];
-      legend: { data: string[] };
+      legend: Legend;
     };
     expect(opt.series.map((x) => x.id)).toEqual(['live-pg', 'live-ch']);
-    expect(opt.series.map((x) => x.symbol)).toEqual(['diamond', 'emptyDiamond']);
+    expect(opt.series.map((x) => x.symbol)).toEqual(['diamond', 'diamond']);
     expect(opt.series.every((x) => x.name === '내 측정(참고용)' && x.lineStyle?.width === 0)).toBe(true);
-    expect(opt.legend.data).toEqual(['PostgreSQL', 'ClickHouse', '내 측정(참고용)']);
+    expect(names(opt.legend)).toEqual([['PostgreSQL', 'ClickHouse', '내 측정(참고용)']]);
     const none = curveOption({ lines: [], range: undefined, live: { ch: [], pg: [] } }) as unknown as {
       series: { id: string }[];
-      legend: { data: string[] };
+      legend: Legend;
     };
     expect(none.series).toEqual([]);
-    expect(none.legend.data).toEqual(['PostgreSQL', 'ClickHouse']);
+    expect(names(none.legend)).toEqual([['PostgreSQL', 'ClickHouse']]);
   });
 });
 

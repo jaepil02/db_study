@@ -1,8 +1,11 @@
 'use client';
-// EXP-PERF — 성능 비교(/performance) 한 장 화면. 설계 .omc/plans/web-junior-redesign.md §1 원칙 · §2 화면 A · §4 용어표 · §5 픽셀 예산.
-// 1440 × 900에서 스크롤 · 서랍 · 탭 없이: 제목(질문형) · 설명 → 두 열(① 센서 데이터 주황 · ② 업무 데이터 파랑) → 한 줄 정리 · 회색 각주.
+// EXP-PERF — 성능 비교(/performance) 한 장 화면. 설계 .omc/plans/web-junior-redesign.md §1 원칙 · §2 화면 A · §4 용어표 · §5 픽셀 예산 · 다듬기 .omc/plans/web-ux-polish.md §2.
+// 1440 × 900에서 스크롤 · 서랍 · 탭 없이: 제목(질문형) · 설명 한 줄 → 두 구역(센서 데이터 주황 · 업무 데이터 파랑 — 머리 띠 + 흰 본문 한 겹) → 한 줄 정리(두 조각 알약) · 각주.
 // 화면 높이는 본문 높이(100dvh − 셸 머리 − 위아래 여백 40)로 고정하고 그림 2만 늘거나 준다 — 진행 띠가 생기면 그림 2가 흡수한다.
-// 직접 재 보기(GEN-11)는 셸 머리 버튼 → 규모 선택 팝오버 → 진행 띠 한 줄 · 결과는 그림 2에 "내 측정" 점. URL은 선택 질문 q 하나만 남긴다.
+// 바닥 높이: 1360px 이상 46rem(제목 · 그림 1 머리가 한 줄) · 1024~1359px는 줄바꿈으로 높아지는 만큼 52rem(1280 × 800은 본문 스크롤 허용 — 구역이 겹치지 않게).
+// 두 범위는 겹치지 않게 쓴다(lg:max-[1360px] · min-[1360px]) — Tailwind가 px 임의 중단점과 rem 중단점의 순서를 정하지 못해 겹치면 앞뒤가 뒤바뀐다.
+// 폭: 최대 88rem(1408px) 가운데 — 1440 × 900의 본문 비(1152 × 804 ≈ 1.43)를 1920 × 1080(본문 높이 984 × 1.43 ≈ 1408)에서도 지켜 늘어나 휑하지 않게.
+// 직접 재 보기(GEN-11)는 셸 머리 버튼 → 규모 선택 팝오버 → 진행 띠 한 줄(실행 중 · 끝난 뒤 30초) · 지난 결과는 셸 머리 작은 글자 · 그림 2에 "내 측정" 점. URL은 선택 질문 q 하나만 남긴다.
 import { useEffect, useState } from 'react';
 import { useShellHealth } from '../../../lib/health';
 import { countIssues, recordTipLines } from '../../../lib/perf';
@@ -14,6 +17,8 @@ import { RunControl } from '../../runs/run-control';
 import { RunProgress } from '../../runs/run-progress';
 import { PERF_PARAM_DEFS } from '../../runs/run-spec';
 import { HeaderActions } from '../../shell/header-actions';
+import { UiIcon } from '../../ui/icon';
+import { STORE } from '../../ui/store';
 import { useEvidence } from '../evidence';
 import { BusinessColumn } from './business-column';
 import { usePerfView } from './perf-data';
@@ -22,8 +27,12 @@ import { SensorColumn } from './sensor-column';
 export const PERF_TITLE = 'PostgreSQL과 ClickHouse, 어떤 데이터에 무엇이 맞을까?';
 export const PERF_LEAD =
   '같은 데이터를 두 DB에 넣고 같은 일을 시켜 봤어요. 데이터의 성격에 따라 이기는 쪽이 바뀝니다.';
-export const PERF_SUMMARY =
-  '많이 쌓아 두고 크게 훑는 데이터 → ClickHouse · 정확하게 한 건씩 다루는 데이터 → PostgreSQL';
+/** 한 줄 정리 두 조각 — 데이터 성격 → 맞는 DB(알약 바탕은 그 DB의 연한 색) */
+export const PERF_SUMMARY_PARTS = [
+  { store: 'ch', data: '많이 쌓아 두고 크게 훑는 데이터' },
+  { store: 'pg', data: '정확하게 한 건씩 다루는 데이터' },
+] as const;
+export const PERF_SUMMARY = PERF_SUMMARY_PARTS.map((p) => `${p.data} → ${STORE[p.store].label}`).join(' · ');
 /** 각주 고정 문구(08_screen/08 §표시 계약 시간 참고값) */
 export const PERF_FOOTNOTE =
   '같은 일을 3번씩 시킨 중간값 · 걸린 시간은 참고용 · 누가 이기는지는 3번 모두 같을 때만';
@@ -75,9 +84,9 @@ export function PerfScreen({ initialQuery }: { initialQuery: string }) {
       <HeaderActions>
         <RunControl params={PERF_PARAM_DEFS} buttonLabel="내 컴퓨터에서 직접 재 보기" intro={RUN_INTRO} />
       </HeaderActions>
-      <div className="flex flex-col gap-3 lg:h-[max(calc(100dvh-var(--header-height)-2.5rem),46rem)]">
-        <header className="shrink-0">
-          <h2 className="text-lg leading-7 font-bold text-slate-900">{PERF_TITLE}</h2>
+      <div className="mx-auto flex w-full max-w-[88rem] flex-col gap-3 lg:max-[1360px]:h-[max(calc(100dvh-var(--header-height)-2.5rem),52rem)] min-[1360px]:h-[max(calc(100dvh-var(--header-height)-2.5rem),46rem)]">
+        <header className="flex shrink-0 flex-wrap items-baseline gap-x-4">
+          <h2 className="text-xl font-bold text-slate-900">{PERF_TITLE}</h2>
           <p className="text-sm text-slate-600">{PERF_LEAD}</p>
         </header>
         <RunProgress className="shrink-0" />
@@ -85,24 +94,32 @@ export function PerfScreen({ initialQuery }: { initialQuery: string }) {
           <SensorColumn view={perf.data} failed={perf.isError} query={query} onQuery={setQuery} />
           <BusinessColumn d={evidence.data?.evidence} failed={evidence.isError} />
         </div>
-        <footer className="shrink-0">
-          <p data-testid="perf-summary" className="text-sm font-semibold text-slate-900">
-            한 줄 정리: {PERF_SUMMARY}
+        <footer className="flex shrink-0 flex-wrap items-center gap-x-6 gap-y-1">
+          <p data-testid="perf-summary" className="flex flex-wrap items-center gap-2">
+            <span className="text-label font-semibold text-slate-700">한 줄 정리</span>
+            {PERF_SUMMARY_PARTS.map((p) => (
+              <span
+                key={p.store}
+                className="rounded-full border px-3 py-0.5 text-sm font-medium text-slate-800"
+                style={{ backgroundColor: STORE[p.store].soft, borderColor: `${STORE[p.store].color}40` }}
+              >
+                {p.data} → <b style={{ color: STORE[p.store].ink }}>{STORE[p.store].label}</b>
+              </span>
+            ))}
           </p>
-          <p
-            data-testid="perf-footnote"
-            className="flex items-center gap-1.5 truncate text-xs text-slate-500"
-          >
-            {PERF_FOOTNOTE}
-            {issues.length > 0 ? <span className="text-amber-700">· {issues.join(' · ')}</span> : null}
+          <p data-testid="perf-footnote" className="flex min-w-0 items-center gap-1.5 text-xs text-slate-600">
+            <span className="min-w-0 truncate">
+              {PERF_FOOTNOTE}
+              {issues.length > 0 ? <span className="text-amber-800"> · {issues.join(' · ')}</span> : null}
+            </span>
             <span
               data-testid="perf-footnote-tip"
               role="img"
               aria-label="기록 조건 · 판독 계수 · 지금 기동"
               title={footTip}
-              className="inline-flex h-4 w-4 shrink-0 cursor-help items-center justify-center rounded-full border border-slate-400 text-[10px] leading-none text-slate-600"
+              className="inline-flex shrink-0 cursor-help text-slate-500 hover:text-slate-800"
             >
-              i
+              <UiIcon name="info" className="size-4" />
             </span>
           </p>
         </footer>

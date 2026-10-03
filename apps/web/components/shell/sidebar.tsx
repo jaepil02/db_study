@@ -27,10 +27,16 @@ function writeStore(key: string, value: unknown) {
   }
 }
 
-/** 접힘 상태 — 셸이 폭을 정하려고 읽는다(첫 렌더는 펼침 · 마운트 뒤 저장값) */
+/** 1440px보다 좁은 창은 저장값이 없으면 레일로 시작한다 — 본문 폭을 흐름도 원래 크기(배율 1)만큼 확보해 글자 바닥 12px를 지킨다 */
+const RAIL_BELOW_PX = 1440;
+
+/** 접힘 상태 — 셸이 폭을 정하려고 읽는다(첫 렌더는 펼침 · 마운트 뒤 저장값 · 저장값이 없으면 창 폭으로) */
 export function useSidebarCollapsed() {
   const [collapsed, setCollapsed] = useState(false);
-  useEffect(() => setCollapsed(readStore(COLLAPSED_KEY, (v) => v === true, false)), []);
+  useEffect(
+    () => setCollapsed(readStore(COLLAPSED_KEY, (v) => v === true, window.innerWidth < RAIL_BELOW_PX)),
+    [],
+  );
   const set = (v: boolean) => {
     setCollapsed(v);
     writeStore(COLLAPSED_KEY, v);
@@ -56,7 +62,7 @@ export function Sidebar({
       <div className="flex h-[var(--header-height)] shrink-0 items-center gap-2 border-b border-sidebar-line px-4">
         <Link href="/performance" className="flex items-center gap-2 rounded-sm">
           <Brand />
-          <span className="text-[15px] font-semibold tracking-tight text-sidebar-fg-strong">db_study</span>
+          <span className="text-base font-semibold tracking-tight text-sidebar-fg-strong">db_study</span>
         </Link>
         <button
           type="button"
@@ -88,7 +94,7 @@ export function Sidebar({
         />
       </div>
 
-      <div className="shrink-0 border-t border-sidebar-line px-4 py-3 text-[11px] leading-relaxed text-sidebar-fg-muted">
+      <div className="shrink-0 border-t border-sidebar-line px-4 py-3 text-xs leading-relaxed text-sidebar-fg-muted">
         PLC 시계열 · 업무 데이터 실험실
         <br />
         PostgreSQL · ClickHouse · Redis
@@ -104,7 +110,7 @@ function ScreenRow({ item, active }: { item: NavItem; active: boolean }) {
       href={item.href}
       aria-current={active ? 'page' : undefined}
       className={cn(
-        'flex h-[var(--nav-item-height)] items-center gap-2 rounded-sm px-2.5 text-[13px] font-medium transition-colors',
+        'flex h-[var(--nav-item-height)] items-center gap-2 rounded-sm px-2.5 text-label font-medium transition-colors',
         active
           ? 'bg-sidebar-active text-sidebar-active-fg'
           : 'text-sidebar-fg hover:bg-sidebar-hover hover:text-sidebar-fg-strong',
@@ -171,7 +177,7 @@ function Rail({ current, onExpand }: { current: ReturnType<typeof resolveNav>; o
 
 function Brand() {
   return (
-    <span className="grid size-7 shrink-0 place-items-center rounded-md bg-accent text-[11px] font-bold text-white">
+    <span className="grid size-7 shrink-0 place-items-center rounded-md bg-accent text-xs font-bold text-white">
       DB
     </span>
   );

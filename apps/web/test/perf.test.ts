@@ -10,14 +10,26 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
 import '../components/experiments/echart';
 import { BusinessColumn } from '../components/experiments/perf/business-column';
-import { CROSS_LABEL, curveOption, LIVE_NAME, rowsTick } from '../components/experiments/perf/options';
+import {
+  CROSS_LABEL,
+  curveOption,
+  HOLLOW_NAME,
+  LEGEND_INK,
+  LIVE_NAME,
+  MISMATCH_TIP,
+  rowsTick,
+  TRIANGLE_NAME,
+  UNDETERMINED_TIP,
+  Y_AXIS_NAME,
+} from '../components/experiments/perf/options';
 import {
   PERF_FOOTNOTE,
   PERF_SUMMARY,
   PERF_TITLE,
   PerfScreen,
 } from '../components/experiments/perf/perf-screen';
-import { SensorColumn } from '../components/experiments/perf/sensor-column';
+import { ROOMY, ROOMY_MEDIA } from '../components/experiments/perf/roomy';
+import { barWidth, SensorColumn } from '../components/experiments/perf/sensor-column';
 import { RunProvider } from '../components/runs/run-context';
 import { readEvidence } from '../lib/evidence';
 import {
@@ -70,6 +82,41 @@ function patch(name: string, newName: string, f: (b: Record<string, unknown>) =>
   return { name: newName, text: out };
 }
 const cond = (b: Record<string, unknown>) => b.conditions as Record<string, unknown>;
+
+/** Pretendard 400 글자 전진 폭(advance) — OTF cmap(형식 12) · hmtx만 읽는 최소 판독(그림 2 범례 폭 근거) */
+function pretendardRegular(): (text: string, px: number) => number {
+  const buf = readFileSync(
+    path.resolve(__dirname, '../node_modules/pretendard/dist/public/static/Pretendard-Regular.otf'),
+  );
+  const u16 = (o: number) => buf.readUInt16BE(o);
+  const u32 = (o: number) => buf.readUInt32BE(o);
+  const table = new Map<string, number>();
+  for (let i = 0; i < u16(4); i++)
+    table.set(buf.toString('latin1', 12 + 16 * i, 16 + 16 * i), u32(20 + 16 * i));
+  const at = (tag: string) => table.get(tag) ?? 0;
+  const upm = u16(at('head') + 18);
+  const metrics = u16(at('hhea') + 34);
+  const advance = (g: number) => u16(at('hmtx') + 4 * Math.min(g, metrics - 1));
+  const glyph = new Map<number, number>();
+  const cm = at('cmap');
+  for (let i = 0; i < u16(cm + 2); i++) {
+    const sub = cm + u32(cm + 8 + 8 * i);
+    if (u16(sub) !== 12) continue;
+    for (let g = 0; g < u32(sub + 12); g++) {
+      const [lo, hi, id] = [u32(sub + 16 + 12 * g), u32(sub + 20 + 12 * g), u32(sub + 24 + 12 * g)];
+      for (let c = lo; c <= hi; c++) glyph.set(c, id + c - lo);
+    }
+  }
+  return (text, px) =>
+    ([...text].reduce((w, ch) => w + advance(glyph.get(ch.codePointAt(0) ?? 0) ?? 0), 0) * px) / upm;
+}
+
+/** 그림 2 범례 — 색 범례(첫 줄 왼쪽) · 모양 범례(둘째 줄 오른쪽 · 그 점이 있을 때만) */
+type LegendItem = string | { name: string; itemStyle?: { color?: string } };
+type Legend = { data: LegendItem[]; top: number; left?: number; right?: number; selectedMode?: boolean };
+const itemName = (d: LegendItem) => (typeof d === 'string' ? d : d.name);
+const legendNames = (o: unknown) =>
+  ((o as { legend: Legend[] }).legend ?? []).map((l) => l.data.map(itemName));
 
 describe('P1 · P2 — 원천 기록 · 단계 기록', () => {
   it('원천은 053(구조 판정 원천과 같은 하나) · discarded · 단계 기록 048~052 전부 더한다', () => {
@@ -366,10 +413,10 @@ describe('그림 1 · 그림 2 — 쉬운 말 판독(웜 · PG(B-tree) 기준)',
       pg: [{ rows: 1e5, exponent: 5, median: 0.3, values: [0.3], resultRows: 1, resultMatch: true }],
     };
     const opt = curveOption({ lines, range: findRange(v.ranges, 'Q2', 'warm', 'I2'), live }) as unknown as {
-      legend: { data: string[] };
+      legend: Legend[];
       series: { id: string; markArea?: { data: { xAxis: number; name?: string }[][] } }[];
     };
-    expect(opt.legend.data).toEqual(['PostgreSQL', 'ClickHouse', LIVE_NAME]);
+    expect(legendNames(opt)).toEqual([['PostgreSQL', 'ClickHouse', LIVE_NAME]]);
     expect(opt.series.map((s) => s.id)).toEqual(['line-clickhouse', 'line-postgresql', 'live-pg', 'live-ch']);
     const area = opt.series.find((s) => s.markArea)?.markArea?.data[0];
     expect(area?.[0]?.xAxis).toBeCloseTo(10 ** 7.5);
@@ -381,9 +428,9 @@ describe('그림 1 · 그림 2 — 쉬운 말 판독(웜 · PG(B-tree) 기준)',
       lines: curveLines(v.points, 'Q1', 'warm').filter((l) => l.key !== 'I1'),
       range: findRange(v.ranges, 'Q1', 'warm', 'I2'),
       live: { ch: [], pg: [] },
-    }) as unknown as { legend: { data: string[] }; series: { markArea?: unknown }[] };
+    }) as unknown as { series: { markArea?: unknown }[] };
     expect(q1.series.some((s) => s.markArea)).toBe(false);
-    expect(q1.legend.data).toEqual(['PostgreSQL', 'ClickHouse']);
+    expect(legendNames(q1)).toEqual([['PostgreSQL', 'ClickHouse']]);
     const c = init(null as unknown as HTMLElement, undefined, {
       renderer: 'svg',
       ssr: true,
@@ -399,6 +446,222 @@ describe('그림 1 · 그림 2 — 쉬운 말 판독(웜 · PG(B-tree) 기준)',
     c.dispose();
   });
 
+  it('그림 2 우열 미정 — "?" 대신 그 규모의 점을 속 빈 점(툴팁 "3번 결과가 엇갈린 점") · 범례 한 항목은 그 점이 있을 때만 · 역전 표지 흰 바탕(§7.1 R5)', () => {
+    type Pt = { value: [number, number]; symbol: string; symbolSize?: number };
+    type S = {
+      id: string;
+      name: string;
+      data: Pt[];
+      markLine?: unknown;
+      markArea?: { label: Record<string, unknown> };
+      tooltip?: { formatter: (x: { dataIndex?: number }) => string };
+    };
+    const lines = curveLines(v.points, 'Q2', 'warm').filter((l) => l.key !== 'I1');
+    const und = undeterminedExps(v, 'Q2');
+    expect(und).toEqual([8]);
+    const opt = curveOption({
+      lines,
+      range: findRange(v.ranges, 'Q2', 'warm', 'I2'),
+      live: { ch: [], pg: [] },
+      undetermined: und,
+    }) as unknown as { legend: Legend[]; series: S[] };
+    // 색 범례는 그대로 · 모양 범례(둘째 줄 오른쪽 · 누를 수 없음)에 속 빈 점 한 항목
+    expect(legendNames(opt)).toEqual([['PostgreSQL', 'ClickHouse'], [HOLLOW_NAME]]);
+    expect(opt.legend[1]).toMatchObject({ top: 17, right: 0, selectedMode: false });
+    expect(HOLLOW_NAME).toBe('속 빈 점 = 3번 결과가 엇갈림');
+    // 뜻 없는 "?" 세로 점선은 없다
+    expect(opt.series.some((x) => x.markLine)).toBe(false);
+    expect(JSON.stringify(opt)).not.toContain('"?"');
+    for (const id of ['line-clickhouse', 'line-postgresql']) {
+      const ser = opt.series.find((x) => x.id === id);
+      const at = ser?.data.findIndex((d) => Math.abs(Math.log10(d.value[0]) - 8) < 1e-6) ?? -1;
+      expect(at).toBeGreaterThanOrEqual(0);
+      expect(ser?.data[at]).toMatchObject({ symbol: 'emptyCircle', symbolSize: 10 });
+      expect(ser?.tooltip?.formatter({ dataIndex: at })).toContain(UNDETERMINED_TIP);
+      // 다른 규모의 점은 그대로(결과 일치 점은 속 찬 점 · 툴팁에 미정 문구 없음)
+      const other = ser?.data.findIndex((d) => Math.abs(Math.log10(d.value[0]) - 9) < 1e-6) ?? -1;
+      expect(ser?.data[other]?.symbolSize).toBeUndefined();
+      expect(ser?.tooltip?.formatter({ dataIndex: other })).not.toContain(UNDETERMINED_TIP);
+    }
+    expect(UNDETERMINED_TIP).toBe('3번 결과가 엇갈린 점');
+    // 범례 그림만 그리는 빈 계열(속 빈 점 · 중립 slate)
+    expect(opt.series.find((x) => x.name === HOLLOW_NAME)).toMatchObject({
+      data: [],
+      symbol: 'emptyCircle',
+      color: LEGEND_INK,
+    });
+    // "여기서 역전!" — 흰 바탕 · 여백(음영 · 선이 글자를 지나도 읽힌다)
+    expect(opt.series.find((x) => x.markArea)?.markArea?.label).toMatchObject({
+      backgroundColor: '#ffffff',
+      padding: [2, 6],
+    });
+    // 미정 점이 없는 질문(Q1) · 미정 규모에 그린 점이 없으면 범례 항목도 없다
+    const q1 = curveOption({
+      lines: curveLines(v.points, 'Q1', 'warm').filter((l) => l.key !== 'I1'),
+      range: findRange(v.ranges, 'Q1', 'warm', 'I2'),
+      live: { ch: [], pg: [] },
+      undetermined: undeterminedExps(v, 'Q1'),
+    });
+    expect(legendNames(q1)).toEqual([['PostgreSQL', 'ClickHouse']]);
+    const offGrid = curveOption({
+      lines,
+      range: undefined,
+      live: { ch: [], pg: [] },
+      undetermined: [4],
+    });
+    expect(legendNames(offGrid).flat()).not.toContain(HOLLOW_NAME);
+    // SVG로 실제 그려진다 — 범례 글자 · 역전 표지
+    const c = init(null as unknown as HTMLElement, undefined, {
+      renderer: 'svg',
+      ssr: true,
+      width: 536,
+      height: 220,
+    });
+    c.setOption(opt as never);
+    const svg = c.renderToSVGString();
+    expect(svg).toContain(HOLLOW_NAME);
+    expect(svg).toContain(CROSS_LABEL);
+    expect(svg).not.toContain('>?<');
+    c.dispose();
+  });
+
+  it('그림 2 결과 불일치 — 삼각형(툴팁 "두 DB 결과가 달라요") · 범례 "삼각형 = 두 DB 결과가 다름"은 그 점이 있을 때만 · 우열 미정과 겹치면 속 빈 삼각형 · 속 빈 원은 우열 미정만(§9 P2)', () => {
+    type Pt = { value: [number, number]; symbol: string; symbolSize?: number };
+    type S = {
+      id: string;
+      name: string;
+      color?: string;
+      symbol?: string;
+      data: Pt[];
+      tooltip?: { formatter: (x: { dataIndex?: number }) => string };
+    };
+    const at = (e: number) => (p: { exponent: number }) => Math.abs(p.exponent - e) < 1e-6;
+    // 10^8 · 10^9 점을 결과 불일치로(메모리에서만) — 10^8은 우열 미정 규모이기도 하다
+    const lines = curveLines(v.points, 'Q2', 'warm')
+      .filter((l) => l.key !== 'I1')
+      .map((l) => ({
+        ...l,
+        points: l.points.map((p) => (at(8)(p) || at(9)(p) ? { ...p, resultMatch: false } : p)),
+      }));
+    const opt = curveOption({
+      lines,
+      range: findRange(v.ranges, 'Q2', 'warm', 'I2'),
+      live: { ch: [], pg: [] },
+      undetermined: [8],
+    }) as unknown as {
+      legend: (Legend & { tooltip: { formatter: (x: { name: string }) => string } })[];
+      series: S[];
+    };
+    for (const id of ['line-clickhouse', 'line-postgresql']) {
+      const ser = opt.series.find((x) => x.id === id);
+      const idx = (e: number) =>
+        ser?.data.findIndex((d) => at(e)({ exponent: Math.log10(d.value[0]) })) ?? -1;
+      // 불일치만 — 속 찬 삼각형 · 불일치 + 우열 미정 — 속 빈 삼각형 · 나머지는 속 찬 원(속 빈 원 없음)
+      expect(ser?.data[idx(9)]).toMatchObject({ symbol: 'triangle', symbolSize: 9 });
+      expect(ser?.data[idx(8)]).toMatchObject({ symbol: 'emptyTriangle', symbolSize: 10 });
+      expect(ser?.data.filter((d) => d.symbol === 'emptyCircle')).toEqual([]);
+      expect(ser?.tooltip?.formatter({ dataIndex: idx(9) })).toContain(`${MISMATCH_TIP}(삼각형)`);
+      expect(ser?.tooltip?.formatter({ dataIndex: idx(9) })).not.toContain(UNDETERMINED_TIP);
+      expect(ser?.tooltip?.formatter({ dataIndex: idx(8) })).toContain(UNDETERMINED_TIP);
+      expect(ser?.tooltip?.formatter({ dataIndex: idx(8) })).toContain(MISMATCH_TIP);
+      expect(ser?.tooltip?.formatter({ dataIndex: idx(7) })).not.toContain(MISMATCH_TIP);
+    }
+    expect([MISMATCH_TIP, TRIANGLE_NAME]).toEqual(['두 DB 결과가 달라요', '삼각형 = 두 DB 결과가 다름']);
+    // 모양 범례 둘(속 빈 점 · 삼각형) — 데이터 없는 계열 · 중립 slate · 툴팁은 그 뜻
+    expect(legendNames(opt)).toEqual([
+      ['PostgreSQL', 'ClickHouse'],
+      [HOLLOW_NAME, TRIANGLE_NAME],
+    ]);
+    expect(opt.series.find((x) => x.name === TRIANGLE_NAME)).toMatchObject({
+      data: [],
+      symbol: 'triangle',
+      color: LEGEND_INK,
+    });
+    expect(opt.legend[1]?.tooltip.formatter({ name: TRIANGLE_NAME })).toBe(MISMATCH_TIP);
+    expect(opt.legend[1]?.tooltip.formatter({ name: HOLLOW_NAME })).toBe(UNDETERMINED_TIP);
+    // 불일치 점만 있고 우열 미정이 없으면 삼각형 항목 하나 · 불일치 점이 없으면 모양 범례 없음
+    const only = curveOption({ lines, range: undefined, live: { ch: [], pg: [] } });
+    expect(legendNames(only)).toEqual([['PostgreSQL', 'ClickHouse'], [TRIANGLE_NAME]]);
+    const none = curveOption({
+      lines: curveLines(v.points, 'Q2', 'warm').filter((l) => l.key !== 'I1'),
+      range: undefined,
+      live: { ch: [], pg: [] },
+    });
+    expect(legendNames(none)).toEqual([['PostgreSQL', 'ClickHouse']]);
+    // SVG로 실제 그려진다 — 두 모양 범례 글자
+    const c = init(null as unknown as HTMLElement, undefined, {
+      renderer: 'svg',
+      ssr: true,
+      width: 534,
+      height: 220,
+    });
+    c.setOption(opt as never);
+    const svg = c.renderToSVGString();
+    expect(svg).toContain(TRIANGLE_NAME);
+    expect(svg).toContain(HOLLOW_NAME);
+    c.dispose();
+  });
+
+  it('그림 2 내 측정 — CH · PG 모두 속 찬 마름모(색이 저장소를 가른다) · 범례 마름모는 중립 slate(§9 P2)', () => {
+    const live = {
+      ch: [{ rows: 1e6, exponent: 6, median: 5, values: [5, 4, 6], resultRows: 1, resultMatch: true }],
+      pg: [{ rows: 1e6, exponent: 6, median: 9, values: [9, 8, 10], resultRows: 1, resultMatch: true }],
+    };
+    const opt = curveOption({ lines: [], range: undefined, live }) as unknown as {
+      legend: Legend[];
+      series: { id: string; symbol?: string; color?: string }[];
+    };
+    expect(opt.series.map((x) => [x.id, x.symbol])).toEqual([
+      ['live-pg', 'diamond'],
+      ['live-ch', 'diamond'],
+    ]);
+    expect(JSON.stringify(opt)).not.toContain('emptyDiamond');
+    expect(opt.legend[0]?.data[2]).toEqual({ name: LIVE_NAME, itemStyle: { color: LEGEND_INK } });
+    // 실제 그림 — 범례 마름모는 slate로 칠하고 점 마름모는 저장소 색으로 칠한다(둘 다 속이 찼다 · 흰 속 없음)
+    const c = init(null as unknown as HTMLElement, undefined, {
+      renderer: 'svg',
+      ssr: true,
+      width: 534,
+      height: 220,
+    });
+    c.setOption(opt as never);
+    const svg = c.renderToSVGString();
+    c.dispose();
+    const diamonds = [...svg.matchAll(/<path d="M[^"]*L[^"]*L[^"]*L[^"]*Z"[^>]*>/g)].map((m) => m[0]);
+    const fills = diamonds.map((d) => /fill="([^"]+)"/.exec(d)?.[1]);
+    expect(fills).toEqual(expect.arrayContaining([LEGEND_INK, '#2563eb', '#d97706']));
+    expect(fills).not.toContain('#fff');
+  });
+
+  it('그림 2 범례 폭 — Pretendard 12px 실측으로 첫 줄(색 범례 셋) · 둘째 줄(축 이름 + 모양 범례 둘)이 1440 · 1280 그림 폭 안 · 다섯을 한 줄에 두면 넘친다', () => {
+    const width = pretendardRegular();
+    // 글꼴 표를 제대로 읽었다 — 한글 0.864em(test/flow-layout과 같은 값)
+    expect(width('가', 100)).toBeCloseTo(86.4, 1);
+    // ECharts 범례 한 항목 = 그림 16 + 틈 5 + 글자 · 항목 사이 16 · 범례 안쪽 여백 5
+    const items = (names: string[]) =>
+      names.reduce((w, n) => w + 16 + 5 + width(n, 12), 0) + 16 * (names.length - 1);
+    // 그림(캔버스) 폭 = 구역 폭 − 테두리 2 − 좌우 여백 32 · 구역 폭 = (본문 − 칸 사이 16) ÷ 2 · 본문 = 창 − 내비 − 여백 40(최대 1408)
+    const canvas = (w: number, nav: number) => (Math.min(w - nav - 40, 1408) - 16) / 2 - 34;
+    const widths = { '1440 × 900': canvas(1440, 248), '1280 × 800(레일)': canvas(1280, 56) };
+    expect(Object.values(widths)).toEqual([534, 550]);
+    const line1 = 5 + items(['PostgreSQL', 'ClickHouse', LIVE_NAME]) + 5;
+    // 둘째 줄 — 축 이름은 왼쪽 4부터(그림 왼쪽 48 − 44) · 모양 범례는 오른쪽 끝(여백 5)부터 왼쪽으로
+    const axisEnd = 4 + width(Y_AXIS_NAME, 12);
+    const shapes = items([HOLLOW_NAME, TRIANGLE_NAME]) + 5;
+    for (const [name, w] of Object.entries(widths)) {
+      expect(line1, `${name} 첫 줄`).toBeLessThanOrEqual(w);
+      expect(w - shapes - axisEnd, `${name} 둘째 줄 축 이름 ~ 모양 범례 틈`).toBeGreaterThanOrEqual(16);
+      // 한 범례에 다섯을 다 두면 그림 폭을 넘어 두 줄로 접힌다 — 그래서 모양 범례를 둘째 줄로 나눴다
+      expect(
+        5 + items(['PostgreSQL', 'ClickHouse', LIVE_NAME, HOLLOW_NAME, TRIANGLE_NAME]) + 5,
+      ).toBeGreaterThan(w);
+    }
+    // 근거 숫자(보고용) — 첫 줄 약 303 · 축 이름 끝 약 164 · 모양 범례 약 331("3번" 포함 · 1440 둘째 줄 틈 약 39)
+    expect(line1).toBeCloseTo(303.3, 0);
+    expect(axisEnd).toBeCloseTo(164.1, 0);
+    expect(shapes).toBeCloseTo(331.3, 0);
+  });
+
   it('진입 파라미터는 q 하나 — 벗어난 값은 Q2', () => {
     expect(parsePerfParams({})).toEqual({ query: 'Q2' });
     expect(parsePerfParams({ q: 'Q3' })).toEqual({ query: 'Q3' });
@@ -406,6 +669,13 @@ describe('그림 1 · 그림 2 — 쉬운 말 판독(웜 · PG(B-tree) 기준)',
     expect(parsePerfParams({ q: 'Q9' })).toEqual({ query: 'Q2' });
   });
 });
+
+/**
+ * 넓고 높은 화면 변형 클래스(roomy.ts — 가로 ≥ 1680 · 세로 ≥ 1000에서만 켜짐)를 걷어 낸 HTML — 1440 × 900 · 1280 × 800에서 실제로 쓰이는 바탕 클래스(§9 P1).
+ * 아래 클래스 단언은 이 바탕 위에서 본다 — 변형을 덧붙이기 전과 글자 하나 다르지 않아야 한다.
+ */
+const baseHtml = (html: string) =>
+  html.replaceAll(/ \[@media\(min-width:1680px\)_and_\(min-height:1000px\)\]:[^\s"]+/g, '');
 
 /** 화면 1층에 보이는 글자 — title · data-* 속성(툴팁 · 시험 표지)을 걷어 낸 HTML */
 const visibleText = (html: string) => html.replace(/\s(title|data-[a-z-]+|aria-label)="[^"]*"/g, '');
@@ -423,7 +693,9 @@ describe('화면 — 두 열 · 한 장(스크롤 · 서랍 · 탭 없음)', () 
       createElement(QueryClientProvider, { client }, createElement(RunProvider, { type: 'perf' }, el)),
     );
   const sensor = (view: PerfView | undefined, query = 'Q2', failed = false) =>
-    wrap(createElement(SensorColumn, { view, failed, query, onQuery: () => {} }));
+    baseHtml(wrap(createElement(SensorColumn, { view, failed, query, onQuery: () => {} })));
+  const business = (d: Parameters<typeof BusinessColumn>[0]['d'], failed = false) =>
+    baseHtml(wrap(createElement(BusinessColumn, { d, failed })));
 
   it('① 센서 데이터 — 결론 · 그림 1 질문 5행(선택 Q2) · 그림 2 문장 · 왜? 카드 2 · 코드 문자열 없음', () => {
     const html = sensor(v);
@@ -442,10 +714,27 @@ describe('화면 — 두 열 · 한 장(스크롤 · 서랍 · 탭 없음)', () 
     for (const t of ['PG 1.7배', 'CH 7.8배', 'CH 101배', 'CH 10배', 'CH 8.8배']) expect(html).toContain(t);
     expect(html).toContain('약 3천만~1.8억 행 사이에서 역전');
     expect(html).toContain('왜 그럴까?');
-    expect(html).toContain('① 필요한 칸만 읽어요');
-    expect(html).toContain('② 같은 값끼리 모아 줄여요');
-    expect(html).toContain('<b>119배</b>');
-    expect(html).toContain('<b>24배</b>');
+    expect(html).toContain('필요한 칸만 읽어요');
+    expect(html).toContain('같은 값끼리 모아 줄여요');
+    // 답 숫자는 문장 안 16px 굵게(text-base) — "몫"은 화면 1층에 없다(툴팁에만)
+    expect(html).toMatch(/<b class="text-base[^"]*tabular-nums">119배<\/b>/);
+    expect(html).toMatch(/<b class="text-base[^"]*tabular-nums">24배<\/b>/);
+    // 숫자 자리는 고정 폭 숫자(R9) — 막대 라벨 · 답 숫자 · 바이트 숫자
+    expect(html).toMatch(/whitespace-nowrap tabular-nums">약 4\.5바이트</);
+    expect(html).toContain('전체 중 읽는 비율이 PG가 ');
+    expect(visibleText(html)).not.toContain('몫');
+    // 그림 1 — 막대 18px · 막대 끝 배수 16px 굵게 · 줄 전체가 버튼(선택 점) · 안내 · 축 머리
+    expect(html).toContain('h-[18px]');
+    expect(html).toMatch(
+      /text-base leading-none font-bold[^"]*tabular-nums" style="color:#b45309">CH 101배</,
+    );
+    expect(html).toContain('줄을 누르면 아래 그림이 그 질문으로 바뀌어요');
+    expect(html).toContain('← PostgreSQL이 빨라요');
+    expect(html).toContain('ClickHouse가 빨라요 →');
+    // 구역 = 머리 띠(연한 주황) + 흰 본문 한 겹 — 2px 색 테두리 · 안쪽 상자 없음
+    expect(html).toContain('bg-store-ch-soft');
+    expect(html).not.toContain('border-2');
+    expect(html).not.toMatch(/rounded-md border border-slate-200/);
     expect(visibleText(html)).not.toMatch(CODE);
     expect(html).not.toContain('aria-expanded');
   });
@@ -457,8 +746,52 @@ describe('화면 — 두 열 · 한 장(스크롤 · 서랍 · 탭 없음)', () 
     expect(html).toContain('전체의 1.3배');
   });
 
+  it('① 그림 1 판정 없는 줄(비슷 · 승패 미정 · 판정 없음) 글자는 slate-600 — 선택 · hover 바탕 위에서도 4.5:1 이상(§7.1 R13)', () => {
+    const und: PerfView = {
+      ...v,
+      verdicts: v.verdicts.map((x) =>
+        x.query === 'Q2' && x.exponent === 9 ? { ...x, verdict: 'undetermined' as const } : x,
+      ),
+    };
+    const html = sensor(und);
+    expect(html).toContain('<span class="text-label text-slate-600">승패 미정</span>');
+    expect(html).not.toMatch(/text-slate-500">(비슷|승패 미정|판정 없음)</);
+  });
+
+  it('① 그림 1 막대 — 배수 라벨 칸(5.25rem)을 모든 줄에 같게 비워 막대 기준 폭이 같다 · 길이는 로그 비(§7.1 R2)', () => {
+    const html = sensor(v);
+    const rows = html.split('data-testid="speed-row"').slice(1);
+    expect(rows).toHaveLength(5);
+    const max = Math.max(...speedBars(v).map((b) => (b.ratio ? Math.max(b.ratio, 1 / b.ratio) : 1)));
+    expect(max.toFixed(4)).toBe('100.5856');
+    for (const [i, b] of speedBars(v).entries()) {
+      const row = rows[i] ?? '';
+      // 두 반쪽이 모두 같은 칸을 비운다 — PG 쪽 pl · CH 쪽 pr(라벨이 어느 쪽에 있든)
+      expect(row).toContain('border-r border-slate-300 pl-[5.25rem]');
+      expect(row).toContain('pr-[5.25rem]');
+      const t = b.ratio === null ? 1 : b.winner === 'clickhouse' ? b.ratio : 1 / b.ratio;
+      const w = /data-testid="speed-fill"[^>]*style="width:([\d.]+)%/.exec(row)?.[1];
+      expect(Number(w)).toBeCloseTo((Math.log10(t) / Math.log10(max)) * 100, 6);
+      // 라벨은 막대 바로 옆(CH 쪽은 막대 뒤 · PG 쪽은 막대 앞) — 같은 반쪽 안 이웃
+      expect(row).toMatch(
+        b.winner === 'clickhouse'
+          ? /data-testid="speed-fill"[^>]*><\/span><span class="[^"]*tabular-nums"/
+          : /tabular-nums" style="[^"]*">PG [\d.]+배<\/span><span data-testid="speed-fill"/,
+      );
+    }
+    // 손 계산 — log10(7.817) ÷ log10(100.59) = 0.8930 ÷ 2.0025 = 44.6% · PG 1.7배 log10(1.738) ÷ 2.0025 = 12.0%
+    expect(Number.parseFloat(barWidth(7.817, 100.5856))).toBeCloseTo(44.6, 1);
+    expect(Number.parseFloat(barWidth(1 / 0.5753, 100.5856))).toBeCloseTo(12.0, 1);
+    expect(barWidth(1.05, 100.5856)).toBe('6%');
+  });
+
   it('① 로딩 · 오류 · 기록 없음', () => {
-    expect(sensor(undefined)).toContain('animate-pulse');
+    // 로딩 자리 깜빡임은 움직임 줄이기 설정이면 멈춘다(R7) — 업무 구역 로딩 자리도 같다
+    expect(sensor(undefined)).toContain('motion-safe:animate-pulse');
+    expect(sensor(undefined)).not.toMatch(/(?<![\w:])animate-pulse/);
+    const bizLoading = business(undefined);
+    expect(bizLoading).toContain('motion-safe:animate-pulse');
+    expect(bizLoading).not.toMatch(/(?<![\w:])animate-pulse/);
     expect(sensor(undefined, 'Q2', true)).toContain('기록을 읽지 못했어요');
     const empty = sensor(readPerf([]));
     expect(empty).toContain('아직 잰 기록이 없어요');
@@ -468,7 +801,7 @@ describe('화면 — 두 열 · 한 장(스크롤 · 서랍 · 탭 없음)', () 
   });
 
   it('② 업무 데이터 — 상황 카드 4 · PG ✓ / CH ✕ · 쉬운 숫자 문장 · 왜? 한 줄 · 상태 갱신 카드 없음 · 코드 없음', () => {
-    const html = wrap(createElement(BusinessColumn, { d: evidence, failed: false }));
+    const html = business(evidence);
     expect(html).toContain('정확해야 하는 업무 데이터는 PostgreSQL이 맞아요');
     expect(html.match(/data-testid="situation-card"/g)).toHaveLength(4);
     for (const t of [
@@ -478,13 +811,35 @@ describe('화면 — 두 열 · 한 장(스크롤 · 서랍 · 탭 없음)', () 
       '1건씩 아주 자주 저장하기',
     ])
       expect(html).toContain(t);
-    expect(html).toContain('전부 되돌림 — 깨진 데이터 0건');
-    expect(html).toContain('반만 저장 — 20번 중 20번 깨짐');
-    expect(html).toContain('막아 냄 — 받아도 되는 2건만 받음');
-    expect(html).toContain('규칙을 어긴 데이터 15건까지 받음');
-    expect(html).toContain('보통 0.1밀리초');
-    expect(html).toContain('보통 4.2~4.3밀리초 — 40배 이상 느림');
+    // 정확성 줄 — 앞 조각 · 답 조각(16px 굵게 · 지킴 초록 · 못 지킴 빨강) · 지킴 표시는 그린 아이콘(sr-only 낱말)
+    expect(html).toMatch(
+      />전부 되돌림<\/span><span class="truncate text-base font-bold tabular-nums text-emerald-700">깨진 데이터 0건</,
+    );
+    expect(html).toMatch(
+      />반만 저장<\/span><span class="truncate text-base font-bold tabular-nums text-red-700">20번 중 20번 깨짐</,
+    );
+    expect(html).toContain('>막아 냄<');
+    expect(html).toContain('>받아도 되는 2건만 받음<');
+    expect(html).toContain('>규칙을 어긴 데이터 15건까지 받음<');
+    expect(html.match(/data-ok="true"/g)).toHaveLength(2);
+    expect(html.match(/data-ok="false"/g)).toHaveLength(2);
+    expect(html).toContain('<span class="sr-only">지킴</span>');
+    expect(html).toContain('<span class="sr-only">못 지킴</span>');
+    // 속도 줄 — 막대 2개(로그 길이) · 숫자 · "N배 이상 느림" 16px 굵게
+    expect(html).toContain('>보통 0.1밀리초<');
+    expect(html).toContain('>보통 4.2~4.3밀리초<');
+    expect(html).toMatch(/text-base font-bold tabular-nums text-red-700">40배 이상 느림</);
+    // 1920 × 1080에서 줄 사이가 벌어지지 않게(§7.1 R11a · L4) — 네 줄은 내용 높이(늘지 않음) · 줄 사이 틈 칸 3개는 최대 2rem(+ 줄 여백 8 + 8 = 48px) · 남는 높이는 구역 아래
+    expect(
+      html.match(/data-testid="situation-card"[^>]*class="flex shrink-0 flex-col gap-0\.5 py-2"/g),
+    ).toHaveLength(4);
+    expect(html).not.toMatch(/data-testid="situation-card"[^>]*class="[^"]*flex-1/);
+    expect(html.match(/data-testid="situation-gap" class="[^"]*\bmax-h-8\b[^"]*\bflex-1\b/g)).toHaveLength(3);
+    expect(html).not.toContain('justify-center gap-0.5');
+    // 이긴 쪽 알약 — 네 줄 모두 PostgreSQL
+    expect(html.match(/data-testid="situation-winner"/g)).toHaveLength(4);
     expect(html).toContain('(트랜잭션)');
+    expect(html).not.toContain('border-2');
     expect(html).toContain('PG는 여러 작업을 한 묶음으로 처리해서, 중간에 실패하면 전부 되돌려요');
     expect(html).not.toContain('상태 갱신');
     expect(visibleText(html)).not.toMatch(CODE);
@@ -492,14 +847,54 @@ describe('화면 — 두 열 · 한 장(스크롤 · 서랍 · 탭 없음)', () 
   });
 
   it('② 기록 0 — 결론 대신 "아직 잰 기록이 없어요" · 카드 4는 제목과 왜? · 수치 줄 "잰 값 없음"', () => {
-    const html = wrap(createElement(BusinessColumn, { d: readEvidence([]), failed: false }));
+    const html = business(readEvidence([]));
     expect(html.match(/data-testid="situation-card"/g)).toHaveLength(4);
     expect(html).toContain('아직 잰 기록이 없어요');
     expect(html).not.toContain('정확해야 하는 업무 데이터는 PostgreSQL이 맞아요');
     expect(html.match(/잰 값 없음/g)).toHaveLength(8);
-    expect(wrap(createElement(BusinessColumn, { d: undefined, failed: true }))).toContain(
-      '기록을 읽지 못했어요',
+    expect(business(undefined, true)).toContain('기록을 읽지 못했어요');
+  });
+
+  it('넓고 높은 화면(가로 ≥ 1680 · 세로 ≥ 1000)만 두 구역 글자 한 단계 — 변형은 미디어 하나 · 바탕 클래스 옆에 덧붙이기만(§9 P1)', () => {
+    const raw = [
+      wrap(createElement(SensorColumn, { view: v, failed: false, query: 'Q2', onQuery: () => {} })),
+      wrap(createElement(BusinessColumn, { d: evidence, failed: false })),
+    ].join('');
+    // 미디어 변형은 roomy.ts 하나뿐(다른 조건이 섞이지 않는다) · 걷어 내면 미디어 글자가 남지 않는다
+    const media = new Set([...raw.matchAll(/\[@media\([^\]]*\)\]/g)].map((m) => m[0]));
+    expect([...media]).toEqual(['[@media(min-width:1680px)_and_(min-height:1000px)]']);
+    expect(ROOMY_MEDIA).toBe('(min-width:1680px) and (min-height:1000px)');
+    expect(baseHtml(raw)).not.toContain('@media');
+    // 바탕 클래스 그대로 + 한 단계 큰 클래스 — 업무: 질문 14 → 16 · 답 숫자 16 → 20 · 왜? 13 → 14 · PG/CH 표지 12 → 13 · 줄 높이 24 → 32 · 틈 칸 최대 32 → 48
+    const cls = (c: string) =>
+      (raw.match(new RegExp(`class="${c.replace(/[[\]().:/]/g, '\\$&')}"`, 'g')) ?? []).length;
+    expect(cls(`min-w-0 truncate text-sm font-bold text-slate-900 ${ROOMY.sm}`)).toBe(4);
+    expect(cls(`truncate text-base font-bold tabular-nums ${ROOMY.base} text-emerald-700`)).toBe(2);
+    expect(cls(`truncate text-base font-bold tabular-nums text-red-700 ${ROOMY.base}`)).toBe(2);
+    expect(cls(`text-label text-slate-600 ${ROOMY.label}`)).toBe(4);
+    expect(cls(`w-6 shrink-0 text-xs font-semibold text-slate-500 ${ROOMY.xs}`)).toBe(8);
+    expect(
+      cls(`flex h-6 min-w-0 items-center gap-2 text-sm text-slate-800 ${ROOMY.bizLine} ${ROOMY.sm}`),
+    ).toBe(8);
+    expect(cls(`flex shrink-0 flex-col gap-0.5 py-2 ${ROOMY.bizGap}`)).toBe(4);
+    expect(cls(`flex max-h-8 min-h-px flex-1 items-center ${ROOMY.bizGapMax}`)).toBe(3);
+    // 센서: 그림 1 질문 이름 14 → 16 · 배수 16 → 20 · 막대 18 → 22 · 줄 30 → 36 · 이름 칸 9 → 10rem · 라벨 칸 84 → 104 · 머리 결론 16 → 20
+    // 선택 줄 이름 1 + 왜? 두 줄 제목 2(같은 클래스)
+    expect(cls(`truncate text-sm font-semibold text-slate-900 ${ROOMY.sm}`)).toBe(3);
+    expect(cls(`truncate text-sm text-slate-700 ${ROOMY.sm}`)).toBe(4);
+    expect(
+      raw.match(/class="block h-\[18px\] shrink-0 rounded-[lr]-sm \[@media[^"]*\]:h-5\.5"/g),
+    ).toHaveLength(5);
+    expect(raw).toContain(`text-base leading-none font-bold whitespace-nowrap tabular-nums ${ROOMY.base}`);
+    expect(
+      raw.match(new RegExp(`hover:bg-slate-50 ${ROOMY.fig1Row.replace(/[[\]().:/]/g, '\\$&')} `, 'g')),
+    ).toHaveLength(4);
+    expect(raw).toContain(
+      `grid grid-cols-[9rem_1fr_1fr] text-label font-medium ${ROOMY.fig1Cols} ${ROOMY.label}`,
     );
+    expect(raw).toContain(`border-r border-slate-300 pl-[5.25rem] ${ROOMY.fig1PadL}`);
+    expect(raw).toContain(`pr-[5.25rem] ${ROOMY.fig1PadR}`);
+    expect(cls(`text-base font-bold text-slate-900 ${ROOMY.base}`)).toBe(2);
   });
 
   it('화면 전체 — 제목(h2 · h1 없음) · 두 열 · 한 줄 정리 · 회색 각주(툴팁에 기록 번호) · 탭 · 서랍 없음', () => {
@@ -509,11 +904,16 @@ describe('화면 — 두 열 · 한 장(스크롤 · 서랍 · 탭 없음)', () 
     const html = renderToStaticMarkup(
       createElement(QueryClientProvider, { client }, createElement(PerfScreen, { initialQuery: 'Q2' })),
     );
-    expect(html).toContain(`<h2 class="text-lg leading-7 font-bold text-slate-900">${PERF_TITLE}</h2>`);
+    expect(html).toContain(`<h2 class="text-xl font-bold text-slate-900">${PERF_TITLE}</h2>`);
     expect(html).not.toContain('<h1');
     expect(html).toContain('aria-label="센서 데이터"');
     expect(html).toContain('aria-label="업무 데이터"');
-    expect(html).toContain(PERF_SUMMARY);
+    // 한 줄 정리 — 두 조각 알약(데이터 성격 → 맞는 DB) · 문장은 그대로
+    expect(PERF_SUMMARY).toBe(
+      '많이 쌓아 두고 크게 훑는 데이터 → ClickHouse · 정확하게 한 건씩 다루는 데이터 → PostgreSQL',
+    );
+    expect(html).toContain('많이 쌓아 두고 크게 훑는 데이터 → <b style="color:#b45309">ClickHouse</b>');
+    expect(html).toContain('정확하게 한 건씩 다루는 데이터 → <b style="color:#1d4ed8">PostgreSQL</b>');
     expect(html).toContain(PERF_FOOTNOTE);
     // 각주 ⓘ 툴팁 — 원천 · 단계 기록 · 4요소 · 한계 2 · 판독 계수(0이어도) · 판독 시각 · 지금 기동
     const tip = /data-testid="perf-footnote-tip"[^>]*title="([^"]*)"/.exec(html)?.[1] ?? '';

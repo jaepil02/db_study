@@ -754,7 +754,18 @@ export const SITUATIONS: readonly {
 
 export interface SituationLine {
   ok: boolean | null;
+  /** 한 줄 문장 전체 — 조각(lead · key 또는 value · slower)을 " — "로 이은 것과 같다 */
   text: string;
+  /** 정확성 줄의 앞 조각(작게) — "전부 되돌림" · 없으면 key만 */
+  lead?: string;
+  /** 정확성 줄의 답 조각(큰 숫자 16px) — "깨진 데이터 0건" · "20번 중 20번 깨짐" */
+  key?: string;
+  /** 시간 줄 — 막대 길이 원천(밀리초 최소 · 최대 · 판독기 값 그대로) */
+  ms?: [number, number];
+  /** 시간 줄의 숫자 조각 — "보통 4.2~4.3밀리초" */
+  value?: string;
+  /** 시간 줄의 결론 조각 — "40배 이상 느림"(CH 줄 · 느릴 때만) */
+  slower?: string;
 }
 
 /** 수치 줄 빈 값 · 3회 미만(08_screen/08 §상태 4행 ④ · §표시 계약 구조 결과 · 분포 값) */
@@ -792,36 +803,64 @@ export function situationLines(s: TaskSummary): { postgresql: SituationLine; cli
     const slow = ch.range[0] / pg.range[1];
     const wide = pg.range[0] !== pg.range[1] || ch.range[0] !== ch.range[1];
     const times = wide ? timesAtLeast(slow) : timesText(slow);
+    // 1.0배는 차이가 없다는 말이라 붙이지 않는다
+    const slower = slow > 1 && times !== '1.0' ? `${times}배${wide ? ' 이상' : ''} 느림` : undefined;
     return {
-      postgresql: { ok: null, text: `보통 ${msRange(pg.range)}` },
-      clickhouse: {
-        ok: null,
-        // 1.0배는 차이가 없다는 말이라 붙이지 않는다
-        text:
-          slow > 1 && times !== '1.0'
-            ? `보통 ${msRange(ch.range)} — ${times}배${wide ? ' 이상' : ''} 느림`
-            : `보통 ${msRange(ch.range)}`,
-      },
+      postgresql: msLine(pg.range),
+      clickhouse: msLine(ch.range, slower),
     };
   }
   return { postgresql: lineOf(s, pg), clickhouse: lineOf(s, ch) };
 }
 
+/** 시간 줄 — "보통 4.2~4.3밀리초"(value) · 느리면 " — 40배 이상 느림"(slower) · 막대 원천 ms */
+function msLine(r: [number, number], slower?: string): SituationLine {
+  const value = `보통 ${msRange(r)}`;
+  return {
+    ok: null,
+    text: slower ? `${value} — ${slower}` : value,
+    ms: r,
+    value,
+    ...(slower ? { slower } : {}),
+  };
+}
+
+/** 정확성 줄 — 앞 조각(작게) · 답 조각(크게) · 문장은 둘을 " — "로 잇는다 */
+function keyLine(ok: boolean | null, key: string, lead?: string): SituationLine {
+  return { ok, text: lead ? `${lead} — ${key}` : key, key, ...(lead ? { lead } : {}) };
+}
+
+/**
+ * 상황 줄의 이긴 쪽 표지(알약) — 이미 낸 판정 · 문장에서만 고른다(새 숫자 없음).
+ * 정확성 작업(원자성 · 제약)은 한쪽이 지키고(✓) 다른 쪽이 못 지킬 때(✕) · 시간 작업은 CH 줄에 "N배 느림"이 붙었을 때만 PG.
+ * 그 밖(빈 값 · 둘 다 같음 · 차이 없음)은 null — 표지를 그리지 않는다.
+ */
+export function situationWinner(lines: {
+  postgresql: SituationLine;
+  clickhouse: SituationLine;
+}): Store | null {
+  const { postgresql: pg, clickhouse: ch } = lines;
+  if (pg.ok === true && ch.ok === false) return 'postgresql';
+  if (ch.ok === true && pg.ok === false) return 'clickhouse';
+  if (ch.slower) return 'postgresql';
+  return null;
+}
+
 /** 한 저장소 줄 — 원자성 · 제약은 건수 문장 · 시간 작업은 밀리초 */
 function lineOf(s: TaskSummary, x: TaskSide): SituationLine {
   const r = x.range as [number, number];
-  if (x.unit === 'ms') return { ok: null, text: `보통 ${msRange(r)}` };
+  if (x.unit === 'ms') return msLine(r);
   if (s.id === 'atomic') {
-    if (x.ok) return { ok: true, text: `전부 되돌림 — 깨진 데이터 ${countText(r)}건` };
+    if (x.ok) return keyLine(true, `깨진 데이터 ${countText(r)}건`, '전부 되돌림');
     const of = x.of === null ? '' : `${x.of}번 중 `;
-    return { ok: x.ok, text: `반만 저장 — ${of}${countText(r)}번 깨짐` };
+    return keyLine(x.ok, `${of}${countText(r)}번 깨짐`, '반만 저장');
   }
   if (s.id === 'constraint') {
-    if (x.ok) return { ok: true, text: `막아 냄 — 받아도 되는 ${countText(r)}건만 받음` };
+    if (x.ok) return keyLine(true, `받아도 되는 ${countText(r)}건만 받음`, '막아 냄');
     // 받은 건수 전부가 아니라 받아도 되는 몫을 뺀 "규칙을 어긴" 건수 · 기본 변형 하나(taskSummary violated)
     return x.violated
-      ? { ok: x.ok, text: `규칙을 어긴 데이터 ${countText(x.violated)}건까지 받음` }
-      : { ok: x.ok, text: `받은 데이터 ${countText(r)}건(규칙을 어긴 몫은 못 셌어요)` };
+      ? keyLine(x.ok, `규칙을 어긴 데이터 ${countText(x.violated)}건까지 받음`)
+      : keyLine(x.ok, `받은 데이터 ${countText(r)}건(규칙을 어긴 몫은 못 셌어요)`);
   }
   return { ok: x.ok, text: x.text };
 }

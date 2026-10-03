@@ -98,7 +98,7 @@ describe('그림 1 — 10억 행에서 누가 몇 배 빠른가(speedBars)', () 
 });
 
 describe('왜? 카드 ① — 그림 1과 같은 방향으로만(readWhy)', () => {
-  it('질문별 문장 — Q1은 PG 승리라 "콕 집어 읽어서 PG가 빨라요" · 나머지는 PG가 더 많이 읽은 배수', () => {
+  it('질문별 문장 — Q1은 PG 승리라 "콕 집어 읽어서 PG가 빨라요" · 나머지는 전체 중 읽는 비율의 비(PG ÷ CH)', () => {
     const out = PERF_QUERIES.map((q) => {
       const w = readWhy(
         bars.find((b) => b.query === q),
@@ -113,15 +113,11 @@ describe('왜? 카드 ① — 그림 1과 같은 방향으로만(readWhy)', () =
         '이 질문은 몇 줄만 콕 집어 읽어서 PG가 빨라요(목차 · 인덱스)',
         '읽은 몫 PG 0.039% · CH 0.0011%',
       ],
-      ['Q2', 'ch', '같은 질문에 PG는 CH보다 전체 중 119배 많은 몫을 읽어요', '읽은 몫 PG 1.1% · CH 0.009%'],
-      [
-        'Q3',
-        'ch',
-        '같은 질문에 PG는 CH보다 전체 중 125배 많은 몫을 읽어요',
-        '읽은 몫 PG 전체의 1.3배 · CH 1.0%',
-      ],
-      ['Q4', 'ch', '같은 질문에 PG는 CH보다 전체 중 1.2배 많은 몫을 읽어요', '읽은 몫 PG 3.6% · CH 3.1%'],
-      ['Q5', 'ch', '같은 질문에 PG는 CH보다 전체 중 5.1배 많은 몫을 읽어요', '읽은 몫 PG 전부 · CH 19.5%'],
+      // 화면 1층은 "몫" 없이 쉬운 문장(web-ux-polish §2.2 · §7.1 R1) — 배수는 그대로 "전체 중 읽은 비율"의 비 · 몫 숫자는 툴팁(shares)
+      ['Q2', 'ch', '전체 중 읽는 비율이 PG가 119배 높아요', '읽은 몫 PG 1.1% · CH 0.009%'],
+      ['Q3', 'ch', '전체 중 읽는 비율이 PG가 125배 높아요', '읽은 몫 PG 전체의 1.3배 · CH 1.0%'],
+      ['Q4', 'ch', '전체 중 읽는 비율이 PG가 1.2배 높아요', '읽은 몫 PG 3.6% · CH 3.1%'],
+      ['Q5', 'ch', '전체 중 읽는 비율이 PG가 5.1배 높아요', '읽은 몫 PG 전부 · CH 19.5%'],
     ]);
     // 손 계산 — Q2 0.010743 ÷ 0.00009011 = 119.2 · Q5 1 ÷ 0.1951 = 5.125
     expect(readShare(view, 'Q2')?.times.toFixed(1)).toBe('119.2');
@@ -155,13 +151,15 @@ describe('왜? 카드 ① — 그림 1과 같은 방향으로만(readWhy)', () =
           const chWin = kind === 'win' && winner === 'clickhouse';
           // PG가 빠르다는 문장은 그림 1이 PG 승리일 때만
           expect(t.includes('PG가 빨라요')).toBe(pgWin);
-          // "PG가 더 많이 읽는다(그래서 CH가 빠르다)"는 그림 1이 CH 승리이고 PG가 실제로 더 읽었을 때만
-          if (t.includes('배 많은 몫')) {
+          // "읽는 비율이 PG가 N배 높다(그래서 CH가 빠르다)"는 그림 1이 CH 승리이고 PG 비율이 실제로 더 클 때만
+          if (t.includes('배 높아요')) {
             expect(chWin).toBe(true);
             expect(read.times).toBeGreaterThan(1);
             expect(t).not.toContain('1.0배');
           }
           if (!pgWin && !chWin) expect(w?.kind).toBe('neutral');
+          // "몫"은 툴팁에만 — 화면 문장에 쓰지 않는다
+          expect(t).not.toContain('몫');
         }
     expect(readWhy(bars[1], null)).toBeNull();
   });
@@ -180,8 +178,12 @@ describe('왜? 카드 ① — 그림 1과 같은 방향으로만(readWhy)', () =
     );
     expect(html).toContain('data-kind="pg"');
     expect(html).toContain('이 질문은 몇 줄만 콕 집어 읽어서 ');
-    expect(html).toContain('<b>PG가 빨라요</b>');
-    expect(html).not.toContain('많은 몫을 읽어요');
+    expect(html).toMatch(/<b class="[^"]*">PG가 빨라요<\/b>/);
+    expect(html).not.toContain('배 높아요');
+    // 그림도 같은 방향 — PG가 줄 하나만 콕 집는 그림
+    expect(html).toContain(
+      'aria-label="PG는 필요한 줄 하나만 읽고 CH는 필요한 칸을 위에서 아래까지 읽는 그림"',
+    );
     expect(html).toMatch(/title="읽은 몫 PG 0\.039% · CH 0\.0011%\n결정적 값 · 기록 052/);
   });
 });
@@ -226,7 +228,7 @@ describe('업무 데이터 상황 카드 4 — situationLines', () => {
     expect(timesAtLeast(2.777 / 1.011)).toBe('2.7');
   });
 
-  it('화면 — 상황 카드에 같은 문장', () => {
+  it('화면 — 상황 줄에 같은 문장(조각으로 나눠 그려도 보이는 글자에 같은 낱말 순서)', () => {
     const html = renderToStaticMarkup(
       createElement(
         QueryClientProvider,
@@ -234,9 +236,14 @@ describe('업무 데이터 상황 카드 4 — situationLines', () => {
         createElement(BusinessColumn, { d: evidence, failed: false }),
       ),
     );
-    for (const [, , pg, , ch] of lines) {
-      expect(html).toContain(pg as string);
-      expect(html).toContain(ch as string);
-    }
+    // 보이는 글자 — 태그를 걷고(sr-only "지킴 · 못 지킴 · 맞는 쪽"도 걷는다) 공백 하나로
+    const plain = html
+      .replace(/<span class="sr-only">[^<]*<\/span>/g, ' ')
+      .replace(/<[^>]+>/g, ' ')
+      .replace(/\s+/g, ' ');
+    for (const [, , pg, , ch] of lines)
+      for (const sentence of [pg, ch] as string[]) expect(plain).toContain(sentence.replace(' — ', ' '));
+    // 이긴 쪽 표지 — 네 줄 모두 PostgreSQL(정확성 2 · 속도 2)
+    expect(html.match(/data-winner="postgresql"/g)).toHaveLength(4);
   });
 });

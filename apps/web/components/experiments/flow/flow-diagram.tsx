@@ -6,7 +6,9 @@
 // 점 하나가 flow 프레임의 요약 하나(실제 묶음 · 실제 요청)이고, 단계마다 머무는 시간의 비율이 그 요약의 실제 단계 ms 비율이다(보기 좋게 느리게).
 // 선 굵기 = 초당 양 · 꺼진 길(스위치로 끈 길)은 그리지 않는다 — 각주가 이름을 댄다. 셸 WS가 끊기면 점 애니메이션을 멈춘다.
 // 요약이 오지 않으면 점도 없다 — 멈춘 그림이 곧 멈춘 적재다. 좌표 · 라벨 자리와 그 겹침 근거는 diagram-layout.ts(검사 test/flow-layout.test.ts).
-import { useEffect, useRef, useState } from 'react';
+// 움직임 줄이기(prefers-reduced-motion: reduce)면 점이 움직이지 않는다 — 가장 오래 머무는 자리(lib/flow restNode)에 나타났다 사라진다.
+// 숫자 자리(숫자 줄 · 숫자가 든 라벨 · 기둥 바닥 · 알람 표지)만 고정 폭 숫자(font-variant-numeric) — 문장 줄의 숫자는 본문 숫자 그대로.
+import { type CSSProperties, useEffect, useRef, useState } from 'react';
 import {
   arriveAt,
   type BatchNode,
@@ -16,11 +18,14 @@ import {
   batchPlan,
   bizPlan,
   type DotPlan,
+  DUPLICATE_MARK,
   edgeWidth,
   type FlowRates,
   type FlowSwitchFlags,
+  OUTCOME_MARK,
   planProgress,
   type ReadRates,
+  restNode,
 } from '../../../lib/flow';
 import type { FlowBatchSummaryBody, FlowBizSummaryBody } from '../../../lib/shared';
 import { STORE, type StoreKey } from '../../ui/store';
@@ -41,8 +46,13 @@ import {
   LABEL_LINE_H,
   type LabelSpot,
   LINE_H,
+  type LineKind,
   labelBox,
+  lineSize,
   MARK_AT,
+  MARK_ICON,
+  MARK_ICON_GAP,
+  type NodeLine,
   nodeTextTop,
   PILLAR,
   PILLAR_FOOT_Y,
@@ -57,6 +67,11 @@ import { BIZ_WORKER_LINES, edgeRate, markText, PILLAR_HEAD, PILLAR_TIP } from '.
 const MAX_DOTS = 60;
 /** 알람 켜짐 · 꺼짐 표지와 업무 결과 표지가 점이 끝난 뒤 남는 시간 */
 const LINGER_MS = 2_000;
+/** 움직임 줄이기 — 매 화면 갱신(rAF) 대신 이 간격으로 시계만 넘긴다(점은 제자리에 나타났다 사라질 뿐 움직이지 않는다) */
+const REDUCED_TICK_MS = 500;
+/** 고정 폭 숫자 — SVG 글자는 클래스 대신 스타일로(숫자 자리에만) */
+const TNUM: CSSProperties = { fontVariantNumeric: 'tabular-nums' };
+const hasDigit = (t: string) => /\d/.test(t);
 
 // ── 점 엔진 — 애니메이션 시계는 끊긴 동안 멈춘다 ──
 
@@ -130,16 +145,37 @@ export class DotEngine {
   }
 }
 
-function dotPos<Nd extends string>(plan: DotPlan<Nd>, elapsed: number, at: Record<Nd, Pt>) {
+function dotPos<Nd extends string>(plan: DotPlan<Nd>, elapsed: number, at: Record<Nd, Pt>, still: boolean) {
+  if (still) return { ...at[restNode(plan)], done: elapsed >= plan.totalMs };
   const p = planProgress(plan, elapsed);
   const a = at[p.from];
   const b = at[p.to];
   return { x: a.x + (b.x - a.x) * p.frac, y: a.y + (b.y - a.y) * p.frac, done: p.done };
 }
 
+/** 움직임 줄이기 설정 — 바뀌면 바로 따른다 */
+function useReducedMotion(): boolean {
+  const [reduced, setReduced] = useState(false);
+  useEffect(() => {
+    const mq = window.matchMedia('(prefers-reduced-motion: reduce)');
+    const sync = () => setReduced(mq.matches);
+    sync();
+    mq.addEventListener('change', sync);
+    return () => mq.removeEventListener('change', sync);
+  }, []);
+  return reduced;
+}
+
 // ── 그리기 조각 ──
 
 const GRAY = '#cbd5e1';
+/** 노드 줄 종류마다 굵기 · 색 — 제목 14 굵게 · 역할 12 · 숫자 13 500(종류는 node-lines가 줄마다 정한다 · 크기는 diagram-layout lineSize) · 꺼진 노드도 읽히는 대비(#64748b · 4.6:1) */
+const LINE_LOOK: Record<LineKind, { weight: number; fill: string }> = {
+  title: { weight: 700, fill: '#0f172a' },
+  role: { weight: 400, fill: '#475569' },
+  num: { weight: 500, fill: '#1e293b' },
+};
+const OFF_TEXT = '#64748b';
 
 function NodeBox({
   id,
@@ -149,7 +185,7 @@ function NodeBox({
   tip,
 }: {
   id: BoxId;
-  lines: string[];
+  lines: readonly NodeLine[];
   off?: boolean;
   store?: StoreKey;
   /** 마우스 올림 설명(SVG title) */
@@ -158,7 +194,7 @@ function NodeBox({
   const b = BOX[id];
   const fill = off ? '#f8fafc' : store ? STORE[store].soft : '#f8fafc';
   const stroke = off ? GRAY : store ? STORE[store].color : '#94a3b8';
-  const top = nodeTextTop(id, lines.length);
+  const top = nodeTextTop(id, lines);
   return (
     <g data-node={id} data-off={off ? 'yes' : undefined}>
       {tip ? <title>{tip}</title> : null}
@@ -173,19 +209,19 @@ function NodeBox({
         strokeWidth={store && !off ? 1.5 : 1}
         strokeDasharray={off ? '4 3' : undefined}
       />
-      {lines.map((t, i) => (
+      {lines.map((l, i) => (
         <text
-          key={t}
+          key={`${l.kind}-${l.text}`}
           x={b.x + b.w / 2}
           y={top + i * LINE_H}
           dominantBaseline="middle"
           textAnchor="middle"
-          fontSize={i === 0 ? FONT.title : FONT.line}
-          fontWeight={i === 0 ? 600 : 400}
-          fill={off ? '#94a3b8' : i === 0 ? '#0f172a' : '#475569'}
-          className="tabular-nums"
+          fontSize={lineSize(l.kind)}
+          fontWeight={LINE_LOOK[l.kind].weight}
+          fill={off ? OFF_TEXT : LINE_LOOK[l.kind].fill}
+          style={l.kind === 'num' ? TNUM : undefined}
         >
-          {t}
+          {l.text}
         </text>
       ))}
     </g>
@@ -212,7 +248,7 @@ function SpotText({ spot, lines, fill = '#334155' }: { spot: LabelSpot; lines: s
           textAnchor={spot.align}
           fontSize={FONT.label}
           fill={fill}
-          className="tabular-nums"
+          style={hasDigit(t) ? TNUM : undefined}
         >
           {t}
         </text>
@@ -256,12 +292,12 @@ export interface DiagramProps {
   engine: DotEngine;
   rates: FlowRates;
   flags: FlowSwitchFlags;
-  /** 노드 줄 — node-lines.ts가 만든다 */
-  lines: Record<Exclude<BoxId, 'bizWorker'>, string[]>;
+  /** 노드 줄 — node-lines.ts가 만든다(줄마다 종류 · 그리기 모양은 종류가 정한다) */
+  lines: Record<Exclude<BoxId, 'bizWorker'>, readonly NodeLine[]>;
   /** 조회 줄 숫자(메트릭 5초 차분) — 선 굵기 · null이면 굵기 1 */
   reads: ReadRates | null;
-  /** ⑤ ↔ DB 줄기 라벨(어느 DB로 몇 % · 조회가 없으면 보내 보라는 한 줄) */
-  readMissLabel: string;
+  /** ⑤ ↔ DB 줄기 라벨(줄기 아래 두 줄 — 무엇을 하나 · 어느 DB로 몇 % · 조회가 없으면 보내 보라는 한 줄) */
+  readMissLabel: readonly string[];
   /** 조회 요청 · ⑤ 툴팁 */
   readSrcTip: string;
   readCacheTip: string;
@@ -279,20 +315,28 @@ export function FlowDiagram(p: DiagramProps) {
   const { engine, flags: f, skeleton } = p;
   const [, setFrame] = useState(0);
   const raf = useRef<number | null>(null);
+  const still = useReducedMotion();
 
   useEffect(() => {
-    const loop = (t: number) => {
+    const step = (t: number) => {
       const before = engine.dots.length;
       engine.tick(t);
       // 점이 있을 때만 다시 그린다 — 멈춘 동안(끊김)에도 제자리 표시는 유지된다
       if (before > 0 || engine.dots.length > 0) setFrame((n) => (n + 1) % 1_000_000);
+    };
+    if (still) {
+      const id = window.setInterval(() => step(performance.now()), REDUCED_TICK_MS);
+      return () => window.clearInterval(id);
+    }
+    const loop = (t: number) => {
+      step(t);
       raf.current = requestAnimationFrame(loop);
     };
     raf.current = requestAnimationFrame(loop);
     return () => {
       if (raf.current !== null) cancelAnimationFrame(raf.current);
     };
-  }, [engine]);
+  }, [engine, still]);
 
   const r = skeleton ? null : p.rates;
   const w = (v: number | null | undefined) => (r ? edgeWidth(v ?? null) : 1);
@@ -389,7 +433,7 @@ export function FlowDiagram(p: DiagramProps) {
           textAnchor="middle"
           fontSize={FONT.label}
           fill="#475569"
-          className="tabular-nums"
+          style={TNUM}
         >
           {p.pillarFoot}
         </text>
@@ -440,7 +484,7 @@ export function FlowDiagram(p: DiagramProps) {
       <NodeBox id="reply" store="redis" lines={p.lines.reply} />
       <NodeBox id="readCache" store="redis" lines={p.lines.readCache} tip={p.readCacheTip} />
       <NodeBox id="worker" lines={p.lines.worker} />
-      <NodeBox id="bizWorker" lines={[...BIZ_WORKER_LINES]} off={f.bizDirect} />
+      <NodeBox id="bizWorker" lines={BIZ_WORKER_LINES} off={f.bizDirect} />
       <NodeBox id="ch" store="ch" lines={p.lines.ch} />
       <NodeBox id="pg" store="pg" lines={p.lines.pg} />
       {f.bizDirect ? (
@@ -456,7 +500,7 @@ export function FlowDiagram(p: DiagramProps) {
         const elapsed = engine.clock - d.born;
         if (elapsed < 0) return null;
         if (d.kind === 'batch') {
-          const pos = dotPos(d.plan, elapsed, BATCH_AT);
+          const pos = dotPos(d.plan, elapsed, BATCH_AT, still);
           const a = d.batch.alarm;
           return (
             <g key={d.id}>
@@ -467,8 +511,9 @@ export function FlowDiagram(p: DiagramProps) {
                   y={ALARM_AT.y}
                   textAnchor="end"
                   dominantBaseline="middle"
-                  fontSize={11}
+                  fontSize={FONT.mark}
                   fill="#b45309"
+                  style={TNUM}
                 >
                   알람 켜짐 {a.opened} · 꺼짐 {a.closed}
                 </text>
@@ -476,30 +521,79 @@ export function FlowDiagram(p: DiagramProps) {
             </g>
           );
         }
-        const pos = dotPos(d.plan, elapsed, BIZ_AT);
+        const pos = dotPos(d.plan, elapsed, BIZ_AT, still);
         const markAt = d.mark ? arriveAt(d.plan, d.mark.at) : null;
         const showMark = d.mark && markAt !== null && elapsed >= markAt;
         const mc: Pt | null = d.mark ? markSpot(d.mark.at) : null;
         return (
           <g key={d.id}>
             {!pos.done && <circle cx={pos.x} cy={pos.y} r={4} fill="#7c3aed" fillOpacity={0.85} />}
-            {showMark && d.mark && mc && (
-              <text
-                x={mc.x}
-                y={mc.y}
-                dominantBaseline="middle"
-                fontSize={11}
-                fontWeight={600}
-                fill={d.mark.symbol === '↺' ? '#0f766e' : d.mark.symbol === '⌛' ? '#64748b' : '#b91c1c'}
-              >
-                {d.mark.code ? <title>{d.mark.code}</title> : null}
-                {markText(d.mark)}
-              </text>
-            )}
+            {showMark && d.mark && mc && <BizMarkView mark={d.mark} at={mc} />}
           </g>
         );
       })}
     </svg>
+  );
+}
+
+// ── 업무 결과 표지 — 그린 기호(24 격자 · components/ui/icon.tsx와 같은 모양 · 선 끝 둥글게) + 쉬운 말 ──
+
+/** 표지 종류(lib/flow 표지 문자열이 키) → 기호 path · 의미 색(이미 처리됨 청록 · 시간 초과 회색 · 거절 · 저장 못 함 빨강) */
+export const MARK_ICONS: Record<string, { paths: readonly string[]; color: string }> = {
+  // 되돌아 도는 화살 — 같은 요청이 이미 처리됨
+  [DUPLICATE_MARK]: {
+    paths: ['M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8', 'M3 3v5h5'],
+    color: '#0f766e',
+  },
+  [OUTCOME_MARK.rejected]: { paths: ['M18 6 6 18', 'm6 6 12 12'], color: '#b91c1c' },
+  [OUTCOME_MARK.failed]: {
+    paths: [
+      'M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z',
+      'M12 9v4',
+      'M12 17h.01',
+    ],
+    color: '#b91c1c',
+  },
+  // 시계 — 유효 시간을 넘김
+  [OUTCOME_MARK.expired]: {
+    paths: ['M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20z', 'M12 6v6l4 2'],
+    color: '#64748b',
+  },
+};
+/** 기호 선 굵기(24 격자) — 화면 공통 아이콘(14px · 선 2.2)과 같은 그려진 굵기를 12px에서 */
+const MARK_STROKE = 2.2 * (14 / MARK_ICON);
+
+/** 표지 하나 — 이름(SVG title = 접근성 이름 · 마우스 올림)은 쉬운 말 + 오류 코드(있을 때만) · 기호는 장식 */
+function BizMarkView({ mark, at }: { mark: BizMark; at: Pt }) {
+  const label = markText(mark);
+  const look = MARK_ICONS[mark.symbol] ?? { paths: [], color: '#b91c1c' };
+  const color = look.color;
+  return (
+    <g data-mark={label}>
+      <title>{mark.code ? `${label} · ${mark.code}` : label}</title>
+      <g
+        transform={`translate(${at.x} ${at.y - MARK_ICON / 2}) scale(${MARK_ICON / 24})`}
+        fill="none"
+        stroke={color}
+        strokeWidth={MARK_STROKE}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      >
+        {look.paths.map((d) => (
+          <path key={d} d={d} />
+        ))}
+      </g>
+      <text
+        x={at.x + MARK_ICON + MARK_ICON_GAP}
+        y={at.y}
+        dominantBaseline="middle"
+        fontSize={FONT.mark}
+        fontWeight={600}
+        fill={color}
+      >
+        {label}
+      </text>
+    </g>
   );
 }
 

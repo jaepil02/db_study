@@ -61,7 +61,7 @@ test('pps 1000 · 30초 · 업무 1/초 · 조회 20/초 시작 → 진행 증�
   });
   const bizNum = async () => {
     const t =
-      (await page.getByTestId('flow-headline').locator('[data-key="biz"] .text-2xl').textContent()) ?? '';
+      (await page.getByTestId('flow-headline').locator('[data-key="biz"] [data-value]').textContent()) ?? '';
     return /^[\d,.]+$/.test(t) ? Number(t.replace(/,/g, '')) : 0;
   };
   await expect.poll(bizNum, { timeout: 15_000, message: '업무 요청 초당 > 0' }).toBeGreaterThan(0);
@@ -83,6 +83,13 @@ test('pps 1000 · 30초 · 업무 1/초 · 조회 20/초 시작 → 진행 증�
   const m = await body.evaluate((el) => ({ sh: el.scrollHeight, ch: el.clientHeight }));
   expect(m.sh).toBeLessThanOrEqual(m.ch + 1);
   await expect(page.getByTestId('flow-footnote')).toBeInViewport({ ratio: 1 });
+  // 띠가 있어도 흐름도 배율 1.0(가로가 먼저 찬다 — viewBox 1126 × 440 · 안쪽 1126 × 452) — 노드 글자 12 ~ 14px가 화면 크기 그대로
+  const scale = await diagram.evaluate((el) => {
+    const svg = el as SVGSVGElement;
+    const r = svg.getBoundingClientRect();
+    return Math.min(r.width / svg.viewBox.baseVal.width, r.height / svg.viewBox.baseVal.height);
+  });
+  expect(scale, '진행 띠가 있어도 흐름도 배율 1.0').toBeGreaterThanOrEqual(0.999);
   await shot(page, info, 'flow-running');
 
   // 중단 — 진행 띠 오른쪽

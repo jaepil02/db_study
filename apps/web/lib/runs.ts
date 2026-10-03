@@ -179,6 +179,64 @@ export function runScopeText(run: Pick<RunObjectBody, 'type' | 'params'>): strin
   return `초당 ${pps.toLocaleString('ko-KR')}개 · ${durationSec}초`;
 }
 
+// ── 지난 실행 자리(.omc/plans/web-ux-polish.md §2.1) ──
+// 진행 띠는 실행 중과 "이 화면에서 방금 끝난" 실행(종결 뒤 30초)에만 본문 위에 선다. 그 뒤(또는 이미 끝난 실행을 열었을 때)는
+// 셸 머리 버튼 옆 작은 글자 한 줄로 접힌다 — 접힘은 애니메이션 없이 사라짐(서랍이 아니다) · 상세는 그 글자의 툴팁.
+
+/** 종결 뒤 띠를 남기는 시간 */
+export const RECENT_END_MS = 30_000;
+
+/** 이 화면에서 지켜보던 실행이 방금 끝났다 — 앞 응답이 같은 실행의 running · stopping이고 이번 응답이 종결이면 그 runId */
+export function justEndedRunId(
+  prev: RunSnapshot | undefined,
+  next: RunSnapshot | undefined,
+  type: RunType,
+): string | null {
+  const a = prev?.run;
+  const b = next?.run;
+  if (!a || !b || a.runId !== b.runId || b.type !== type) return null;
+  return isActive(a.status) && isTerminal(b.status) ? b.runId : null;
+}
+
+/** 진행 띠가 이 실행 줄을 그리는가 — 진행 중이거나 방금 끝난 실행(recentEndId)일 때만 */
+export const stripShowsRun = (run: RunObjectBody | null, recentEndId: string | null): boolean =>
+  run !== null && (isActive(run.status) || run.runId === recentEndId);
+
+/** 셸 머리 "지난번" 글자에 보일 실행 — 이 화면 종류의 종결 실행이고 띠가 그 실행을 그리지 않을 때만(같은 말 두 곳 금지) */
+export const headerLastRun = (run: RunObjectBody | null, recentEndId: string | null): RunObjectBody | null =>
+  run !== null && isTerminal(run.status) && run.runId !== recentEndId ? run : null;
+
+/**
+ * 셸 머리 "지난번" 한 줄 — 무엇을 잰 결과(runScopeText) · 결말.
+ * perf 완료 "지난번 100만 행까지 · 3.0초"(걸린 시간이 답) · flow 완료 "지난번 초당 1,000개 · 30초 · 완료"(보낸 시간은 이미 범위에 있다) ·
+ * 중단 · 실패는 상태 낱말("· 중단됨" · "· 실패").
+ */
+export function lastRunText(run: RunObjectBody): string {
+  const scope = runScopeText(run);
+  const head = scope ? `지난번 ${scope}` : LAST_RUN_LABEL[run.type];
+  const tail =
+    run.status === 'completed'
+      ? run.type === 'perf'
+        ? formatElapsed(terminalElapsedMs(run), true)
+        : STATUS_LABEL.completed
+      : STATUS_LABEL[run.status];
+  return `${head} · ${tail}`;
+}
+
+/** "지난번" 글자 툴팁 — 띠가 하던 말 전부(머리 · 종결 띠 문장과 툴팁 · 시작 · 종료 · 단계 · 라이브 표지) */
+export function lastRunTip(run: RunObjectBody): string {
+  const band = runBand(run);
+  const lines = [
+    LAST_RUN_LABEL[run.type],
+    band?.text,
+    ...(band?.tip ?? '').split('\n'),
+    ...runTip(run).split('\n'),
+    `${LIVE_LABEL} — ${LIVE_MARK}`,
+  ];
+  // 띠 툴팁의 종료 시각과 진행 띠 툴팁의 종료 시각이 겹친다 — 같은 줄은 한 번만
+  return [...new Set(lines.filter((x): x is string => !!x))].join('\n');
+}
+
 /** 진행 띠 툴팁 — 시작 · 종료 시각(KST 초) · 단계 key와 상태 · 소요 · flow publish 계수(08_screen/08 진행 띠 행) */
 export function runTip(run: RunObjectBody): string {
   const lines = [`시작 ${formatRunClock(run.startedAt)}`];

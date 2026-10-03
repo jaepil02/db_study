@@ -60,7 +60,7 @@ test('한 장 화면 — 실시간 연결됨 · 10초 안에 데이터 · 숫자
     await expect(head.getByText(label, { exact: true })).toBeVisible();
   }
   const num = async (key: string) => {
-    const t = (await head.locator(`[data-key="${key}"] .text-2xl`).textContent()) ?? '';
+    const t = (await head.locator(`[data-key="${key}"] [data-value]`).textContent()) ?? '';
     return /^[\d,.]+$/.test(t) ? Number(t.replace(/,/g, '')) : 0;
   };
   await expect
@@ -74,7 +74,7 @@ test('한 장 화면 — 실시간 연결됨 · 10초 안에 데이터 · 숫자
       const t = (sel: string) => document.querySelector(sel)?.textContent ?? '';
       const node = /초당 ([\d,.]+)개/.exec(t('[data-node="src"] text:nth-of-type(2)'))?.[1] ?? null;
       const edge = (id: string) => /([\d,.]+)개\/초/.exec(t(`[data-edge="${id}"]`))?.[1] ?? null;
-      return [t('[data-key="sensor"] .text-2xl'), node, edge('src-stream'), edge('stream-worker')];
+      return [t('[data-key="sensor"] [data-value]'), node, edge('src-stream'), edge('stream-worker')];
     });
   await expect
     .poll(async () => new Set(await sensorNumbers()).size, {
@@ -109,17 +109,17 @@ test('한 장 화면 — 실시간 연결됨 · 10초 안에 데이터 · 숫자
     await expect(diagram.getByText(name, { exact: true })).toBeVisible();
   }
   await expect(diagram.getByText('Redis — 서버와 DB 사이 중간층', { exact: true })).toBeVisible();
-  await expect(diagram.getByTestId('flow-biz-note')).toContainText(
-    '업무 데이터는 ClickHouse로 보내지 않아요',
-  );
+  // 업무 줄 옆 한 줄 — 세 줄(<text> 셋)이라 textContent는 줄 사이 공백 없이 이어진다
+  await expect(diagram.getByTestId('flow-biz-note')).toContainText('업무 데이터는ClickHouse로 보내지 않아요');
   await expect(diagram.locator('[data-edge="biz-reply"]')).toContainText('결과 받음');
   await expect(diagram.locator('[data-edge][data-off]')).toHaveCount(0);
   // 조회 줄(§9.2) — 조회 요청 → ⑤ → 응답 · ⑤ ↔ ClickHouse · PostgreSQL(처리기를 거치지 않는다) · 조회가 없으면 보내 보라는 한 줄
   for (const id of ['read-ask', 'read-answer', 'read-miss', 'read-pg', 'read-ch'])
     await expect(diagram.locator(`[data-edge="${id}"]`)).toHaveCount(1);
   await expect(diagram.locator('[data-edge="read-answer"]')).toContainText('응답');
+  // 줄기 라벨은 줄기 아래 두 줄(무엇을 하나 · 어느 DB로 몇 %) — <text> 둘이 공백 없이 이어진다
   await expect(diagram.locator('[data-edge="read-miss"]')).toContainText(
-    /없으면 읽어 와 사본 담기 — ClickHouse\(센서\) .*% · PostgreSQL\(업무 목록\) .*%|조회 요청이 없어요 — 직접 보내 보기로 보내 보세요/,
+    /없으면 읽어 와 사본 담기ClickHouse\(센서\) .*% · PostgreSQL\(업무 목록\) .*%|조회 요청이 없어요 — 직접 보내 보기로 보내 보세요/,
     { timeout: 15_000 },
   );
   await expect(diagram.locator('[data-node="readCache"]')).toContainText('있으면 바로 응답');
@@ -130,10 +130,46 @@ test('한 장 화면 — 실시간 연결됨 · 10초 안에 데이터 · 숫자
   for (const db of ['ClickHouse', 'Redis', 'PostgreSQL'])
     await expect(why.getByText(db, { exact: true })).toBeVisible();
   await expect(page.getByTestId('flow-compare')).toContainText('센서는 묶어서 많이 · 업무는 하나씩 정확히');
+  // 모아서 vs 하나씩 — 막대 숫자는 처리 시간(대기줄 대기 빼고) · 사람이 읽는 단위 · 대기는 따로 한 줄(.omc/plans/web-ux-polish.md §7.1 R17 = L1)
+  await expect(page.getByTestId('flow-wait')).toContainText(/^대기줄에서 기다린 시간 — 센서 \d/, {
+    timeout: 15_000,
+  });
+  const times = await page.getByTestId('flow-compare').locator('.tabular-nums.font-bold').allTextContents();
+  for (const t of times)
+    expect(t, '사람이 읽는 시간 단위').toMatch(/^(\d+(\.\d)?ms|\d+\.\d초|\d+분 \d+초|\d+시간 \d+분|—)$/);
   await expect(page.getByTestId('flow-footnote')).toContainText('점은 보기 좋게 느리게 움직여요');
   await expect(page.getByTestId('flow-footnote')).toContainText('조회는 점 없이 숫자로만');
   for (const id of ['flow-headline', 'flow-diagram', 'flow-why', 'flow-compare', 'flow-footnote'])
     await expect(page.getByTestId(id)).toBeInViewport({ ratio: 1 });
+
+  // 다듬기(.omc/plans/web-ux-polish.md §2.3) — 화면 안 글자 최소 12px(SVG 글자 크기 × 그려진 배율) · 숫자 4 문장 잘림 없음 · 굵은 왼쪽 색 테두리 없음
+  const svgText = await diagram.evaluate((el) => {
+    const svg = el as SVGSVGElement;
+    const r = svg.getBoundingClientRect();
+    const vb = svg.viewBox.baseVal;
+    const scale = Math.min(r.width / vb.width, r.height / vb.height);
+    const sizes = [...svg.querySelectorAll('text')].map((t) => Number(t.getAttribute('font-size')));
+    return { scale, minPx: Math.min(...sizes) * scale };
+  });
+  expect(svgText.scale, '1440 × 900 흐름도 배율 1.0').toBeGreaterThanOrEqual(0.999);
+  expect(svgText.minPx, '흐름도 글자 최소 12px').toBeGreaterThanOrEqual(11.99);
+  const clipped = await head
+    .locator('[data-text]')
+    .evaluateAll((els) =>
+      els
+        .filter((el) => el.scrollHeight > el.clientHeight + 1 || el.scrollWidth > el.clientWidth + 1)
+        .map((el) => el.textContent),
+    );
+  expect(clipped, '숫자 4 문장 잘림 없음').toEqual([]);
+  const thickLeft = await page
+    .getByTestId('flow-why')
+    .evaluate(
+      (el) =>
+        [...el.querySelectorAll('*')].filter(
+          (c) => Number.parseFloat(getComputedStyle(c).borderLeftWidth) > 1,
+        ).length,
+    );
+  expect(thickLeft, '왜 나눌까 — 굵은 왼쪽 색 테두리 없음').toBe(0);
 
   await expectOneGlance(page);
   await shot(page, info, 'flow-one-screen');
@@ -145,4 +181,70 @@ test('한 장 화면 — 실시간 연결됨 · 10초 안에 데이터 · 숫자
   await expect(page.getByTestId('flow-compare')).toContainText('업무 1건');
   await expectOneGlance(page);
   await shot(page, info, 'flow-biz-request');
+});
+
+// 1280 × 800 바닥(.omc/plans/web-ux-polish.md §7.1 R4) — 처음부터 1280으로 연 새 페이지(저장값 없음)는 사이드바가 레일로 시작해
+// 본문 폭이 흐름도 원래 크기(viewBox 1126)보다 넓다 — 흐름도 배율 1 · 실제 글자 최소 12px. 세로 스크롤은 허용(깨지지만 않게 — 가로 스크롤 없음).
+test.describe('1280 × 800', () => {
+  test.use({ viewport: { width: 1280, height: 800 } });
+
+  test('새로 연 페이지는 사이드바 레일 · 흐름도 배율 ≥ 0.999 · 화면 글자 최소 12px · 숫자 4 문장 잘림 없음 · 가로 스크롤 없음', async ({
+    page,
+  }, info) => {
+    await page.goto('/monitoring');
+    await expect(page.getByRole('button', { name: '사이드바 펼치기' })).toBeVisible();
+    const nav = page.locator('[data-shell="nav"]');
+    await expect
+      .poll(() => nav.evaluate((el) => el.getBoundingClientRect().width), { message: '레일 56px' })
+      .toBeLessThanOrEqual(57);
+
+    const diagram = page.getByTestId('flow-diagram');
+    await expect(diagram).toBeVisible();
+    const svgScale = () =>
+      diagram.evaluate((el) => {
+        const svg = el as SVGSVGElement;
+        const r = svg.getBoundingClientRect();
+        return Math.min(r.width / svg.viewBox.baseVal.width, r.height / svg.viewBox.baseVal.height);
+      });
+    await expect.poll(svgScale, { message: '1280 × 800 흐름도 배율 1' }).toBeGreaterThanOrEqual(0.999);
+
+    // 실제 글자 크기 — SVG는 글자 크기 × 그려진 배율 · HTML은 글자를 직접 가진 요소의 계산된 크기
+    await expect(page.getByTestId('flow-sub')).toContainText('마지막 데이터', { timeout: 10_000 });
+    const sizes = await page.getByTestId('flow-screen').evaluate((root) => {
+      const svg = root.querySelector('[data-testid="flow-diagram"]') as SVGSVGElement;
+      const r = svg.getBoundingClientRect();
+      const scale = Math.min(r.width / svg.viewBox.baseVal.width, r.height / svg.viewBox.baseVal.height);
+      const svgMin = Math.min(
+        ...[...svg.querySelectorAll('text')].map((t) => Number(t.getAttribute('font-size')) * scale),
+      );
+      const own = [...root.querySelectorAll('*')].filter(
+        (el) =>
+          !el.closest('svg') &&
+          [...el.childNodes].some(
+            (n) => n.nodeType === Node.TEXT_NODE && (n.textContent ?? '').trim() !== '',
+          ),
+      );
+      const small = own
+        .filter((el) => Number.parseFloat(getComputedStyle(el).fontSize) < 12)
+        .map((el) => `${el.tagName} ${el.textContent}`);
+      return { svgMin, small, count: own.length };
+    });
+    expect(sizes.count).toBeGreaterThan(10);
+    expect(sizes.svgMin, '흐름도 글자 최소 12px').toBeGreaterThanOrEqual(11.99);
+    expect(sizes.small, '화면 글자 최소 12px').toEqual([]);
+
+    const clipped = await page
+      .getByTestId('flow-headline')
+      .locator('[data-text]')
+      .evaluateAll((els) =>
+        els
+          .filter((el) => el.scrollHeight > el.clientHeight + 1 || el.scrollWidth > el.clientWidth + 1)
+          .map((el) => el.textContent),
+      );
+    expect(clipped, '숫자 4 문장 잘림 없음').toEqual([]);
+    const body = page.locator('[data-shell="content-body"]');
+    const m = await body.evaluate((el) => ({ sw: el.scrollWidth, cw: el.clientWidth }));
+    expect(m.sw, '본문 가로 스크롤 없음').toBeLessThanOrEqual(m.cw + 1);
+    await shot(page, info, 'flow-1280');
+  });
 });

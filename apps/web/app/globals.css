@@ -3,10 +3,28 @@
 /* 셸 색 · 치수 토큰 — 사이드바는 시맨틱 이름으로만 칠한다(원시 색을 컴포넌트에 직접 쓰지 않는다)
    값은 밝은 중립 사이드바 + 파랑 강조(대비 실측: sidebar-fg #333d4d · 사이드바 바탕 위 10.5:1 · 강조 fg #1d4ed8 · 강조 바탕 위 6.2:1 · muted #636e7e · 사이드바 바탕 4.9:1 · canvas 4.7:1) */
 @theme {
+  /* 글꼴 — Pretendard Variable 자체 호스팅(app/layout.tsx next/font/local이 <html>에 --font-pretendard를 단다) · 없으면 대체 글꼴 순서 그대로 */
+  --font-sans: var(
+    --font-pretendard,
+    system-ui,
+    -apple-system,
+    "Apple SD Gothic Neo",
+    "Noto Sans KR",
+    sans-serif
+  );
+
+  /* 글자 단계(rem 고정) 12 · 13 · 14 · 16 · 20 · 28 — 화면 안 최소 12px(.omc/plans/web-ux-polish.md §2.1)
+     xs 12 · sm 14 · base 16 · xl 20은 Tailwind 기본값을 그대로 쓰고, 빠진 두 단계만 더한다 */
+  --text-label: 0.8125rem; /* 13 — 그림 머리 · 축 머리 · "왜?" 줄 */
+  --text-label--line-height: 1.125rem;
+  --text-answer: 1.75rem; /* 28 — 결론 숫자 */
+  --text-answer--line-height: 2rem;
+
   --color-canvas: #f1f4f7;
   --color-surface: #ffffff;
   --color-line: #e4e8ee;
   --color-accent: #2563eb;
+  --color-accent-soft: #dbeafe;
   --color-sidebar: #f8fafc;
   --color-sidebar-line: #e4e8ee;
   --color-sidebar-hover: #eef1f5;
@@ -15,13 +33,18 @@
   --color-sidebar-fg-muted: #636e7e;
   --color-sidebar-active: #eff6ff;
   --color-sidebar-active-fg: #1d4ed8;
-  /* 저장소 색 3 — components/ui/store.ts와 같은 값(perf options.ts STORE_COLOR와 동일) · 연한 짝은 칩 · 띠 배경용 */
+  /* 저장소 색 3 — components/ui/store.ts와 같은 값(perf options.ts STORE_COLOR와 동일) · 연한 짝은 칩 · 띠 배경용
+     ink는 그 색으로 쓰는 글자(점 · 선 · 막대는 원색) — 원색 주황 #d97706은 흰 바탕 3.2:1이라 작은 글자 4.5:1에 못 미친다
+     (실측: ch-ink #b45309 흰 5.0:1 · ch-soft 위 4.8:1 · pg-ink #1d4ed8 흰 6.7:1 · pg-soft 위 6.2:1 · redis-ink #b91c1c 흰 6.5:1 · redis-soft 위 5.9:1) */
   --color-store-ch: #d97706;
   --color-store-ch-soft: #fffbeb;
+  --color-store-ch-ink: #b45309;
   --color-store-pg: #2563eb;
   --color-store-pg-soft: #eff6ff;
+  --color-store-pg-ink: #1d4ed8;
   --color-store-redis: #dc2626;
   --color-store-redis-soft: #fef2f2;
+  --color-store-redis-ink: #b91c1c;
 }
 
 :root {
@@ -29,8 +52,34 @@
   --nav-item-height: 34px;
   --sidebar-width: 248px;
   --sidebar-rail-width: 56px;
+  /* 스크롤 막대 — 중립 선 색(브라우저 기본 회색 대신 화면 색에서) */
+  scrollbar-color: #c3cad5 transparent;
 }
 
 body {
-  font-family: system-ui, -apple-system, "Apple SD Gothic Neo", "Noto Sans KR", sans-serif;
+  font-family: var(--font-sans);
+  /* 한국어 줄바꿈 — 낱말 가운데서 끊지 않는다(어절 단위) · 어절 하나가 칸보다 길 때만 아무 데서나 끊는다 */
+  word-break: keep-all;
+  overflow-wrap: anywhere;
+  /* 고정 폭 숫자(tabular-nums)는 숫자 자리에만 클래스로 — 본문에 걸면 Pretendard '1'이 넓어져 "센서 1개"의 1 둘레가 벌어진다 */
+}
+
+/* 브라우저 표면 — 선택 · 포커스 · 밑줄 · 커서도 화면 색에서(.omc/plans/web-ux-polish.md §2.1) */
+::selection {
+  background-color: var(--color-accent-soft);
+  color: inherit;
+}
+
+:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 2px;
+}
+
+a {
+  text-underline-offset: 2px;
+}
+
+input,
+textarea {
+  caret-color: var(--color-accent);
 }

@@ -49,7 +49,8 @@ export function Shell({ children }: { children: ReactNode }) {
         </header>
         {/* relative — 본문 안 absolute 요소(sr-only legend 등)의 포함 블록을 본문에 가둔다 · 없으면 초기 포함 블록 기준으로 놓여 문서 높이를 키운다(본문만 스크롤 위반) */}
         <main data-shell="content-body" className="relative min-h-0 flex-1 overflow-y-auto">
-          <div className="mx-auto max-w-[1600px] p-5">
+          {/* 두 화면 같은 최대 폭(본문 88rem + 좌우 여백) — 화면을 바꿔도 본문 왼쪽 끝이 튀지 않는다 */}
+          <div className="mx-auto max-w-[90.5rem] p-5">
             <HeaderSlotContext.Provider value={slots}>{children}</HeaderSlotContext.Provider>
           </div>
         </main>

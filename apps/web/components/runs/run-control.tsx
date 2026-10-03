@@ -1,10 +1,14 @@
 'use client';
-// 실행 조작부 머리 — "▶ {buttonLabel}" 버튼 · 상태 칩 (셸 머리 동작 자리에 놓는다) → 매개변수 팝오버(쉬운 설명 · 매개변수 · 시작 · 큰 규모 경고 · 다른 실행 링크 · 역할 안내 · 아직 안 재 봄)
+// 실행 조작부 머리 — "지난번 …" 작은 글자 · "{재생 아이콘} {buttonLabel}" 버튼 · 상태 칩 (셸 머리 동작 자리에 놓는다) → 매개변수 팝오버(쉬운 설명 · 매개변수 · 시작 · 큰 규모 경고 · 다른 실행 링크 · 역할 안내 · 아직 안 재 봄)
+// "지난번" 글자는 진행 띠가 종결 실행을 그리지 않을 때만(종결 뒤 30초가 지났거나 이미 끝난 실행을 열었을 때 — .omc/plans/web-ux-polish.md §2.1) · 상세는 툴팁.
 // 중단 · 요청 사건 띠(409 · 404 · 요청 실패 · 폴링 실패)는 진행 띠(RunProgress)가 갖는다 — 정본 docs/08_screen/08_evidence_screens.md §실행 패널 — 두 화면 공통 규칙 §배치.
 // 상태 · 폴링 · 경과 · 409 · 404 · 권한은 RunProvider(useRunPanel) · 버튼 상태 규칙은 lib/runs.ts(runControls)를 그대로 쓴다.
 import Link from 'next/link';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useId, useRef, useState } from 'react';
 import {
+  headerLastRun,
+  lastRunText,
+  lastRunTip,
   NO_RUN_TEXT,
   type PanelLocal,
   panelRun,
@@ -15,8 +19,13 @@ import {
 } from '../../lib/runs';
 import type { RunType } from '../../lib/shared';
 import { cn } from '../../lib/utils';
+import { UiIcon } from '../ui/icon';
 import { useRunContext } from './run-context';
 import { buildRunParams, defaultParams, paramWarnings, type RunParamDef } from './run-spec';
+
+/** 주 버튼(머리 · 팝오버 시작) — 같은 모양 하나 */
+const PRIMARY =
+  'inline-flex items-center gap-1.5 rounded bg-slate-800 px-3 py-1 text-sm text-white hover:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-50';
 
 /** 칩은 진행 중(실행 중 · 멈추는 중)에만 그린다 — 종결 색은 진행 띠의 종결 띠가 갖는다 */
 const CHIP: Record<'running' | 'stopping', string> = {
@@ -27,7 +36,7 @@ const CHIP: Record<'running' | 'stopping', string> = {
 export interface RunControlProps {
   /** 매개변수 정의 — run-spec.ts의 PERF_PARAM_DEFS · FLOW_PARAM_DEFS */
   params: readonly RunParamDef[];
-  /** 머리 버튼 글자(▶는 조각이 붙인다) — 화면마다 쉬운 말("내 컴퓨터에서 직접 재 보기") */
+  /** 머리 버튼 글자(재생 아이콘은 조각이 붙인다) — 화면마다 쉬운 말("내 컴퓨터에서 직접 재 보기") */
   buttonLabel: string;
   /** 팝오버 맨 위 쉬운 설명 한 줄 — 무엇을 하고 결과가 어디에 나오는지 */
   intro?: string;
@@ -37,7 +46,7 @@ export interface RunControlProps {
 }
 
 export function RunControl({ params, buttonLabel, intro, canControl = true, className }: RunControlProps) {
-  const { type, snapshot, pollFailed, local, start } = useRunContext();
+  const { type, snapshot, pollFailed, local, start, recentEndId } = useRunContext();
   const [chosen, setChosen] = useState<Record<string, number>>(() => defaultParams(params));
   return (
     <RunControlView
@@ -48,6 +57,7 @@ export function RunControl({ params, buttonLabel, intro, canControl = true, clas
       snapshot={snapshot}
       pollFailed={pollFailed}
       local={local}
+      recentEndId={recentEndId}
       canControl={canControl}
       chosen={chosen}
       onChoose={(k, v) => setChosen((p) => ({ ...p, [k]: v }))}
@@ -62,6 +72,8 @@ export interface RunControlViewProps extends RunControlProps {
   snapshot: RunSnapshot | undefined;
   pollFailed: boolean;
   local: PanelLocal;
+  /** 이 화면에서 방금 끝난 실행(진행 띠가 결말을 그리는 중) — 그 실행이면 "지난번" 글자를 쓰지 않는다 */
+  recentEndId?: string | null;
   chosen: Record<string, number>;
   onChoose: (key: string, v: number) => void;
   /** 시작 요청 — 결과가 started(202)일 때만 팝오버를 닫는다 · 409 · 400 · 요청 실패면 열어 둔다(문구가 팝오버 · 띠에 보인다) */
@@ -80,7 +92,7 @@ export function RunChip({ snapshot, type }: { snapshot: RunSnapshot | undefined;
       <span
         data-testid="run-status-pending"
         aria-hidden="true"
-        className="inline-block h-5 w-14 animate-pulse rounded bg-slate-100"
+        className="inline-block h-5 w-14 rounded bg-slate-100 motion-safe:animate-pulse"
       />
     );
   const run = panelRun(snapshot, type);
@@ -91,7 +103,10 @@ export function RunChip({ snapshot, type }: { snapshot: RunSnapshot | undefined;
       data-testid="run-status"
       className={cn('inline-flex items-center gap-1 rounded-md px-2 py-0.5 font-medium', CHIP[run.status])}
     >
-      <span className="inline-block h-2 w-2 animate-pulse rounded-full bg-current" aria-hidden="true" />
+      <span
+        className="inline-block h-2 w-2 rounded-full bg-current motion-safe:animate-pulse"
+        aria-hidden="true"
+      />
       {STATUS_LABEL[run.status]}
     </span>
   );
@@ -109,12 +124,14 @@ export function RunControlView(p: RunControlViewProps) {
   });
   const ready = snapshot !== undefined;
   const run = panelRun(snapshot, type);
+  const last = headerLastRun(run, p.recentEndId ?? null);
   const shown = ctl.lockedParams ?? p.chosen;
   const warnings = paramWarnings(p.params, shown);
   const [openState, setOpen] = useState(p.defaultOpen ?? false);
   // current를 받기 전에는 팝오버를 열지 않는다 — 진행 중 실행을 모른 채 매개변수를 고르게 두지 않는다(§버튼 상태)
   const open = openState && ready;
   const root = useRef<HTMLDivElement>(null);
+  const lastTipId = useId();
 
   // 바깥 클릭 · Esc로 닫는다
   useEffect(() => {
@@ -139,15 +156,36 @@ export function RunControlView(p: RunControlViewProps) {
       data-testid={`run-control-${type}`}
       className={cn('relative flex items-center gap-2 text-xs', p.pollFailed && 'opacity-70', p.className)}
     >
+      {/* 상세는 마우스 툴팁(title) · 키보드는 탭으로 닿고(tabIndex 0) 낭독기는 sr-only 상세를 설명으로 읽는다(R12) */}
+      {last ? (
+        <>
+          <span
+            data-testid="run-last"
+            title={lastRunTip(last)}
+            // biome-ignore lint/a11y/noNoninteractiveTabindex: 툴팁 상세(지난 실행 결말 · 시각 · 단계)를 키보드로 닿게 하는 자리 — 누르는 동작은 없다
+            tabIndex={0}
+            aria-describedby={lastTipId}
+            className={cn(
+              'max-w-[18rem] cursor-help truncate rounded-sm text-xs tabular-nums',
+              last.status === 'failed' ? 'text-red-700' : 'text-slate-500',
+            )}
+          >
+            {lastRunText(last)}
+          </span>
+          <span id={lastTipId} className="sr-only">
+            {lastRunTip(last).split('\n').join(' · ')}
+          </span>
+        </>
+      ) : null}
       <button
         type="button"
         aria-haspopup="dialog"
         disabled={!ready}
         title={ready ? undefined : '실행 상태를 읽는 중이에요'}
         onClick={() => setOpen((v) => !v)}
-        className="rounded bg-slate-800 px-3 py-1 text-sm text-white hover:bg-slate-700 disabled:opacity-50"
+        className={PRIMARY}
       >
-        <span aria-hidden="true">▶ </span>
+        <UiIcon name="play" className="size-3" />
         {p.buttonLabel}
       </button>
       <RunChip snapshot={snapshot} type={type} />
@@ -174,9 +212,10 @@ export function RunControlView(p: RunControlViewProps) {
                 <p
                   key={w}
                   data-testid="run-large-warning"
-                  className="rounded bg-amber-50 px-2 py-1 text-amber-800"
+                  className="flex items-start gap-1.5 rounded bg-amber-50 px-2 py-1 text-amber-800"
                 >
-                  ⚠ {w}
+                  <UiIcon name="warn" className="mt-px size-3.5 shrink-0" />
+                  {w}
                 </p>
               ))
             : null}
@@ -190,9 +229,9 @@ export function RunControlView(p: RunControlViewProps) {
                 });
               }}
               disabled={!ctl.start.enabled}
-              className="rounded bg-slate-800 px-3 py-1 text-sm text-white hover:bg-slate-700 disabled:opacity-50"
+              className={PRIMARY}
             >
-              <span aria-hidden="true">▶ </span>
+              <UiIcon name="play" className="size-3" />
               {ctl.start.label}
             </button>
             {ctl.start.other ? (
@@ -244,7 +283,7 @@ function ParamGroup({
           )}
         >
           {def.text(v)}
-          {def.warn?.(v) ? <span aria-hidden="true"> ⚠</span> : null}
+          {def.warn?.(v) ? <UiIcon name="warn" className="ml-1 inline size-3 align-[-1px]" /> : null}
         </button>
       ))}
     </fieldset>

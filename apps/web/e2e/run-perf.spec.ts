@@ -1,4 +1,4 @@
-// EXP-PERF 직접 재 보기 — 실제 api로 perf 실행(최대 10만 · 100만 행) 시작 → 진행 띠 한 줄(상태 · 쉬운 단계 문장 · 단계 n/m · 경과 · 중단) → 완료 띠 → 그림 2 "내 측정" 점
+// EXP-PERF 직접 재 보기 — 실제 api로 perf 실행(최대 10만 · 100만 행) 시작 → 진행 띠 한 줄(상태 · 쉬운 단계 문장 · 단계 n/m · 경과 · 중단) → 완료 띠(30초) → 셸 머리 "지난번" 글자 · 그림 2 "내 측정" 점
 // 설계 .omc/plans/web-junior-redesign.md §2 직접 재 보기 행 · 정본 docs/08_screen/08_evidence_screens.md §실행 패널 — 두 화면 공통 규칙(버튼 상태 · 종결 표시 · 경과)
 // 배치 — 셸 머리 "▶ 내 컴퓨터에서 직접 재 보기" · 상태 칩 → 규모 팝오버(쉬운 말) → 머리 아래 진행 띠 한 줄. 서랍 · 단계 목록 · 라이브 결과 표는 없다.
 import { expect, type Page, test } from '@playwright/test';
@@ -56,9 +56,11 @@ test('10만 행 시작 → 실행 중(쉬운 단계 문장) → "지난번 직�
     await expect(r.popover.getByRole('button', { name: new RegExp(`^${t}`) })).toBeVisible();
   await expect(r.popover).not.toContainText('10^');
   await r.popover.getByRole('button', { name: /^1억 행/ }).click();
+  // 경고 표시는 그린 아이콘(SVG) — 글자는 문장만
   await expect(r.popover.getByTestId('run-large-warning')).toHaveText(
-    /^⚠ 예상 디스크\(추정 상한\) PostgreSQL .+ · ClickHouse .+ — 수 분 이상 걸려요$/,
+    /^예상 디스크\(추정 상한\) PostgreSQL .+ · ClickHouse .+ — 수 분 이상 걸려요$/,
   );
+  await expect(r.popover.getByTestId('run-large-warning').locator('svg')).toHaveCount(1);
   await r.popover.getByRole('button', { name: '10만 행', exact: true }).click();
   await expect(r.popover.getByTestId('run-large-warning')).toHaveCount(0);
   await expect(r.start).toBeEnabled();
@@ -85,9 +87,14 @@ test('10만 행 시작 → 실행 중(쉬운 단계 문장) → "지난번 직�
   let sawRunning = false;
   for (;;) {
     // 칩은 진행 중에만 있다 — 종결 뒤에는 숨고 띠가 결과를 말한다
-    const s = (await r.status.count()) > 0 ? await r.status.textContent() : null;
+    // 칩 · 단계 칸은 읽는 사이에 실행이 끝나 사라질 수 있다 — 짧게 읽고(500ms) 없으면 null(15초 기다리지 않는다)
+    const s =
+      (await r.status.count()) > 0 ? await r.status.textContent({ timeout: 500 }).catch(() => null) : null;
     if (s !== '실행 중' && s !== '멈추는 중') break;
-    if (await r.stage.isVisible()) stages.push((await r.stage.textContent()) ?? '');
+    const stage = (await r.stage.isVisible())
+      ? await r.stage.textContent({ timeout: 500 }).catch(() => null)
+      : null;
+    if (stage !== null) stages.push(stage);
     if (!sawRunning) {
       sawRunning = true;
       await expect(r.stop).toBeEnabled();
@@ -121,11 +128,29 @@ test('10만 행 시작 → 실행 중(쉬운 단계 문장) → "지난번 직�
   await expect(page.getByRole('region', { name: '그림 2' }).locator('canvas').first()).toBeVisible();
   await expectNoScroll(page);
 
+  // 완료 띠가 남는 동안 머리 "지난번" 글자는 없다(같은 말 두 곳 금지)
+  await expect(page.getByTestId('run-last')).toHaveCount(0);
+
   // 완료 뒤 시작 재활성 · 매개변수 잠금 해제
   await r.open();
   await expect(r.start).toBeEnabled();
   await expect(r.popover.getByRole('button', { name: '10만 행', exact: true })).toBeEnabled();
   await shot(page, info, 'perf-completed');
+
+  // 이미 끝난 실행을 다시 열면 띠는 없고 셸 머리 버튼 옆 작은 글자 한 줄 — 상세(완료 띠 문장 · 라이브 표지)는 툴팁
+  await page.reload();
+  await expect(r.measure).toBeEnabled();
+  await expect(r.strip).toHaveCount(0);
+  const last = page.getByTestId('run-last');
+  await expect(last).toHaveText(/^지난번 10만 행까지 · (\d+분 )?\d+(\.\d)?초$/);
+  await expect(last).toHaveAttribute('title', /완료 — 걸린 시간 [\s\S]*내 측정\(참고용\) — 라이브 실행/);
+  await expect(page.locator('[data-shell="content-header"]').getByTestId('run-last')).toBeVisible();
+  // 키보드 · 낭독기로도 상세에 닿는다 — 탭 초점 · 설명(aria-describedby → sr-only)이 툴팁과 같은 말(§7.1 R12)
+  await last.focus();
+  await expect(last).toBeFocused();
+  await expect(last).toHaveAccessibleDescription(/완료 — 걸린 시간 .* · 내 측정\(참고용\) — 라이브 실행/);
+  await expectNoScroll(page);
+  await shot(page, info, 'perf-last-in-header');
 });
 
 // 10만 행 실행은 0.6초 안팎이라 1초 폴링으로는 중간 상태가 남지 않는다 — 진행 관찰은 3초 안팎인 100만 행으로 본다
@@ -150,12 +175,18 @@ test('100만 행 — 진행 띠의 경과가 1초 틱으로 늘고 단계 n이 �
   const nSeen: number[] = [];
   for (;;) {
     // 칩은 진행 중에만 있다 — 종결 뒤에는 숨고 띠가 결과를 말한다
-    const s = (await r.status.count()) > 0 ? await r.status.textContent() : null;
+    // 칩 · 단계 칸은 읽는 사이에 실행이 끝나 사라질 수 있다 — 짧게 읽고(500ms) 없으면 null(15초 기다리지 않는다)
+    const s =
+      (await r.status.count()) > 0 ? await r.status.textContent({ timeout: 500 }).catch(() => null) : null;
     if (s !== '실행 중' && s !== '멈추는 중') break;
-    const st = (await r.stage.textContent().catch(() => '')) ?? '';
+    const st = (await r.stage.textContent({ timeout: 500 }).catch(() => '')) ?? '';
     const n = /단계 (\d+)\//.exec(st)?.[1];
     if (n) nSeen.push(Number(n));
-    if (await r.elapsed.isVisible()) elapsedSeen.push((await r.elapsed.textContent()) ?? '');
+    // 보인 직후 실행이 끝나 경과 칸이 사라질 수 있다 — 짧게 읽고 없으면 이번 회차는 건너뛴다(15초 기다리지 않는다)
+    const el = (await r.elapsed.isVisible())
+      ? await r.elapsed.textContent({ timeout: 500 }).catch(() => null)
+      : null;
+    if (el !== null) elapsedSeen.push(el);
     await page.waitForTimeout(200);
   }
   await expect(r.status).toHaveCount(0);
@@ -169,4 +200,9 @@ test('100만 행 — 진행 띠의 경과가 1초 틱으로 늘고 단계 n이 �
     expect(nSeen[i] as number).toBeGreaterThanOrEqual(nSeen[i - 1] as number);
   await expect(r.band).toHaveText(/^완료 — /);
   await shot(page, info, 'perf-1e6-completed');
+
+  // 종결 뒤 30초가 지나면 띠가 사라지고(애니메이션 없음) 셸 머리 "지난번 100만 행까지 · …" 글자로 접힌다
+  await expect(r.strip).toHaveCount(0, { timeout: 35_000 });
+  await expect(page.getByTestId('run-last')).toHaveText(/^지난번 100만 행까지 · /);
+  await expectNoScroll(page);
 });

@@ -7,10 +7,12 @@ import { useCallback, useEffect, useReducer, useRef, useState } from 'react';
 import {
   currentRunQueryOptions,
   isActive,
+  justEndedRunId,
   monoNow,
   PANEL_IDLE,
   panelReducer,
   panelRun,
+  RECENT_END_MS,
   RUN_POLL_MS,
   type RunSnapshot,
   requestStart,
@@ -39,11 +41,20 @@ export function useRunPanel(type: RunType) {
   const [local, dispatch] = useReducer(panelReducer, PANEL_IDLE);
 
   // 진행 중이던 실행이 current null로 바뀌었다 — api 재기동(실패가 아니라 기록 없음)
+  // 이 화면에서 지켜보던 실행이 종결로 바뀌었다 — 30초 동안 띠에 결말을 남기고 그 뒤 셸 머리 "지난번" 글자로 접는다(web-ux-polish §2.1)
   const prev = useRef<RunSnapshot | undefined>(q.data);
+  const [recentEndId, setRecentEndId] = useState<string | null>(null);
   useEffect(() => {
     if (vanished(prev.current, q.data)) dispatch({ kind: 'vanished' });
+    const ended = justEndedRunId(prev.current, q.data, type);
+    if (ended) setRecentEndId(ended);
     prev.current = q.data;
-  }, [q.data]);
+  }, [q.data, type]);
+  useEffect(() => {
+    if (recentEndId === null) return;
+    const t = setTimeout(() => setRecentEndId(null), RECENT_END_MS);
+    return () => clearTimeout(t);
+  }, [recentEndId]);
 
   const put = useCallback(
     (run: RunObjectBody) => qc.setQueryData<RunSnapshot>(runKeys.current, { run, receivedAt: monoNow() }),
@@ -86,7 +97,7 @@ export function useRunPanel(type: RunType) {
   const tick = useMonoTick(tickOn(run, type, pollFailed));
   const now = panelNow(snapshot, failedAt.current, tick);
 
-  return { snapshot, pollFailed, local, start, stop, now };
+  return { snapshot, pollFailed, local, start, stop, now, recentEndId };
 }
 
 /** 1초 틱을 거는가 — 이 화면 종류의 running · stopping 실행 · 폴링 실패가 아닐 때만 */

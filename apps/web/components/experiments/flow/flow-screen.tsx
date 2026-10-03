@@ -1,8 +1,14 @@
 'use client';
 // EXP-FLOW — 분산 처리 모니터링(/monitoring) · 설계 .omc/plans/web-junior-redesign.md §3(화면 B) · §5 픽셀 예산 · 정본 docs/08_screen/08_evidence_screens.md §EXP-FLOW
-// 한 화면 한 장(1440 × 900 스크롤 0 · 서랍 0): 제목 · 설명 52 → 숫자 4(60) → 흐름도(남는 높이 — 진행 띠가 생기면 흐름도가 줄어 흡수) → 왜 나눌까 카드 3 · 모아서 vs 하나씩(124) → 회색 각주(24).
-// 높이 셈(본문 804 = 900 − 셸 머리 56 − 안쪽 여백 40 · 칸 사이 8): 띠 있음 804 − 52 − 32 − 60 − 124 − 24 − 8 × 5 = 472 · 띠 없음 512 —
-//   흐름도 세 줄(viewBox 1132 × 474)이 테두리 · 안쪽 여백 18을 뺀 454 ~ 494 높이에 0.96 ~ 1배로 든다(§9.2 조회 줄 · 숫자 4 84 → 60 · 아래 줄 170 → 124로 흡수).
+// 한 화면 한 장(1440 × 900 스크롤 0 · 서랍 0): 제목 · 설명 52 → 숫자 4(64) → 흐름도(남는 높이 — 진행 띠가 생기면 흐름도가 줄어 흡수) → 왜 나눌까 · 모아서 vs 하나씩(124) → 회색 각주(24).
+// 높이 셈(본문 804 = 900 − 셸 머리 56 − 안쪽 여백 40 · 칸 사이 8): 띠 있음 804 − 52 − 34 − 64 − 124 − 24 − 8 × 5 = 466 · 띠 없음 508 —
+//   흐름도(viewBox 1126 × 440)가 테두리 2 · 안쪽 여백(가로 24 · 세로 12)을 뺀 1126 × 452 ~ 494에 든다 — 가로가 먼저 차서 띠가 있어도 없어도 1.0배(viewBox 단위 = CSS px · 노드 글자 12 ~ 14가 화면 크기 그대로).
+//   흐름도 최소 높이 454(= viewBox 440 + 테두리 · 세로 여백 14) — 세로에 묶여 1.0배 아래로 줄지 않는다(글자 바닥 12px). 그래서 화면 최소 높이 750
+//   (52 + 64 + 454 + 124 + 24 + 칸 사이 8 × 4). 1440 × 900은 흐름도가 466 ~ 508이라 이 바닥에 닿지 않는다(스크롤 0 그대로).
+//   1280 × 800은 내비가 레일(56)로 시작해 가로 1158 — 세로 704에 흐름도가 408이면 0.895배라, 바닥 454로 본문이 46 스크롤하고 1.0배를 지킨다
+//   (스크롤 허용 · .omc/plans/web-ux-polish.md §7.1 R4 · 진행 띠가 있으면 42 더 넘친다 — 1280에서 실행 중일 때만).
+//   1920 × 1080은 셸 본문 최대 폭 1408 안에서 가로 1382에 1.23배(세로가 남아 가로에 묶인다).
+//   다듬기 정본 .omc/plans/web-ux-polish.md §2.3 — 숫자 4 큰 숫자 28 · 흐름도 글자 · 조회 줄 선 정리 · 왜 나눌까 한 구역 세 칸 · 막대 10.
 // 진입이 곧 subscribe_flow이고 이탈이 unsubscribe_flow다 — 셸의 WebSocket 연결 하나를 그대로 쓴다(재연결 재구독은 lib/realtime-socket.ts).
 // 관찰 보조 — 기록 정본 아님. flow 프레임은 캐시 층이 없다(Pub/Sub · 링 버퍼 20). 저장소 값은 BFF 흐름 보기 5초 폴링.
 // 직접 보내 보기(GEN-12)는 셸 머리 동작 자리(RunControl) · 머리 아래 진행 띠(RunProgress) — 결과는 흐름도가 바로 보여 준다.
@@ -172,7 +178,7 @@ export function FlowScreen() {
       {/* 한 화면 높이 — 본문(100dvh − 셸 머리) − 본문 안쪽 여백 40 */}
       <div
         data-testid="flow-screen"
-        className="flex h-[calc(100dvh-var(--header-height)-40px)] min-h-[600px] flex-col gap-2"
+        className="flex h-[calc(100dvh-var(--header-height)-40px)] min-h-[750px] flex-col gap-2"
       >
         <HeaderStatus>
           <span data-testid="flow-sub" className="text-slate-600">
@@ -189,7 +195,7 @@ export function FlowScreen() {
 
         {/* 제목 · 설명 52 */}
         <header className="h-[52px] shrink-0">
-          <h2 className="truncate text-lg leading-7 font-semibold text-slate-900">{FLOW_TITLE}</h2>
+          <h2 className="truncate text-xl leading-7 font-bold text-slate-900">{FLOW_TITLE}</h2>
           <p className="truncate text-sm leading-6 text-slate-600">{FLOW_LEAD}</p>
         </header>
 
@@ -208,10 +214,11 @@ export function FlowScreen() {
           dim={dim}
         />
 
-        {/* 흐름도 — 남는 높이(1440 × 900 · 띠 있음 472 · 없음 512) */}
+        {/* 흐름도 — 남는 높이(1440 × 900 · 띠 있음 466 · 없음 508) · 최소 454 — 세로에 묶여 1.0배 아래로 줄지 않는다
+            (1280 × 800은 본문이 스크롤 — 스크롤 허용 · 1440 × 900은 늘 454 이상이라 스크롤 0) */}
         <section
           aria-label="흐름도"
-          className="relative min-h-0 flex-1 rounded-lg border border-slate-200 bg-white px-3 py-2"
+          className="relative min-h-[454px] flex-1 rounded-lg border border-slate-200 bg-white px-3 py-1.5"
         >
           {notice ? (
             <p
@@ -249,7 +256,7 @@ export function FlowScreen() {
           />
         </section>
 
-        {/* 아래 줄 124 — 왜 나눌까 카드 3 · 모아서 vs 하나씩 */}
+        {/* 아래 줄 124 — 왜 나눌까(한 구역 세 칸) · 모아서 vs 하나씩 */}
         <div className="grid h-[124px] shrink-0 grid-cols-[2fr_1fr] gap-3">
           <WhyCards cards={whyCards(shown, flags)} dim={dim} />
           <BatchVsOne

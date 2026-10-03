@@ -1,10 +1,11 @@
 'use client';
 // 머리 아래 얇은 진행 띠 한 줄 — 정본 docs/08_screen/08_evidence_screens.md §실행 패널 — 두 화면 공통 규칙 §배치 진행 띠 행
 // 진행 중: ● 상태 · 지금 단계 쉬운 문장 · 단계 n/m · 진행 막대(EXP-FLOW) · 경과 · 오른쪽 [■ 중단]
-// 종결 뒤: "지난번 직접 재 보기" · 완료 띠(완료 — 걸린 시간 · 중단됨 · 실패 — 오류 전문은 띠 툴팁) · 무엇을 쟀나(10만 행까지) · 라이브 표지 — 다음 시작 전까지 남는다.
+// 방금 끝남(이 화면에서 지켜보던 실행 · 종결 뒤 30초): "지난번 직접 재 보기" · 완료 띠(완료 — 걸린 시간 · 중단됨 · 실패 — 오류 전문은 띠 툴팁) · 무엇을 쟀나(10만 행까지) · 라이브 표지.
+// 30초가 지나면(또는 이미 끝난 실행을 열면) 띠는 사라지고 셸 머리 버튼 옆 "지난번 …" 작은 글자가 같은 말을 한다(.omc/plans/web-ux-polish.md §2.1 · run-control.tsx).
 // 완료 띠가 진행 띠 자리를 대신하므로 종결 뒤에는 중단 버튼을 그리지 않는다(리드 확인 2026-10-03). 띠 툴팁에 시작 · 종료 시각과 단계 key. 서랍 · 단계 목록은 없다.
 // 다른 종류가 진행 중이면 "다른 측정이 이미 돌고 있어요 — … 화면에서 보기" 한 줄(409 띠가 같은 말이면 생략) · 요청 사건(409 · 404 · 요청 실패) · 폴링 실패 문구도 이 띠에 둔다.
-// 실행이 없고 종결 실행도 없고 띠 문구도 없으면 띠 자체가 없다(화면 높이를 쓰지 않는다).
+// 그릴 실행 줄도 띠 문구도 없으면 띠 자체가 없다(화면 높이를 쓰지 않는다).
 import Link from 'next/link';
 import {
   flowProgress,
@@ -25,9 +26,11 @@ import {
   runTip,
   STATUS_LABEL,
   stepPlainText,
+  stripShowsRun,
 } from '../../lib/runs';
 import type { RunType } from '../../lib/shared';
 import { cn } from '../../lib/utils';
+import { UiIcon } from '../ui/icon';
 import { useRunContext } from './run-context';
 import { stageProgress } from './run-spec';
 
@@ -39,7 +42,7 @@ const BAND: Record<string, string> = {
 };
 
 export function RunProgress({ className, canControl = true }: { className?: string; canControl?: boolean }) {
-  const { type, snapshot, pollFailed, local, now, stop } = useRunContext();
+  const { type, snapshot, pollFailed, local, now, stop, recentEndId } = useRunContext();
   return (
     <RunProgressView
       type={type}
@@ -47,6 +50,7 @@ export function RunProgress({ className, canControl = true }: { className?: stri
       pollFailed={pollFailed}
       local={local}
       now={now}
+      recentEndId={recentEndId}
       canControl={canControl}
       onStop={() => void stop()}
       className={className}
@@ -60,6 +64,8 @@ export interface RunProgressViewProps {
   pollFailed: boolean;
   local: PanelLocal;
   now: number;
+  /** 이 화면에서 방금 끝난 실행(종결 뒤 30초 · useRunPanel) — 그 실행만 종결 띠를 그린다 · 없으면 종결 실행은 셸 머리 글자로 */
+  recentEndId?: string | null;
   canControl?: boolean;
   onStop: () => void;
   className?: string;
@@ -68,7 +74,8 @@ export interface RunProgressViewProps {
 /** 그리기만 — 상태는 모두 props */
 export function RunProgressView(p: RunProgressViewProps) {
   const { type, snapshot, local } = p;
-  const run = panelRun(snapshot, type);
+  const mine = panelRun(snapshot, type);
+  const run = stripShowsRun(mine, p.recentEndId ?? null) ? mine : null;
   const other =
     snapshot?.run && snapshot.run.type !== type && isActive(snapshot.run.status) ? snapshot.run : null;
   // 첫 조회 실패(snapshot 없음)도 띠 문구로 — 조작부가 왜 비활성인지 보인다(§갱신과 응답 처리 폴링 실패 행)
@@ -87,7 +94,7 @@ export function RunProgressView(p: RunProgressViewProps) {
     <div
       data-testid="run-progress-strip"
       className={cn(
-        'flex flex-col gap-1 rounded-lg border border-slate-200 bg-white px-3 py-1 text-xs',
+        'flex flex-col gap-1 rounded-lg border border-line bg-surface px-3 py-1 text-xs',
         p.pollFailed && 'opacity-70',
         p.className,
       )}
@@ -144,7 +151,10 @@ function RunLine({
     >
       {active ? (
         <span className="flex items-center gap-1.5 font-medium text-slate-800">
-          <span aria-hidden="true" className="inline-block h-2 w-2 animate-pulse rounded-full bg-sky-500" />
+          <span
+            aria-hidden="true"
+            className="inline-block h-2 w-2 rounded-full bg-sky-500 motion-safe:animate-pulse"
+          />
           {STATUS_LABEL[run.status]}
         </span>
       ) : (
@@ -192,14 +202,15 @@ function RunLine({
           {LIVE_LABEL}
         </span>
       ) : null}
+      {/* 포커스 링은 안쪽으로(-2px) — 이 줄은 한 줄 높이(h-6)를 지키려 overflow-hidden이라 바깥 링(전역 offset 2px)이 잘린다(R6) */}
       {active ? (
         <button
           type="button"
           onClick={onStop}
           disabled={!stopCtl.enabled}
-          className="ml-auto rounded border border-red-300 bg-white px-2.5 py-0.5 text-red-700 hover:bg-red-50 disabled:opacity-50"
+          className="ml-auto inline-flex items-center gap-1 rounded border border-red-300 bg-white px-2.5 py-0.5 text-red-700 hover:bg-red-50 focus-visible:-outline-offset-2 disabled:opacity-50"
         >
-          <span aria-hidden="true">■ </span>
+          <UiIcon name="stop" className="size-3" />
           {stopCtl.label}
         </button>
       ) : null}

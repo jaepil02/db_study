@@ -1,5 +1,9 @@
 // EXP-FLOW 화면 상태 변환 — 정본 docs/08_screen/08_evidence_screens.md §EXP-FLOW 표시 계약 · docs/07_api/11_websocket.md §흐름 이벤트
+import { createElement } from 'react';
+import { renderToStaticMarkup } from 'react-dom/server';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { textWidth } from '../components/experiments/flow/diagram-layout';
+import { HeadlineRow } from '../components/experiments/flow/flow-panels';
 import {
   bizSrcLines,
   compareBars,
@@ -7,6 +11,7 @@ import {
   headlines,
   koBytes,
   koCount,
+  latencyValue,
   latestLines,
   markText,
   NO_BIZ_TEXT,
@@ -24,6 +29,7 @@ import {
   sourceLines,
   sourceTip,
   storeLines,
+  waitLine,
   whyCards,
   workerLines,
 } from '../components/experiments/flow/node-lines';
@@ -37,6 +43,7 @@ import {
   bizOutcome,
   bizPlan,
   bizStageAverages,
+  durationText,
   emptyFlowState,
   FLOW_RING,
   flowMetricRates,
@@ -51,6 +58,7 @@ import {
   plcRawLag,
   readRates,
   readShare,
+  restNode,
   sourcePps,
   summarizeFlow,
   trackRate,
@@ -63,6 +71,9 @@ import type {
   FlowTotalsEntryBody,
 } from '../lib/shared';
 import { FlowFrame } from '../lib/shared';
+
+/** 노드 줄 글자만(줄 종류는 test/flow-layout.test.ts가 본다) */
+const tx = (lines: readonly { text: string }[]): string[] => lines.map((l) => l.text);
 
 function batch(seq: number, over: Partial<FlowBatchSummaryBody> = {}): FlowBatchSummaryBody {
   return {
@@ -263,7 +274,7 @@ describe('totals — 간선 굵기 · 초당 값 · 재기동', () => {
   });
 
   it('공장 센서 노드는 흐름 요약(rows)과 같은 원천 — 메트릭 보낸 쪽 계수는 툴팁에만', () => {
-    expect(sourceLines(10_004)).toEqual(['공장 센서', '초당 10,004개 보냄']);
+    expect(tx(sourceLines(10_004))).toEqual(['공장 센서', '초당 10,004개 보냄']);
     const tip = sourceTip(10_004, { genPpsByMode: { run: 10_000 } } as never);
     expect(tip).toContain('최근 10초 흐름 요약 기준');
     expect(tip).toContain('보낸 쪽 계수(메트릭 5초 차분) 초당 10,004개');
@@ -411,7 +422,7 @@ describe('totals — 간선 굵기 · 초당 값 · 재기동', () => {
           (h) => h.key === 'biz',
         ),
       ).toMatchObject({ value: '0', text: '업무 요청이 없어요' });
-      expect(bizSrcLines(on)[1]).toBe('초당 0건');
+      expect(bizSrcLines(on)[2]?.text).toBe('초당 0건');
       expect(whyCards(on, { collectorLatest: false })[2]?.now).toContain('업무 0건');
       // 구독 확인 전 · 끊김(subscribed 아님) — 모른다
       expect(flowRates(s.totals, 12_000).commands).toBeNull();
@@ -561,6 +572,27 @@ describe('점 계획 — 단계 순서 · 배율', () => {
     // cmdId가 있어도 role biz-writer면 명령 경로
     const w = bizPlan(biz(2, { role: 'biz-writer' }));
     expect(w.legs[0]?.to).toBe('bizStream');
+  });
+
+  it('움직임 줄이기 — 점은 가장 오래 머무는 다리의 도착 노드에 멈춘다(대기줄 밀림이면 ① · 평소 ClickHouse · 업무는 트랜잭션)', () => {
+    expect(restNode(batchPlan(batch(1)))).toBe('ch');
+    expect(restNode(batchPlan(batch(1, { stages: { ...batch(1).stages, streamWaitMs: 2_788_236 } })))).toBe(
+      'stream',
+    );
+    expect(restNode(bizPlan(biz(1)))).toBe('pgTx');
+    const empty = batchPlan(
+      batch(1, {
+        stages: {
+          streamWaitMs: null,
+          decodeMs: null,
+          chInsertMs: null,
+          controlCopyMs: null,
+          latestWriteMs: null,
+          alarmMs: null,
+        },
+      }),
+    );
+    expect(restNode(empty)).toBe('src');
   });
 });
 
@@ -729,13 +761,20 @@ describe('메트릭 흐름 보기', () => {
     expect(rr.pgMiss).toBeCloseTo(1);
     expect(rr.bypass).toBe(0);
     expect(rr.latestPoints).toBeCloseTo(1_600);
-    expect(readSrcLines(rr)).toEqual(['사람의 조회 요청(api)', '초당 20.0건', 'Redis부터 먼저 봐요']);
-    expect(readCacheLines(rr)).toEqual(['⑤ 조회 사본(캐시)', '있으면 바로 응답 85%', '없으면 DB까지 15%']);
-    expect(readMissLabel(rr)).toBe(
-      '없으면 읽어 와 사본 담기 — ClickHouse(센서) 10% · PostgreSQL(업무 목록) 5%',
-    );
+    // 노드 줄은 제목 → 역할 → 숫자 순서(diagram-layout lineKind)
+    expect(tx(readSrcLines(rr))).toEqual(['사람의 조회 요청(api)', 'Redis부터 먼저 봐요', '초당 20.0건']);
+    expect(tx(readCacheLines(rr))).toEqual([
+      '⑤ 조회 사본(캐시)',
+      '있으면 바로 응답 85%',
+      '없으면 DB까지 15%',
+    ]);
+    // 줄기 아래 두 줄 — 무엇을 하나 · 어느 DB로 몇 %
+    expect(readMissLabel(rr)).toEqual([
+      '없으면 읽어 와 사본 담기',
+      'ClickHouse(센서) 10% · PostgreSQL(업무 목록) 5%',
+    ]);
     // 점 수는 노드에 쓰지 않고 툴팁에만(요청 수와 헷갈리지 않게)
-    expect(readSrcLines(rr).join(' ')).not.toContain('1,600');
+    expect(tx(readSrcLines(rr)).join(' ')).not.toContain('1,600');
     expect(readSrcTip(rr)).toContain('점 초당 1,600개(요청 수가 아니에요)');
     // 지금 값 restored · bypass는 ClickHouse 쪽 · bypass는 툴팁에 "Redis를 건너뜀(스위치)"
     const sw: R3 = { s: [0, 0, 0], l: [50, 25, 25, 0], m: [0, 0, 0] };
@@ -748,14 +787,14 @@ describe('메트릭 흐름 보기', () => {
     // 첫 폴링(앞 응답 없음) · 원천 없음 — 만들지 않는다
     const first = readRates(flowMetricRates(null, b));
     expect(first.requests).toBeNull();
-    expect(readCacheLines(first)[1]).toBe('있으면 바로 응답 —%');
-    expect(readSrcLines(null)[1]).toBe('초당 —건');
-    expect(readMissLabel(null)).toContain('—%');
+    expect(readCacheLines(first)[1]?.text).toBe('있으면 바로 응답 —%');
+    expect(readSrcLines(null)[2]?.text).toBe('초당 —건');
+    expect(readMissLabel(null)[1]).toContain('—%');
     // 조회가 없으면 보내 보라는 한 줄 · 비율은 모름
     const idle = readRates(flowMetricRates(b, { ...b, fetchedAt: 35_000 }));
     expect(idle.requests).toBe(0);
     expect(readShare(idle.hit, idle)).toBeNull();
-    expect(readMissLabel(idle)).toBe(NO_READ_TEXT);
+    expect(readMissLabel(idle)).toEqual([NO_READ_TEXT]);
     expect(NO_READ_TEXT).toBe('조회 요청이 없어요 — 직접 보내 보기로 보내 보세요');
     // 옛 BFF 응답(reads 없음)도 받는다
     const old = { fetchedAt: 0, flow: { ...a.flow, reads: undefined } } as never;
@@ -952,6 +991,10 @@ describe('화면 문구 — 쉬운 말 · 숫자는 크게 읽히게(설계 §4 
     expect(h[0]?.value).toBe('9,681');
     expect(h[1]?.text).toBe('잘 처리하고 있어요');
     expect(h[2]?.value).toBe('0.8');
+    // 짧은 고정 문장(.omc/plans/web-ux-polish.md §2.3 — 큰 숫자 28 옆에서 잘리지 않게) · 뜻은 이름 · 단위와 함께 그대로
+    expect([h[0]?.text, h[2]?.text]).toEqual(['초당 들어오는 양', '보통 걸리는 시간']);
+    // 1440 × 900 카드 안 폭 245 − 큰 숫자 · 단위(약 120)에 한 줄로 드는 폭(13px 보수적 어림) — 넘으면 두 줄까지(잘림 없음)
+    for (const x of h) expect(textWidth(x.text, 13), x.text).toBeLessThanOrEqual(130);
     const slow = headlines({
       rates: null,
       lag: 12_000,
@@ -965,11 +1008,14 @@ describe('화면 문구 — 쉬운 말 · 숫자는 크게 읽히게(설계 §4 
     for (const x of [...h, ...slow]) expect(`${x.label} ${x.text}`).not.toMatch(FORBIDDEN);
   });
 
-  it('숫자 4 — 명세 08 §숫자 4 표: 밀림 N개 · 업무 N건 덧붙임(더하지 않음) · e2e 행 0이면 "—" · 업무 0 · 거절 · 실패 · 시간 초과는 툴팁', () => {
+  it('숫자 4 — 명세 08 §숫자 4 표: 밀림은 숫자 없는 고정 문장(큰 숫자를 두 번 말하지 않음 · R15) · 업무 N건 덧붙임(더하지 않음) · e2e 행 0이면 "—" · 업무 0 · 거절 · 실패 · 시간 초과는 툴팁', () => {
     const back = headlines({ rates, lag: 340, bizLag: 0, slowing: false, e2eP50: 0.84, e2eRows: 1_200 });
-    expect(back[1]).toMatchObject({ value: '340', text: '340개 밀려 있어요', warn: false });
+    expect(back[1]).toMatchObject({ value: '340', text: '아직 처리 안 된 양', warn: false });
+    const big = headlines({ rates, lag: 150_000, bizLag: 0, slowing: false, e2eP50: 0.84, e2eRows: 1_200 });
+    expect(big[1]).toMatchObject({ value: '15만', text: '아직 처리 안 된 양' });
+    expect(big[1]?.text).not.toMatch(/\d/);
     const both = headlines({ rates, lag: 340, bizLag: 12, slowing: false, e2eP50: 0.84, e2eRows: 1_200 });
-    expect(both[1]).toMatchObject({ value: '340', text: '340개 밀려 있어요 · 업무 12건' });
+    expect(both[1]).toMatchObject({ value: '340', text: '아직 처리 안 된 양 · 업무 12건' });
     const zeroBiz = headlines({ rates, lag: 0, bizLag: 3, slowing: false, e2eP50: 0.84, e2eRows: 1_200 });
     expect(zeroBiz[1]?.text).toBe('잘 처리하고 있어요 · 업무 3건');
     const bp = headlines({ rates, lag: 340, bizLag: 12, slowing: true, e2eP50: 0.84, e2eRows: 1_200 });
@@ -997,62 +1043,144 @@ describe('화면 문구 — 쉬운 말 · 숫자는 크게 읽히게(설계 §4 
     });
     expect(bad[3]).toMatchObject({
       value: '2.0',
-      text: '사람이 보낸 요청을 하나씩 처리해요',
+      text: '하나씩 순서대로 처리',
       tip: '거절 초당 0.5건 · 시간 초과 초당 0.1건',
     });
   });
 
+  it('숫자 4 — 측정 → 저장까지가 60초 이상이면 "46분 28초" 한 덩어리(단위 칸 없음 · durationText) · 60초 미만은 "0.6" + "초" 그대로(§9 P3)', () => {
+    const at = (sec: number) =>
+      headlines({ rates, lag: 0, bizLag: 0, slowing: false, e2eP50: sec, e2eRows: 1_200 })[2];
+    // 60초 미만 — 지금 그대로(10초 미만 소수 1자리 · 그 위 정수 + 단위 칸 "초")
+    expect(at(0.6)).toMatchObject({ value: '0.6', unit: '초', text: '보통 걸리는 시간' });
+    expect(at(9.96)).toMatchObject({ value: '10', unit: '초' });
+    expect(at(59.4)).toMatchObject({ value: '59', unit: '초' });
+    // 보이는 정수 초가 60이 되는 자리부터 분 · 초 — "60 초"를 내지 않는다
+    expect(at(59.5)).toMatchObject({ value: '1분 0초', unit: '' });
+    expect(at(60)).toMatchObject({ value: '1분 0초', unit: '' });
+    expect(at(2_788.236)).toMatchObject({
+      value: '46분 28초',
+      unit: '',
+      text: '보통 걸리는 시간',
+      tip: '측정 시각에서 저장 시각까지의 중간값이에요',
+    });
+    expect(at(3_700)).toMatchObject({ value: '1시간 2분', unit: '' });
+    // 형식은 durationText 그대로(재사용 — 같은 시간은 화면 어디서나 같은 글자)
+    for (const sec of [59.5, 125.4, 2_788.236, 10_920])
+      expect(latencyValue(sec).value).toBe(durationText(Math.round(sec) * 1000));
+    // 비면 지금 그대로 "—" + "초"
+    expect(headlines({ rates, lag: 0, bizLag: 0, slowing: false, e2eP50: 0, e2eRows: 0 })[2]).toMatchObject({
+      value: '—',
+      unit: '초',
+    });
+    // 화면 — 단위가 빈 칸은 단위 글자 상자를 그리지 않는다(큰 숫자 옆 빈 틈 없음) · 다른 셋은 단위 그대로
+    const html = renderToStaticMarkup(
+      createElement(HeadlineRow, {
+        items: headlines({ rates, lag: 0, bizLag: 0, slowing: false, e2eP50: 2_788.236, e2eRows: 1_200 }),
+        dim: false,
+      }),
+    );
+    const card = (key: string) => html.split(`data-key="${key}"`)[1]?.split('data-text')[0] ?? '';
+    expect(card('latency')).toContain('>46분 28초</span>');
+    expect(card('latency')).not.toContain('text-sm text-slate-500');
+    expect(card('sensor')).toContain('<span class="text-sm text-slate-500">개/초</span>');
+  });
+
   it('저장 노드 "지금까지" — 값이 없으면 "약" · "행" 없이 "—"', () => {
     const none = storeLines(rates, null);
-    expect(none.ch[2]).toBe('초당 9,681개 · 지금까지 —');
-    expect(none.pg[3]).toBe('지금까지 — · —');
+    expect(none.ch[2]?.text).toBe('초당 9,681개 · 지금까지 —');
+    expect(none.pg[3]?.text).toBe('지금까지 — · —');
   });
 
   it('노드 · 카드 문구에 코드 · 키 이름이 없다', () => {
     const lines = [
-      ...sourceLines(9_681),
-      ...workerLines(rates),
-      ...Object.values(storeLines(rates, null)).flat(),
+      ...tx(sourceLines(9_681)),
+      ...tx(workerLines(rates)),
+      ...Object.values(storeLines(rates, null)).flatMap(tx),
       ...whyCards(rates, noFlags).flatMap((c) => [c.why, c.now]),
-      ...latestLines(rates, noFlags),
-      ...replyLines(rates, false),
-      ...replyLines(rates, true),
+      ...tx(latestLines(rates, noFlags)),
+      ...tx(replyLines(rates, false)),
+      ...tx(replyLines(rates, true)),
       pillarFootText(null),
     ];
     for (const t of lines) expect(t).not.toMatch(FORBIDDEN);
-    expect(workerLines(rates)).toEqual(['모아서 한 번에 저장(배치)', '1초에 1.0번', '한 번에 약 9,681개']);
+    expect(tx(workerLines(rates))).toEqual([
+      '모아서 한 번에 저장(배치)',
+      '1초에 1.0번',
+      '한 번에 약 9,681개',
+    ]);
   });
 
   it('Redis 기둥 칸 — ② 지금 값은 latestWrites · ④ 결과 알림은 업무 요청과 같은 원천(commands) · 바닥은 메모리', () => {
     const r = { ...rates, commands: 2, latestWrites: 9_681 };
-    expect(latestLines(r, noFlags)).toEqual([
+    expect(tx(latestLines(r, noFlags))).toEqual([
       '② 지금 값 · 알람 상태',
       '태그마다 가장 최신 값 1개만',
       '초당 9,681개 고침',
     ]);
-    expect(latestLines(r, { collectorLatest: true })[2]).toBe('센서 수집기가 직접 고쳐요');
-    expect(replyLines(r, false)).toEqual([
+    expect(latestLines(r, { collectorLatest: true })[2]?.text).toBe('센서 수집기가 직접 고쳐요');
+    expect(tx(replyLines(r, false))).toEqual([
       '④ 옛 사본 지움 · 결과 알림',
       '다음 조회가 새 값을 보게',
       '결과 알림 초당 2.0건',
     ]);
-    expect(replyLines(r, false)[2]).toBe(`결과 알림 ${bizSrcLines(r)[1]}`);
-    expect(replyLines(null, false)[2]).toBe('결과 알림 초당 —건');
+    expect(replyLines(r, false)[2]?.text).toBe(`결과 알림 ${bizSrcLines(r)[2]?.text}`);
+    expect(replyLines(null, false)[2]?.text).toBe('결과 알림 초당 —건');
     expect(pillarFootText(null)).toBe('Redis 메모리 —');
     expect(whyCards(r, noFlags)[1]?.why).toBe(
       '줄을 세우고 지금 값을 들고 있어요 · 조회도 먼저 여기서 찾아봐요',
     );
   });
 
-  it('모아서 vs 하나씩 — 단계 합 · 긴 쪽이 1 · 업무가 없으면 ms null(안내 문구)', () => {
+  it('모아서 vs 하나씩 — 막대는 처리 시간(대기 단계 빼고 · 단계 합) · 긴 쪽이 1 · 대기는 따로 · 업무가 없으면 ms null(안내 문구)', () => {
     const timeline = [1, 2].map((i) => ({ kind: 'batch' as const, batch: batch(i) }));
     const bars = compareBars(batchStageAverages(timeline), bizStageAverages([biz(1)]), timeline);
-    expect(bars[0]).toMatchObject({ label: '센서 1묶음(약 1만개)', ms: 89, frac: 1 });
-    expect(bars[1]?.ms).toBeCloseTo(7.9);
-    expect(bars[1]?.frac).toBeCloseTo(7.9 / 89);
+    // 센서: 디코드 4 + CH 삽입 64 + 최신값 3 + 알람 6 = 77(스트림 대기 12 뺌) · 업무: 트랜잭션 4.2 + 무효화 1.1 + 결과 0.6 = 5.9(대기 2 뺌)
+    expect(bars[0]).toMatchObject({ label: '센서 1묶음(약 1만개)', ms: 77, wait: 12, samples: 2, frac: 1 });
+    expect(bars[1]?.ms).toBeCloseTo(5.9);
+    expect(bars[1]?.wait).toBe(2);
+    expect(bars[1]?.frac).toBeCloseTo(5.9 / 77);
+    expect(waitLine(bars)).toBe('대기줄에서 기다린 시간 — 센서 12ms · 업무 2.0ms');
     const none = compareBars(batchStageAverages(timeline), bizStageAverages([]), timeline);
-    expect(none[1]?.ms).toBeNull();
+    expect(none[1]).toMatchObject({ ms: null, wait: null, samples: 0 });
+    expect(waitLine(none)).toBe('대기줄에서 기다린 시간 — 센서 12ms');
+    expect(waitLine(compareBars(batchStageAverages([]), bizStageAverages([]), []))).toBeNull();
     expect(NO_BIZ_TEXT).toContain('오른쪽 위 버튼');
+  });
+
+  it('모아서 vs 하나씩 — 대기줄이 밀려도(ClickHouse가 멈춘 뒤 따라잡는 중) 막대는 처리 시간 · 대기는 사람이 읽는 단위 한 줄(리드 L1)', () => {
+    const slow = (seq: number) => batch(seq, { stages: { ...batch(seq).stages, streamWaitMs: 2_788_236 } });
+    const timeline = [1, 2].map((i) => ({ kind: 'batch' as const, batch: slow(i) }));
+    // 대기줄 없이 바로 저장(api-direct)은 대기 단계가 없다 — 업무 대기는 지어내지 않는다
+    const direct = biz(1, {
+      role: 'api-direct',
+      stages: { queueWaitMs: null, txMs: 4.2, invalidateMs: 1.1, replyMs: null },
+    });
+    const bars = compareBars(batchStageAverages(timeline), bizStageAverages([direct]), timeline);
+    expect(bars[0]).toMatchObject({ ms: 77, wait: 2_788_236 });
+    expect(bars[1]).toMatchObject({ wait: null, samples: 1 });
+    expect(bars[1]?.ms).toBeCloseTo(5.3);
+    expect(waitLine(bars)).toBe('대기줄에서 기다린 시간 — 센서 46분 28초');
+    expect(durationText(bars[0]?.ms)).toBe('77ms');
+  });
+
+  it('사람이 읽는 시간 — 1초 미만 ms · 1분 미만 초(소수 1자리) · 1시간 미만 분 초 · 그 위 시간 분 · 반올림 뒤 단위를 다시 고른다', () => {
+    expect(durationText(null)).toBe('—');
+    expect(durationText(undefined)).toBe('—');
+    expect(durationText(-1)).toBe('—');
+    expect(durationText(0)).toBe('0.0ms');
+    expect(durationText(7.94)).toBe('7.9ms');
+    expect(durationText(9.96)).toBe('10ms');
+    expect(durationText(120.4)).toBe('120ms');
+    expect(durationText(999.4)).toBe('999ms');
+    expect(durationText(999.6)).toBe('1.0초');
+    expect(durationText(1_234)).toBe('1.2초');
+    expect(durationText(59_940)).toBe('59.9초');
+    expect(durationText(59_950)).toBe('1분 0초');
+    expect(durationText(2_788_236)).toBe('46분 28초');
+    expect(durationText(3_599_400)).toBe('59분 59초');
+    expect(durationText(3_599_600)).toBe('1시간 0분');
+    expect(durationText(10_920_000)).toBe('3시간 2분');
   });
 
   it('꺼진 길은 각주에 쉬운 이름으로 · 업무 결과 표지는 쉬운 말', () => {
@@ -1061,7 +1189,10 @@ describe('화면 문구 — 쉬운 말 · 숫자는 크게 읽히게(설계 §4 
     expect(footnoteText([])).not.toContain('꺼진 길');
     expect(footnoteText([])).toContain('조회는 점 없이 숫자로만');
     expect(footnoteText(['PostgreSQL 비교용 사본'])).not.toMatch(FORBIDDEN);
-    expect(markText({ symbol: '✕' })).toBe('✕ 거절됨');
-    expect(markText({ symbol: '⌛' })).toBe('⌛ 시간 초과');
+    // 표지는 그린 기호 + 쉬운 말 — 유니코드 기호는 글자로 쓰지 않는다(그리기 검사 test/flow-layout.test.ts)
+    expect(markText({ symbol: '✕' })).toBe('거절됨');
+    expect(markText({ symbol: '⌛' })).toBe('시간 초과');
+    expect(markText({ symbol: '↺' })).toBe('이미 처리됨');
+    expect(markText({ symbol: '⚠' })).toBe('저장 못 함');
   });
 });

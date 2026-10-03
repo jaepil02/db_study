@@ -12,6 +12,7 @@ import {
   readEvidence,
   SITUATIONS,
   situationLines,
+  situationWinner,
   structuralVerdict,
   type TaskSummary,
   taskSummary,
@@ -306,8 +307,20 @@ describe('상황 카드 — 쉬운 문장(situationLines) · 왜? 상수(SITUATI
         side('부분 반영 20건', false, [20, 20], 'count', 20),
       ),
     );
-    expect(a.postgresql).toEqual({ ok: true, text: '전부 되돌림 — 깨진 데이터 0건' });
-    expect(a.clickhouse).toEqual({ ok: false, text: '반만 저장 — 20번 중 20번 깨짐' });
+    // 화면은 앞 조각(lead · 작게)과 답 조각(key · 16px 굵게)으로 나눠 그린다 — 문장(text)은 두 조각을 " — "로 이은 것
+    expect(a.postgresql).toEqual({
+      ok: true,
+      text: '전부 되돌림 — 깨진 데이터 0건',
+      lead: '전부 되돌림',
+      key: '깨진 데이터 0건',
+    });
+    expect(a.clickhouse).toEqual({
+      ok: false,
+      text: '반만 저장 — 20번 중 20번 깨짐',
+      lead: '반만 저장',
+      key: '20번 중 20번 깨짐',
+    });
+    expect(situationWinner(a)).toBe('postgresql');
     // 대상 수를 모르면 분모 없이 · 3회가 엇갈리면 N~M번
     const b = situationLines(
       sum('atomic', side('', true, [0, 0], 'count'), side('', false, [18, 20], 'count')),
@@ -322,6 +335,10 @@ describe('상황 카드 — 쉬운 문장(situationLines) · 왜? 상수(SITUATI
     );
     expect(c.postgresql.text).toBe('막아 냄 — 받아도 되는 2건만 받음');
     expect(c.clickhouse.text).toBe('규칙을 어긴 데이터 15건까지 받음');
+    // 앞 조각이 없으면 답 조각이 곧 문장
+    expect(c.clickhouse).toMatchObject({ key: '규칙을 어긴 데이터 15건까지 받음' });
+    expect(c.clickhouse.lead).toBeUndefined();
+    expect(situationWinner(c)).toBe('postgresql');
     // 어긴 몫을 셀 수 없으면 받은 건수를 그대로 말하고 그 사실을 밝힌다
     const c2 = situationLines(
       sum('constraint', side('', true, [2, 2], 'count'), side('', false, [11, 17], 'count')),
@@ -333,9 +350,21 @@ describe('상황 카드 — 쉬운 문장(situationLines) · 왜? 상수(SITUATI
     const p = situationLines(
       sum('point', side('', null, [0.1, 0.1], 'ms'), side('', null, [4.16, 4.27], 'ms')),
     );
-    expect(p.postgresql).toEqual({ ok: null, text: '보통 0.1밀리초' });
+    // 막대 원천(ms)은 판독기 값 그대로 · 숫자 조각(value)과 결론 조각(slower)을 " — "로 이은 것이 문장
+    expect(p.postgresql).toEqual({
+      ok: null,
+      text: '보통 0.1밀리초',
+      ms: [0.1, 0.1],
+      value: '보통 0.1밀리초',
+    });
     // "N배 이상"은 하한 — 41.6을 반올림(42)하지 않고 내린다(41)
     expect(p.clickhouse.text).toBe('보통 4.2~4.3밀리초 — 41배 이상 느림');
+    expect(p.clickhouse).toMatchObject({
+      ms: [4.16, 4.27],
+      value: '보통 4.2~4.3밀리초',
+      slower: '41배 이상 느림',
+    });
+    expect(situationWinner(p)).toBe('postgresql');
     const low = situationLines(
       sum('insert', side('', null, [0.55, 1.011], 'ms'), side('', null, [2.777, 708.868], 'ms')),
     );
@@ -348,6 +377,9 @@ describe('상황 카드 — 쉬운 문장(situationLines) · 왜? 상수(SITUATI
     expect(same.clickhouse.text).toBe('보통 8밀리초 — 4.0배 느림');
     const none = situationLines(sum('insert', side('', null, [2, 2], 'ms'), side('', null, [1, 1], 'ms')));
     expect(none.clickhouse.text).toBe('보통 1밀리초');
+    // 문장이 "느림"을 말하지 않으면 이긴 쪽 표지도 없다(새 판정을 만들지 않는다)
+    expect(none.clickhouse.slower).toBeUndefined();
+    expect(situationWinner(none)).toBeNull();
   });
 
   it('원천이 없으면 "잰 값 없음" · 3회 미만이면 "판정할 만큼 재지 않았어요"(수치를 지어내지 않는다)', () => {
@@ -356,6 +388,7 @@ describe('상황 카드 — 쉬운 문장(situationLines) · 왜? 상수(SITUATI
     if (!s) throw new Error('insert');
     expect(s.postgresql.range).toBeNull();
     expect(situationLines(s).postgresql).toEqual({ ok: null, text: NO_VALUE_TEXT });
+    expect(situationWinner(situationLines(s))).toBeNull();
     const inc = situationLines(
       sum('atomic', { ...side('', null, null, ''), incomplete: true }, side('', null, null, '')),
     );

@@ -793,7 +793,7 @@ export interface ReadShare {
   /** 전체 데이터 가운데 읽은 비율 — CH 읽은 바이트 ÷ 논리 크기 · PG 읽은 블록 ÷ 힙 블록(1을 넘으면 같은 페이지를 여러 번) */
   ch: number;
   pg: number;
-  /** PG가 CH보다 몇 배 많이 읽나 */
+  /** 전체 중 읽는 비율의 비 — PG 비율 ÷ CH 비율 */
   times: number;
 }
 
@@ -815,22 +815,23 @@ export interface WhyPart {
 }
 
 export interface ReadWhy {
-  /** ch = 그림 1에서 CH가 이겼고 PG가 더 많이 읽었다 · pg = 그림 1에서 PG가 이겼다 · neutral = 비슷 · 미정 · 판정 없음 · 읽은 몫이 방향과 어긋남 */
+  /** ch = 그림 1에서 CH가 이겼고 PG가 전체 중 더 큰 비율을 읽었다 · pg = 그림 1에서 PG가 이겼다 · neutral = 비슷 · 미정 · 판정 없음 · 읽은 몫이 방향과 어긋남 */
   kind: 'ch' | 'pg' | 'neutral';
   parts: WhyPart[];
-  /** 읽은 몫 숫자 — "읽은 몫 PG 1.1% · CH 0.009%"(ch는 카드 아래 줄 · 나머지는 툴팁) */
+  /** 읽은 몫 숫자 — "읽은 몫 PG 1.1% · CH 0.009%"(툴팁 — "몫"은 화면 1층에 쓰지 않는다 · .omc/plans/web-ux-polish.md §2.2) */
   shares: string;
 }
 
 /**
- * 왜? 카드 ① 문장 — 선택 질문의 그림 1 결론(speedBars)과 같은 방향으로만 말한다(그림 1과 반대로 읽히는 조합 금지).
- * CH 승리 · PG가 더 많이 읽음 → "같은 질문에 PG는 CH보다 전체 중 N배 많은 몫을 읽어요"
+ * 왜? ① 문장 — 선택 질문의 그림 1 결론(speedBars)과 같은 방향으로만 말한다(그림 1과 반대로 읽히는 조합 금지).
+ * CH 승리 · PG가 더 큰 비율을 읽음 → "전체 중 읽는 비율이 PG가 N배 높아요"(N = 읽은 비율의 비 · 읽은 몫 숫자는 툴팁 — web-ux-polish §7.1 R1)
  * PG 승리 → "이 질문은 몇 줄만 콕 집어 읽어서 PG가 빨라요(목차 · 인덱스)"(읽은 몫 숫자는 툴팁)
- * 그 밖(비슷 · 승패 미정 · 판정 없음 · CH 승리인데 PG가 덜 읽음) → 방향 없는 사실 문장. 읽은 몫이 없으면 null(화면은 "잰 값 없음").
+ * 그 밖(비슷 · 승패 미정 · 판정 없음 · CH 승리인데 PG가 덜 읽음) → 방향 없는 사실 문장("전체 중 읽은 비율 PG … · CH …"). 읽은 몫이 없으면 null(화면은 "잰 값 없음").
  */
 export function readWhy(bar: SpeedBar | undefined, read: ReadShare | null): ReadWhy | null {
   if (!read) return null;
-  const shares = `읽은 몫 PG ${shareText(read.pg)} · CH ${shareText(read.ch)}`;
+  const pair = `PG ${shareText(read.pg)} · CH ${shareText(read.ch)}`;
+  const shares = `읽은 몫 ${pair}`;
   if (bar?.kind === 'win' && bar.winner === 'postgresql')
     return {
       kind: 'pg',
@@ -846,9 +847,9 @@ export function readWhy(bar: SpeedBar | undefined, read: ReadShare | null): Read
     return {
       kind: 'ch',
       parts: [
-        { text: '같은 질문에 PG는 CH보다 전체 중 ' },
+        { text: '전체 중 읽는 비율이 PG가 ' },
         { text: `${times}배`, strong: true },
-        { text: ' 많은 몫을 읽어요' },
+        { text: ' 높아요' },
       ],
       shares,
     };
@@ -858,7 +859,7 @@ export function readWhy(bar: SpeedBar | undefined, read: ReadShare | null): Read
       : bar?.kind === 'undetermined'
         ? '이 질문은 3번 결과가 엇갈려요 — '
         : '';
-  return { kind: 'neutral', parts: [{ text: `${head}${shares}` }], shares };
+  return { kind: 'neutral', parts: [{ text: `${head}전체 중 읽은 비율 ${pair}` }], shares };
 }
 
 export interface RowBytes {
