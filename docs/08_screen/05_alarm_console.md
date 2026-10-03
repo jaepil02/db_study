@@ -2,6 +2,7 @@
 
 > **대상**: ALM-CONSOLE(활성 · 미확인 · 이력 · 확인) · ALM-RULES(규칙 관리 · 판정 이력 분석 — min · max 쌍 차트) — ACK 허용 조건 · alarms.ack_not_allowed/409 표시 · 역할 OPERATOR · ENGINEER
 > **작성일**: 2026-09-24
+> **개정일**: 2026-10-03 — D-14 2화면 전환(사용자 결정 2026-10-03) — **상태 — 폐지** 단락 신설 · 화면 2(ALM-CONSOLE · ALM-RULES) 폐지 · 이어받는 자리 EXP-FLOW 흐름도 알람 갈래 · 분배 표 알람 판정 · 전이 행 · 업무 줄 alarm.event.ack · 본문은 폐지 전 원문 보존(수치 · 계약 · 링크 미수정)
 > **개정일**: 2026-09-28 — 리드 정정 — Redis 불가 코드 신설 없음 · **common.postgres_unavailable/503 재사용**(07_api/01) — 오류 칸 코드명 교체
 > **개정일**: 2026-09-28 — 07_api/01 확정 값 반영 — Redis 불가 **common.command_bus_unavailable/503** · 두 화면 호출 표면에 명령 조회 GET /api/v1/commands/{cmdId}(202 뒤) — ALM-CONSOLE 표면 3 → **4** · ALM-RULES 묶음 3 → **4**
 > **개정일**: 2026-09-28 — 업무 쓰기 명령 경로 반영(사용자 결정 2026-09-27 · SW-12) — ALM-CONSOLE 확인 · ALM-RULES 규칙 저장의 상태 4행 오류 칸에 202 pending · Redis 불가 503 인용 한 줄씩(공통 규칙 01_standards §업무 쓰기 응답 — 명령 경로) — 행 수 불변
@@ -10,6 +11,8 @@
 > **개정일**: 2026-09-24 — 최종 정밀 검수 — 비활성 태그 열린 알람 닫는 수단 — 리드 판정 대기 → 두지 않는다(W5 알람 강제 해제 표면 없음 판정 반영)
 > **개정일**: 2026-09-24 — W6 실험 채번 반영 — 무효 구간 자리 판정 · EXP 번호 반영(정본 10_observability/01 · 06)
 > **원천**: 원본 data_flow.md §6.3 · §8 · §8.1 · §8.2 · §9.2(커밋 ff66a37) · 원본 architecture.md §6 · §7.3 · §11 · §18(커밋 ff66a37) · REQ-ALM-01~20 · REQ-RLT-14 · AC-09 · AC-35 · AC-36 · AC-38 · 기능 ALM-01 · 07 · 08 · 09 · RLT-08 · MST-04 · [../06_pipeline/08_alarm.md](../06_pipeline/08_alarm.md) · [../02_features/09_alarms.md](../02_features/09_alarms.md) · [../02_features/12_permission_matrix.md](../02_features/12_permission_matrix.md) · [../11_glossary/03_enums_state_machines.md](../11_glossary/03_enums_state_machines.md) · [01_standards.md](./01_standards.md)
+
+**상태 — 폐지(D-14 · 2026-10-03)** — ALM-CONSOLE(알람 콘솔) · ALM-RULES(알람 규칙 관리 · 판정 분석)는 웹에서 폐지됐다(사용자 결정 — [../01_overview/06_design_decisions.md](../01_overview/06_design_decisions.md) D-14). 화면 코드는 결번으로 두고 재사용하지 않는다. 알람이 **어디로 갈라져 쓰이는가**는 [08_evidence_screens.md](./08_evidence_screens.md) EXP-FLOW가 이어받는다 — 흐름도의 알람 갈래(판정 전수 → ClickHouse · 전이 → PostgreSQL ◆ · 상태 → Redis)와 분배 표 알람 판정 · 알람 전이 행 · 업무 줄의 alarm.event.ack 명령. 활성 · 이력 목록 · 확인 버튼 · 규칙 편집 · 판정 이력 분석 차트를 이어받는 현행 화면은 없다 — 알람 REST · WebSocket 알람 푸시 표면은 api에 남는다(D-14 결정 1). 아래 본문은 폐지 전 원문이며 고치지 않는다 — 현행 공통 규칙은 [01_standards.md](./01_standards.md)가 갖는다.
 
 이 문서는 알람 화면 둘을 명세한다. ALM-CONSOLE은 현장 운영자가 알람을 받고 확인하는 자리이고, ALM-RULES는 엔지니어가 판정 전수를 분석해 임계값을 고치는 자리다. **쓰기 주체는 역할 하나씩이다** — 확인은 OPERATOR, 규칙 변경은 ENGINEER다([../02_features/12_permission_matrix.md](../02_features/12_permission_matrix.md)). 같은 쓰기를 두 역할에 열면 감사 로그의 행위자로 책임 축을 읽을 수 없다.
 

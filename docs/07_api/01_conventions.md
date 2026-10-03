@@ -2,6 +2,8 @@
 
 > **대상**: db_study api 컨테이너 표면 전체에 걸리는 규약 — 경로 버전 · 표면 계층 · BFF 경유와 직결의 배정(ADR-02 정본) · 인증 헤더 · 요청 검증 · 성공 본문 · **에러 봉투** · 시각 직렬화(points 시각 형식 판정) · 수치 직렬화 · 페이지네이션 · **업무 쓰기 경로(커밋 뒤 동기 응답 · 202 pending · Idempotency-Key · Redis 불가 503)** · **명령 조회 표면** · 멱등 · 캐시 헤더 · 레이트 리밋 헤더 · 응답 필드 변경 규칙 · 표면 번호 규약 · 표면 요약 표 어휘
 > **작성일**: 2026-09-24
+> **개정일**: 2026-10-03 — D-15 학습자 눈높이 한 화면(사용자 지시 2026-10-03 — 08_screen/08_evidence_screens · 01_standards §한 화면 원칙) — 헬스 · 메트릭(화면) 행의 측정 조건 서랍 → **각주 툴팁** — 표면 · 배정 불변
+> **개정일**: 2026-10-03 — D-14 2화면 전환(사용자 결정 2026-10-03) — 명령 조회 #1 호출 화면 ADM-MASTER · ALM-CONSOLE · ALM-RULES · ADM-WORKORDER → **화면 없음(API 전용)** · 요청 경로 표 명령 조회 · 헬스 · 메트릭 행의 화면 서술을 현행 화면으로 — 표면 · 기능 · 에러 코드 수 불변(api 표면은 지우지 않는다 — D-14 결정 1)
 > **개정일**: 2026-09-28 — 라이브 실행 제어 반영(사용자 요구 2026-09-28 · 09_datagen #2~#5) — BFF 경유와 직결 표에 라이브 실행 제어 행(no-store) · 요청 묶음 10 → **11** · 멱등 표 조건부 갱신에 실행 시작(409) · 결과 동일에 실행 중단 — 수단 없음 표면 수 불변
 > **개정일**: 2026-09-28 — DB 시각 UTC(ADR-27 · 사용자 요구 2026-09-28) — 시각 직렬화 절에 불변 근거 불릿 한 줄(응답은 DB 세션 시간대와 무관) — 판정 · 자리 수 불변
 > **개정일**: 2026-09-28 — 웨이브 1 검수 반영(B-H3 · B-H4 · B-M4 · B-M8 · B-M9) — 202 뒤 화면 무효화 "미설계" → **명령 조회 applied 확인 → 로컬 무효화 + 신선 창 표지(x-bff-fresh) 재조회**(08_screen/01 판정) · 같은 키 재요청 — 만료 키 → **202 + {cmdId, status: 'expired'}**(새 코드 없음 · 적용 없음) · 503 뒤 재요청은 원장 재확인 · 생성 응답 202 설명에 expired · 명령 조회 404 = **결과 키 또는 원장의 actor 불일치(둘 다 NULL이면 같다)** · status failed = **적용 여부 미확정**(한계 등재 #26) · 원인 구분 → **Redis 불가 = unavailable · PostgreSQL 불가 = failed** — status 수 · 표면 수 불변
@@ -42,11 +44,11 @@
 | 작업지시 · 실적 · 감사 조회 | 브라우저 → BFF → api | **no-store** | 08_work_orders #1~#9 | ③계층 read-your-writes | 상태 전이 직후 목록이 옛 상태면 전이 요청이 두 번 온다 |
 | 알람 이벤트 · 확인 · 규칙 | 브라우저 → BFF → api | no-store | 07_alarms #1~#5 | 저빈도 — 실시간 표시는 WebSocket 알람 푸시가 맡는다 | 확인 직후 목록이 revalidate 창만큼 미확인으로 남는다 |
 | 라이브 실행 제어 | 브라우저 → BFF → api | **no-store** | 09_datagen #2~#5 | 실행 패널이 1초 폴링으로 순간 상태를 읽는다 — 실행 상태는 api 인스턴스 메모리라 캐시할 것이 없다 | 캐시하면 종결된 실행이 revalidate 창만큼 running으로 보여 시작 버튼이 잠긴다 |
-| 명령 조회 | 브라우저 → BFF → api | **no-store** | 01_conventions #1 | 202를 받은 업무 쓰기 화면이 결과를 읽는다 — 결과는 순간값이라 캐시할 것이 없다 | 캐시하면 pending이 revalidate 창만큼 남아 적용된 쓰기를 미적용으로 보인다 |
+| 명령 조회 | 브라우저 → BFF → api | **no-store** | 01_conventions #1 | 202를 받은 업무 쓰기 호출자가 결과를 읽는다(D-14 뒤 부르는 화면 없음 — 표면 계약 유지) — 결과는 순간값이라 캐시할 것이 없다 | 캐시하면 pending이 revalidate 창만큼 남아 적용된 쓰기를 미적용으로 보인다 |
 | 최신값 조회 | 브라우저 → api 직결 | 해당 없음 | 06_realtime #1 · #2 | 초당 수 회 — 고빈도에 1홉을 더할 이유가 없다 | 최신값 p95가 api가 아니라 BFF 이벤트 루프에 묶인다 |
 | 시계열 조회 · 내보내기 · 판정 이력 분석 | 브라우저 → api 직결 | 해당 없음 | 05_timeseries #1 · #2 · 07_alarms #6 | 응답이 크고(수백 KB) 사용자별이라 중계 · 캐시 이득이 없다 | BFF 힙이 대용량 응답을 한 번 더 들고 내보내기 스트림이 두 번 복사된다 |
 | WebSocket | 브라우저 → api 직결 | 해당 없음 | 11_websocket #1 | 장기 연결을 BFF가 중계할 이유가 없다 | 연결 수만큼 BFF에 소켓이 쌓여 개발 서버 재시작이 모든 실시간 연결을 끊는다 |
-| 헬스 · 메트릭(화면) | 브라우저 → BFF → api | 없음 | 10_metrics #1 · #2 | 실험 콘솔이 저빈도로 읽고 메트릭 텍스트 해석을 서버에서 한다 | 브라우저가 텍스트 형식 전체를 받아 파싱한다 |
+| 헬스 · 메트릭(화면) | 브라우저 → BFF → api | 없음 | 10_metrics #1 · #2 | EXP-PERF · EXP-FLOW가 읽고(각주 툴팁 · EXP-FLOW 메트릭 5초 폴링) 메트릭 텍스트 해석을 서버에서 한다 | 브라우저가 텍스트 형식 전체를 받아 파싱한다 |
 | 기계 호출 | Compose · Prometheus · k6 → api | 해당 없음 | 10_metrics #1 · #2 · 09_datagen #1 | 호출 주체가 브라우저가 아니다 | 해당 없음 |
 
 - 검산: 요청 묶음 = **11** · BFF 7 + 직결 3 + 기계 1 = **11**
@@ -191,7 +193,7 @@ REST 표면의 모든 실패는 아래 봉투 하나로 낸다. **예외는 셋�
 
 | # | 메서드 | 경로 | 기능 ID | 역할 | 캐시 | 에러 코드 | 호출 화면 | 원본 여부 |
 |:-:|------|------|------|------|------|------|------|------|
-| 1 | GET | /api/v1/commands/{cmdId} | MST-01~06 · ALM-01 · ALM-08 · WRK-01~03(업무 쓰기의 결과 확인) | 전원 | biz:result:{cmdId} · BFF no-store | common.validation_failed/400 · common.not_found/404 · common.postgres_unavailable/503 | ADM-MASTER · ALM-CONSOLE · ALM-RULES · ADM-WORKORDER | 신설 |
+| 1 | GET | /api/v1/commands/{cmdId} | MST-01~06 · ALM-01 · ALM-08 · WRK-01~03(업무 쓰기의 결과 확인) | 전원 | biz:result:{cmdId} · BFF no-store | common.validation_failed/400 · common.not_found/404 · common.postgres_unavailable/503 | 화면 없음(API 전용) — 폐지 화면 ADM-MASTER · ALM-CONSOLE · ALM-RULES · ADM-WORKORDER(D-14) | 신설 |
 
 - 검산: 표면 = REST **1** · 신설 1 · 조회 1
 - 경로는 BFF 경유 no-store다(§BFF 경유와 직결). 읽는 순서는 결과 키 → 없으면 biz_command_log → 둘 다 없으면 pending이다(기전 정본 [../06_pipeline/07_business_crud.md](../06_pipeline/07_business_crud.md)).

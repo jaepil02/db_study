@@ -2,6 +2,7 @@
 
 > **대상**: ALM 도메인 REST 표면 — 알람 이벤트 목록 · 확인(ACK) · 알람 규칙 조회와 쓰기 · 판정 이력(alarm_eval) 분석 · **알람 목록 범위 기본값 판정** · 원본에 없는 표면 판정(규칙 CRUD · alarm_eval 분석) · **인증 전(S7 ② 이전) 확인 행위자 판정**
 > **작성일**: 2026-09-24
+> **개정일**: 2026-10-03 — D-14 2화면 전환(사용자 결정 2026-10-03) — 표면 6의 호출 화면 ALM-CONSOLE · ALM-RULES → **화면 없음(API 전용)** · 판정 버킷 누락 불릿의 화면 표지 서술 · 관련 문서 폐지 표기 — 표면 · 기능 · 에러 코드 수 불변(api 표면은 지우지 않는다 — D-14 결정 1)
 > **개정일**: 2026-09-27 — D-04 부분 개정 반영(사용자 결정 — 업무 쓰기도 Redis를 거친다 · 동기 응답) — 도입 단락 확인(ACK) 경로 · 공통 규약 **쓰기 경로 행 신설** — 항목 7 → **8** · 표면 수 불변
 > **개정일**: 2026-09-26 — W3 코드 검수 반영(L5) — #5 비활성 태그 거절을 **결과 enabled 참일 때만**으로 명시(검증 칸 · 해설 불릿 1) · #6 버킷 누락 불릿 1(웹 합성 — r-alarm M1) — 구현 유지 · 표면 수 불변
 > **개정일**: 2026-09-26 — W1 검수 반영 — 미확인 2행 닫힘(학습자 계정 email learner@localhost · 감사 NULL 단계 경계 정본 두 문서 갱신 완료) · 감사 NULL 파급 불릿을 완료 사실로
@@ -37,12 +38,12 @@
 
 | # | 메서드 | 경로 | 기능 ID | 역할 | 캐시 | 에러 코드 | 호출 화면 | 원본 여부 |
 |:-:|------|------|------|------|------|------|------|------|
-| 1 | GET | /api/v1/alarms/events | ALM-07 | 전원 | cache:alarmevents · BFF no-store | common.validation_failed/400 · common.postgres_unavailable/503 | ALM-CONSOLE | 원본 |
-| 2 | POST | /api/v1/alarms/events/{id}/ack | ALM-08 | OPERATOR | 없음 | common.not_found/404 · alarms.ack_not_allowed/409 · common.postgres_unavailable/503 | ALM-CONSOLE | 원본 |
-| 3 | GET | /api/v1/alarms/rules | ALM-01 | 전원 | 없음 · BFF no-store | common.validation_failed/400 · common.postgres_unavailable/503 | ALM-RULES | 신설 |
-| 4 | POST | /api/v1/alarms/rules | ALM-01 | ENGINEER | 없음 | common.validation_failed/400 · common.postgres_unavailable/503 | ALM-RULES | 신설 |
-| 5 | PATCH | /api/v1/alarms/rules/{id} | ALM-01 | ENGINEER | 없음 | common.validation_failed/400 · common.not_found/404 · common.postgres_unavailable/503 | ALM-RULES | 신설 |
-| 6 | GET | /api/v1/alarms/evaluations | ALM-09 | ENGINEER | 없음 — 캐시하지 않는다 | common.validation_failed/400 · alarms.eval_store_unavailable/503 | ALM-RULES | 신설 |
+| 1 | GET | /api/v1/alarms/events | ALM-07 | 전원 | cache:alarmevents · BFF no-store | common.validation_failed/400 · common.postgres_unavailable/503 | 화면 없음(API 전용) — 폐지 화면 ALM-CONSOLE(D-14) | 원본 |
+| 2 | POST | /api/v1/alarms/events/{id}/ack | ALM-08 | OPERATOR | 없음 | common.not_found/404 · alarms.ack_not_allowed/409 · common.postgres_unavailable/503 | 화면 없음(API 전용) — 폐지 화면 ALM-CONSOLE(D-14) | 원본 |
+| 3 | GET | /api/v1/alarms/rules | ALM-01 | 전원 | 없음 · BFF no-store | common.validation_failed/400 · common.postgres_unavailable/503 | 화면 없음(API 전용) — 폐지 화면 ALM-RULES(D-14) | 신설 |
+| 4 | POST | /api/v1/alarms/rules | ALM-01 | ENGINEER | 없음 | common.validation_failed/400 · common.postgres_unavailable/503 | 화면 없음(API 전용) — 폐지 화면 ALM-RULES(D-14) | 신설 |
+| 5 | PATCH | /api/v1/alarms/rules/{id} | ALM-01 | ENGINEER | 없음 | common.validation_failed/400 · common.not_found/404 · common.postgres_unavailable/503 | 화면 없음(API 전용) — 폐지 화면 ALM-RULES(D-14) | 신설 |
+| 6 | GET | /api/v1/alarms/evaluations | ALM-09 | ENGINEER | 없음 — 캐시하지 않는다 | common.validation_failed/400 · alarms.eval_store_unavailable/503 | 화면 없음(API 전용) — 폐지 화면 ALM-RULES(D-14) | 신설 |
 
 - 검산: 표면 = REST **6** · 원본 2(#1 · #2) + 신설 4(#3~#6) = **6** · 조회 3(#1 · 3 · 6) + 쓰기 3 = **6**
 - 표면 있는 기능 4(ALM-01 · 07 · 08 · 09) — ALM-01이 세 표면(#3~#5)에 앉는다.
@@ -144,7 +145,7 @@
 | 관련 REQ | REQ-ALM-17 |
 | 흐름 | F-06 · F-04 |
 
-- **판정 행이 없는 버킷은 points에 싣지 않는다(버킷 누락).** 서버 채움(WITH FILL)을 쓰지 않는 것은 [05_timeseries.md](./05_timeseries.md) 관례와 같다 — 빈 버킷 주의 표지는 화면이 meta.interval · from · to로 누락 버킷을 합성해 켠다([../08_screen/05_alarm_console.md](../08_screen/05_alarm_console.md) ALM-RULES 요소).
+- **판정 행이 없는 버킷은 points에 싣지 않는다(버킷 누락).** 서버 채움(WITH FILL)을 쓰지 않는 것은 [05_timeseries.md](./05_timeseries.md) 관례와 같다 — 누락 버킷은 호출자가 meta.interval · from · to로 합성한다(빈 버킷 주의 표지를 켜던 ALM-RULES 요소 — [../08_screen/05_alarm_console.md](../08_screen/05_alarm_console.md) · 폐지 D-14).
 - **평균을 내지 않고 min · max 쌍만 낸다.** 평균은 임계값 근처의 순간 초과를 지운다 — 오탐 분석의 근거가 사라진다(REQ-ALM-17 · 원본 data_flow.md §6.3).
 - **캐시하지 않는 이유** — 분석은 엔지니어가 범위를 바꿔 가며 드물게 부르고, 키 공간에 판정 이력 사본 키가 없다. 대신 대량 조회 등급 한도가 반복 스캔을 묶는다.
 - **meta.rule은 현재 규칙이다.** 차트에 겹쳐 그리는 임계선이 과거 구간에서는 그 시점의 임계값이 아닐 수 있다 — 변경 시점은 audit_log에서 읽는다.
@@ -221,4 +222,4 @@
 - [../02_features/09_alarms.md](../02_features/09_alarms.md) — ALM-01~09 기능 정본
 - [../03_requirements/10_alarms.md](../03_requirements/10_alarms.md) — REQ-ALM 계약
 - [../06_pipeline/08_alarm.md](../06_pipeline/08_alarm.md) — 판정 · ACK 기전
-- [../08_screen/05_alarm_console.md](../08_screen/05_alarm_console.md) — ALM-CONSOLE · ALM-RULES 화면
+- [../08_screen/05_alarm_console.md](../08_screen/05_alarm_console.md) — ALM-CONSOLE · ALM-RULES 화면(폐지 · D-14 — 폐지 전 원문 보존)

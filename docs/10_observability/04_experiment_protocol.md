@@ -1,7 +1,9 @@
 # 실험 프로토콜
 
-> **대상**: ★ 실험 규칙 정본 — 실험 한 번의 절차 · 3회 중앙값과 편차 폐기 기준 · 구조 판정과 분포 판정 · 역전 구간 우열 3/3 구조 판정 · 스냅샷과 복원 · 캐시 키 초기화 · 기준선 · 회복 관측 · 조건 칸(4요소 + 부가 조건) · 조건 분리 강제 · **측정 기록 템플릿(docs/measurements/NNN-{slug}.md)** · **기계 판독 블록 형식(EXP-COMPARE BFF가 읽는다)** · 기록 상태와 정정 · 결과를 정본 문서에 올리는 절차
+> **대상**: ★ 실험 규칙 정본 — 실험 한 번의 절차 · 3회 중앙값과 편차 폐기 기준 · 구조 판정과 분포 판정 · 역전 구간 우열 3/3 구조 판정 · 스냅샷과 복원 · 캐시 키 초기화 · 기준선 · 회복 관측 · 조건 칸(4요소 + 부가 조건) · 조건 분리 강제 · **측정 기록 템플릿(docs/measurements/NNN-{slug}.md)** · **기계 판독 블록 형식(EXP-PERF BFF가 읽는다)** · 기록 상태와 정정 · 결과를 정본 문서에 올리는 절차
 > **작성일**: 2026-09-24
+> **개정일**: 2026-10-03 — D-15 학습자 눈높이 한 화면(사용자 지시 2026-10-03 — 08_screen/08_evidence_screens · 01_standards §한 화면 원칙) — 4요소 표시 자리 측정 조건 서랍 → **각주 툴팁** · 화면 참고값 예외의 표시 방식 점선 · 회색 · 배지 · 최소~최대 막대 → **각주 고정 문구(시간은 참고용 · 승패는 3번 모두 같을 때만) + 툴팁 배지 문구** — 예외의 범위(표시만 · 정본 문장 인용 금지 · 역전 구간은 structuralRanges만) 불변
+> **개정일**: 2026-10-03 — D-14 2화면 전환(사용자 결정 2026-10-03) — 기계 판독 블록을 읽는 화면 EXP-COMPARE(폐지) → **EXP-PERF**(대상 줄 · 도입 · structuralRanges 소비 자리) · 4요소 표시 자리 EXP-CONSOLE 기록 조건 블록 → **두 실증 화면 측정 조건 서랍** · 조합 제약 경고 문장 — 기록 형식 · 필드 수 불변
 > **개정일**: 2026-09-28 — DB 시각 UTC(ADR-27) — 격자 2차 절차 사실의 S = KST 자정 − 50,020초에 ADR-27 전 기록 사실임과 러너의 UTC 자정 전환(구현 목록 #21) 병기 — 기록 사실 불변
 > **개정일**: 2026-09-28 — 라이브 실행 제어 반영(사용자 요구 2026-09-28 · 리드 판정) — §조건 칸에 **라이브 실행 없음** 행(gen_run_active 전부 0 · GET /api/v1/runs/current가 running · stopping 아님 — 착수 전 확인) — 부가 9 → **10** · 칸 13 → **14**
 > **개정일**: 2026-09-28 — 웨이브 1 검수 판정 반영(f-screens · r-screens M3 · r-biz M3) — BFF 판독 규칙 4 "switches 11키" → **기록 시점 스위치 정본의 키 전부**(SW-12 도입 2026-09-27 전 기록은 SW-01~11 11키 · SW-12 부재는 기본값 stream으로 읽는다) · 현재 수 자리 스위치 11종 → **12종**(조건 칸 · 스위치 기록 불릿 · 조건 분리 비교 · 블록 switches · 정본 반영 불릿) · 조합 제약 9건 → **10건**(#10 SW-12 stream) · 스위치 값에 stream · direct — 규칙 · 칸 수 불변
@@ -25,7 +27,7 @@
 
 **규칙의 목적은 하나다 — 3주 뒤의 자기 수치를 믿을 수 있게 한다.** 이 머신은 P · E 코어 혼합과 WSL2 vCPU 매핑 불확실성 때문에 같은 실험도 실행마다 흔들리고(원본 implementation_plan.md §2.4), 한 번의 수치는 재현되지 않는다. 조건을 잃은 수치는 사후에 복원할 수 없다 — 그래서 기록은 실행 시점에 조건과 함께 고정되고 사후에 고치지 않는다.
 
-**docs/measurements는 린트 대상 밖이지만 형식은 이 문서가 고정한다.** 기록 파일은 설계 정본이 아니라 실측 파일이다(docs_plan 보정 #3). 그러나 EXP-COMPARE의 대조군 역전 지점 패널을 Next.js BFF가 이 파일에서 읽으므로 기계 판독 블록의 모양은 계약이다 — 형식을 어긴 기록은 화면에서 빠지고 "판독 불가 기록"으로 세어진다.
+**docs/measurements는 린트 대상 밖이지만 형식은 이 문서가 고정한다.** 기록 파일은 설계 정본이 아니라 실측 파일이다(docs_plan 보정 #3). 그러나 EXP-PERF의 규모 곡선 · 역전 구간을 Next.js BFF가 이 파일에서 읽으므로 기계 판독 블록의 모양은 계약이다 — 형식을 어긴 기록은 화면에서 빠지고 "판독 불가 기록"으로 세어진다.
 
 ## 실험 한 번의 절차
 
@@ -111,7 +113,7 @@ AC의 합격선은 두 종류다([../03_requirements/14_acceptance_criteria.md](
 
 ## 조건 칸 — 4요소와 부가 조건
 
-**4요소는 health 응답에서 복사한다 — 손으로 옮겨 적지 않는다.** 필드 정본은 [../07_api/10_metrics.md](../07_api/10_metrics.md) #1(run · switches)이며 EXP-CONSOLE 기록 조건 블록이 같은 모양을 만든다.
+**4요소는 health 응답에서 복사한다 — 손으로 옮겨 적지 않는다.** 필드 정본은 [../07_api/10_metrics.md](../07_api/10_metrics.md) #1(run · switches)이며 두 실증 화면(EXP-PERF · EXP-FLOW)의 각주 툴팁이 같은 필드를 보인다.
 
 | 칸 | 원천 | 값 형식 | 없으면 |
 |------|------|------|------|
@@ -139,7 +141,7 @@ AC의 합격선은 두 종류다([../03_requirements/14_acceptance_criteria.md](
 
 ## 조건 분리 강제
 
-[../02_features/13_switch_matrix.md](../02_features/13_switch_matrix.md) 조합 제약을 실행 규칙으로 강제하는 자리다. 콘솔은 경고만 하고(EXP-CONSOLE), 강제는 기록 판정이 한다.
+[../02_features/13_switch_matrix.md](../02_features/13_switch_matrix.md) 조합 제약을 실행 규칙으로 강제하는 자리다. 화면은 강제하지 않고(경고를 보이던 EXP-CONSOLE은 폐지 — D-14), 강제는 기록 판정이 한다.
 
 | 규칙 | 판정 시점 | 위반 기록의 처리 |
 |------|------|------|
@@ -237,7 +239,7 @@ AC의 합격선은 두 종류다([../03_requirements/14_acceptance_criteria.md](
 | results | 예(빈 배열 허용) | metric · arm · unit · values · median | 스위치 비교 기록 |
 | points | 대조 기록만 | query · rows · stage · store · index · cache · unit · values · median · resultMatch | 역전 지점 선 차트 |
 | axes | 대조 기록만 | axis(storage_bytes · compression_ratio · insert_rows_per_sec · write_amplification · index_bytes) · store · index · rows · value · unit | 비교 축 막대 |
-| structuralRanges | 대조 기록 선택(EXP-01~05) | 행마다 query · cache · pgVariant · crossover · undetermined 필수 — crossover는 역전 구간 ["10^a", "10^b"] 또는 null · **crossover가 null일 때만** winner(postgresql · clickhouse)와 range(["10^a", "10^b"]) · undetermined는 우열 미정 점의 지수 표기 문자열 배열(빈 배열 허용) · from · to(역전 방향 — 역전 전 앞선 저장소 → 역전 뒤 앞선 저장소)는 선택 | EXP-COMPARE 구조 판정 역전 구간 표 |
+| structuralRanges | 대조 기록 선택(EXP-01~05) | 행마다 query · cache · pgVariant · crossover · undetermined 필수 — crossover는 역전 구간 ["10^a", "10^b"] 또는 null · **crossover가 null일 때만** winner(postgresql · clickhouse)와 range(["10^a", "10^b"]) · undetermined는 우열 미정 점의 지수 표기 문자열 배열(빈 배열 허용) · from · to(역전 방향 — 역전 전 앞선 저장소 → 역전 뒤 앞선 저장소)는 선택 | EXP-PERF 쿼리 카드 · 규모 곡선 역전 구간 |
 | reverse | 역방향 기록만(EXP-40~44) | exp · op · store · variant · scale · concurrency · rate · read · metric · unit · values · median · structural(구조 지표만 true) | 역방향 대조 해석 · 판독기는 structural true면 중앙값이 아니라 3회 전부를 본다 |
 | streamSteps | EXP-45만 | pps · store · metric(insert_duration_seconds_p50 · _p95 · control_copy_seconds_p50 · _p95) · unit · values(반복 번호 순 · 계단 없음 · 그 저장소 무효 반복 자리 null) · median(값이 있는 반복 3 미만이면 null) · failures · valid(선택 — false면 판정 제외 계단) — failures는 반복 자리 단위(재기동 · 포화 반복 자리는 null) · 행 valid:false = 그 저장소 유효 반복 0(PostgreSQL은 실패 ≥ 1 반복도 유효 반복으로 센다 — 행 수가 어긋나도 실패는 사실이다) | 계단별 두 싱크 시간 · 판정 점 |
 
@@ -274,7 +276,7 @@ AC의 합격선은 두 종류다([../03_requirements/14_acceptance_criteria.md](
 - 검산: 상태 = **3**
 - **구조 사실 판별 기록(api 부재 단계)** — health가 없는 단계(S0)의 판별 · 회귀 기록은 run의 티어 · switches를 null로 두고 status valid로 쓴다. 4요소가 비었으므로 수치는 인용하지 않고, 정본에는 구조 사실(동작 여부 · 1계층 개수 · 설정 채택 근거)만 올린다. BFF 규칙 4는 그대로 적용해 "4요소 누락"으로 센다. 기계 판독 블록 conditions에 recordKind structural-discrimination을 적는다.
 - **폐기 기록의 인용 규칙(W6 리드 판정 · 기록 047 · 048~053).** discarded 기록에서 정본 문장에 올릴 수 있는 것은 두 종류다. ① **구조 사실** — 우열 3/3(§역전 구간) · 인덱스 선택 · 계획 노드 · 읽은 행 · 블록 수 · 결과 일치 · 원자성 · 제약 판정처럼 3회 전부 같은 값으로 성립한 판정. ② **결정적 값** — 반복 대상이 아닌 단계당 1회 측정 · 채움 1회의 산출이다 — 비 쿼리 축의 저장 바이트 · 압축률 · 인덱스 바이트 · WAL 바이트와 행 · 파트 수. 결정적 값을 올릴 때는 "결정적 값 · 기록 NNN · discarded"를 밝힌다. **ms · 배수 · 처리량 같은 크기 수치는 참고로도 정본 문장에 넣지 않고 기록 번호만 가리킨다** — 삽입 처리량(행/s)은 비 쿼리 축이지만 시간을 재는 값이라 이 금지에 든다(쿼리 시간과 같은 실행 분산을 탄다). 이 규칙은 정본 문장의 인용 범위이고 BFF 판독 규칙 3은 바뀌지 않는다 — 화면은 discarded 기록을 그대로 뺀다.
-- **예외 — 화면의 참고값 표시(리드 판정 1 · 2026-09-27).** EXP-PERF는 discarded 격자 기록의 크기 수치(ms · 배수)를 **표시만** 한다 — 점선 · 회색 · "참고값 — 편차 기준 초과(구조 판정만 정본)" 배지와 반복 최소~최대 막대가 필수이고, 화면 값은 정본 문장에 인용하지 않으며, 역전 구간은 structuralRanges(구조 판정)만 쓴다(판독 규칙 3 · 5의 대체는 [../08_screen/08_evidence_screens.md](../08_screen/08_evidence_screens.md) §판독 규칙).
+- **예외 — 화면의 참고값 표시(리드 판정 1 · 2026-09-27).** EXP-PERF는 discarded 격자 기록의 크기 수치(ms · 배수)를 **표시만** 한다 — 각주 고정 문구("걸린 시간은 참고용 · 누가 이기는지는 3번 모두 같을 때만")와 툴팁 문구 "참고값 — 편차 기준 초과(구조 판정만 정본)"가 필수이고(D-15 — 점선 · 회색 · 최소~최대 막대 대체), 화면 값은 정본 문장에 인용하지 않으며, 역전 구간은 structuralRanges(구조 판정)만 쓴다(판독 규칙 3 · 5의 대체는 [../08_screen/08_evidence_screens.md](../08_screen/08_evidence_screens.md) §판독 규칙).
 - **기록은 사후에 고치지 않는다**(REQ-TEC-11). 잘못 적은 기록은 새 번호의 정정 기록을 쓰고 supersedes로 옛 번호를 가리킨다 — 옛 파일의 status를 바꾸지 않아도 BFF 규칙 3이 옛 기록을 뺀다.
 
 ## 결과를 정본 문서에 올리는 절차

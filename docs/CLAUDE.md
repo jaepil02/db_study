@@ -2,6 +2,8 @@
 
 > **대상**: docs/ 문서군을 작성·수정·검수하는 작업자(사람 · 리드 에이전트 · 팀원 에이전트)의 규약
 > **작성일**: 2026-09-23
+> **개정일**: 2026-10-03 — D-15 — 스위치 동시 갱신 자리 표현 측정 조건 서랍 → **각주 툴팁**
+> **개정일**: 2026-10-03 — D-14 웹 2화면 전환 — 고유 규칙 스위치 동시 갱신 자리 08_screen/07_experiment_console(폐지) → **08_screen/08_evidence_screens**(측정 조건 서랍)
 > **개정일**: 2026-09-25 — S4 반영 — 성격 문단 S3까지 → **S4까지(조회 경로 · 캐시 · 팬아웃 구현 · 티어 S · M 측정 — docs/README 성격 줄과 같은 범위)**
 > **개정일**: 2026-09-25 — S3 반영 — 성격 문단 S2까지 → **S3까지(파이프라인 심화 구현 · 티어 S · M 측정 — docs/README 성격 줄과 같은 범위)**
 > **개정일**: 2026-09-25 — S2 반영 — 성격 문단 "S1까지(저장소 · 계약 · 생성기)" → **S2까지(수직 슬라이스 설비 1 · 태그 8과 티어 S 전 구성 설비 5 × 태그 50 구현 · 측정 — 루트 README 성격 줄과 같은 범위)**
@@ -112,7 +114,7 @@
 
 ## 이 프로젝트 고유 규칙
 
-- **스위치를 더하거나 바꾸면** [02_features/13_switch_matrix.md](./02_features/13_switch_matrix.md)(정본) · [10_observability/06_experiment_catalog.md](./10_observability/06_experiment_catalog.md)(측정 실험) · [08_screen/07_experiment_console.md](./08_screen/07_experiment_console.md)(상태 표시)를 같은 변경 단위에서 고친다. 스위치 없는 실험 · 실험 없는 스위치를 두지 않는다.
+- **스위치를 더하거나 바꾸면** [02_features/13_switch_matrix.md](./02_features/13_switch_matrix.md)(정본) · [10_observability/06_experiment_catalog.md](./10_observability/06_experiment_catalog.md)(측정 실험) · [08_screen/08_evidence_screens.md](./08_screen/08_evidence_screens.md)(각주 툴팁의 스위치 상태 표시 — D-14로 실험 콘솔 폐지 · D-15로 서랍 폐지)를 같은 변경 단위에서 고친다. 스위치 없는 실험 · 실험 없는 스위치를 두지 않는다.
 - **새 데이터 종류를 들이면** [04_architecture/04_storage_split.md](./04_architecture/04_storage_split.md)의 3계층 분기 표에 행을 먼저 두고 [06_pipeline/04_routing.md](./06_pipeline/04_routing.md)에 기전을 적는다. 목적지를 정하지 않은 데이터는 스키마에 올리지 않는다.
 - **새 Redis 키 계열을 들이면** [05_data_stores/05_redis_keyspace.md](./05_data_stores/05_redis_keyspace.md)의 봉인 표 칸과 검산식을 함께 고친다. 봉인 계열인지 캐시 계열인지 정하지 않은 키는 만들지 않는다.
 - **측정 수치를 인용하면** 커밋 해시 · 메모리 프로파일 · 용량 티어 · 스위치 상태 4요소가 없는 수치를 본문에 올리지 않는다. 4요소가 없는 원본 수치는 "원본 예상치"로만 인용한다.

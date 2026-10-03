@@ -2,6 +2,7 @@
 
 > **대상**: MST 도메인 REST 표면 — 사이트 · 라인 · 설비 · Modbus 접속 설정 · 태그 마스터의 조회와 쓰기 · 태그 논리 삭제 · 스케일 변경 새 태그 발급 · 무효화 체인 대상 키 · 원본에 없는 표면 판정(라인 · 사이트 · modbus_config 쓰기) · unit만 바꾸는 태그 수정 판정 · 재활성화 판정
 > **작성일**: 2026-09-24
+> **개정일**: 2026-10-03 — D-14 2화면 전환(사용자 결정 2026-10-03) — 표면 17의 호출 화면 ADM-MASTER 등 → **화면 없음(API 전용)** · 관련 문서 폐지 표기 — 표면 · 기능 · 에러 코드 수 불변(api 표면은 지우지 않는다 — D-14 결정 1)
 > **개정일**: 2026-09-27 — D-04 부분 개정 반영(사용자 결정 — 업무 쓰기도 Redis를 거친다 · 동기 응답) — 도입 단락 쓰기 주체 · 공통 규약 **쓰기 경로 행 신설**(명령 스트림 · 커밋 뒤 응답 · 202 pending · Idempotency-Key · Redis 불가 503) — 항목 8 → **9** · 표면 수 불변 · 에러 코드 열 불변(Redis 불가는 common.postgres_unavailable 재사용)
 > **개정일**: 2026-09-24 — 최종 정밀 검수 — §층별 반영 시점 → §층별 옛 값의 창(없는 절 참조 교정)
 > **개정일**: 2026-09-24 — W5 판정 반영 — #7 비활성 원천 거절 → **master.reissue_source_inactive/409** · 사이트 · 라인 · 태그 목록 Redis 사본 없음(리드 판정) · Modbus 매핑 변경 PATCH 허용 + 감사(리드 판정) — 표면 수 불변
@@ -34,23 +35,23 @@ MST 표면은 **한 번의 저장이 네 사본 층을 건드리는 표면**이�
 
 | # | 메서드 | 경로 | 기능 ID | 역할 | 캐시 | 에러 코드 | 호출 화면 | 원본 여부 |
 |:-:|------|------|------|------|------|------|------|------|
-| 1 | GET | /api/v1/sites | MST-01 | 전원 | Redis 사본 없음(판정) · BFF revalidate | common.postgres_unavailable/503 | ADM-MASTER · DSH-REALTIME · ANL-TREND | 원본 |
-| 2 | GET | /api/v1/devices | MST-02 | 전원 | cache:devlist:{site_id} · BFF revalidate | common.validation_failed/400 · common.not_found/404 · common.postgres_unavailable/503 | ADM-MASTER · DSH-REALTIME · ANL-TREND | 원본 |
-| 3 | GET | /api/v1/tags | MST-04 · 05 | 전원 | Redis 사본 없음(판정) · BFF revalidate | common.validation_failed/400 · common.not_found/404 · common.postgres_unavailable/503 | ADM-MASTER · ANL-TREND · ALM-RULES | 원본 |
-| 4 | POST | /api/v1/tags | MST-04 | ADMIN | 없음 | common.validation_failed/400 · common.duplicate_key/409 · common.postgres_unavailable/503 | ADM-MASTER | 원본 |
-| 5 | PATCH | /api/v1/tags/{id} | MST-04 | ADMIN | 없음 | common.validation_failed/400 · common.not_found/404 · common.duplicate_key/409 · master.scale_change_forbidden/409 · common.postgres_unavailable/503 | ADM-MASTER | 원본 |
-| 6 | POST | /api/v1/tags/{id}/deactivate | MST-05 | ADMIN | 없음 | common.not_found/404 · common.postgres_unavailable/503 | ADM-MASTER | 신설 |
-| 7 | POST | /api/v1/tags/{id}/reissue | MST-06 | ADMIN | 없음 | common.validation_failed/400 · common.not_found/404 · common.duplicate_key/409 · master.reissue_source_inactive/409 · common.postgres_unavailable/503 | ADM-MASTER | 신설 |
-| 8 | GET | /api/v1/tags/{id} | MST-04 · 05 | 전원 | cache:tagmeta:{tag_id} · BFF revalidate | common.not_found/404 · common.postgres_unavailable/503 | ADM-MASTER · ANL-TREND | 신설 |
-| 9 | POST | /api/v1/sites | MST-01 | ADMIN | 없음 | common.validation_failed/400 · common.duplicate_key/409 · common.postgres_unavailable/503 | ADM-MASTER | 신설 |
-| 10 | PATCH | /api/v1/sites/{id} | MST-01 | ADMIN | 없음 | common.validation_failed/400 · common.not_found/404 · common.duplicate_key/409 · common.postgres_unavailable/503 | ADM-MASTER | 신설 |
-| 11 | GET | /api/v1/lines | MST-01 | 전원 | Redis 사본 없음(판정) · BFF revalidate | common.validation_failed/400 · common.postgres_unavailable/503 | ADM-MASTER · ADM-WORKORDER | 신설 |
-| 12 | POST | /api/v1/lines | MST-01 | ADMIN | 없음 | common.validation_failed/400 · common.duplicate_key/409 · common.postgres_unavailable/503 | ADM-MASTER | 신설 |
-| 13 | PATCH | /api/v1/lines/{id} | MST-01 | ADMIN | 없음 | common.validation_failed/400 · common.not_found/404 · common.duplicate_key/409 · common.postgres_unavailable/503 | ADM-MASTER | 신설 |
-| 14 | POST | /api/v1/devices | MST-02 · 03 | ADMIN | 없음 | common.validation_failed/400 · common.duplicate_key/409 · common.postgres_unavailable/503 | ADM-MASTER | 신설 |
-| 15 | PATCH | /api/v1/devices/{id} | MST-02 | ADMIN | 없음 | common.validation_failed/400 · common.not_found/404 · common.duplicate_key/409 · common.postgres_unavailable/503 | ADM-MASTER | 신설 |
-| 16 | GET | /api/v1/devices/{id}/modbus-config | MST-03 | 전원 | 없음 · BFF no-store | common.not_found/404 · common.postgres_unavailable/503 | ADM-MASTER | 신설 |
-| 17 | PUT | /api/v1/devices/{id}/modbus-config | MST-03 | ADMIN | 없음 | common.validation_failed/400 · common.not_found/404 · common.postgres_unavailable/503 | ADM-MASTER | 신설 |
+| 1 | GET | /api/v1/sites | MST-01 | 전원 | Redis 사본 없음(판정) · BFF revalidate | common.postgres_unavailable/503 | 화면 없음(API 전용) — 폐지 화면 ADM-MASTER · DSH-REALTIME · ANL-TREND(D-14) | 원본 |
+| 2 | GET | /api/v1/devices | MST-02 | 전원 | cache:devlist:{site_id} · BFF revalidate | common.validation_failed/400 · common.not_found/404 · common.postgres_unavailable/503 | 화면 없음(API 전용) — 폐지 화면 ADM-MASTER · DSH-REALTIME · ANL-TREND(D-14) | 원본 |
+| 3 | GET | /api/v1/tags | MST-04 · 05 | 전원 | Redis 사본 없음(판정) · BFF revalidate | common.validation_failed/400 · common.not_found/404 · common.postgres_unavailable/503 | 화면 없음(API 전용) — 폐지 화면 ADM-MASTER · ANL-TREND · ALM-RULES(D-14) | 원본 |
+| 4 | POST | /api/v1/tags | MST-04 | ADMIN | 없음 | common.validation_failed/400 · common.duplicate_key/409 · common.postgres_unavailable/503 | 화면 없음(API 전용) — 폐지 화면 ADM-MASTER(D-14) | 원본 |
+| 5 | PATCH | /api/v1/tags/{id} | MST-04 | ADMIN | 없음 | common.validation_failed/400 · common.not_found/404 · common.duplicate_key/409 · master.scale_change_forbidden/409 · common.postgres_unavailable/503 | 화면 없음(API 전용) — 폐지 화면 ADM-MASTER(D-14) | 원본 |
+| 6 | POST | /api/v1/tags/{id}/deactivate | MST-05 | ADMIN | 없음 | common.not_found/404 · common.postgres_unavailable/503 | 화면 없음(API 전용) — 폐지 화면 ADM-MASTER(D-14) | 신설 |
+| 7 | POST | /api/v1/tags/{id}/reissue | MST-06 | ADMIN | 없음 | common.validation_failed/400 · common.not_found/404 · common.duplicate_key/409 · master.reissue_source_inactive/409 · common.postgres_unavailable/503 | 화면 없음(API 전용) — 폐지 화면 ADM-MASTER(D-14) | 신설 |
+| 8 | GET | /api/v1/tags/{id} | MST-04 · 05 | 전원 | cache:tagmeta:{tag_id} · BFF revalidate | common.not_found/404 · common.postgres_unavailable/503 | 화면 없음(API 전용) — 폐지 화면 ADM-MASTER · ANL-TREND(D-14) | 신설 |
+| 9 | POST | /api/v1/sites | MST-01 | ADMIN | 없음 | common.validation_failed/400 · common.duplicate_key/409 · common.postgres_unavailable/503 | 화면 없음(API 전용) — 폐지 화면 ADM-MASTER(D-14) | 신설 |
+| 10 | PATCH | /api/v1/sites/{id} | MST-01 | ADMIN | 없음 | common.validation_failed/400 · common.not_found/404 · common.duplicate_key/409 · common.postgres_unavailable/503 | 화면 없음(API 전용) — 폐지 화면 ADM-MASTER(D-14) | 신설 |
+| 11 | GET | /api/v1/lines | MST-01 | 전원 | Redis 사본 없음(판정) · BFF revalidate | common.validation_failed/400 · common.postgres_unavailable/503 | 화면 없음(API 전용) — 폐지 화면 ADM-MASTER · ADM-WORKORDER(D-14) | 신설 |
+| 12 | POST | /api/v1/lines | MST-01 | ADMIN | 없음 | common.validation_failed/400 · common.duplicate_key/409 · common.postgres_unavailable/503 | 화면 없음(API 전용) — 폐지 화면 ADM-MASTER(D-14) | 신설 |
+| 13 | PATCH | /api/v1/lines/{id} | MST-01 | ADMIN | 없음 | common.validation_failed/400 · common.not_found/404 · common.duplicate_key/409 · common.postgres_unavailable/503 | 화면 없음(API 전용) — 폐지 화면 ADM-MASTER(D-14) | 신설 |
+| 14 | POST | /api/v1/devices | MST-02 · 03 | ADMIN | 없음 | common.validation_failed/400 · common.duplicate_key/409 · common.postgres_unavailable/503 | 화면 없음(API 전용) — 폐지 화면 ADM-MASTER(D-14) | 신설 |
+| 15 | PATCH | /api/v1/devices/{id} | MST-02 | ADMIN | 없음 | common.validation_failed/400 · common.not_found/404 · common.duplicate_key/409 · common.postgres_unavailable/503 | 화면 없음(API 전용) — 폐지 화면 ADM-MASTER(D-14) | 신설 |
+| 16 | GET | /api/v1/devices/{id}/modbus-config | MST-03 | 전원 | 없음 · BFF no-store | common.not_found/404 · common.postgres_unavailable/503 | 화면 없음(API 전용) — 폐지 화면 ADM-MASTER(D-14) | 신설 |
+| 17 | PUT | /api/v1/devices/{id}/modbus-config | MST-03 | ADMIN | 없음 | common.validation_failed/400 · common.not_found/404 · common.postgres_unavailable/503 | 화면 없음(API 전용) — 폐지 화면 ADM-MASTER(D-14) | 신설 |
 
 - 검산: 표면 = REST **17** · 원본 5(#1~#5) + 신설 12(#6~#17) = **17** · 조회 6(#1 · 2 · 3 · 8 · 11 · 16) + 쓰기 11 = **17**
 - 신설 12의 기능 근거: MST-01 5(#9~#13) · MST-02 2(#14 · 15) · MST-03 2(#16 · 17) · MST-04 · 05 1(#8) · MST-05 1(#6) · MST-06 1(#7) = **12**
@@ -229,4 +230,4 @@ MST 표면은 **한 번의 저장이 네 사본 층을 건드리는 표면**이�
 - [../03_requirements/03_master.md](../03_requirements/03_master.md) — REQ-MST 계약
 - [../06_pipeline/07_business_crud.md](../06_pipeline/07_business_crud.md) — 무효화 체인 6단 · 쓰기별 대상 키
 - [../05_data_stores/01_postgresql_schema.md](../05_data_stores/01_postgresql_schema.md) — 마스터 테이블 컬럼
-- [../08_screen/06_master_admin.md](../08_screen/06_master_admin.md) — ADM-MASTER 화면
+- [../08_screen/06_master_admin.md](../08_screen/06_master_admin.md) — ADM-MASTER 화면(폐지 · D-14 — 폐지 전 원문 보존)

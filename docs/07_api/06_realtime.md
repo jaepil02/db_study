@@ -2,6 +2,7 @@
 
 > **대상**: RLT 도메인 REST 표면 — 설비 전체 최신값 · 단일 태그 최신값의 요청 · 응답 모양 · STALE 표시 · 빈 목록 표지 · 메타 비움 표지 · 응답 판정(200 · 404 · 503) · **설비 전체 200(메타 비움) · 단일 태그 common.postgres_unavailable/503 판정의 표면 반영** · WebSocket 재연결 동기화의 REST 쪽 계약
 > **작성일**: 2026-09-24
+> **개정일**: 2026-10-03 — D-14 2화면 전환(사용자 결정 2026-10-03) — 표면 2의 호출 화면 DSH-REALTIME → **화면 없음(API 전용)** · 관련 문서 폐지 표기 — 표면 · 기능 · 에러 코드 수 불변(api 표면은 지우지 않는다 — D-14 결정 1)
 > **개정일**: 2026-09-24 — W7 보안 판정 반영 — 재연결 폭주와 일반 등급 한도의 관계 닫힘 — 관계 R3(정본 12_security/03)
 > **개정일**: 2026-09-24 — W6 실험 채번 반영 — EXP 번호 반영(정본 10_observability/01 · 06)
 > **개정일**: 2026-09-24 — W5 판정 반영 — 미확인 "폴링 빈도 대 한도"를 **재연결 폭주 대 한도**로 좁힘(화면은 WebSocket 연결 중 폴링하지 않는다) · 공통 규약 레이트 리밋 행 정렬 — 표면 수 불변
@@ -33,8 +34,8 @@ RLT REST 표면은 **Redis의 휘발 사본을 읽는 유일한 요청 · 응답
 
 | # | 메서드 | 경로 | 기능 ID | 역할 | 캐시 | 에러 코드 | 호출 화면 | 원본 여부 |
 |:-:|------|------|------|------|------|------|------|------|
-| 1 | GET | /api/v1/realtime/devices/{id}/tags | RLT-01 · 03 · 04 · 07 | 전원 | rt:latest:{device_id}(봉인 사본) · cache:tagmeta:{tag_id} · lock:rebuild:rt:{device_id} | common.not_found/404 · realtime.latest_unavailable/503 | DSH-REALTIME | 원본 |
-| 2 | GET | /api/v1/realtime/tags/{id} | RLT-02 · 03 | 전원 | rt:latest:{device_id}(봉인 사본) · cache:tagmeta:{tag_id} | common.not_found/404 · realtime.latest_unavailable/503 · common.postgres_unavailable/503 | DSH-REALTIME | 원본 |
+| 1 | GET | /api/v1/realtime/devices/{id}/tags | RLT-01 · 03 · 04 · 07 | 전원 | rt:latest:{device_id}(봉인 사본) · cache:tagmeta:{tag_id} · lock:rebuild:rt:{device_id} | common.not_found/404 · realtime.latest_unavailable/503 | 화면 없음(API 전용) — 폐지 화면 DSH-REALTIME(D-14) | 원본 |
+| 2 | GET | /api/v1/realtime/tags/{id} | RLT-02 · 03 | 전원 | rt:latest:{device_id}(봉인 사본) · cache:tagmeta:{tag_id} | common.not_found/404 · realtime.latest_unavailable/503 · common.postgres_unavailable/503 | 화면 없음(API 전용) — 폐지 화면 DSH-REALTIME(D-14) | 원본 |
 
 - 검산: 표면 = REST **2** · 원본 2 + 신설 0 = **2**
 - RLT의 나머지 기능 5(RLT-05 · 06 · 07 · 08 · 09)는 [11_websocket.md](./11_websocket.md) #1의 동작이다. RLT-07은 두 자리에 걸친다 — 연결 관리는 WebSocket, 재연결 동기화는 이 문서 #1이다.
@@ -163,4 +164,4 @@ WebSocket이 끊겼다 다시 붙은 직후 클라이언트는 구독한 설비�
 - [../02_features/08_realtime.md](../02_features/08_realtime.md) — RLT-01~09 기능 정본
 - [../03_requirements/09_realtime.md](../03_requirements/09_realtime.md) — REQ-RLT 계약
 - [../06_pipeline/05_realtime_read.md](../06_pipeline/05_realtime_read.md) — 판정 트리 · 복원 · STALE 기전
-- [../08_screen/03_realtime_dashboard.md](../08_screen/03_realtime_dashboard.md) — DSH-REALTIME 화면
+- [../08_screen/03_realtime_dashboard.md](../08_screen/03_realtime_dashboard.md) — DSH-REALTIME 화면(폐지 · D-14 — 폐지 전 원문 보존)

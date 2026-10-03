@@ -2,6 +2,9 @@
 
 > **대상**: GEN 도메인 표면 둘 묶음 — ① 모드 C 부하 주입 POST /api/v1/ingest/bulk의 게이트(환경변수 이름) · 인증 · 요청 본문(엔트리 계약 변환) · 백프레셔 거절 datagen.stream_full/503 · 부분 수용 · 레이트 리밋 등급 ② **라이브 실행 제어 #2~#5**(EXP-PERF 성능 비교 · EXP-FLOW 흐름 시연의 시작 · 현재 · 단건 · 중단 — 실행 객체 스키마 · status · step status · 매개변수 두 종류 · 동시 실행 하나 datagen.run_in_progress/409 · 중단 · 실패 의미) · 생성기 실행 제어 표면 판정 · 실행 중 주입 제어 표면 판정
 > **작성일**: 2026-09-24
+> **개정일**: 2026-10-03 — 사용자 선택 2026-10-03 — 조회 경로 보이기 · D-15(설계 정본 .omc/plans/web-junior-redesign.md §9) — flow 매개변수 **readsPerSec 신설**(0 · 5 · 20 · 50 · 기본 20 — 조회 3종을 publish 동안 섞는다 · 기전 06_pipeline/10) · 매개변수 키 4 → **5** · 값 수 17 → **21** · flow 결과 수치 8 → **9**(**readsSent**) · publish detail에 readsSent · readsFailed · readsSkipped · 응답 예시 params · result에 반영 · 라이브 실행 판정 행의 "닫힌 매개변수 4키" → 개수 없이 §매개변수 인용 — 표면 · 기능 · 에러 코드 수 불변
+> **개정일**: 2026-10-03 — D-15 학습자 눈높이 한 화면(사용자 지시 2026-10-03 — 08_screen/08_evidence_screens) — 생성기 원격 손잡이 반론 불릿 측정 조건 서랍 → **각주 툴팁** — 표면 · 기능 · 에러 코드 수 불변
+> **개정일**: 2026-10-03 — D-14 2화면 전환(사용자 결정 2026-10-03) — 생성기 원격 손잡이 반론 불릿의 실험 콘솔(EXP-CONSOLE) → **두 실증 화면 · 측정 조건 서랍** — 표면 · 기능 · 에러 코드 수 불변(api 표면은 지우지 않는다 — D-14 결정 1)
 > **개정일**: 2026-09-28 — 라이브 실행 검수 반영(리드 재판정 2026-09-28) — flow bizPerSec 뜻 이름 토글 짝 → **시연 전용 설비 DEMO-FLOW-DEV에만 새 이름 명령**(되돌림 없음 · 운영 행 불변 · 명령 1건 = 1 · prepare 생성 명령은 commandsSent에 세지 않는다) · #5 표 행 4 → **5**(cleanup 진행 중 running — 중단 무시) · §중단과 실패 사건 3 → **5**(정상 경로 정리 실패 → failed · cleanup 중 중단 요청 → completed) · 중단 단계 표지(끝난 단계 done 유지 · 미시작 skipped · 진행 중 0~1개 stopped) · PostgreSQL 취소 = 전용 연결 pid · 레이트 리밋 폴링 항 = 실행 패널 탭 수(현행 참고 2) × 60 · 10^8 예상 디스크는 상한값 · flow 예시 검산 불릿
 > **개정일**: 2026-09-28 — 리드 정정(통합 확인) — 흐름 시연 업무 명령 "deviceName 현재 이름 그대로(순 변경 없음)" → **이름 토글 짝**(같은 설비에 "원래 이름 (시연)" → 원래 이름 · 중단이면 되돌림 1건 뒤 종결) — 기존 쓰기 서비스는 변경이 없으면 감사 · 체인을 건너뛰어(통합 확인 2026-09-28) 시연에서 무효화가 보이지 않았다
 > **개정일**: 2026-09-28 — 라이브 실행 제어 신설(사용자 요구 2026-09-28 "시작 · 중단 · 완료 표시 · 소요 시간" · 리드 판정) — **표면 #2~#5 신설**(POST /api/v1/runs · GET /api/v1/runs/current · GET /api/v1/runs/{runId} · POST /api/v1/runs/{runId}/stop · GEN-11 · 12 · 인증 전 무인증 · 뒤 시작 · 중단 ENGINEER · ADMIN · 조회 전원 · BFF no-store · 호출 화면 EXP-PERF · EXP-FLOW) · **§실행 객체**(필드 10 · status 5 · step status 6 · elapsedMs 서버 계산) · **§매개변수**(perf maxExponent · flow pps · durationSec · bizPerSec) · 에러 코드 **datagen.run_in_progress/409** 인용(정본 11_glossary/02) · 옛 서술 "GEN이 가진 표면은 하나뿐이다" → **표면 5(부하 주입 1 + 라이브 실행 4)** · 표면 요약 검산 1 → **5**(원본 1 + 신설 4) · 원본에 없는 표면 판정에 라이브 실행 행(두지 않는 생성기 실행 제어와 가르는 축) — 옛 판정(생성기 실행 · 상태 조회 표면 두지 않음)은 모드 A~D에 대해 유지
@@ -261,7 +264,7 @@ GEN이 가진 표면은 **두 묶음 다섯이다.** ① 모드 C 부하 주입 
 | 종류 | 단계 key(순서) | 단계 수 | detail |
 |------|------|------|------|
 | perf | prepare → 규모마다 fill-ch@{지수} · fill-pg@{지수} · query@{지수} → cleanup | 2 + 3 × (maxExponent − 4) — 기본 7이면 **11** | fill-* {rows(이 단계에 더한 행), ms, storageBytes(적재 뒤 누적)} · query {done, total 10} · prepare · cleanup {objects} |
-| flow | prepare → publish → drain | **3** | publish {pointsSent, entriesSent, commandsSent, backpressurePauses, progress 0~1} · drain {drainMs, timedOut} · prepare {devices, tags}(시드 활성 설비 · 태그 수 — 시연 전용 행은 세지 않는다) |
+| flow | prepare → publish → drain | **3** | publish {pointsSent, entriesSent, commandsSent, backpressurePauses, progress 0~1, readsSent, readsFailed, readsSkipped} · drain {drainMs, timedOut} · prepare {devices, tags}(시드 활성 설비 · 태그 수 — 시연 전용 행은 세지 않는다) |
 
 - 검산: 종류 = **2**
 - {지수}는 5 ~ maxExponent의 정수다(규모 10^지수 행). fill-pg는 ANALYZE를 포함한다. query는 동일 쿼리 5종 Q1~Q5 × 두 저장소 = 10(웜 · 워밍업 1회 버림 + 3회 — 정본 [../05_data_stores/10_olap_vs_rdb_control.md](../05_data_stores/10_olap_vs_rdb_control.md) §동일 쿼리 5종).
@@ -277,8 +280,9 @@ params는 **닫힌 값 집합(화이트리스트)**이다 — 자유 수치를 �
 | flow | pps | 1000 · 5000 · 10000 · 20000 · 50000 | 10000 | 생성기가 stream:plc:raw에 보내는 초당 포인트 |
 | flow | durationSec | 30 · 60 · 120 · 300 | 60 | publish 단계 길이 |
 | flow | bizPerSec | 0 · 0.5 · 1 · 2 | 1 | 초당 업무 명령 수(BizWritePort — master.device.patch · **시연 전용 설비 DEMO-FLOW-DEV에만** 새 이름 · 되돌림 없음) · 0이면 명령 없음 |
+| flow | **readsPerSec** | 0 · 5 · 20 · 50 | 20 | 초당 조회 수 — 센서 시계열 · 센서 지금 값 · 업무 설비 목록 3종을 돌아가며 프로세스 안 호출로 보낸다(표면을 거치지 않고 같은 서비스 계층 · 같은 캐시 경로 — 기전 [../06_pipeline/10_datagen_inject.md](../06_pipeline/10_datagen_inject.md) §흐름 시연 실행) · 0이면 조회 없음 |
 
-- 검산: 키 = perf 1 + flow 3 = **4** · 값 수 = 4 + 5 + 4 + 4 = **17**
+- 검산: 키 = perf 1 + flow 4 = **5** · 값 수 = 4 + 5 + 4 + 4 + 4 = **21**
 - **10^8은 표면이 막지 않는다.** 화이트리스트 안이다 — 시작 전 예상 디스크(**상한값** · 추정 표기)와 "수 분 이상" 경고는 화면이 보인다(예상식 [../05_data_stores/10_olap_vs_rdb_control.md](../05_data_stores/10_olap_vs_rdb_control.md) §비교 축 6의 행당 저장 바이트 · 현행 참고). 디스크 부족은 단계 예외 → failed로 드러난다.
 - 값 집합 확장은 이 표 · [../03_requirements/06_datagen.md](../03_requirements/06_datagen.md) REQ-GEN-17 · 18 · 화면 선택지를 같은 변경 단위에서 고친다.
 
@@ -290,10 +294,11 @@ result는 단계가 끝날 때마다 채워진다 — 중단 · 실패한 실행
 |------|------|------|
 | perf | scales[] | exponent · rows · fillMs {ch, pg} · storageBytes {ch, pg} · queries[] |
 | perf | scales[].queries[] | q(Q1~Q5) · ch {values[3], median, rows} · pg {values[3], median, rows} · winner(ch · pg) · ratio(pg.median ÷ ch.median) · resultMatch(결과 행 수 일치) |
-| flow | 수치 8 | pointsSent · entriesSent · commandsSent · commandsOk · commandsPending · commandsFailed · backpressurePauses · drainMs |
+| flow | 수치 9 | pointsSent · entriesSent · commandsSent · commandsOk · commandsPending · commandsFailed · backpressurePauses · drainMs · **readsSent** |
 
-- 검산: 행 = **3** · flow 수치 = **8**
+- 검산: 행 = **3** · flow 수치 = **9**
 - **perf의 PostgreSQL 쪽은 I2 인덱스 변형 하나다**(격자 053 구조 판정의 기준 변형) — 화면 곡선의 라이브 계열이 "라이브 CH · 라이브 PG I2" 둘인 이유다. 역전 음영은 라이브 결과로 그리지 않는다(053 구조 판정만).
+- **readsSent는 보낸 조회 수다(3종 합 · 실패 포함 · 동시 상한으로 건너뛴 조회는 빼고 publish detail.readsSkipped가 센다).** readsFailed · readsSkipped는 publish detail에만 있고 result에는 없다. 조회는 결과를 실행 객체에 싣지 않고 버린다 — 히트 · 미스 · 실패는 실행이 아니라 /metrics의 조회 계열(tsq_cache_requests_total · rlt_latest_requests_total · mst_cache_requests_total — 정본 [../10_observability/01_metrics_catalog.md](../10_observability/01_metrics_catalog.md))이 센다. 조회가 실패해도 실행은 failed가 되지 않는다 — 조회 실패를 실행 실패로 올리면 ClickHouse가 잠깐 503인 동안 흐름 시연 전체가 멈춘다.
 - commandsPending은 명령 응답이 202(대기 상한 초과)였던 수다 — 실패가 아니다([01_conventions.md](./01_conventions.md) §업무 쓰기 경로).
 - **명령 1건 = 1이다(짝 없음).** commandsSent는 publish가 시연 전용 설비에 보낸 master.device.patch 수이고 commandsOk + commandsPending + commandsFailed와 같다 · prepare가 시연 전용 행(사이트 · 라인 · 설비)을 만드는 명령은 세지 않는다(기전 [../06_pipeline/10_datagen_inject.md](../06_pipeline/10_datagen_inject.md) §시연 전용 행).
 
@@ -350,21 +355,21 @@ flow 실행이 끝난 뒤의 #4 응답이다(예시 수치는 모양 설명용).
   "runId": "b0c9e4d1-58a2-4f37-8e0b-6a1d2c3e4f50",
   "type": "flow",
   "status": "completed",
-  "params": { "pps": 10000, "durationSec": 60, "bizPerSec": 1 },
+  "params": { "pps": 10000, "durationSec": 60, "bizPerSec": 1, "readsPerSec": 20 },
   "startedAt": "2026-09-28T06:00:00.000Z",
   "endedAt": "2026-09-28T06:01:02.410Z",
   "elapsedMs": 62410,
   "steps": [
     { "key": "prepare", "label": "시드 설비 · 태그 로드 · 시연 전용 행 확인", "status": "done", "startedAt": "2026-09-28T06:00:00.002Z", "endedAt": "2026-09-28T06:00:00.570Z", "elapsedMs": 568, "detail": { "devices": 50, "tags": 10000 } },
-    { "key": "publish", "label": "발행", "status": "done", "startedAt": "2026-09-28T06:00:00.570Z", "endedAt": "2026-09-28T06:01:00.570Z", "elapsedMs": 60000, "detail": { "pointsSent": 600000, "entriesSent": 3000, "commandsSent": 60, "backpressurePauses": 0, "progress": 1 } },
+    { "key": "publish", "label": "발행", "status": "done", "startedAt": "2026-09-28T06:00:00.570Z", "endedAt": "2026-09-28T06:01:00.570Z", "elapsedMs": 60000, "detail": { "pointsSent": 600000, "entriesSent": 3000, "commandsSent": 60, "backpressurePauses": 0, "progress": 1, "readsSent": 1200, "readsFailed": 0, "readsSkipped": 0 } },
     { "key": "drain", "label": "적체 소진", "status": "done", "startedAt": "2026-09-28T06:01:00.570Z", "endedAt": "2026-09-28T06:01:02.410Z", "elapsedMs": 1840, "detail": { "drainMs": 1840, "timedOut": false } }
   ],
-  "result": { "pointsSent": 600000, "entriesSent": 3000, "commandsSent": 60, "commandsOk": 59, "commandsPending": 1, "commandsFailed": 0, "backpressurePauses": 0, "drainMs": 1840 },
+  "result": { "pointsSent": 600000, "entriesSent": 3000, "commandsSent": 60, "commandsOk": 59, "commandsPending": 1, "commandsFailed": 0, "backpressurePauses": 0, "drainMs": 1840, "readsSent": 1200 },
   "error": null
 }
 ```
 
-- commandsSent 60 = durationSec 60 × bizPerSec 1(명령 1건 = 1 · 전부 DEMO-FLOW-DEV) = commandsOk 59 + commandsPending 1 + commandsFailed 0 · entriesSent 3000 = 60초 × 설비 50(pps 10000 = 태그 10000이라 초마다 태그 전부 한 번 · 같은 설비 · 같은 ts 한 엔트리).
+- commandsSent 60 = durationSec 60 × bizPerSec 1(명령 1건 = 1 · 전부 DEMO-FLOW-DEV) = commandsOk 59 + commandsPending 1 + commandsFailed 0 · entriesSent 3000 = 60초 × 설비 50(pps 10000 = 태그 10000이라 초마다 태그 전부 한 번 · 같은 설비 · 같은 ts 한 엔트리) · readsSent 1200 = durationSec 60 × readsPerSec 20(건너뛴 조회 0 · 순환 2 : 2 : 1이라 시계열 480 · 지금 값 480 · 설비 목록 240).
 - elapsedMs 62410 = endedAt − startedAt이다 — 화면의 "완료 — 총 소요 1분 2.4초"가 이 값 하나에서 나온다(REQ-GEN-19 · AC-46).
 - 409 응답은 에러 봉투다 — {"error": {"code": "datagen.run_in_progress", "message": "…", "details": {"runId": "…", "type": "perf"}}}([01_conventions.md](./01_conventions.md) §에러 봉투).
 
@@ -378,11 +383,11 @@ flow 실행이 끝난 뒤의 #4 응답이다(예시 수치는 모양 설명용).
 | 실행 중 주입 제어(SIM 지연 · 오류 주입 시작 · 해제) | **두지 않는다** | W4 판정 — 제어 수단은 기동 시 읽는 주입 계획 · 전환 = 재기동 원칙([../06_pipeline/10_datagen_inject.md](../06_pipeline/10_datagen_inject.md) §SIM 주입 제어) | 요청 시각이 실험 기록과 따로 놀아 "언제 장애를 넣었는가"가 기록에 없다 · 새 표면 · 인가 · 레이트 리밋 방어 지점이 생긴다 |
 | 생성기 상태 조회(진행률 · pps) | **두지 않는다** | 생성기 계측은 /metrics가 노출한다 · 기능 근거 없음 | 같은 수치가 두 표면에 있으면 실험 콘솔이 어느 쪽을 읽는지에 따라 값이 다르다 |
 | 모드 B 표면(Stream 직결 HTTP 대행) | **두지 않는다** | 모드 B의 정의가 HTTP를 거치지 않는 것이다 | HTTP를 거치면 모드 C다 — 모드 둘이 같은 경로를 재게 된다 |
-| **라이브 실행 제어(EXP-PERF · EXP-FLOW 시연 실행)** | **둔다 — #2~#5**(2026-09-28) | 사용자 요구 2026-09-28 · GEN-11 · 12 · **측정 기록을 만들지 않는 시연**이라 위 첫 행의 실패(실험 조건이 요청 본문으로 흩어져 기록과 따로 논다)가 성립하지 않는다 — 기록이 없으니 어긋날 기록 조건도 없다 · 시드 · 티어 · 모드를 요청으로 받지 않고 닫힌 매개변수 4키만 받는다 | 두지 않으면(옛 판정) 두 실증 화면이 "기록을 읽기만 하는 화면"에 머물러 시연 청중 앞에서 시작 · 중단 · 소요 시간을 보일 수 없다 — 사용자 요구 불충족 |
+| **라이브 실행 제어(EXP-PERF · EXP-FLOW 시연 실행)** | **둔다 — #2~#5**(2026-09-28) | 사용자 요구 2026-09-28 · GEN-11 · 12 · **측정 기록을 만들지 않는 시연**이라 위 첫 행의 실패(실험 조건이 요청 본문으로 흩어져 기록과 따로 논다)가 성립하지 않는다 — 기록이 없으니 어긋날 기록 조건도 없다 · 시드 · 티어 · 모드를 요청으로 받지 않고 닫힌 매개변수(§매개변수)만 받는다 | 두지 않으면(옛 판정) 두 실증 화면이 "기록을 읽기만 하는 화면"에 머물러 시연 청중 앞에서 시작 · 중단 · 소요 시간을 보일 수 없다 — 사용자 요구 불충족 |
 
 - 검산: 후보 = **5** · 둔다 1(라이브 실행 — 표면 4) · 두지 않는다 4
 - **라이브 실행의 진행 수치와 /metrics는 같은 수치가 아니다** — 셋째 행(생성기 상태 조회)의 실패가 재발하지 않는 이유다. 실행 객체의 pointsSent는 그 실행 하나의 누계이고, /metrics의 gen_points_generated_total{mode="run"}은 프로세스 기동 이후 누계다(메트릭 정본 [../10_observability/01_metrics_catalog.md](../10_observability/01_metrics_catalog.md)). 화면은 실행 패널에 앞의 것을, 흐름도 카드에 뒤의 것을 쓴다.
-- **"실험 콘솔에서 생성기(모드 A~D)를 켜고 싶다"는 요구가 오면 이 표가 반론이다.** 라이브 실행은 모드 A~D의 원격 손잡이가 아니다 — 측정 기록을 만드는 실험은 여전히 호스트 셸의 실행 인자 · 환경변수 · 재기동으로만 돈다. 실험 콘솔(EXP-CONSOLE)은 표시 전용이다(docs_plan 보정 #14 · 권한 매트릭스 §실험 수행자와 실험 콘솔). 스위치 · 게이트 · 생성기의 전환은 모두 호스트 셸의 환경변수와 재기동이다(D-06).
+- **"화면에서 생성기(모드 A~D)를 켜고 싶다"는 요구가 오면 이 표가 반론이다.** 라이브 실행은 모드 A~D의 원격 손잡이가 아니다 — 측정 기록을 만드는 실험은 여전히 호스트 셸의 실행 인자 · 환경변수 · 재기동으로만 돈다. 두 실증 화면(EXP-PERF · EXP-FLOW)은 실행 패널 밖에 생성기 손잡이를 두지 않고 스위치는 각주 툴팁에 표시만 한다(docs_plan 보정 #14 · 권한 매트릭스 §실험 수행자와 실험 콘솔 · 실험 콘솔 EXP-CONSOLE은 폐지 — D-14). 스위치 · 게이트 · 생성기의 전환은 모두 호스트 셸의 환경변수와 재기동이다(D-06).
 
 ## 미확인 · 미설계 등재
 

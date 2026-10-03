@@ -2,6 +2,8 @@
 
 > **대상**: /metrics로 노출하는 메트릭 전수 — 이름 규약 · 닫힌 레이블 집합 · **스위치 상태 레이블 이름** · **컨슈머 랙 산출식 판정(가장 중요한 단일 지표)** · 계열별 전수(앱 기본 · HTTP·WS · 수집 · 적재 · 알람 · 실시간 · 조회 · 업무 · 인증 · Redis · PostgreSQL · ClickHouse · E2E · 관측 자체) · 파생 지표 식 · 선행 문서 인계 메트릭 대응 · 수집 주기 · E2E 창 · 메모리 표본 수 조회 계약 · Pub/Sub 출력 버퍼 관련 메트릭
 > **작성일**: 2026-09-24
+> **개정일**: 2026-10-03 — 사용자 선택 2026-10-03 — 조회 경로 보이기 · D-15(설계 정본 .omc/plans/web-junior-redesign.md §9) — **mst_cache_requests_total{result} · rlt_latest_requests_total{result} 신설**(마스터 목록 사본 조회 결과 hit · miss · error · 설비 최신값 조회 요청 결과 hit · restored · bypass · error — 둘 다 닫힌 레이블 0 초기화 · EXP-FLOW 조회 줄 · 흐름 시연 조회 섞기) · 실시간 · 조회 · 업무 · 인증 행 26 → **28**(RLT 9 → **10** · MST 2 → **3**) · 표 행 133 → **135** · 이름 145 → **147** · 인계 대응 라이브 실행 행에 흐름 실행 조회 · 조회 캐시 히트율 식 불변(tsq만 — 마스터 사본은 따로 읽는다)
+> **개정일**: 2026-10-03 — D-14 2화면 전환(사용자 결정 2026-10-03) — 메트릭 이름을 부르는 자리 EXP-CONSOLE BFF 해석 → **EXP-FLOW BFF 해석** — 메트릭 수 불변
 > **개정일**: 2026-09-28 — 라이브 실행 제어 반영(사용자 요구 2026-09-28 · 리드 판정 — EXP-PERF · EXP-FLOW 시작 · 중단) — **gen_runs_total{type, status} · gen_run_active{type} 신설** · 수집 행 20 → **22**(GEN 5 → **7**) · 표 행 131 → **133** · 이름 143 → **145** · mode 레이블 값에 **run**(라이브 흐름 실행 — 이름 추가 아님) · 닫힌 레이블 route API 표면 44 → **48** · error_code 22 → **23** · mode 값 집합을 주입 모드 4 + standalone + run = **6**으로 정정(S1 standalone 누락 포함) · 인계 대응 원천 행 15 → **16**
 > **개정일**: 2026-09-28 — 웨이브 1 검증 반영(v-wave1 L1) — biz_command_seconds result 3 → **5**값(expired · failed 추가 · unavailable 제외 근거) — 이름 수 불변
 > **개정일**: 2026-09-28 — 웨이브 1 검수 반영(B-M4) — biz_commands_total result 값 applied · rejected · timeout · unavailable → **applied · rejected · expired · failed · timeout · unavailable**(6) · 계수 주체 둘(워커 = 종결 4값 · api = timeout · unavailable) · 한 명령이 api 1 + 워커 1로 두 번 셀 수 있음 · 503 원인 구분 **Redis 불가 = unavailable · PostgreSQL 불가 = failed** — 메트릭 이름 · 행 수 불변
@@ -19,7 +21,7 @@
 
 이 문서는 **메트릭 이름의 정본**이다. 선행 문서들이 "이름은 W6"으로 넘긴 계수 · 히스토그램 · 게이지 전부를 여기서 명명하고, 어느 요구가 그 지표를 요구했는지를 원천 열에 남긴다. 계측 지점과 수집 방식은 [02_instrumentation.md](./02_instrumentation.md), 대시보드와 알림은 [03_dashboards_alerts.md](./03_dashboards_alerts.md), 실험의 판정 지표 선택은 [06_experiment_catalog.md](./06_experiment_catalog.md)가 갖는다.
 
-**이름은 계약이다.** 메트릭 이름은 알림 규칙 · 대시보드 · EXP-CONSOLE의 BFF 해석 · 측정 기록의 지표 칸이 같은 문자열로 부른다. 그래서 이름은 바꾸지 않고, 뜻이 바뀌면 새 이름을 만든다(§이름 변경 규칙). 수치는 이 문서에 하나도 없다 — 목표 · 원본 예상치는 [../03_requirements/13_nonfunctional.md](../03_requirements/13_nonfunctional.md)와 실험 카탈로그가 갖고 전부 3계층 미확인이다.
+**이름은 계약이다.** 메트릭 이름은 알림 규칙 · 대시보드 · EXP-FLOW의 BFF 해석 · 측정 기록의 지표 칸이 같은 문자열로 부른다. 그래서 이름은 바꾸지 않고, 뜻이 바뀌면 새 이름을 만든다(§이름 변경 규칙). 수치는 이 문서에 하나도 없다 — 목표 · 원본 예상치는 [../03_requirements/13_nonfunctional.md](../03_requirements/13_nonfunctional.md)와 실험 카탈로그가 갖고 전부 3계층 미확인이다.
 
 **가장 중요한 단일 지표는 컨슈머 랙(consumer_lag)이다**(원본 tech_stack.md §9). 원본의 두 산출식이 서로 다르고 둘 다 ADR-21 뒤에는 정상 운전에서 틀린 값을 낸다 — §컨슈머 랙 판정이 이것을 닫는다.
 
@@ -186,7 +188,8 @@
 |------|------|------|------|------|------|
 | rlt_latest_restores_total | counter | 건 | result(success · empty · failed) | 키 없음 → ClickHouse 복원 결과 | [../06_pipeline/05_realtime_read.md](../06_pipeline/05_realtime_read.md) |
 | rlt_latest_lock_wait_exhausted_total | counter | 건 | 없음 | 최신값 락 실패 뒤 대기 소진 | 상동 |
-| rlt_latest_points_served_total | counter | 포인트 | freshness(fresh · stale) | 응답한 태그 값 — STALE 비율의 분모 · 분자 | AC-34 · RLT-03 |
+| rlt_latest_points_served_total | counter | 포인트 | freshness(fresh · stale) | 응답한 태그 값 — STALE 비율의 분모 · 분자 · **요청 수로 읽지 않는다**(설비당 태그 수만큼 오른다) | AC-34 · RLT-03 |
+| **rlt_latest_requests_total** | counter | 건 | result(hit · restored · bypass · error) | 설비 최신값 조회 요청 결과(deviceLatest 1회 = 1) — hit = Redis rt:latest가 답함(남의 복원을 기다린 뒤 재읽기 포함) · restored = 빈 키 ClickHouse 복원 경로 · bypass = SW-02 off로 ClickHouse 리더가 답함 · error = 예외(503 · 404 등) 또는 락 대기 소진 뒤 빈 응답 · 사람의 조회(표면 GET /api/v1/realtime/devices/{id}/tags)와 흐름 시연의 조회 섞기가 같은 메서드라 함께 센다 · 닫힌 레이블 값 4를 0으로 초기화한다 | RLT-01 · [../06_pipeline/05_realtime_read.md](../06_pipeline/05_realtime_read.md) · [../06_pipeline/10_datagen_inject.md](../06_pipeline/10_datagen_inject.md) §흐름 시연 실행 · EXP-FLOW 조회 줄 |
 | rlt_latest_updates_total | counter | 건 | writer(ingest · collector) | rt:latest 갱신 — 갱신 공백 판정 | SW-11 · AC-34 |
 | rlt_tag_unresolved_total | counter | 건 | 없음 | 단일 태그 해석 실패(503) | [../06_pipeline/05_realtime_read.md](../06_pipeline/05_realtime_read.md) |
 | rlt_fanout_delivery_seconds | histogram | 초 | channel(pubsub · direct) | 발행 → 게이트웨이 도착(스로틀 창 대기 · 소켓 송신 제외 · 한 프로세스 안에서만 잰다) — **첫 칸 100 µs가 direct 경로를 가르지 못해 판정은 합 ÷ 수(평균)로 한다(기록 025)** | SW-06 · AC-40 |
@@ -198,6 +201,7 @@
 | tsq_rebuild_duration_seconds | histogram | 초 | 없음 | 캐시 미스 재구성 시간 — 스탬피드 대기 관계의 우변 | [../06_pipeline/06_timeseries_read.md](../06_pipeline/06_timeseries_read.md) |
 | tsq_rebuild_lock_wait_exhausted_total | counter | 건 | 없음 | 스탬피드 대기 소진 → 직접 조회 | 상동 |
 | tsq_export_aborted_total | counter | 건 | 없음 | 원시 내보내기 도중 중단 | [../07_api/05_timeseries.md](../07_api/05_timeseries.md) |
+| **mst_cache_requests_total** | counter | 건 | result(hit · miss · error) | 마스터 목록 사본(cache:devlist) 조회 결과 — 사람의 목록 조회(표면 GET /api/v1/devices)와 흐름 시연의 조회 섞기가 같은 서비스 메서드를 거쳐 함께 센다 · 사본 호출 실패(degrade)는 error — miss에 섞지 않는다(tsq_cache_requests_total과 같은 규칙) · 닫힌 레이블 값 3을 0으로 초기화한다 | MST-02 · [../06_pipeline/07_business_crud.md](../06_pipeline/07_business_crud.md) §읽기 · 쓰기 경로 · [../06_pipeline/10_datagen_inject.md](../06_pipeline/10_datagen_inject.md) §흐름 시연 실행 · EXP-FLOW 조회 줄 |
 | mst_cache_delete_failures_total | counter | 건 | prefix | 무효화 체인 ② 삭제 실패 | REQ-MST-10 |
 | mst_dict_reloads_total | counter | 건 | result(ok · failed) | 체인 ④ Dictionary 재적재 — AC-06 사건 | REQ-MST-10 · AC-06 |
 | cache_wrapper_failures_total | counter | 건 | prefix · op | CacheKeyClient가 삼킨 실패(degrade) | REQ-GLB-09 |
@@ -211,7 +215,7 @@
 | biz_stream_lag | gauge | 엔트리 | 없음 | stream:biz:cmd의 grp:biz-writer 미확인 적체 — 그룹 lag + pending(§컨슈머 랙 판정과 같은 산출 기준 · XLEN 아님) · 워커 정지 · 적체의 신호 | 상동 · SW-12 |
 | biz_duplicates_total | counter | 건 | kind | 원장(biz_command_log)에 이미 있는 cmdId를 만나 적용 없이 저장된 결과를 다시 낸 수 — 재전달 · 같은 키 재요청 | REQ-GLB-12 · AC-37 · EXP-46 |
 
-- 검산: 행 = **26** — RLT 9 + TSQ 5 + MST 2 + 래퍼 2 + AUT 3 + BIZ 5
+- 검산: 행 = **28** — RLT 10 + TSQ 5 + MST 3 + 래퍼 2 + AUT 3 + BIZ 5
 - **로그인 실패 계수는 따로 두지 않는다(W7 판정).** http_requests_total{route="/api/v1/auth/login", method="POST", code="401"}가 곧 로그인 실패 수다 — 로그인 표면의 401은 auth.invalid_credentials 하나뿐이다([../07_api/03_auth.md](../07_api/03_auth.md) #1). 대입 흔적은 이 계수의 급증으로 본다(로그인 시도 제한을 두지 않은 판정의 관측 자리 — [../12_security/03_api_surface_defense.md](../12_security/03_api_surface_defense.md) §로그인 시도 제한 판정).
 
 ## 저장소 — Redis · PostgreSQL · ClickHouse
@@ -274,9 +278,9 @@ OBS가 수집 주기마다 모아 마지막 값을 낸다(REQ-OBS-03). 수집 �
 
 ### 검산
 
-- 표 행 = 14 + 22 + 20 + 11 + 26 + 30 + 10 = **133**
+- 표 행 = 14 + 22 + 20 + 11 + 28 + 30 + 10 = **135**
 - 한 행에 이름 둘을 둔 행 = 수집 3(col_polls · spool · gen_publish_halted) + 적재 2(ing_group · ing_control_copy) + 알람 2(alm_events · alm_eval_gap) + 저장소 5(redis 메모리 · redis keyspace · pg 데드 튜플 · ch 파트 크기 · ch 디스크) = **12**
-- **이름 수 = 133 + 12 = 145** — 계열별 앱 · 워커 풀 · HTTP · WS 14 · 수집 25 · 적재 22 · 알람 13 · 실시간 · 조회 · 업무 · 인증 26 · 저장소 35 · E2E · 관측 10 = 14 + 25 + 22 + 13 + 26 + 35 + 10 = **145**
+- **이름 수 = 135 + 12 = 147** — 계열별 앱 · 워커 풀 · HTTP · WS 14 · 수집 25 · 적재 22 · 알람 13 · 실시간 · 조회 · 업무 · 인증 28 · 저장소 35 · E2E · 관측 10 = 14 + 25 + 22 + 13 + 28 + 35 + 10 = **147**
 - 원본 보존 13종은 전부 위 표에 있다 — points_emitted · poll_duration · deadband_boost_active · spool_active · spool_bytes · spool_drain_rate(수집) · consumer_lag · rows_inserted · insert_duration · batch_size · dlq_count(적재) · stream_trimmed_unacked(저장소) · e2e_latency(E2E) = **13**
 
 ## 파생 지표
@@ -294,6 +298,7 @@ PromQL 기록 규칙으로 계산하는 값이다. 관측 프로파일이 없을
 | 파트 생성률 | ch_new_parts_total{table="tag_raw"} 증가율 | AC-22 · REQ-NFR-13 | 활성 파트 수만 보면 머지가 생성을 따라잡는 동안의 부담이 안 보인다 |
 
 - 검산: 파생 지표 = **7**
+- **최신값 · 마스터 목록 사본의 히트는 조회 캐시 히트율에 더하지 않는다.** rlt_latest_requests_total은 사본이 아니라 원본 최신값의 읽기이고 mst_cache_requests_total은 TTL · 무효화 규칙이 다른 사본(업무 쓰기마다 지워진다)이라 tsq 계열과 합치면 업무 명령 빈도가 시계열 캐시의 효율처럼 읽힌다 — 두 계열을 나란히 읽는다(EXP-FLOW 조회 줄은 건수만 합친다 — [../08_screen/08_evidence_screens.md](../08_screen/08_evidence_screens.md)).
 - 무손실 차의 tag_raw count는 메트릭이 아니라 SQL이다 — 적재를 멈추고 랙 0 뒤에 같은 구간으로 센다(AC-01).
 - **모드 A의 분모는 생성 카운트가 아니라 Collector 발행 포인트다(S2 판정).** 모드 A의 생성기는 레지스터를 갱신할 뿐 행을 만들지 않는다 — 행이 되는 것은 Collector가 폴링한 표본이라 gen_points_generated_total은 폴링 주기와 갱신 주기의 비만큼 행 수와 어긋난다. 모드 A 무손실 차 = points_emitted − tag_raw count이며, 수집 정지 뒤 Stream 엔트리 전부를 디코딩한 포인트 합으로 교차 확인한다(기록 010). 모드 B · C는 위 식 그대로다.
 
@@ -318,7 +323,7 @@ PromQL 기록 규칙으로 계산하는 값이다. 관측 프로파일이 없을
 | 06_pipeline/12 | 음수 dt · 잘린 스풀 프레임 | ing_negative_dt_total · col_spool_truncated_frames_total |
 | 07_api/05 | 내보내기 중단 | tsq_export_aborted_total |
 | 02_features/13 · 07_api/10 · 03_requirements/12 | 스위치 상태 레이블 이름 | obs_switch_info(switch · env · value · impl) |
-| REQ-GEN-16~19 · 06_pipeline/10 §라이브 실행 — perf · flow | 라이브 실행 종결 수 · 진행 중 실행 · 흐름 실행 발행 | gen_runs_total · gen_run_active · gen_points_generated_total{mode="run"} |
+| REQ-GEN-16~19 · 06_pipeline/10 §라이브 실행 — perf · flow | 라이브 실행 종결 수 · 진행 중 실행 · 흐름 실행 발행 · 흐름 실행 조회(설비 최신값 · 마스터 목록 사본) | gen_runs_total · gen_run_active · gen_points_generated_total{mode="run"} · rlt_latest_requests_total · mst_cache_requests_total |
 
 - 검산: 원천 행 = **16** · 넘긴 지표 전부 이름 있음 · 미명명 **0**
 - 병목 확인 지표(06_pipeline/01 §흐름별 병목 후보의 원본 표기)는 poll_duration · ch_active_parts · redis_ops_per_sec · ch_query_duration_p95_seconds · tsq_cache_requests_total · pg_connections · alm_eval_duration_seconds · nodejs_eventloop_lag_p95_seconds · gen_worker_utilization · ing_fanin_wait_seconds · alm_handoff_wait_seconds로 읽는다. 디스크 대기 · 호스트 CPU는 메트릭이 아니라 호스트 도구다([02_instrumentation.md](./02_instrumentation.md)).

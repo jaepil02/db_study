@@ -2,6 +2,7 @@
 
 > **대상**: db_study 문서군과 구현이 쓰는 모든 식별자의 형식 · 채번 규칙 · 결번 · 예약 대역 · 원본 흐름 표기 대응 — ID 규약 정본
 > **작성일**: 2026-09-24
+> **개정일**: 2026-10-03 — D-14 2화면 전환(사용자 결정 2026-10-03) — 화면 코드 예시 DSH-REALTIME(폐지 결번) → **EXP-PERF** — ID 체계 수 불변
 > **개정일**: 2026-09-25 — S3 구현 반영 — 컨슈머 이름 {모듈}-{pid}-{n} → **{모듈}-{n}**(S2 판정 · S3 다중 컨슈머 ingest-1..N)
 > **개정일**: 2026-09-24 — S0 반영 — 린트 경로 .omc/docs_lint.py → **scripts/docs_lint.py**
 > **개정일**: 2026-09-24 — 최종 정밀 검수 — 빈 표 칸을 닫힌 어휘 해당 없음으로 채움(표 열 규약)
@@ -25,7 +26,7 @@
 | **데이터 흐름** | **F-NN** | F-01 | [../06_pipeline/01_flow_inventory.md](../06_pipeline/01_flow_inventory.md) | 2자리 |
 | **역할 스위치** | **SW-NN** | SW-01 | [../02_features/13_switch_matrix.md](../02_features/13_switch_matrix.md) | 2자리 |
 | **실험** | **EXP-NN** | EXP-01 | [../10_observability/06_experiment_catalog.md](../10_observability/06_experiment_catalog.md) | 2자리 |
-| 화면 코드 | {표면}-{의미} — 대문자 · 하이픈 | DSH-REALTIME | [../08_screen/README.md](../08_screen/README.md) | 해당 없음 |
+| 화면 코드 | {표면}-{의미} — 대문자 · 하이픈 | EXP-PERF | [../08_screen/README.md](../08_screen/README.md) | 해당 없음 |
 | API 표면 | {문서} #N — 문서 지역 번호 | 05_timeseries #3 | 각 [../07_api](../07_api/README.md) 도메인 파일 | 자릿수 없음 |
 | 에러 코드 | {domain}.{snake_case}/{HTTP} | datagen.stream_full/503 | [02_error_codes.md](./02_error_codes.md) | 해당 없음 |
 | 테이블 · 컬럼 | snake_case | tag_raw · tag_master.tag_id | [../05_data_stores](../05_data_stores/README.md) | 해당 없음 |

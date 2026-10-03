@@ -2,6 +2,9 @@
 
 > **대상**: 이 머신에서 잴 수 없게 된 것의 전수 — 로컬 한계 · cpuset으로 되살린 원칙과 남은 한계 · WSL2 mirrored 네트워킹의 영향 · 흐름별 병목과 측정이 가르지 못하는 경우 · 관측 스택 간섭 · 측정 도구 자체의 한계 등재 · **공정성 · 측정 한계(실측에서 드러난 것)** · 수치 해석 규칙
 > **작성일**: 2026-09-24
+> **개정일**: 2026-10-03 — D-15 학습자 눈높이 한 화면(사용자 지시 2026-10-03 — 08_screen/08_evidence_screens · 01_standards §한 화면 원칙) — 관측 부하 행 health 조회 시점 "진입 1회 · 측정 조건 서랍 열 때 1회" → **진입 1회**(서랍 폐지) — 행 수 불변
+> **개정일**: 2026-10-03 — D-14 검수 반영 — 관측 부하 행 이름 화면 메트릭 · health 폴링 → **화면 메트릭 폴링 · health 조회**(health는 폴링이 아니라 진입 1회 · 서랍 열 때 1회 — 08_screen/08_evidence_screens) — 행 수 불변
+> **개정일**: 2026-10-03 — D-14 2화면 전환(사용자 결정 2026-10-03) — 관측 부하 행 콘솔 · health 폴링(EXP-CONSOLE) → **화면 메트릭 · health 폴링(EXP-FLOW)** — 행 수 불변
 > **개정일**: 2026-09-27 — W6 종합(한계 · 기록 045 · 046 · 048~054) — §공정성 · 측정 한계 신설(ClickHouse 서버 로그 수준 trace · 상대 편차 기준 대 서브 ms · 콜드 1회 실행 · 격자 적재 방향 어긋남과 해소 · EXP-45 배치 행 상한 · serverTimeAsymmetry · 린트 범위 밖 기록 — 6행) · §미확인 등재 2행(trace 로그 부하 크기 · 콜드 반복 방식과 절대 차 하한)
 > **개정일**: 2026-09-24 — 측정 머신 전환 · S0 구현 반영 — 부하 생성기 격리 서술을 현행 배치(vCPU 14 · 부하 도구 11-12 · 관측 13)로 갱신
 > **원천**: 원본 tech_stack.md §8 · §9 · §10.6(커밋 ff66a37) · 원본 data_flow.md §15 · §16(커밋 ff66a37) · 원본 implementation_plan.md §2.1 · §2.4 · §2.5(커밋 ff66a37) · 원본 architecture.md §14 · §19(커밋 ff66a37) · D-10 · ADR-20 · ADR-25 · REQ-TEC-11 · 12 · 13 · [../04_architecture/03_execution_topology.md](../04_architecture/03_execution_topology.md) §cpuset 배치 · [../06_pipeline/01_flow_inventory.md](../06_pipeline/01_flow_inventory.md) §흐름별 병목 후보 · [../03_requirements/13_nonfunctional.md](../03_requirements/13_nonfunctional.md) §로컬 측정 한계와 해석
@@ -88,7 +91,7 @@
 | E2E 게이지 쿼리 | tag_raw 최근 창 스캔 | 항상 | 창을 ts로 잘라 스캔 범위를 묶는다(REQ-OBS-05) |
 | 메모리 표본 추출 | Redis 명령 주기당 표본 × 2 | 항상 | 전수 순회 금지 · 표본 수 고정 |
 | 컨슈머 랙 갱신 | 플러시마다 XINFO GROUPS 1회 | 항상 | 플러시당 1회 이상으로 늘리지 않는다 |
-| 콘솔 · health 폴링 | 세 저장소 왕복 · /metrics 해석 | EXP-CONSOLE을 열어 둠 | 정밀 측정 모드로 폴링을 멈추거나 닫는다 |
+| 화면 메트릭 폴링 · health 조회 | 세 저장소 왕복 · /metrics 해석 | EXP-FLOW를 열어 둠(메트릭 5초 폴링 · health는 EXP-FLOW · EXP-PERF가 진입 1회) | 화면을 닫는다(정밀 측정 모드를 두던 EXP-CONSOLE은 폐지 — D-14) |
 | k6 원격 쓰기 | k6 CPU · Prometheus 쓰기 | 탐색 세션 설정 | 정밀 세션은 끈다 — 생성기 포화 판정이 흔들린다 |
 | 구조화 로그 | 이벤트당 한 줄 쓰기 | 무효 · 의심 구간 발생 시 | 사건 드문 경로에만 — 행 단위 로그 금지 |
 

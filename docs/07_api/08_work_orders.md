@@ -2,6 +2,7 @@
 
 > **대상**: WRK 도메인 REST 표면 — 작업지시 조회 · 등록 · 수정 · 상태 전이 · 생산 실적 기록과 조회 · 감사 로그 조회 · 태그 새 발급 계보 조회 · **실적 기록 시점의 작업지시 상태 조건 판정** · 일반 수정 본문의 status 처리 판정 · 원본에 없는 표면 판정(생산 실적 · 감사 조회)
 > **작성일**: 2026-09-24
+> **개정일**: 2026-10-03 — D-14 2화면 전환(사용자 결정 2026-10-03) — 표면 9의 호출 화면 ADM-WORKORDER · ADM-AUDIT · ANL-TREND → **화면 없음(API 전용)** · #9 계보 불릿 · 관련 문서 폐지 표기 — 표면 · 기능 · 에러 코드 수 불변(api 표면은 지우지 않는다 — D-14 결정 1)
 > **개정일**: 2026-09-27 — D-04 부분 개정 반영(사용자 결정 — 업무 쓰기도 Redis를 거친다 · 동기 응답) — 도입 단락 ③계층 반례 → **시연**(명령 스트림 경유 · 커밋 뒤 응답) · 공통 규약 쓰기 행(202 pending · Idempotency-Key · Redis 불가 503) · 실적 불릿 — 항목 수 · 표면 수 불변
 > **개정일**: 2026-09-26 — W1 검수 반영 — userId null 행의 무인증 기간 S4~S6 → **인증 도입(S7 ②) 전**(S7 ①도 무인증 · 정본 05_data_stores/01 §인계 판정)
 > **개정일**: 2026-09-24 — 최종 정밀 검수 — §판정 → §실적 기록 시점의 작업지시 상태 조건 판정(절 참조 명확화)
@@ -32,20 +33,20 @@ WRK 표면은 분기 **③계층의 시연 자리**다 — 업무 쓰기는 명�
 
 | # | 메서드 | 경로 | 기능 ID | 역할 | 캐시 | 에러 코드 | 호출 화면 | 원본 여부 |
 |:-:|------|------|------|------|------|------|------|------|
-| 1 | GET | /api/v1/work-orders | WRK-01 | 전원 | cache:workorders · BFF no-store | common.validation_failed/400 · common.postgres_unavailable/503 | ADM-WORKORDER | 원본 |
-| 2 | POST | /api/v1/work-orders | WRK-01 | ADMIN | 없음 | common.validation_failed/400 · common.duplicate_key/409 · common.postgres_unavailable/503 | ADM-WORKORDER | 원본 |
-| 3 | PATCH | /api/v1/work-orders/{id} | WRK-01 | ADMIN | 없음 | common.validation_failed/400 · common.not_found/404 · common.duplicate_key/409 · common.postgres_unavailable/503 | ADM-WORKORDER | 원본 |
-| 4 | GET | /api/v1/work-orders/{id} | WRK-01 · 03 | 전원 | cache:workorders · BFF no-store | common.not_found/404 · common.postgres_unavailable/503 | ADM-WORKORDER | 신설 |
-| 5 | POST | /api/v1/work-orders/{id}/status | WRK-02 | ADMIN | 없음 | common.validation_failed/400 · common.not_found/404 · work_orders.invalid_status_transition/409 · common.postgres_unavailable/503 | ADM-WORKORDER | 신설 |
-| 6 | GET | /api/v1/work-orders/{id}/production-logs | WRK-03 | 전원 | cache:workorders · BFF no-store | common.validation_failed/400 · common.not_found/404 · common.postgres_unavailable/503 | ADM-WORKORDER | 신설 |
-| 7 | POST | /api/v1/work-orders/{id}/production-logs | WRK-03 | ADMIN | 없음 | common.validation_failed/400 · common.not_found/404 · work_orders.production_log_not_allowed/409 · common.postgres_unavailable/503 | ADM-WORKORDER | 신설 |
-| 8 | GET | /api/v1/audit-logs | WRK-05 | ADMIN | 없음 · BFF no-store | common.validation_failed/400 · common.postgres_unavailable/503 | ADM-AUDIT | 신설 |
-| 9 | GET | /api/v1/audit-logs/tag-reissues | WRK-05 | 전원 | 없음 · BFF no-store | common.validation_failed/400 · common.postgres_unavailable/503 | ADM-AUDIT · ANL-TREND | 신설 |
+| 1 | GET | /api/v1/work-orders | WRK-01 | 전원 | cache:workorders · BFF no-store | common.validation_failed/400 · common.postgres_unavailable/503 | 화면 없음(API 전용) — 폐지 화면 ADM-WORKORDER(D-14) | 원본 |
+| 2 | POST | /api/v1/work-orders | WRK-01 | ADMIN | 없음 | common.validation_failed/400 · common.duplicate_key/409 · common.postgres_unavailable/503 | 화면 없음(API 전용) — 폐지 화면 ADM-WORKORDER(D-14) | 원본 |
+| 3 | PATCH | /api/v1/work-orders/{id} | WRK-01 | ADMIN | 없음 | common.validation_failed/400 · common.not_found/404 · common.duplicate_key/409 · common.postgres_unavailable/503 | 화면 없음(API 전용) — 폐지 화면 ADM-WORKORDER(D-14) | 원본 |
+| 4 | GET | /api/v1/work-orders/{id} | WRK-01 · 03 | 전원 | cache:workorders · BFF no-store | common.not_found/404 · common.postgres_unavailable/503 | 화면 없음(API 전용) — 폐지 화면 ADM-WORKORDER(D-14) | 신설 |
+| 5 | POST | /api/v1/work-orders/{id}/status | WRK-02 | ADMIN | 없음 | common.validation_failed/400 · common.not_found/404 · work_orders.invalid_status_transition/409 · common.postgres_unavailable/503 | 화면 없음(API 전용) — 폐지 화면 ADM-WORKORDER(D-14) | 신설 |
+| 6 | GET | /api/v1/work-orders/{id}/production-logs | WRK-03 | 전원 | cache:workorders · BFF no-store | common.validation_failed/400 · common.not_found/404 · common.postgres_unavailable/503 | 화면 없음(API 전용) — 폐지 화면 ADM-WORKORDER(D-14) | 신설 |
+| 7 | POST | /api/v1/work-orders/{id}/production-logs | WRK-03 | ADMIN | 없음 | common.validation_failed/400 · common.not_found/404 · work_orders.production_log_not_allowed/409 · common.postgres_unavailable/503 | 화면 없음(API 전용) — 폐지 화면 ADM-WORKORDER(D-14) | 신설 |
+| 8 | GET | /api/v1/audit-logs | WRK-05 | ADMIN | 없음 · BFF no-store | common.validation_failed/400 · common.postgres_unavailable/503 | 화면 없음(API 전용) — 폐지 화면 ADM-AUDIT(D-14) | 신설 |
+| 9 | GET | /api/v1/audit-logs/tag-reissues | WRK-05 | 전원 | 없음 · BFF no-store | common.validation_failed/400 · common.postgres_unavailable/503 | 화면 없음(API 전용) — 폐지 화면 ADM-AUDIT · ANL-TREND(D-14) | 신설 |
 
 - 검산: 표면 = REST **9** · 원본 3(#1~#3) + 신설 6(#4~#9) = **9** · 조회 5(#1 · 4 · 6 · 8 · 9) + 쓰기 4 = **9**
 - 신설 6의 기능 근거: WRK-01 · 03 1(#4) · WRK-02 1(#5) · WRK-03 2(#6 · 7) · WRK-05 2(#8 · 9) = **6**
 - #7의 상태 조건 거절은 work_orders.production_log_not_allowed/409다(W5 채번) — §실적 기록 시점의 작업지시 상태 조건 판정.
-- #9의 ANL-TREND 호출은 스케일 변경 전후 태그를 한 트렌드로 잇는 계보 조회다 — 그래서 #9는 감사 원문(#8 · ADMIN)과 달리 **인증 사용자 전원**이 읽는다(리드 판정 · 권한 매트릭스 WRK-05 계보 행). 계보 행에는 before · after 업무 원문이 없고 변환식 쌍 · 사유만 있다.
+- #9는 스케일 변경 전후 태그를 한 트렌드로 잇는 계보 조회다(이 조회를 부르던 ANL-TREND는 폐지 — D-14) — 그래서 #9는 감사 원문(#8 · ADMIN)과 달리 **인증 사용자 전원**이 읽는다(리드 판정 · 권한 매트릭스 WRK-05 계보 행). 계보 행에는 before · after 업무 원문이 없고 변환식 쌍 · 사유만 있다.
 
 ## 표면 계약 — 작업지시
 
@@ -197,4 +198,4 @@ PLANNED ──→ IN_PROGRESS ──→ COMPLETED
 - [../02_features/10_work_orders.md](../02_features/10_work_orders.md) — WRK-01~05 기능 정본
 - [../03_requirements/11_work_orders.md](../03_requirements/11_work_orders.md) — REQ-WRK 계약
 - [../11_glossary/03_enums_state_machines.md](../11_glossary/03_enums_state_machines.md) — 상태 머신 4
-- [../08_screen/06_master_admin.md](../08_screen/06_master_admin.md) — ADM-WORKORDER · ADM-AUDIT 화면
+- [../08_screen/06_master_admin.md](../08_screen/06_master_admin.md) — ADM-WORKORDER · ADM-AUDIT 화면(폐지 · D-14 — 폐지 전 원문 보존)

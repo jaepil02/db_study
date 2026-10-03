@@ -2,6 +2,8 @@
 
 > **대상**: OBS 도메인 표면 — GET /api/v1/health(저장소별 상태 · 스위치 12종의 실제 주입 구현 · 부분 실패 503) · GET /metrics(Prometheus 텍스트 · 스위치 상태 레이블) · 두 표면의 공개 판정 반영 · **health 본문 필드 이름 판정** · **저장소별 타임아웃 판정**
 > **작성일**: 2026-09-24
+> **개정일**: 2026-10-03 — D-15 학습자 눈높이 한 화면(사용자 지시 2026-10-03 — 08_screen/08_evidence_screens · 01_standards §한 화면 원칙) — 측정 조건 서랍 → **각주 툴팁**(읽기 전용 단락 · #1 호출 화면 · EXP-PERF 불릿 · run 근거 불릿 · 관련 문서) · EXP-PERF 불릿의 기록 곡선 · 배수 지도 → 그림 1 · 그림 2 — 표면 · 기능 불변
+> **개정일**: 2026-10-03 — D-14 2화면 전환(사용자 결정 2026-10-03) — 호출 화면 EXP-CONSOLE · EXP-COMPARE → **#1 EXP-FLOW · EXP-PERF(측정 조건 서랍) · #2 EXP-FLOW** · 읽기 전용 · 경로 · run 근거 · 메트릭 요약 JSON 행의 화면 서술 · 관련 문서에 08_evidence_screens — 표면 · 기능 · 에러 코드 수 불변(api 표면은 지우지 않는다 — D-14 결정 1)
 > **개정일**: 2026-09-28 — 웨이브 1 검수 반영(B-M3) — 대상 줄 스위치 11종 → **12종** · 도입 전 스위치 불릿 "스위치 11키" → **스위치 키(현재 12 — 정본 링크)** · switches 노출 표에 **SW-12 행**(stream · direct · StreamBizWriter · DirectBizWriter) — 스위치 행 11 → **12** · 표면 수 불변
 > **개정일**: 2026-09-24 — S2 구현 반영 — switches.*.impl 문자열 → **문자열 또는 null**(도입 전 스위치) · obs_switch_info는 주입된 스위치만
 > **개정일**: 2026-09-24 — W6 실험 채번 반영 — 레이블 이름 · 설비 레이블 · EXP 반영(정본 10_observability/01 · 06)
@@ -11,7 +13,7 @@
 
 OBS 표면은 **둘뿐이고 둘 다 공개다.** /api/v1/health는 Compose가 api의 healthcheck로 자격 증명 없이 부르고(인증을 걸면 기동이 순환한다), /metrics는 Prometheus 스크레이프와 정밀 측정 세션의 직접 덤프가 토큰 수명과 무관하게 읽는다. 공개의 근거는 도달 가능성이 아니라 **호출 주체가 기계이고 응답에 업무 데이터가 없다**는 것이다 — 업무 데이터가 실리는 순간 판정이 무효다(권한 매트릭스 §GEN · OBS 표면 인가).
 
-**두 표면은 읽기 전용이다.** 스위치를 바꾸는 쓰기 메서드가 없다 — 전환은 환경변수와 api 재기동뿐이다(D-06 · REQ-OBS-12). 실험 콘솔(EXP-CONSOLE)이 스위치 상태를 표시하는 원천이 이 두 표면이지만, 콘솔은 표시만 한다(docs_plan 보정 #14).
+**두 표면은 읽기 전용이다.** 스위치를 바꾸는 쓰기 메서드가 없다 — 전환은 환경변수와 api 재기동뿐이다(D-06 · REQ-OBS-12). 두 실증 화면(EXP-PERF · EXP-FLOW)의 각주 툴팁이 스위치 상태를 표시하는 원천이 이 두 표면이지만, 화면은 표시만 한다(docs_plan 보정 #14 · 실험 콘솔 EXP-CONSOLE은 폐지 — D-14).
 
 metrics 네임스페이스는 정의만 있고 코드가 0이다. health의 503은 **에러 봉투가 아니라 정상 본문과 같은 모양**을 낸다 — 불가 순간에 저장소별 상태가 사라지면 어느 저장소가 원인인지 응답에서 읽을 수 없다(REQ-OBS-09).
 
@@ -21,7 +23,7 @@ metrics 네임스페이스는 정의만 있고 코드가 0이다. health의 503�
 |------|------|------|
 | 인증 · 인가 | 공개 — Authorization을 보지 않는다 · 레이트 리밋 계수 대상 아님(user_id 없음) | REQ-OBS-10 · REQ-AUT-16 |
 | 응답 내용 | 업무 데이터 · 비밀(접속 문자열 · 자격 증명 · 토큰)을 싣지 않는다 · health는 저장소별 상태 · 스위치 상태 · 측정 조건(커밋 해시 · 메모리 프로파일 · 용량 티어)만 | REQ-OBS-10 · 11 |
-| 경로 | 기계 호출 직결 · 화면(EXP-CONSOLE · EXP-COMPARE)은 BFF 경유 | [01_conventions.md](./01_conventions.md) §BFF 경유와 직결 |
+| 경로 | 기계 호출 직결 · 화면(EXP-PERF · EXP-FLOW)은 BFF 경유 | [01_conventions.md](./01_conventions.md) §BFF 경유와 직결 |
 | 쓰기 | 없음 — GET만 | REQ-OBS-12 |
 | 캐시 | 없음 · Cache-Control no-store | [01_conventions.md](./01_conventions.md) §캐시 헤더 |
 | 에러 코드 | 없음 — metrics 네임스페이스 코드 0 · health 부분 실패는 코드 없는 503 | [../11_glossary/02_error_codes.md](../11_glossary/02_error_codes.md) 채번 보류의 처리 결과 |
@@ -33,12 +35,12 @@ metrics 네임스페이스는 정의만 있고 코드가 0이다. health의 503�
 
 | # | 메서드 | 경로 | 기능 ID | 역할 | 캐시 | 에러 코드 | 호출 화면 | 원본 여부 |
 |:-:|------|------|------|------|------|------|------|------|
-| 1 | GET | /api/v1/health | OBS-05 · 06 | 공개 | 없음 | 없음 — 부분 실패는 코드 없는 503 | EXP-CONSOLE · EXP-COMPARE | 원본 |
-| 2 | GET | /metrics | OBS-01 · 02 · 03 · 04 · 06 | 공개 | 없음 | 없음 | EXP-CONSOLE | 원본 |
+| 1 | GET | /api/v1/health | OBS-05 · 06 | 공개 | 없음 | 없음 — 부분 실패는 코드 없는 503 | EXP-FLOW · EXP-PERF(각주 툴팁) | 원본 |
+| 2 | GET | /metrics | OBS-01 · 02 · 03 · 04 · 06 | 공개 | 없음 | 없음 | EXP-FLOW | 원본 |
 
 - 검산: 표면 = **2** · REST JSON 1 + 메트릭 텍스트 1 = **2** · 원본 2 + 신설 0
 - 기능 6이 두 표면에 앉는다 — /metrics 4(OBS-01~04) + health 1(OBS-05) + 양쪽 1(OBS-06) = **6**
-- EXP-COMPARE의 대조군 역전 지점 · on/off 비교 값은 **api 표면이 없다** — BFF가 docs/measurements를 읽기 전용으로 읽는다(W5 리드 판정). 이 화면이 api에서 읽는 것은 현재 조건을 보이는 #1 run · switches뿐이다.
+- EXP-PERF의 그림 1 승패 막대 · 그림 2 규모 곡선 값은 **api 표면이 없다** — BFF가 docs/measurements를 읽기 전용으로 읽는다(W5 리드 판정 · 폐지 화면 EXP-COMPARE의 역전 지점 패널과 같은 경로 · D-14). 이 화면이 api에서 읽는 것은 각주 툴팁의 #1 run · switches뿐이다.
 - 기계 호출 주체(Compose healthcheck · Prometheus · 직접 덤프)는 화면 코드가 아니라 호출 화면 열에 적지 않는다 — [01_conventions.md](./01_conventions.md) §BFF 경유와 직결의 기계 호출 행이 갖는다.
 
 ## #1 GET /api/v1/health
@@ -75,7 +77,7 @@ metrics 네임스페이스는 정의만 있고 코드가 0이다. health의 503�
 | **run.commitHash · memoryProfile · memoryLimitMb · capacityTier** | 문자열 · 문자열 · 정수 · 문자열(S · M · M+ · L) — 각각 null 가능 | 빌드된 커밋 해시 · 메모리 프로파일 이름 · api 컨테이너의 실제 메모리 상한(cgroup에서 읽음) · 기동 시 주입된 용량 티어 |
 
 - 검산: 필드 행 = **10** · 최상위 필드 = status · checkedAt · stores · switches · run = **5**
-- **run을 싣는 이유(W5 리드 판정)** — 측정 기록의 4요소(커밋 해시 · 메모리 프로파일 · 용량 티어 · 스위치 상태 — REQ-GLB-17)를 한 응답에서 읽게 한다. 실험 콘솔(EXP-CONSOLE)과 비교 화면(EXP-COMPARE)이 기록 조건을 손으로 옮겨 적지 않는다 — 옮겨 적다 틀리면 같은 조건이라 믿은 두 측정의 조건이 다르다. 셋 다 비밀이 아니다.
+- **run을 싣는 이유(W5 리드 판정)** — 측정 기록의 4요소(커밋 해시 · 메모리 프로파일 · 용량 티어 · 스위치 상태 — REQ-GLB-17)를 한 응답에서 읽게 한다. 두 실증 화면의 각주 툴팁이 기록 조건을 손으로 옮겨 적지 않는다 — 옮겨 적다 틀리면 같은 조건이라 믿은 두 측정의 조건이 다르다. 셋 다 비밀이 아니다.
 - **값은 기동 시 주입값이며 모르면 null이다.** 커밋 해시는 이미지 빌드 인자, 메모리 프로파일 · 용량 티어는 기동 환경변수에서 읽는다(환경변수 MEMORY_PROFILE · CAPACITY_TIER · 빌드 인자 COMMIT_HASH — 이름 정본 [../09_tech_stack/04_local_environment.md](../09_tech_stack/04_local_environment.md)). 추정값으로 채우지 않는다 — null은 "그 측정 기록은 4요소가 빠져 인용할 수 없다"는 표지다. memoryLimitMb만은 프로파일 이름과 별도로 cgroup의 실제 상한을 읽는다 — 스위치와 같은 "실제 적용값" 원칙(REQ-OBS-11)이다.
 - **error에 원문 메시지를 싣지 않는 이유** — 드라이버 오류 문자열에는 접속 문자열 · 호스트 · 사용자 이름이 섞인다. 공개 표면의 응답에 비밀이 실리면 공개 판정이 무효다(REQ-OBS-10).
 - **도입 전 스위치의 impl은 null이다(S2 as-built).** 주입되지 않은 구현 이름을 적으면 "실제 주입 구현"이 거짓이 되고, 키를 빼면 측정 기록의 스위치 키(현재 12 — 정본 [../02_features/13_switch_matrix.md](../02_features/13_switch_matrix.md))가 비어 4요소가 성립하지 않는다([../10_observability/04_experiment_protocol.md](../10_observability/04_experiment_protocol.md) BFF 판독 규칙 4) — 키는 싣고 impl만 비운다. obs_switch_info는 impl 레이블이 비지 않게 주입된 스위치만 낸다.
@@ -163,7 +165,7 @@ metrics 네임스페이스는 정의만 있고 코드가 0이다. health의 503�
 | 스위치 전환 표면 | **두지 않는다** | D-06 · REQ-OBS-12 · 보정 #14 | 런타임 토글이 되어 경로 안 분기로 돌아가고 측정 도중 스위치가 바뀌어 한 기록 안에서 조건이 섞인다 |
 | 저장소별 헬스 분리(/health/postgres 등) | **두지 않는다** | Compose healthcheck는 표면 하나를 부른다 | 표면이 셋이면 api healthy의 뜻이 어느 것을 부르느냐에 따라 달라진다 |
 | 준비(readiness) · 생존(liveness) 분리 | **두지 않는다** | 오케스트레이터 없음 · 로컬 Compose 단일 판정 | 클러스터 개념을 현행 범위로 들인다 — 확장 로드맵 밖 |
-| 메트릭 요약 JSON(화면용) | **두지 않는다** | 실험 콘솔은 BFF가 /metrics 텍스트를 해석한다 | 같은 수치가 두 형식으로 나가 콘솔과 Prometheus가 다른 스크레이프 시점을 본다 |
+| 메트릭 요약 JSON(화면용) | **두지 않는다** | EXP-FLOW는 BFF가 /metrics 텍스트를 해석한다 | 같은 수치가 두 형식으로 나가 화면과 Prometheus가 다른 스크레이프 시점을 본다 |
 
 - 검산: 후보 = **4** · 신설 0
 
@@ -185,4 +187,5 @@ metrics 네임스페이스는 정의만 있고 코드가 0이다. health의 503�
 - [../02_features/13_switch_matrix.md](../02_features/13_switch_matrix.md) — 스위치 · 포트 구현 이름 정본
 - [../04_architecture/03_execution_topology.md](../04_architecture/03_execution_topology.md) — healthcheck · 기동 순서
 - [../10_observability/01_metrics_catalog.md](../10_observability/01_metrics_catalog.md) — 메트릭 이름 정본
-- [../08_screen/07_experiment_console.md](../08_screen/07_experiment_console.md) — EXP-CONSOLE 화면
+- [../08_screen/07_experiment_console.md](../08_screen/07_experiment_console.md) — EXP-CONSOLE 화면(폐지 · D-14 — 폐지 전 원문 보존)
+- [../08_screen/08_evidence_screens.md](../08_screen/08_evidence_screens.md) — EXP-PERF · EXP-FLOW 각주 툴팁 · 흐름 메트릭

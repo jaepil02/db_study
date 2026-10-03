@@ -2,6 +2,8 @@
 
 > **대상**: /ws/realtime 한 표면의 프로토콜 — 핸드셰이크 Origin 검증 · 첫 메시지 인증 · **구독 방식 판정(쿼리 파라미터 대 subscribe 메시지)** · 메시지 봉투와 스키마 · 스로틀 병합(SW-07) · 알람 · 무효화 신호 중계 · **흐름 이벤트(flow · subscribe_flow · unsubscribe_flow — EXP-FLOW)** · ping · 재연결 · 종료 코드 정본
 > **작성일**: 2026-09-24
+> **개정일**: 2026-10-03 — 리드 판정(웨이브 1 정합 · 정본 08_screen/02_traceability) — #1 호출 화면 공통 셸(무효화 신호) → **공통 셸(연결만 — cacheinv는 받지 않는다)** · 무효화 신호 중계(RLT-09) 화면 없음(API 전용) — 표면 · 메시지 type · 종료 코드 수 불변(cacheinv 중계 계약은 그대로)
+> **개정일**: 2026-10-03 — D-14 2화면 전환(사용자 결정 2026-10-03) — #1 호출 화면 DSH-REALTIME · ALM-CONSOLE · EXP-FLOW · 전 화면 → **EXP-FLOW(subscribe_flow · flow) · 공통 셸(무효화 신호)** — rt · alarm을 받던 화면은 폐지 — 표면 · 기능 · 에러 코드 수 불변(api 표면은 지우지 않는다 — D-14 결정 1)
 > **개정일**: 2026-09-28 — 웨이브 1 검증 반영(v-wave1 M1) — 업무 요약 발행자 행의 direct 구분 "source로" → **role api-direct로**(같은 문서 페이로드 행 · 08_screen/08과 일치)
 > **개정일**: 2026-09-28 — 웨이브 1 검수 판정 반영(f-screens · r-screens M1 · M2 · M5) — ch:flow 두 event에 **role** 필드(batch → ingest · biz → biz-writer 또는 api-direct — 게이트웨이 totals 묶음 키 · 화면 direct 판별 · source는 인스턴스 식별만) · biz 발행 대상에 **failed**(PostgreSQL 불가 — 결과 키만 · result = common.postgres_unavailable) · biz totals에 **failed** · commands = applied + rejected + expired + failed · duplicates는 부분집합 · 예시 JSON 정합 · 미확인 행 flow 레이블 **닫힘** — 페이로드 행 · 프레임 필드 · 계약 · type 수 불변
 > **개정일**: 2026-09-28 — 표지 키 리드 재판정 — rt:flow:subscribed → **cache:flow:subscribed**(rt 봉인 계열 TTL 금지) · 표지 읽기 실패 시 발행하지 않는다 한 줄 — TTL · 갱신 · 확인 간격과 type 수 불변
@@ -24,7 +26,7 @@ WebSocket은 **RLT가 소유하는 횡단 표면**이다. 설비 최신값 푸�
 
 | # | 메서드 | 경로 | 기능 ID | 역할 | 캐시 | 에러 코드 | 호출 화면 | 원본 여부 |
 |:-:|------|------|------|------|------|------|------|------|
-| 1 | WS | /ws/realtime | RLT-05 · 06 · 07 · 08 · 09 · 흐름 이벤트(기능 ID 없음 — OBS 보조 실증 화면 · 리드 판정) | 전원 | 없음 — 채널 ch:rt:{device_id} · ch:alarm · ch:cacheinv · ch:flow 구독 | 없음 — 종료 코드(§종료 코드) | DSH-REALTIME · ALM-CONSOLE · EXP-FLOW · 전 화면(무효화 신호) | 원본 |
+| 1 | WS | /ws/realtime | RLT-05 · 06 · 07 · 08 · 09 · 흐름 이벤트(기능 ID 없음 · 리드 판정) | 전원 | 없음 — 채널 ch:rt:{device_id} · ch:alarm · ch:cacheinv · ch:flow 구독 | 없음 — 종료 코드(§종료 코드) | EXP-FLOW(subscribe_flow · flow) · 공통 셸(연결만 — cacheinv는 받지 않는다 · RLT-09 화면 없음(API 전용)) — rt · alarm을 받던 DSH-REALTIME · ALM-CONSOLE은 폐지(D-14) | 원본 |
 
 - 검산: 표면 = WebSocket **1** · 원본 1 + 신설 0 = **1**
 - **원본 경로의 쿼리 파라미터(?devices=1,2,3)는 버렸다** — §구독 방식 판정. 번호 · 경로는 그대로이고 구독 수단만 메시지로 옮겼다.

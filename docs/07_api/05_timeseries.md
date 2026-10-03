@@ -2,6 +2,7 @@
 
 > **대상**: TSQ 도메인 표면 — 시계열 조회(POST /api/v1/timeseries/query) 요청 스키마 · 해상도 규칙의 표면 모양 · meta · points 열 구성 · 다운샘플 모드 · 진행 구간 분할의 호출 모양 · 원시 내보내기 스트림 · **내보내기 스트림 중단 종료 표지 판정** · 태그 상한 · 최대 포인트 수(2계층 소유)
 > **작성일**: 2026-09-24
+> **개정일**: 2026-10-03 — D-14 2화면 전환(사용자 결정 2026-10-03) — 표면 2의 호출 화면 ANL-TREND · DSH-REALTIME · ALM-RULES → **화면 없음(API 전용)** · 관련 문서 폐지 표기 — 표면 · 기능 · 에러 코드 수 불변(api 표면은 지우지 않는다 — D-14 결정 1)
 > **개정일**: 2026-09-25 — S4 as-built(3e8a46d) — §S2 단계 표면 절 **삭제**(S4에서 해상도 선택 · 상향 · LTTB로 복귀 — 절이 예고한 대로) → §S4 표면(as-built) 신설 · maxPoints 상한 없음 → **현행 참고 10,000**(S4 판정 15 · 검수 L1) · 내보내기 tagIds 범위 밖 400(검수 L2) · 캐시 히트 series 순서 = 요청 순서(검수 L3)
 > **개정일**: 2026-09-25 — S3 구현 반영 — §S2 단계 표면 tagName · unit 행 null → **S3에서 계약으로 복귀**(dictGet(plc.dict_tag) · 사전 조회 실패 시 null · 응답은 성공)
 > **개정일**: 2026-09-24 — S2 구현 반영 — §S2 단계 표면(as-built) 신설 — raw 고정 · 예상 포인트 초과 400(S4에서 상향으로) · tagName · unit null(S3 dict_tag) · 현재 버킷 TTL 구간 미도달
@@ -32,8 +33,8 @@ TSQ 표면은 **요청한 것이 아니라 서버가 고른 것을 돌려주는 
 
 | # | 메서드 | 경로 | 기능 ID | 역할 | 캐시 | 에러 코드 | 호출 화면 | 원본 여부 |
 |:-:|------|------|------|------|------|------|------|------|
-| 1 | POST | /api/v1/timeseries/query | TSQ-01 · 02 · 06 · 07 · 08 | 전원 | cache:q:{sha1} · lock:rebuild:q:{sha1} | common.validation_failed/400 · timeseries.too_many_tags/400 · timeseries.clickhouse_unavailable/503 | ANL-TREND · DSH-REALTIME · ALM-RULES | 원본 |
-| 2 | GET | /api/v1/timeseries/export | TSQ-09 | ENGINEER | 없음 — 캐시하지 않는다 | common.validation_failed/400 · timeseries.too_many_tags/400 · timeseries.clickhouse_unavailable/503 | ANL-TREND | 원본 |
+| 1 | POST | /api/v1/timeseries/query | TSQ-01 · 02 · 06 · 07 · 08 | 전원 | cache:q:{sha1} · lock:rebuild:q:{sha1} | common.validation_failed/400 · timeseries.too_many_tags/400 · timeseries.clickhouse_unavailable/503 | 화면 없음(API 전용) — 폐지 화면 ANL-TREND · DSH-REALTIME · ALM-RULES(D-14) | 원본 |
+| 2 | GET | /api/v1/timeseries/export | TSQ-09 | ENGINEER | 없음 — 캐시하지 않는다 | common.validation_failed/400 · timeseries.too_many_tags/400 · timeseries.clickhouse_unavailable/503 | 화면 없음(API 전용) — 폐지 화면 ANL-TREND(D-14) | 원본 |
 
 - 검산: 표면 = **2** · REST JSON 1 + 다운로드 스트림 1 = **2** · 원본 2 + 신설 0
 - 표면 있는 기능 6(TSQ-01 · 02 · 06 · 07 · 08 · 09)이 두 표면에 앉는다 — 02 · 06 · 07 · 08은 #1의 동작이다. TSQ-03 · 04 · 05는 표면 없는 내부 단계다.
@@ -197,4 +198,4 @@ S2의 부분 집합 표면(raw 고정 · 예상 포인트 초과 거절 · 메�
 - [../03_requirements/08_timeseries.md](../03_requirements/08_timeseries.md) — REQ-TSQ 계약
 - [../06_pipeline/06_timeseries_read.md](../06_pipeline/06_timeseries_read.md) — 판정 트리 · 캐시 · 스탬피드 기전
 - [../06_pipeline/12_data_contract.md](../06_pipeline/12_data_contract.md) — 5단계 API 응답
-- [../08_screen/04_trend_analysis.md](../08_screen/04_trend_analysis.md) — ANL-TREND 화면
+- [../08_screen/04_trend_analysis.md](../08_screen/04_trend_analysis.md) — ANL-TREND 화면(폐지 · D-14 — 폐지 전 원문 보존)

@@ -1,7 +1,8 @@
 # F-09 테스트 데이터 주입 (10_datagen_inject)
 
-> **대상**: F-09 주입 흐름의 기전 정본 — 생성 엔진 → 모드 A~D · 한 번에 한 계층 원칙 · 모드 A 레지스터 갱신 · **모드 B 적체 검사 기전(판정량은 그룹 적체)** · 모드 C 표면 · 모드 D 백필 실행 · **모드 D 대조군 동일 행 절차** · 대조군 파티션 정리 · **SIM 지연 · 오류 주입 제어 수단** · 티어 시드 구성 · 생성기 포화 · 부하 실행 절차 · **라이브 실행 두 종류(perf · flow)의 단계 · 취소 · 정리 · 생성 규칙**
+> **대상**: F-09 주입 흐름의 기전 정본 — 생성 엔진 → 모드 A~D · 한 번에 한 계층 원칙 · 모드 A 레지스터 갱신 · **모드 B 적체 검사 기전(판정량은 그룹 적체)** · 모드 C 표면 · 모드 D 백필 실행 · **모드 D 대조군 동일 행 절차** · 대조군 파티션 정리 · **SIM 지연 · 오류 주입 제어 수단** · 티어 시드 구성 · 생성기 포화 · 부하 실행 절차 · **라이브 실행 두 종류(perf · flow)의 단계 · 취소 · 정리 · 생성 규칙 · 흐름 시연의 조회 섞기**
 > **작성일**: 2026-09-24
+> **개정일**: 2026-10-03 — 사용자 선택 2026-10-03 — 조회 경로 보이기 · D-15(설계 정본 .omc/plans/web-junior-redesign.md §9) — §흐름 시연 실행에 **조회 섞기** 신설(매개변수 readsPerSec 0 · 5 · 20 · 50 · 기본 20 · 조회 3종 센서 시계열 · 센서 지금 값 · 업무 설비 목록을 프로세스 안 호출로 · cache-aside 경로 그대로 · 히트와 미스가 둘 다 생기는 키 선택 · 실패는 세기만 · 결과 readsSent · 코드 기준 apps/api/src/modules/runs/flow-runner.ts — 리드 판정 2026-10-03) · 발행 규칙 6 → **9**(조회 섞기 — 일정대로 보내고 기다리지 않음 · 순환 2 : 2 : 1 · 동시 상한 32 · 조회 키 선택 · 조회 계수 — publish detail readsSent · readsFailed · readsSkipped) · **A형 — 조회를 대기줄에 넣지 않는 이유** · 단계 publish에 조회 · 취소 표 flow publish 행에 조회 정지 — 단계 · 주입 모드 수 불변
 > **개정일**: 2026-09-28 — 코드 검수 반영(r-code-api L5) — 흐름 시연 대용량 발행에 태그 수 가드(⌈pps ÷ L⌉ > 1000이면 prepare failed · 시연 전용 행 명령 전)
 > **개정일**: 2026-09-28 — 라이브 실행 검수 반영(리드 재판정 2026-09-28) — 흐름 시연 업무 명령 이름 토글 짝(운영 설비 이름을 바꿨다 되돌림 — 중단 · 되돌림 실패 · 짝 가운데 재기동에서 되돌림 보장 자리가 없다) → **시연 전용 설비 DEMO-FLOW-DEV에만 새 이름 명령**(사이트 DEMO-FLOW · 라인 DEMO-FLOW-L · 설비 비활성 · 태그 없음 · prepare가 없으면 명령으로 만든다 · 되돌림 없음 · 운영 행 불변 · 명령 1건 = 1) · §시연 전용 행 신설 · perf 생성 식 고정(행 번호 n · ts 오름차순 삽입 · 두 저장소 같은 식) · 규모 증가분 구간 k = 5는 [S, S + 10초) · flow 발행 식 고정((태그 · ts) 중복 없음) · 종결 규칙(정상 경로 cleanup 실패 → failed · cleanup 중 stop 무시 · flow prepare 중 stop → stopped) · perf 전용 PostgreSQL 연결 1(pg_backend_pid) · 취소 표 단계 5 → **6**(flow prepare) · 관련 문서 GEN-01~10 → **GEN-01~12**
 > **개정일**: 2026-09-28 — DB 시각 UTC(ADR-27) — 모드 D 일 단위 반복 KST 일 → **UTC 일(파티션 경계)** · 대조군 정리 기준 KST 일 파티션 → **UTC 날짜 일 파티션** · 정리 시점 KST 자정 뒤 → **UTC 자정(= 09:00 KST) 뒤** — 단계 · 행 수 불변
@@ -214,7 +215,7 @@ F-09는 **생성기가 만든 값이 네 계층 중 하나에 들어가기까지
 
 ## 라이브 실행 — perf · flow
 
-증거 화면 EXP-PERF · EXP-FLOW의 시작 버튼이 부르는 실행이다(표면 [../07_api/09_datagen.md](../07_api/09_datagen.md) #2~#5 · 화면 [../08_screen/08_evidence_screens.md](../08_screen/08_evidence_screens.md)). 종류는 둘 — **perf**(규모별 성능 비교 · 격자의 앞부분을 api가 다시 채우고 잰다) · **flow**(흐름 시연 · 생성기 발행과 업무 명령을 함께 흘린다). 이 절은 두 종류의 단계 · 취소 · 정리 · 생성 규칙을 고정하고, 실행 객체 모양 · 응답 코드는 표면 정본이 갖는다.
+증거 화면 EXP-PERF · EXP-FLOW의 시작 버튼이 부르는 실행이다(표면 [../07_api/09_datagen.md](../07_api/09_datagen.md) #2~#5 · 화면 [../08_screen/08_evidence_screens.md](../08_screen/08_evidence_screens.md)). 종류는 둘 — **perf**(규모별 성능 비교 · 격자의 앞부분을 api가 다시 채우고 잰다) · **flow**(흐름 시연 · 생성기 발행 · 업무 명령 · 조회를 함께 흘린다). 이 절은 두 종류의 단계 · 취소 · 정리 · 생성 규칙을 고정하고, 실행 객체 모양 · 응답 코드는 표면 정본이 갖는다.
 
 **A형 — 라이브 실행의 값은 측정 기록이 아니다.** 통념은 화면에서 누른 실행의 시간이 격자 기록과 같은 종류의 수치라는 것이다. 부정 — 라이브 실행은 api 프로세스를 거쳐 재고(드라이버 · 이벤트 루프 · 풀 포함), 4요소 · 3회 중앙값 · 편차 판정을 갖추지 않는다. 격자 대조 쿼리는 앱을 거치지 않는다([../08_screen/07_experiment_console.md](../08_screen/07_experiment_console.md) §스위치별 비교 대상). 진짜 축은 **재는 경로와 기록 규칙**이다. 대체 경로 — 결과에는 항상 "라이브 실행 — 앱 경유 · 시연값 · 기록 정본 아님" 표지를 달고, docs/measurements 기록을 만들지 않으며, 정본 수치는 [../05_data_stores/10_olap_vs_rdb_control.md](../05_data_stores/10_olap_vs_rdb_control.md) §결과가 인용한 기록만이다.
 
@@ -281,27 +282,31 @@ F-09는 **생성기가 만든 값이 네 계층 중 하나에 들어가기까지
 
 ### 흐름 시연 실행 — flow
 
-대용량 발행과 업무 명령을 함께 흘려 EXP-FLOW 흐름도를 움직인다. **흐름 계약은 바뀌지 않는다** — 실행은 발행 원천을 늘릴 뿐이고 화면은 기존 flow 프레임([../07_api/11_websocket.md](../07_api/11_websocket.md) §흐름 이벤트)으로 움직인다.
+대용량 발행 · 업무 명령 · 조회를 함께 흘려 EXP-FLOW 흐름도를 움직인다. **흐름 계약은 바뀌지 않는다** — 실행은 발행 원천을 늘릴 뿐이고 화면은 기존 flow 프레임([../07_api/11_websocket.md](../07_api/11_websocket.md) §흐름 이벤트)으로 움직인다.
 
 | 발행 규칙 | 계약 | 근거 | 어기면 |
 |------|------|------|------|
-| 매개변수 | pps ∈ {1000, 5000, 10000, 20000, 50000}(기본 10000) · durationSec ∈ {30, 60, 120, 300}(기본 60) · bizPerSec ∈ {0, 0.5, 1, 2}(기본 1) | 화이트리스트가 발행량 · 명령량의 상한이다 | 목록 밖 값은 common.validation_failed/400 |
+| 매개변수 | pps ∈ {1000, 5000, 10000, 20000, 50000}(기본 10000) · durationSec ∈ {30, 60, 120, 300}(기본 60) · bizPerSec ∈ {0, 0.5, 1, 2}(기본 1) · readsPerSec ∈ {0, 5, 20, 50}(기본 20) | 화이트리스트가 발행량 · 명령량 · 조회량의 상한이다 | 목록 밖 값은 common.validation_failed/400 |
 | 대용량 발행 | api 안 생성기가 stream:plc:raw에 **엔트리 계약 v1 그대로** XADD — 시드의 설비 · 태그 · quality 9 · 현재 시각 · 시드 활성 태그 목록 T(길이 L)에서 발행 초 s마다 점 i = 0 … pps − 1 · 태그 = T[(i + s × pps) mod L] · ts = 초 시작 + ⌊i ÷ L⌋ × ⌊1000 ÷ ⌈pps ÷ L⌉⌋ ms — **(태그 · ts) 중복 없음** · 같은 설비 · 같은 ts는 한 엔트리 · ⌈pps ÷ L⌉ > 1000(ts 간격 0)이면 prepare failed("활성 태그 수가 pps에 비해 적다" · 시연 전용 행 명령 전) | 모드 B와 같은 계약이라 ING · 흐름 요약이 발행자를 가리지 않는다([12_data_contract.md](./12_data_contract.md)) | 계약을 바꾸면 흐름 시연이 운영 경로가 아닌 경로를 보인다 |
 | 백프레셔 | 모드 B와 **같은 판정량 · 같은 위험 임계**(§모드 B 적체 검사) — 위험이면 발행을 멈추고 주의 임계 아래로 내려오면 잇는다 · 정지 수는 detail.backpressurePauses | 검사하지 않는 발행자가 하나라도 있으면 MAXLEN 트리밍이 미소비 엔트리를 조용히 자른다(REQ-GLB-21) | 적체를 보지 않고 발행하면 시연이 수집 경로의 유실을 만든다 |
 | 발행 시계 | durationSec는 벽시계다 — 정지 동안의 시점은 발행하지 않고 지나간다 · 재개 뒤 ts는 현재 시각 | §모드 B 적체 검사의 "생성 시계는 멈추지 않는다" | 정지분을 몰아 발행하면 STALE 판정 · E2E가 과거 시각으로 오염된다 |
 | 업무 명령 | 1 ÷ bizPerSec초마다 **BizWritePort로 명령 하나**(HTTP가 아니라 프로세스 안 호출 — 같은 명령 스트림 · 같은 워커 · 같은 원장) · kind master.device.patch · **시연 전용 설비 DEMO-FLOW-DEV에만**(§시연 전용 행) · 본문 {deviceName: "시연 설비 {runId 앞 8자}-{명령 번호}"} — 매번 새 값 · **되돌림 없음** · actor null · bizPerSec 0이면 보내지 않는다 | 명령마다 실제 변경이 있어 트랜잭션 · 감사 · cache:devlist:{DEMO-FLOW의 site_id} DEL · ch:cacheinv가 돈다 — **변경 없는 본문은 기존 쓰기 서비스가 감사 · 체인을 건너뛰어 흐름도에 무효화가 보이지 않는다**(리드 통합 확인 2026-09-28) · 대상이 시연 전용 행뿐이라 **중단 · 실패 · 재기동 어느 경우에도 운영 행은 바뀌지 않는다**(리드 재판정 2026-09-28 — [07_business_crud.md](./07_business_crud.md) §업무 명령 경로) | 운영 설비에 명령을 보내면 시연이 운영 마스터를 바꾼다 — 바꿨다 되돌리는 짝(폐기)은 중단 · 되돌림 실패 · 짝 가운데 재기동에서 바뀐 이름을 남긴다 · 가짜 명령을 흉내 내면 흐름도의 biz 칸이 운영 경로가 아닌 것을 보인다 |
 | 명령 계수 | publish 명령 1건 = 1(짝 없음 — commandsSent = durationSec × bizPerSec의 정수 부분 · 중단이면 그때까지) · 결과마다 commandsOk(applied) · commandsPending(202 · 대기 상한 초과) · commandsFailed(rejected · failed · unavailable) · prepare의 시연 전용 행 생성 명령은 세지 않는다 | 명령 결과는 동기 응답이다 — 대기 상한을 넘으면 pending이다 | 결과를 기다리지 않고 세면 워커 적체가 성공으로 보인다 |
+| 조회 섞기 | 조회 수 = durationSec × readsPerSec의 정수 부분 · **j번째 조회는 publish 시작 + j ÷ readsPerSec초에 보낸다**(일정대로 — 앞 조회를 기다리지 않는다) · 종류는 j mod 5 자리 순환으로 **센서 시계열 2 · 센서 지금 값 2 · 업무 설비 목록 1**(40% · 40% · 20% — 무작위가 아니라 순환이라 같은 매개변수면 같은 순서) · 셋 다 **프로세스 안 호출**(HTTP 아님 — 업무 명령의 BizWritePort처럼 표면 컨트롤러가 부르는 서비스 그대로): ① TimeseriesService.query(표면 POST /api/v1/timeseries/query · cache:q 히트면 Redis · 미스면 ClickHouse 뒤 사본 담기 — [06_timeseries_read.md](./06_timeseries_read.md) §조회 판정 트리) ② RealtimeService.deviceLatest(표면 GET /api/v1/realtime/devices/{id}/tags · Redis rt:latest · 빈 키면 ClickHouse 복원 — [05_realtime_read.md](./05_realtime_read.md)) ③ MasterReadService.listDevices(표면 GET /api/v1/devices · cache:devlist 히트면 Redis · 미스면 PostgreSQL 뒤 사본 담기 — [07_business_crud.md](./07_business_crud.md) §읽기 · 쓰기 경로) · **동시 진행 상한 32**(2계층 조정값 · 현행 참고 · 소유 이 문서) — 넘으면 그 조회는 보내지 않고 건너뛴다 · 결과는 버린다(실행 객체 · 응답에 싣지 않는다) · readsPerSec 0이면 보내지 않는다 | 캐시 경로 · SW-02~05가 사람의 조회와 같아야 흐름도의 조회 줄이 실제 cache-aside를 보인다 — HTTP로 보내면 BFF · 인가 · 레이트 리밋이 섞여 캐시가 아니라 표면 비용을 보인다(업무 명령과 같은 이유) · 기다리지 않아 조회 지연이 발행 시계를 밀지 않는다 | 조회를 흉내 내 메트릭만 올리면 조회 줄이 실제 경로가 아닌 것을 보인다 · 상한 없이 보내면 ClickHouse 불가 동안 진행 중 조회가 api 메모리에 쌓인다 |
+| 조회 키 선택 | **같은 키 반복 + 주기적 새 키** — ① 시드 활성 태그 앞 3개 · 범위 10분 · 기준 = publish 시작을 분 단위로 내린 시각에서 10분 전에 끝나는 범위(최근 창 5분 밖이라 과거 구간 TTL로 사본에 담긴다) · 시계열 순번 n의 4번 중 3번은 기준 범위 반복(첫 번째만 미스 · 뒤는 히트) · 1번은 k = ⌊n ÷ 4⌋ + 1분 더 과거의 새 범위(미스 → ClickHouse) · 기준 범위 사본은 TTL이 지나면 다시 미스 ② 시드 활성 태그의 설비를 오름차순으로 순환 — rt:latest는 사본이 아니라 원본 최신값이라 실행이 발행 중이면 hit · 빈 키면 restored ③ **시연 사이트 DEMO-FLOW 하나**(cache:devlist:{DEMO-FLOW의 site_id} · §시연 전용 행) — 첫 조회는 미스(PostgreSQL → 사본 담기) · 이후 히트 · **업무 명령의 체인 ②가 사본을 지운 다음 조회는 미스** · TTL(현행 참고 600초)이 지나도 미스 | 반복 키만 쓰면 첫 조회 뒤 히트 100%라 DB로 가는 길이 비고, 매번 새 키면 히트 0이라 사본의 효과가 보이지 않는다 · ③의 미스가 업무 명령의 무효화 체인과 이어져 "지운 사본은 다음 조회가 다시 담는다"가 한 화면에 보인다 · 새 범위 간격이 1분이라 SW-04 버킷 스냅에도 키가 갈린다 · 최근 구간을 고르면 캐시 없이 ClickHouse로 가 히트가 0이 된다([06_timeseries_read.md](./06_timeseries_read.md) §TTL 구간 분류와 지터) | 운영 사이트를 고르면 시연 명령이 그 사본을 지우지 않아 bizPerSec가 있어도 ③에 미스가 생기지 않는다 |
+| 조회 계수 | publish detail에 readsSent(보낸 조회 — 실패 포함) · readsFailed(예외로 끝난 조회) · readsSkipped(동시 상한으로 건너뛴 조회) · result에는 **readsSent만** · readsSent + readsSkipped ≤ durationSec × readsPerSec의 정수 부분 · **실패는 세기만 한다** — 조회 예외(timeseries.clickhouse_unavailable · common.postgres_unavailable 등 503 · 404)는 실행을 멈추거나 failed로 만들지 않는다 · 히트 · 미스 · 실패의 뜻은 조회 메트릭(tsq_cache_requests_total · **rlt_latest_requests_total** · **mst_cache_requests_total** — 정본 [../10_observability/01_metrics_catalog.md](../10_observability/01_metrics_catalog.md))이 사람의 조회와 같은 계열로 센다 · 완료 경로는 drain 전에 보낸 조회의 결말을 기다려 readsFailed를 확정한다 | 실행은 조회를 보내는 주체일 뿐 판정 주체가 아니다 | 조회 실패를 실행 실패로 올리면 ClickHouse가 잠깐 503인 동안 발행 · 명령까지 멈춰 흐름 시연 전체가 끊긴다 · 실행이 따로 히트를 세면 같은 사실의 정본이 둘이 된다 |
 
-- 검산: 발행 규칙 = **6**
+- 검산: 발행 규칙 = **9**
 - **생성은 worker_threads에서 한다.** 신호 벡터 생성 · 대량 인코딩은 격리 대상이다([../04_architecture/02_module_boundaries.md](../04_architecture/02_module_boundaries.md) §worker_threads 격리 대상) — api 이벤트 루프에서 만들면 50,000 pps에서 조회 · WebSocket 표면이 틱마다 멈춘다.
 - **actor null은 거짓 귀속을 피한다.** 실행을 시작한 사용자를 명령 actor로 싣지 않는다 — 사람이 요청하지 않은 쓰기를 사람 이름으로 남기지 않는다. 귀속 없음 잔여는 [../12_security/04_threat_model.md](../12_security/04_threat_model.md) §잔여 위험 등재가 받는다.
-- **라이브 흐름 실행은 주입 모드가 아니다.** 주입 모드는 측정 원칙(한 번에 한 계층)의 손잡이이고, 이 실행은 대용량 발행과 업무 명령을 일부러 겹쳐 흐름을 보이는 시연이다 — mode 레이블 값 run이 둘을 가른다.
+- **A형 — 조회는 대기줄(Stream)에 넣지 않는다.** 통념은 "모든 요청은 Redis 대기줄을 거친다"는 것이다. 부정 — 대기줄을 타는 것은 쓰기 두 길(센서 stream:plc:raw · 업무 stream:biz:cmd)뿐이고 조회는 줄을 서지 않는다. 진짜 축은 **즉답이 필요한가**다 — 쓰기는 모아 넣거나(센서) 순서대로 하나씩 넣어야(업무) 해서 줄이 이득이지만, 조회는 사람이 화면 앞에서 답을 기다리므로 줄을 세우면 앞 요청을 기다린 시간만큼 느려질 뿐 얻는 것이 없다. 대체 경로 — 조회에서 Redis는 **먼저 확인하는 사본 자리**다(cache-aside — 있으면 바로 답하고 없을 때만 ClickHouse · PostgreSQL에 가서 사본을 담는다 · [07_business_crud.md](./07_business_crud.md) §읽기 · 쓰기 경로 · [06_timeseries_read.md](./06_timeseries_read.md)). 흐름 시연의 조회 섞기도 이 길을 그대로 탄다.
+- **라이브 흐름 실행은 주입 모드가 아니다.** 주입 모드는 측정 원칙(한 번에 한 계층)의 손잡이이고, 이 실행은 대용량 발행 · 업무 명령 · 조회를 일부러 겹쳐 흐름을 보이는 시연이다 — mode 레이블 값 run이 둘을 가른다.
 
 단계의 순서다.
 
 ```plain
 ① prepare   시드 설비 · 활성 태그 로드 · 시연 전용 행 확인(없으면 명령으로 생성) · 시작 시점 grp:ingest 적체(lag + pending) 기록
-② publish   durationSec 동안 발행 + 명령 · detail pointsSent · entriesSent · commandsSent · backpressurePauses · progress(0~1)
+② publish   durationSec 동안 발행 + 명령 + 조회 · detail pointsSent · entriesSent · commandsSent · backpressurePauses · progress(0~1) · readsSent · readsFailed · readsSkipped
 ③ drain     grp:ingest 적체가 ①의 수준 이하로 돌아올 때까지 · 상한 30초 — 넘으면 done + detail.timedOut true · detail drainMs
 ④ 종결      completed · 중단이면 진행 중 단계 stopped · 뒤 단계 skipped · prepare 실패면 failed
 ```
@@ -309,7 +314,7 @@ F-09는 **생성기가 만든 값이 네 계층 중 하나에 들어가기까지
 - 검산: 단계 = **3**(prepare · publish · drain) · 실행 수명 객체 없음 — cleanup 단계를 두지 않는다
 - **drain 상한 초과는 실패가 아니다(B형).** 결론 — 30초 안에 적체가 돌아오지 않아도 drain은 done이고 timedOut만 true다. 반대 시나리오 — failed로 두면 고 pps 시연이 매번 실패로 끝나 화면이 "완료"를 보이지 못하는데, 남은 적체는 ING가 계속 소진하므로 실행이 할 일은 없다. 파생 지침 — drainMs · timedOut을 결과에 싣고 상한(현행 참고 30초 · 소유 이 문서)은 2계층 조정값이다.
 - **중단하면 drain을 건너뛴다.** 이미 발행한 엔트리는 ING가 소진한다 — 중단을 누른 사람은 곧바로 끝나기를 기대하므로 적체 소진을 기다리지 않는다.
-- result = pointsSent · entriesSent · commandsSent · commandsOk · commandsPending · commandsFailed · backpressurePauses · drainMs(표면 정본 [../07_api/09_datagen.md](../07_api/09_datagen.md)).
+- result = pointsSent · entriesSent · commandsSent · commandsOk · commandsPending · commandsFailed · backpressurePauses · drainMs · readsSent(표면 정본 [../07_api/09_datagen.md](../07_api/09_datagen.md)).
 
 ### 시연 전용 행
 
@@ -336,7 +341,7 @@ stop을 받으면 status stopping으로 바꾸고 진행 중 단계에 아래 �
 | perf fill-pg@k · query@k(PostgreSQL) | 다른 연결에서 prepare가 기록한 전용 연결 pid에 pg_cancel_backend | 롤백된 트랜잭션 — 행 없음 | cleanup이 run_perf_raw를 DROP |
 | perf prepare | 생성 DDL이 끝나기를 기다린다(짧은 DDL — 취소하지 않는다) | 만들어진 객체 | cleanup이 DROP |
 | flow prepare | 보낸 생성 명령의 결과까지 기다린 뒤 멈춘다(명령은 취소할 수 없다) | 만들어진 시연 전용 행 — 다음 실행이 재사용한다 | 없음 |
-| flow publish | 발행 루프 정지 · 명령 발송 정지(보낸 명령은 결과까지 센다) | 이미 발행한 엔트리 · 시연 전용 설비에 적용된 명령 — 운영 행 변경 없음 | 없음 — 엔트리는 ING가 소진한다 · 되돌릴 것이 없다 |
+| flow publish | 발행 루프 정지 · 명령 발송 정지(보낸 명령은 결과까지 센다) · 새 조회 중지(보낸 조회는 기다리지 않는다 — 결과는 버린다 · 원천 지연이 중단을 늦추지 않게) | 이미 발행한 엔트리 · 시연 전용 설비에 적용된 명령 — 운영 행 변경 없음 | 없음 — 엔트리는 ING가 소진한다 · 되돌릴 것이 없다 |
 | flow drain | 대기 중지 | 남은 적체 | 없음 |
 
 - 검산: 단계 = **6**

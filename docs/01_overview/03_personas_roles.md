@@ -2,6 +2,8 @@
 
 > **대상**: 기능 · 화면 · 권한 설계자 — db_study를 누가 어떤 목적으로 쓰는가, 각자 어느 화면과 어느 경로로 어느 저장소에 닿는가
 > **작성일**: 2026-09-24
+> **개정일**: 2026-10-03 — D-15 학습자 눈높이 한 화면(사용자 지시 2026-10-03 — 08_screen/08_evidence_screens · 01_standards §한 화면 원칙) — 측정 조건 서랍 → **각주 툴팁**(실험 수행자 작업 표 스위치 조건 · 결과 기록 행 · 화면 밖 작업 불릿 · 반직관 A행) — 행 수 불변
+> **개정일**: 2026-10-03 — D-14 2화면 전환(사용자 결정 2026-10-03) — 페르소나 주 화면 — 실험 수행자 07_experiment_console → **08_evidence_screens(EXP-PERF · EXP-FLOW)** · 운영자 · 관리자 · 엔지니어 → **화면 없음(API 전용)**(폐지 화면 원문 링크 보존) · 작업 표 화면 열 13행의 폐지 화면 코드 → **화면 없음(API 전용)** · 실험 수행자 표 3행(EXP-CONSOLE · EXP-COMPARE → EXP-PERF · EXP-FLOW 자리) · 실험 콘솔 서술 4자리(신설 이유 · 화면 밖 작업 · A형 · 미확정 등재) — 페르소나 · 역할 · 요청 유형 수 불변
 > **개정일**: 2026-09-27 — D-04 부분 개정 반영(사용자 결정 — 업무 쓰기도 Redis를 거친다 · 동기 응답) — 관리자 쓰기 불릿 · 분기 계층 표의 실험 수행자 ③ 칸을 명령 경로로
 > **개정일**: 2026-09-24 — W5 판정 반영 — 페르소나별 작업 표의 화면 열을 파일명 → **화면 코드**(08_screen 인벤토리)로 · 알람 확인 경로 브라우저 → api → **BFF 경유 no-store**(07_api/01) · 요청 경로 표에 알람 행 추가(요청 유형 6 → **7**) · 미확정 등재 "화면 코드 채번 전"을 닫는다
 > **개정일**: 2026-09-24 — W2 확정 반영 — 페르소나별 권한 역할 채움(OPERATOR · ADMIN · ENGINEER · 실험 수행자는 역할 없음) · 미확정 등재 3행(역할 값 · 알람 규칙 권한 · 실험 콘솔 권한)을 닫는다. 정본 02_features/12
@@ -15,14 +17,14 @@
 
 | 페르소나 | 원천 | 목표 | 대표 질문 | 주 화면 | 빈도 | 권한 역할 |
 |------|------|------|------|------|------|------|
-| 현장 운영자 | 원본 architecture.md §2 | 설비 상태를 지금 보고 알람에 반응한다 | 이 설비의 태그가 지금 정상인가 · 방금 뜬 알람을 확인했는가 | [../08_screen/03_realtime_dashboard.md](../08_screen/03_realtime_dashboard.md) · [../08_screen/05_alarm_console.md](../08_screen/05_alarm_console.md) | 상시 — 화면을 띄워 둔다 | OPERATOR |
-| 관리자 | 원본 architecture.md §2 | 마스터 · 작업지시 · 실적 등 업무 데이터를 정확히 유지한다 | 새 설비와 태그를 등록했는가 · 작업지시 상태가 맞는가 | [../08_screen/06_master_admin.md](../08_screen/06_master_admin.md) | 수시 — 변경이 생길 때 | ADMIN |
-| 엔지니어 | 원본 architecture.md §2 | 과거 시계열과 알람 판정 이력으로 원인과 임계값을 분석한다 | 지난주 이 태그는 어떻게 움직였나 · 이 임계값은 오탐이 많은가 | [../08_screen/04_trend_analysis.md](../08_screen/04_trend_analysis.md) · [../08_screen/05_alarm_console.md](../08_screen/05_alarm_console.md) | 분석 세션 단위 | ENGINEER |
-| 실험 수행자 | **신설** — 학습 목표 2축(D-01) | 스위치 조건을 바꿔 두 축의 비교 수치를 만들고 기록한다 | SW-02를 끄면 최신값 조회가 얼마나 느려지나 · 몇 행부터 역전되나 | [../08_screen/07_experiment_console.md](../08_screen/07_experiment_console.md) · 저장소 CLI · observability 프로파일 대시보드 | 실험 세션 단위 — 같은 실험을 반복한다 | 역할 없음 — **머신 접근**이 주 권한이다(§권한 역할) |
+| 현장 운영자 | 원본 architecture.md §2 | 설비 상태를 지금 보고 알람에 반응한다 | 이 설비의 태그가 지금 정상인가 · 방금 뜬 알람을 확인했는가 | 화면 없음(API 전용) — 폐지 화면 DSH-REALTIME · ALM-CONSOLE(D-14 · 폐지 전 원문 [../08_screen/03_realtime_dashboard.md](../08_screen/03_realtime_dashboard.md) · [../08_screen/05_alarm_console.md](../08_screen/05_alarm_console.md)) · 보기는 EXP-FLOW | 상시 — 화면을 띄워 둔다 | OPERATOR |
+| 관리자 | 원본 architecture.md §2 | 마스터 · 작업지시 · 실적 등 업무 데이터를 정확히 유지한다 | 새 설비와 태그를 등록했는가 · 작업지시 상태가 맞는가 | 화면 없음(API 전용) — 폐지 화면 ADM-MASTER · ADM-WORKORDER · ADM-AUDIT(D-14 · 폐지 전 원문 [../08_screen/06_master_admin.md](../08_screen/06_master_admin.md)) · 쓰기 명령의 흐름은 EXP-FLOW 업무 길에 보인다 | 수시 — 변경이 생길 때 | ADMIN |
+| 엔지니어 | 원본 architecture.md §2 | 과거 시계열과 알람 판정 이력으로 원인과 임계값을 분석한다 | 지난주 이 태그는 어떻게 움직였나 · 이 임계값은 오탐이 많은가 | 화면 없음(API 전용) — 폐지 화면 ANL-TREND · ALM-RULES(D-14 · 폐지 전 원문 [../08_screen/04_trend_analysis.md](../08_screen/04_trend_analysis.md) · [../08_screen/05_alarm_console.md](../08_screen/05_alarm_console.md)) · 라이브 실행은 EXP-PERF · EXP-FLOW | 분석 세션 단위 | ENGINEER |
+| 실험 수행자 | **신설** — 학습 목표 2축(D-01) | 스위치 조건을 바꿔 두 축의 비교 수치를 만들고 기록한다 | SW-02를 끄면 최신값 조회가 얼마나 느려지나 · 몇 행부터 역전되나 | [../08_screen/08_evidence_screens.md](../08_screen/08_evidence_screens.md) EXP-PERF(/performance) · EXP-FLOW(/monitoring) · 저장소 CLI · observability 프로파일 대시보드 | 실험 세션 단위 — 같은 실험을 반복한다 | 역할 없음 — **머신 접근**이 주 권한이다(§권한 역할) |
 
 - 검산: 원본 3(현장 운영자 · 관리자 · 엔지니어) + 신설 1(실험 수행자) = **4**
 - **빈도는 정성 서술이다.** 동시 사용자 수 · 요청률은 페르소나가 아니라 용량 티어와 부하 시나리오가 정한다([../04_architecture/07_capacity_planning.md](../04_architecture/07_capacity_planning.md) · [../10_observability/05_load_scenarios.md](../10_observability/05_load_scenarios.md)).
-- **실험 수행자를 신설한 이유** — 원본 세 페르소나로는 스위치 상태 표시 · 실험 기록 · on/off 비교 화면의 사용자가 없다. 사용자가 없는 화면은 요구사항의 근거를 잃고, 실험 콘솔이 "관리자 부가 기능"으로 밀려 학습 목표의 산출 자리가 사라진다.
+- **실험 수행자를 신설한 이유** — 원본 세 페르소나로는 스위치 상태 표시 · 실험 기록 · 규모별 성능 비교 화면의 사용자가 없다. 사용자가 없는 화면은 요구사항의 근거를 잃고, 실증 화면이 "관리자 부가 기능"으로 밀려 학습 목표의 산출 자리가 사라진다.
 
 ## 페르소나별 작업
 
@@ -30,35 +32,35 @@
 
 | 작업 | 화면 | 요청 경로 | 닿는 저장소 | 분기 계층 |
 |------|------|------|------|------|
-| 설비 전체 태그 최신값 보기 | DSH-REALTIME | 브라우저 → api 직결 | Redis rt:latest | ① 사본(진실은 ClickHouse) |
-| 실시간 트렌드 받기 | DSH-REALTIME | 브라우저 → api WebSocket 직결 | Redis Pub/Sub ch:rt | ① |
-| 태그 STALE · 통신 이상 인지 | DSH-REALTIME | 상동 | Redis rt:latest의 품질 필드 | ① |
-| 알람 발생 · 해제 받기 | ALM-CONSOLE | WebSocket 직결 | Redis Pub/Sub ch:alarm | ② |
-| 알람 확인(ack) | ALM-CONSOLE | 브라우저 → BFF → api(no-store) | PostgreSQL alarm_event | ② 확정 이벤트 |
+| 설비 전체 태그 최신값 보기 | 화면 없음(API 전용) — 폐지 화면 DSH-REALTIME(D-14) | 브라우저 → api 직결 | Redis rt:latest | ① 사본(진실은 ClickHouse) |
+| 실시간 트렌드 받기 | 화면 없음(API 전용) — 폐지 화면 DSH-REALTIME(D-14) | 브라우저 → api WebSocket 직결 | Redis Pub/Sub ch:rt | ① |
+| 태그 STALE · 통신 이상 인지 | 화면 없음(API 전용) — 폐지 화면 DSH-REALTIME(D-14) | 상동 | Redis rt:latest의 품질 필드 | ① |
+| 알람 발생 · 해제 받기 | 화면 없음(API 전용) — 폐지 화면 ALM-CONSOLE(D-14) | WebSocket 직결 | Redis Pub/Sub ch:alarm | ② |
+| 알람 확인(ack) | 화면 없음(API 전용) — 폐지 화면 ALM-CONSOLE(D-14) | 브라우저 → BFF → api(no-store) | PostgreSQL alarm_event | ② 확정 이벤트 |
 
-- **운영자의 화면은 거의 전부 Redis만 본다.** 운영자가 체감하는 "시스템이 느리다"는 대개 Redis 역할 스위치 하나의 상태로 설명된다 — SW-02 off면 최신값이 ClickHouse 점조회로 떨어지고, SW-07이 0이면 프레임이 폭증한다.
+- **운영자의 작업은 거의 전부 Redis만 본다.** 운영자가 체감하는 "시스템이 느리다"는 대개 Redis 역할 스위치 하나의 상태로 설명된다 — SW-02 off면 최신값이 ClickHouse 점조회로 떨어지고, SW-07이 0이면 프레임이 폭증한다.
 - **알람 확인은 운영자가 한다**(원본 data_flow.md §8.1 상태 머신의 확인 전이). 확인 기록의 진실은 PostgreSQL alarm_event이며 Redis alarm:state가 아니다.
 
 ### 관리자
 
 | 작업 | 화면 | 요청 경로 | 닿는 저장소 | 분기 계층 |
 |------|------|------|------|------|
-| 로그인 · 토큰 갱신 | AUTH-LOGIN | 브라우저 → Next.js BFF → api | PostgreSQL user_account · Redis auth · sess | ③ |
-| 사이트 · 라인 · 설비 · 태그 마스터 관리 | ADM-MASTER | BFF 경유 | PostgreSQL · 커밋 이후 캐시 무효화 · Dictionary 재적재 | ③(ClickHouse는 Dictionary로만 닿는다) |
-| 작업지시 · 생산 실적 관리 | ADM-WORKORDER | BFF 경유 | PostgreSQL work_order · production_log | ③ |
-| 변경 이력 확인 | ADM-AUDIT | BFF 경유 | PostgreSQL audit_log · tag_master_history | ③ |
+| 로그인 · 토큰 갱신 | 로그인은 화면 없음(API 전용) — 폐지 화면 AUTH-LOGIN(D-14) · 토큰 갱신은 공통 셸 | 브라우저 → Next.js BFF → api | PostgreSQL user_account · Redis auth · sess | ③ |
+| 사이트 · 라인 · 설비 · 태그 마스터 관리 | 화면 없음(API 전용) — 폐지 화면 ADM-MASTER(D-14) | BFF 경유 | PostgreSQL · 커밋 이후 캐시 무효화 · Dictionary 재적재 | ③(ClickHouse는 Dictionary로만 닿는다) |
+| 작업지시 · 생산 실적 관리 | 화면 없음(API 전용) — 폐지 화면 ADM-WORKORDER(D-14) | BFF 경유 | PostgreSQL work_order · production_log | ③ |
+| 변경 이력 확인 | 화면 없음(API 전용) — 폐지 화면 ADM-AUDIT(D-14) | BFF 경유 | PostgreSQL audit_log · tag_master_history | ③ |
 
 - **관리자의 쓰기는 명령 스트림(stream:biz:cmd)을 거쳐 워커가 PostgreSQL에 커밋한 뒤에야 응답을 받는다.** 이것이 분기 ③계층 — Redis를 거쳐도 목적지와 동기 계약을 바꾸지 않는 분기 — 의 시연 자리다(D-04 개정 · D-11). 관리자가 태그 스케일을 바꾸면 새 tag_id가 발급되고 이전 태그는 비활성화된다(전역 불변식 "불변 사실 기록").
-- **마스터 변경은 네 저장소 층을 건드린다** — PostgreSQL 커밋 → Redis 캐시 삭제 → Pub/Sub 전파 → ClickHouse Dictionary 재적재(원본 data_flow.md §7.1). 관리자 한 번의 저장이 운영자 · 엔지니어 화면의 태그명까지 바꾸는 경로이며, 확장된 무효화 체인의 정본은 [../06_pipeline/07_business_crud.md](../06_pipeline/07_business_crud.md)다.
+- **마스터 변경은 네 저장소 층을 건드린다** — PostgreSQL 커밋 → Redis 캐시 삭제 → Pub/Sub 전파 → ClickHouse Dictionary 재적재(원본 data_flow.md §7.1). 관리자 한 번의 저장이 운영자 · 엔지니어가 읽는 태그명까지 바꾸는 경로이며, 확장된 무효화 체인의 정본은 [../06_pipeline/07_business_crud.md](../06_pipeline/07_business_crud.md)다.
 
 ### 엔지니어
 
 | 작업 | 화면 | 요청 경로 | 닿는 저장소 | 분기 계층 |
 |------|------|------|------|------|
-| 시간 범위 트렌드 조회 | ANL-TREND | 브라우저 → api 직결 | Redis cache:q → 미스 시 ClickHouse 롤업 또는 원시 | ① |
-| 원시 데이터 내보내기 | ANL-TREND | 직결 · 스트리밍 | ClickHouse | ① |
-| 알람 판정 이력 분석 | ALM-RULES | 직결 | ClickHouse alarm_eval | ② 판정 전수 |
-| 알람 규칙 조정 | ALM-RULES | BFF 경유(no-store) | PostgreSQL alarm_rule · 캐시 즉시 무효화 | ② 규칙(원천) |
+| 시간 범위 트렌드 조회 | 화면 없음(API 전용) — 폐지 화면 ANL-TREND(D-14) | 브라우저 → api 직결 | Redis cache:q → 미스 시 ClickHouse 롤업 또는 원시 | ① |
+| 원시 데이터 내보내기 | 화면 없음(API 전용) — 폐지 화면 ANL-TREND(D-14) | 직결 · 스트리밍 | ClickHouse | ① |
+| 알람 판정 이력 분석 | 화면 없음(API 전용) — 폐지 화면 ALM-RULES(D-14) | 직결 | ClickHouse alarm_eval | ② 판정 전수 |
+| 알람 규칙 조정 | 화면 없음(API 전용) — 폐지 화면 ALM-RULES(D-14) | BFF 경유(no-store) | PostgreSQL alarm_rule · 캐시 즉시 무효화 | ② 규칙(원천) |
 
 - **엔지니어는 해상도를 고르지 않는다.** 조회 범위에 따라 서버가 raw · 1m · 1h · 1d 중 하나를 고른다 — 원시 1년치 요청이 ClickHouse를 마비시키는 사고를 서버가 구조로 막기 위해서다. 원시가 꼭 필요하면 내보내기로 간다.
 - **알람 규칙은 ENGINEER가 고친다(W2 판정).** 원본은 주체를 정하지 않았고, 판정 전수를 분석해 임계값을 조정하는 쪽이 엔지니어이므로 규칙 변경을 ENGINEER에, 알람 확인(ACK)을 OPERATOR에 둔다. 정본 [../02_features/12_permission_matrix.md](../02_features/12_permission_matrix.md).
@@ -68,14 +70,14 @@
 | 작업 | 도구 · 화면 | 요청 경로 | 닿는 저장소 | 학습 목표 |
 |------|------|------|------|------|
 | 저장소 수동 실습(PEL 관찰 등) | redis-cli · psql · clickhouse-client | 호스트 CLI → 127.0.0.1 저장소 포트 | 전부 | ②(at-least-once의 실체) |
-| 스위치 조건 설정 · 재기동 | 환경변수 · Compose 재기동 · EXP-CONSOLE(주입 구현 확인) | 호스트 셸 | 해당 없음 | ① · ② |
+| 스위치 조건 설정 · 재기동 | 환경변수 · Compose 재기동 · EXP-PERF · EXP-FLOW 각주 툴팁(주입 구현 확인) | 호스트 셸 | 해당 없음 | ① · ② |
 | 부하 주입 | k6(호스트 프로세스) · 생성기 주입 모드 | 호스트 → api · 부하 주입 표면 | Redis Stream · ClickHouse | ① · ② |
 | 계측 관찰 | observability 프로파일 대시보드 · /metrics 직접 덤프 | 호스트 → api /metrics | 해당 없음 | ① · ② |
 | 스냅샷 · 복원 | Taskfile 스냅샷 · 복원 | 호스트 셸 | 볼륨 전체 | 전제(같은 초기 상태) |
-| 대조 쿼리 실행 | psql · clickhouse-client · EXP-COMPARE(역전 지점 표시) | 호스트 CLI · 직결 | PostgreSQL 대조군 · ClickHouse tag_raw | ① |
-| 결과 기록 | docs/measurements · EXP-CONSOLE(기록 조건 블록) | 파일 · 화면 | 해당 없음 | ① · ② |
+| 대조 쿼리 실행 | psql · clickhouse-client · EXP-PERF(역전 구간 표시) | 호스트 CLI · 직결 | PostgreSQL 대조군 · ClickHouse tag_raw | ① |
+| 결과 기록 | docs/measurements · EXP-PERF 각주 툴팁(원천 기록 · 4요소) | 파일 · 화면 | 해당 없음 | ① · ② |
 
-- **실험 수행자의 화면 밖 작업이 화면 안 작업보다 많다.** 스위치는 환경변수 + DI 초기화 선택이라 화면에서 바꿀 수 없고(D-06), 실험 콘솔은 상태 표시 · 실행 기록 · 비교만 한다. 콘솔에 토글을 기대하면 설계를 버그로 오해한다.
+- **실험 수행자의 화면 밖 작업이 화면 안 작업보다 많다.** 스위치는 환경변수 + DI 초기화 선택이라 화면에서 바꿀 수 없고(D-06), 두 실증 화면은 스위치를 각주 툴팁에 표시만 하고 실행 패널로 시연 실행만 시작 · 중단한다. 화면에 토글을 기대하면 설계를 버그로 오해한다.
 - **정밀 측정 세션에서는 관측 대시보드를 끈다.** 관측 스택이 측정 대상과 같은 CPU를 쓰므로 그 동안의 수치는 상대 비교용이다([../10_observability/04_experiment_protocol.md](../10_observability/04_experiment_protocol.md)).
 
 ## 요청 경로 — BFF 경유와 직결
@@ -113,7 +115,7 @@
 
 | 항목 | 원본이 정한 것 | 원본에 없는 것 | 확정 자리 |
 |------|------|------|------|
-| 역할 저장 | role(role_code 유일) · user_role(사용자 ↔ 역할 다대다) 테이블(원본 architecture.md §6) | **W2 확정** — OPERATOR · ENGINEER · ADMIN 3값 · 알람 규칙 변경 ENGINEER · ACK OPERATOR · 실험 콘솔은 인증 사용자 전원 표시 전용 | [../02_features/12_permission_matrix.md](../02_features/12_permission_matrix.md) · [../05_data_stores/01_postgresql_schema.md](../05_data_stores/01_postgresql_schema.md) |
+| 역할 저장 | role(role_code 유일) · user_role(사용자 ↔ 역할 다대다) 테이블(원본 architecture.md §6) | **W2 확정** — OPERATOR · ENGINEER · ADMIN 3값 · 알람 규칙 변경 ENGINEER · ACK OPERATOR · 실험 콘솔은 인증 사용자 전원 표시 전용(D-14로 실험 콘솔 폐지 — 실증 화면 2는 보기 전원 · 실행 시작 · 중단 ENGINEER · ADMIN) | [../02_features/12_permission_matrix.md](../02_features/12_permission_matrix.md) · [../05_data_stores/01_postgresql_schema.md](../05_data_stores/01_postgresql_schema.md) |
 | 인가 방식 | 역할 기반 · 엔드포인트별 Guard 검사(원본 architecture.md §18) | 역할 × 기능 매트릭스 | [../02_features/12_permission_matrix.md](../02_features/12_permission_matrix.md) |
 | 권한 캐시 | cache-aside · 권한 변경 시 즉시 삭제(원본 architecture.md §10.1) | 캐시 키 모양 | [../05_data_stores/05_redis_keyspace.md](../05_data_stores/05_redis_keyspace.md) |
 | 페르소나 ↔ 역할 | 없음 | 페르소나 하나가 역할 하나인지 여부 | [../02_features/12_permission_matrix.md](../02_features/12_permission_matrix.md) |
@@ -142,15 +144,15 @@
 |------|------|------|------|------|
 | A | 페르소나가 넷이면 동시 사용자 부하도 넷 분량이다 | 로컬 1대에서 학습자 한 명이 관점을 오간다 | 부하는 용량 티어와 k6 시나리오가 만든다 | 동시 연결 · 요청률은 부하 시나리오 문서에서 읽는다 |
 | A | 실험 수행자에게 역할 코드가 없으니 권한 누락이다 | 스위치는 앱 권한으로 막을 대상이 아니다 | 스위치 전환은 환경변수 + 재기동이다 | 머신 접근 경계(127.0.0.1 · .env)로 지킨다 |
-| A | 실험 콘솔에서 스위치를 못 바꾸는 것은 미구현이다 | 런타임 토글은 설계상 없다 | DI 초기화 선택(D-06) | 콘솔은 상태 표시와 재기동 절차 안내를 한다 |
-| B | 운영자 화면이 ClickHouse를 거의 안 부르는 것은 기능 부족이다 → 의도된 차단이다 | 최신값을 ClickHouse에서 읽으면 고빈도 점조회가 OLAP에 몰린다 | 운영자 화면의 부하가 Redis에 머문다 | 운영자 화면에 새 조회를 더할 때는 Redis 경유 여부를 먼저 정한다 |
-| B | 관리자 저장 직후 트렌드 화면의 태그명이 잠시 옛값이다 → 무효화 체인 밖 캐시 층의 흔적이다 | 체인을 생략하면 Dictionary 수명만큼 옛 이름이 남는다 | 무효화는 커밋 이후 순서로만 동작한다 | 체인의 정본(06_pipeline/07)에서 층별 반영 시점을 읽는다 |
+| A | 실증 화면에서 스위치를 못 바꾸는 것은 미구현이다 | 런타임 토글은 설계상 없다 | DI 초기화 선택(D-06) | 각주 툴팁은 상태 표시만 한다 — 전환은 호스트 셸 재기동 |
+| B | 운영자 표면(최신값 · 실시간)이 ClickHouse를 거의 안 부르는 것은 기능 부족이다 → 의도된 차단이다 | 최신값을 ClickHouse에서 읽으면 고빈도 점조회가 OLAP에 몰린다 | 운영자 표면의 부하가 Redis에 머문다 | 운영자 표면에 새 조회를 더할 때는 Redis 경유 여부를 먼저 정한다 |
+| B | 관리자 저장 직후 시계열 조회 응답의 태그명이 잠시 옛값이다 → 무효화 체인 밖 캐시 층의 흔적이다 | 체인을 생략하면 Dictionary 수명만큼 옛 이름이 남는다 | 무효화는 커밋 이후 순서로만 동작한다 | 체인의 정본(06_pipeline/07)에서 층별 반영 시점을 읽는다 |
 
 ## 미확정 등재
 
 | 항목 | 상태 | 확정 자리 |
 |------|------|------|
-| 화면 코드({표면}-{의미}) | **닫힘** — W5 채번(화면 10) · 이 문서의 화면 열은 코드로 표기한다 | [../08_screen/README.md](../08_screen/README.md) |
+| 화면 코드({표면}-{의미}) | **닫힘** — W5 채번(화면 10) · 이 문서의 화면 열은 코드로 표기한다 · D-14로 현행 2(EXP-PERF · EXP-FLOW) · 폐지 10은 결번 | [../08_screen/README.md](../08_screen/README.md) |
 
 ## 관련 문서
 

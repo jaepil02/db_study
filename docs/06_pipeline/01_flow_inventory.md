@@ -2,6 +2,7 @@
 
 > **대상**: 데이터 흐름 10종의 채번 정본(F-01~F-10) — 원본 대응 · 방향 · 주 경로 · 성격 · 목표 지연 · 참여 도메인 · 관련 기능 · 스위치 · 요구사항 파일 · 기전 문서 · 전체 흐름도 · 흐름별 병목 후보 · 흐름 검증 항목 · 검산
 > **작성일**: 2026-09-24
+> **개정일**: 2026-10-03 — 사용자 선택 2026-10-03 — 조회 경로 보이기 · D-15(설계 정본 .omc/plans/web-junior-redesign.md §9 · 리드 판정 2026-10-03) — F-03 · F-04 참여 기능에 **GEN-12**(흐름 시연의 조회 섞기 — 센서 지금 값 · 센서 시계열 조회를 같은 서비스로 부른다 · 정본 02_features/05) · 참여 도메인에 GEN · F-03 12 → **13** · F-04 14 → **15** · 기능 검산 122 → **124** — 흐름 · 도메인 합집합 · 스위치 참여 불변
 > **개정일**: 2026-09-28 — 라이브 실행 제어 반영(사용자 요구 2026-09-28 · GEN-11 · 12 — 정본 02_features/05) — F-02 참여 기능에 **GEN-12**(12 → **13**) · F-05에 **GEN-12**(참여 도메인 GEN 추가 · 21 → **22**) · F-09에 **GEN-11 · 12**(12 → **14**) — 기능 참여 합 118 → **122**(03_requirements/15 흐름 축과 일치) · 흐름 · 참여 도메인 · 스위치 참여 수 불변
 > **개정일**: 2026-09-28 — 웨이브 1 검수 반영(B-L3) — F-05 참여 기능에 **ALM-08**(알람 확인은 업무 명령 경로를 탄다 — F-06 참여 유지) — F-05 20 → **21** · 기능 참여 합 117 → **118** — 흐름 · 스위치 참여 수 불변
 > **개정일**: 2026-09-28 — 업무 쓰기 Redis 경유 개정(사용자 결정 2026-09-27 · D-04 · REQ-GLB-12 개정) — F-05 주 경로 · 성격 "Stream 비경유" → **명령 스트림 경유(stream:biz:cmd → 워커 grp:biz-writer → PostgreSQL 트랜잭션 → 결과 · ch:bizreply → api 응답) · 동기 응답** · 새 F-NN 없음(지연 목표 · 병목 지표가 F-05와 같은 요청 · 응답) · 경계 판정 7 → **8**(업무 명령 적용 → F-05) · F-05 스위치 없음 → **SW-12** — 스위치 참여 18 → **19** · 스위치 없는 흐름 2 → **1**(F-08) · 흐름도에 명령 스트림 · 워커 간선 · PostgreSQL 업무 14 → **15** · 병목 후보 14 → **15**(#15 업무 명령 직렬 적용)
@@ -58,8 +59,8 @@
 |------|------|------|:------:|------|------|------|
 | F-01 | COL · SIM · GEN · MST | COL-01~07 · SIM-01~05 · GEN-05 · MST-03 · MST-07 | 15 | SW-01 · SW-10 · SW-11(collector) | [../03_requirements/04_collector.md](../03_requirements/04_collector.md) · [../03_requirements/05_plc_sim.md](../03_requirements/05_plc_sim.md) | [02_collect.md](./02_collect.md) |
 | F-02 | COL · GEN · ING | COL-07 · GEN-06 · GEN-12 · ING-01~08 · ING-10 · ING-11 | 13 | SW-01 · SW-08 · SW-09 · SW-11 | [../03_requirements/07_ingest.md](../03_requirements/07_ingest.md) | [03_ingest_batch.md](./03_ingest_batch.md) · [04_routing.md](./04_routing.md) |
-| F-03 | RLT · AUT · MST · ING · TSQ | RLT-01~04 · RLT-07 · AUT-04~07 · MST-07 · ING-08 · TSQ-08 | 12 | SW-02 · SW-11 | [../03_requirements/09_realtime.md](../03_requirements/09_realtime.md) | [05_realtime_read.md](./05_realtime_read.md) |
-| F-04 | TSQ · AUT · MST | TSQ-01~09 · AUT-04~07 · MST-09 | 14 | SW-03 · SW-04 · SW-05 | [../03_requirements/08_timeseries.md](../03_requirements/08_timeseries.md) | [06_timeseries_read.md](./06_timeseries_read.md) |
+| F-03 | RLT · AUT · MST · ING · TSQ · GEN | RLT-01~04 · RLT-07 · AUT-04~07 · MST-07 · ING-08 · TSQ-08 · GEN-12 | 13 | SW-02 · SW-11 | [../03_requirements/09_realtime.md](../03_requirements/09_realtime.md) | [05_realtime_read.md](./05_realtime_read.md) |
+| F-04 | TSQ · AUT · MST · GEN | TSQ-01~09 · AUT-04~07 · MST-09 · GEN-12 | 15 | SW-03 · SW-04 · SW-05 | [../03_requirements/08_timeseries.md](../03_requirements/08_timeseries.md) | [06_timeseries_read.md](./06_timeseries_read.md) |
 | F-05 | AUT · MST · WRK · ALM · RLT · GEN | AUT-01~06 · MST-01~06 · MST-08 · WRK-01~05 · ALM-01 · ALM-08 · RLT-09 · GEN-12 | 22 | SW-12 — 쓰기 적용 경로(무효화 체인은 스위치 밖 정합성 계약) | [../03_requirements/02_auth.md](../03_requirements/02_auth.md) · [../03_requirements/03_master.md](../03_requirements/03_master.md) · [../03_requirements/11_work_orders.md](../03_requirements/11_work_orders.md) | [07_business_crud.md](./07_business_crud.md) |
 | F-06 | ING · ALM · RLT · AUT | ING-09 · ING-10 · ALM-02~09 · RLT-08 · AUT-05 | 12 | SW-06 | [../03_requirements/10_alarms.md](../03_requirements/10_alarms.md) | [08_alarm.md](./08_alarm.md) · [04_routing.md](./04_routing.md) |
 | F-07 | RLT · ING · ALM · AUT | RLT-05~08 · ING-08 · ALM-06 · AUT-04 · AUT-05 · AUT-07 | 9 | SW-06 · SW-07 | [../03_requirements/09_realtime.md](../03_requirements/09_realtime.md) | [05_realtime_read.md](./05_realtime_read.md) |
@@ -67,7 +68,7 @@
 | F-09 | GEN · SIM · AUT | GEN-01~12 · SIM-03 · AUT-05 | 14 | SW-09(모드 D 구간은 GEN-10) | [../03_requirements/06_datagen.md](../03_requirements/06_datagen.md) | [10_datagen_inject.md](./10_datagen_inject.md) |
 | F-10 | COL · SIM · GEN · ING · RLT | COL-08 · COL-09 · SIM-04 · GEN-07 · ING-05 · ING-06 · ING-13 · RLT-04 | 8 | SW-01 · SW-11 | [../03_requirements/01_global_rules.md](../03_requirements/01_global_rules.md) REQ-GLB-10 · [../03_requirements/13_nonfunctional.md](../03_requirements/13_nonfunctional.md) | [11_backpressure_failure.md](./11_backpressure_failure.md) |
 
-- 검산(기능 — 중복 허용 · 02_features 11본의 흐름 열을 다시 셈): 15 + 13 + 12 + 14 + 22 + 12 + 9 + 3 + 14 + 8 = **122** · 흐름 열이 "해당 없음 — 관측"인 기능 OBS-01~06 = **6**
+- 검산(기능 — 중복 허용 · 02_features 11본의 흐름 열을 다시 셈): 15 + 13 + 13 + 15 + 22 + 12 + 9 + 3 + 14 + 8 = **124** · 흐름 열이 "해당 없음 — 관측"인 기능 OBS-01~06 = **6**
 - 검산(참여 도메인): 합집합 = AUT · MST · COL · SIM · GEN · ING · TSQ · RLT · ALM · WRK = **10** · 불참 OBS **1** · 10 + 1 = **11** — 루트 고정 기준 "06_pipeline 흐름 불참 1 — OBS"와 같다
 - 검산(스위치 참여 — 중복 허용): F-01 3 · F-02 4 · F-03 2 · F-04 3 · F-05 1 · F-06 1 · F-07 2 · F-09 1 · F-10 2 = **19** · 스위치 없는 흐름 F-08 = **1**. [../02_features/13_switch_matrix.md](../02_features/13_switch_matrix.md)의 참여 합과 같다 — SW-11 collector는 발행 파이프라인(F-01)에서 실행되므로 F-01에 센다
 - **OBS가 흐름에 불참하는 것은 설계 진술이다.** OBS는 흐름 구간마다 카운터를 등록할 뿐 데이터를 한 저장소에서 다른 저장소로 옮기지 않는다 — E2E 게이지(OBS-04)가 ClickHouse를 읽는 것도 계측이지 흐름이 아니다.

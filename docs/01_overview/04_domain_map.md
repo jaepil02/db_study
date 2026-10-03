@@ -2,6 +2,9 @@
 
 > **대상**: 전 설계자 · 신규 합류자 — 11도메인이 어느 NestJS 모듈 · 평면 · 위치에 앉고, 서로 어떤 경계로 이어지며, 각 폴더에서 어디가 비는가
 > **작성일**: 2026-09-24
+> **개정일**: 2026-10-03 — D-15 학습자 눈높이 한 화면(사용자 지시 2026-10-03 — 08_screen/08_evidence_screens) — OBS 행 화면 칸 측정 조건 서랍 → **각주 툴팁** — 도메인 · 대응 수 불변
+> **개정일**: 2026-10-03 — 리드 판정(웨이브 1 정합 · 정본 08_screen/02_traceability) — 도메인 좌표 표 AUT · RLT 행의 08_screen 칸(로그아웃 · 무효화 신호 중계 → 화면 없음(API 전용)) · 08_screen 세는 기준 문장의 RLT · OBS 주 화면 EXP-FLOW · 공통 셸 → **EXP-FLOW** — 공백 매트릭스 불변(AUT · RLT · OBS는 다른 기능이 주 화면을 가진다 · 08_screen 행 4 · 공백 7)
+> **개정일**: 2026-10-03 — D-14 2화면 전환(사용자 결정 2026-10-03) — 폴더 × 도메인 08_screen 행 재판정(정본 08_screen/02_traceability) — MST · TSQ · ALM · WRK 행 → **공백(선언)**(폐지 화면 — 화면 없음(API 전용)) · GEN 공백(선언) → **행**(2026-09-28 GEN-11 · 12 주 화면 반영 누락 정정) · 08_screen 행 7 → **4** · 공백 4 → **7** · 검산 행 22 → **19** · 공백(선언) 14 → **17** · 합계 132 불변 · 도메인 좌표 표 화면 열 8칸(AUT · MST · GEN · TSQ · RLT · ALM · WRK · OBS)을 현행 자리 또는 화면 없음(API 전용)으로
 > **개정일**: 2026-09-28 — 라이브 실행 검수 반영(리드 재판정 2026-09-28) — GEN → MST 간선 설명 이름 토글 짝 → **시연 전용 행 한정 마스터 명령**(prepare가 사이트 · 라인 · 설비 생성 명령 · publish가 시연 전용 설비 DEMO-FLOW-DEV에만 master.device.patch · 되돌림 없음 · 운영 행 불변 · MST-02 명시 예외) — 간선 수 불변
 > **개정일**: 2026-09-28 — 리드 정정(통합 확인) — GEN → MST 간선 설명의 "순 변경 없는 본문" → **이름 토글 짝**(06_pipeline/10과 일치) — 간선 수 불변
 > **개정일**: 2026-09-28 — 라이브 실행 제어 반영(사용자 요구 2026-09-28 · 리드 판정) — 명령 스트림 경계에 **GEN → MST 간선 1**(라이브 흐름 실행의 시연 명령 master.device.patch · BizWritePort 프로세스 안 호출 · 같은 명령 스트림) — 명령 스트림 3 → **4**(자기 간선 3 + 도메인 사이 1) · 간선 21 → **22** · Stream 경계 GEN → ING 라벨에 라이브 흐름 실행
@@ -135,17 +138,17 @@ flowchart LR
 
 | 도메인 | 기능 | 요구사항 | API | 화면 |
 |------|------|------|------|------|
-| AUT | [../02_features/01_auth.md](../02_features/01_auth.md) | [../03_requirements/02_auth.md](../03_requirements/02_auth.md) | [../07_api/03_auth.md](../07_api/03_auth.md) | [../08_screen/06_master_admin.md](../08_screen/06_master_admin.md)(로그인) |
-| MST | [../02_features/02_master.md](../02_features/02_master.md) | [../03_requirements/03_master.md](../03_requirements/03_master.md) | [../07_api/04_master.md](../07_api/04_master.md) | [../08_screen/06_master_admin.md](../08_screen/06_master_admin.md) |
+| AUT | [../02_features/01_auth.md](../02_features/01_auth.md) | [../03_requirements/02_auth.md](../03_requirements/02_auth.md) | [../07_api/03_auth.md](../07_api/03_auth.md) | [../08_screen/01_standards.md](../08_screen/01_standards.md)(공통 셸 — 토큰 갱신 · 횡단) · 로그인 · 로그아웃은 화면 없음(API 전용 — 폐지 화면 AUTH-LOGIN · D-14 · 현행 셸에 사용자 메뉴 없음) |
+| MST | [../02_features/02_master.md](../02_features/02_master.md) | [../03_requirements/03_master.md](../03_requirements/03_master.md) | [../07_api/04_master.md](../07_api/04_master.md) | 화면 없음(API 전용) — 폐지 화면 ADM-MASTER(D-14) |
 | COL | [../02_features/03_collector.md](../02_features/03_collector.md) | [../03_requirements/04_collector.md](../03_requirements/04_collector.md) | 표면 없음 — 내부 모듈 | 화면 없음 |
 | SIM | [../02_features/04_plc_sim.md](../02_features/04_plc_sim.md) | [../03_requirements/05_plc_sim.md](../03_requirements/05_plc_sim.md) | 표면 없음 — 내부 모듈 | 화면 없음 |
-| GEN | [../02_features/05_datagen.md](../02_features/05_datagen.md) | [../03_requirements/06_datagen.md](../03_requirements/06_datagen.md) | [../07_api/09_datagen.md](../07_api/09_datagen.md) | [../08_screen/07_experiment_console.md](../08_screen/07_experiment_console.md)(잠정 — W5) |
+| GEN | [../02_features/05_datagen.md](../02_features/05_datagen.md) | [../03_requirements/06_datagen.md](../03_requirements/06_datagen.md) | [../07_api/09_datagen.md](../07_api/09_datagen.md) | [../08_screen/08_evidence_screens.md](../08_screen/08_evidence_screens.md)(EXP-PERF · EXP-FLOW 실행 패널) |
 | ING | [../02_features/06_ingest.md](../02_features/06_ingest.md) | [../03_requirements/07_ingest.md](../03_requirements/07_ingest.md) | 표면 없음 — 내부 모듈 | 화면 없음 |
-| TSQ | [../02_features/07_timeseries.md](../02_features/07_timeseries.md) | [../03_requirements/08_timeseries.md](../03_requirements/08_timeseries.md) | [../07_api/05_timeseries.md](../07_api/05_timeseries.md) | [../08_screen/04_trend_analysis.md](../08_screen/04_trend_analysis.md) |
-| RLT | [../02_features/08_realtime.md](../02_features/08_realtime.md) | [../03_requirements/09_realtime.md](../03_requirements/09_realtime.md) | [../07_api/06_realtime.md](../07_api/06_realtime.md) · [../07_api/11_websocket.md](../07_api/11_websocket.md) | [../08_screen/03_realtime_dashboard.md](../08_screen/03_realtime_dashboard.md) |
-| ALM | [../02_features/09_alarms.md](../02_features/09_alarms.md) | [../03_requirements/10_alarms.md](../03_requirements/10_alarms.md) | [../07_api/07_alarms.md](../07_api/07_alarms.md) | [../08_screen/05_alarm_console.md](../08_screen/05_alarm_console.md) |
-| WRK | [../02_features/10_work_orders.md](../02_features/10_work_orders.md) | [../03_requirements/11_work_orders.md](../03_requirements/11_work_orders.md) | [../07_api/08_work_orders.md](../07_api/08_work_orders.md) | [../08_screen/06_master_admin.md](../08_screen/06_master_admin.md) |
-| OBS | [../02_features/11_metrics.md](../02_features/11_metrics.md) | [../03_requirements/12_metrics.md](../03_requirements/12_metrics.md) | [../07_api/10_metrics.md](../07_api/10_metrics.md) | [../08_screen/07_experiment_console.md](../08_screen/07_experiment_console.md)(잠정 — W5) |
+| TSQ | [../02_features/07_timeseries.md](../02_features/07_timeseries.md) | [../03_requirements/08_timeseries.md](../03_requirements/08_timeseries.md) | [../07_api/05_timeseries.md](../07_api/05_timeseries.md) | 화면 없음(API 전용) — 폐지 화면 ANL-TREND(D-14) |
+| RLT | [../02_features/08_realtime.md](../02_features/08_realtime.md) | [../03_requirements/09_realtime.md](../03_requirements/09_realtime.md) | [../07_api/06_realtime.md](../07_api/06_realtime.md) · [../07_api/11_websocket.md](../07_api/11_websocket.md) | [../08_screen/08_evidence_screens.md](../08_screen/08_evidence_screens.md)(EXP-FLOW — 흐름 구독) · 무효화 신호 중계는 화면 없음(API 전용 — 셸이 받지 않는다) |
+| ALM | [../02_features/09_alarms.md](../02_features/09_alarms.md) | [../03_requirements/10_alarms.md](../03_requirements/10_alarms.md) | [../07_api/07_alarms.md](../07_api/07_alarms.md) | 화면 없음(API 전용) — 폐지 화면 ALM-CONSOLE · ALM-RULES(D-14) |
+| WRK | [../02_features/10_work_orders.md](../02_features/10_work_orders.md) | [../03_requirements/11_work_orders.md](../03_requirements/11_work_orders.md) | [../07_api/08_work_orders.md](../07_api/08_work_orders.md) | 화면 없음(API 전용) — 폐지 화면 ADM-WORKORDER · ADM-AUDIT(D-14) |
+| OBS | [../02_features/11_metrics.md](../02_features/11_metrics.md) | [../03_requirements/12_metrics.md](../03_requirements/12_metrics.md) | [../07_api/10_metrics.md](../07_api/10_metrics.md) | [../08_screen/08_evidence_screens.md](../08_screen/08_evidence_screens.md)(EXP-FLOW · 각주 툴팁) |
 
 - **/api/v1/ingest/bulk는 이름과 달리 ING 표면이 아니다.** 호출 주체가 부하 주입(GEN 모드 C)이고 ING는 Stream 뒤에서만 데이터를 받는다(docs_plan 보정 #11). /api/v1/health · /metrics는 OBS 소유다(보정 #12).
 
@@ -170,22 +173,22 @@ flowchart LR
 | 05_data_stores | 행 | 행 | 공백(선언) | 공백(선언) | 공백(선언) | 행 | 공백(선언) | 공백(선언) | 행 | 행 | 공백(선언) |
 | 06_pipeline | 행 | 행 | 행 | 행 | 행 | 행 | 행 | 행 | 행 | 행 | 공백(선언) |
 | 07_api | 파일 | 파일 | 공백(선언) | 공백(선언) | 파일 | 공백(선언) | 파일 | 파일 | 파일 | 파일 | 파일 |
-| 08_screen | 행 | 행 | 공백(선언) | 공백(선언) | 공백(선언) | 공백(선언) | 행 | 행 | 행 | 행 | 행 |
+| 08_screen | 행 | 공백(선언) | 공백(선언) | 공백(선언) | 행 | 공백(선언) | 공백(선언) | 행 | 공백(선언) | 공백(선언) | 행 |
 | 09_tech_stack | 횡단 | 횡단 | 횡단 | 횡단 | 횡단 | 횡단 | 횡단 | 횡단 | 횡단 | 횡단 | 횡단 |
 | 10_observability | 횡단 | 횡단 | 횡단 | 횡단 | 횡단 | 횡단 | 횡단 | 횡단 | 횡단 | 횡단 | 횡단 |
 | 11_glossary | 횡단 | 횡단 | 횡단 | 횡단 | 횡단 | 횡단 | 횡단 | 횡단 | 횡단 | 횡단 | 횡단 |
 | 12_security | 파일 | 횡단 | 횡단 | 횡단 | 횡단 | 횡단 | 횡단 | 횡단 | 횡단 | 횡단 | 횡단 |
 
-세는 기준은 칸이다. 05_data_stores 행의 기준은 **소유 PostgreSQL · ClickHouse 테이블**(§도메인 × 저장 객체)이고 Redis 키만 소유한 도메인은 행으로 세지 않는다. 06_pipeline 행의 기준은 흐름 F-01~F-10의 주 경로 참여이며, AUT는 F-05의 BFF 경유 요청(로그인 · 토큰 갱신)으로 참여한다(원본 data_flow.md §7.2). 08_screen의 기준은 기능의 주 화면이다 — GEN은 주 화면이 없고(산출이 EXP-CONSOLE 카드에 간접 표시될 뿐이다) OBS는 EXP-CONSOLE · EXP-COMPARE가 주 화면이다(W5 확정 — [../08_screen/02_traceability.md](../08_screen/02_traceability.md)).
+세는 기준은 칸이다. 05_data_stores 행의 기준은 **소유 PostgreSQL · ClickHouse 테이블**(§도메인 × 저장 객체)이고 Redis 키만 소유한 도메인은 행으로 세지 않는다. 06_pipeline 행의 기준은 흐름 F-01~F-10의 주 경로 참여이며, AUT는 F-05의 BFF 경유 요청(로그인 · 토큰 갱신)으로 참여한다(원본 data_flow.md §7.2). 08_screen의 기준은 기능의 주 화면이다(공통 셸 포함) — AUT는 공통 셸, GEN은 라이브 실행 기능 2(GEN-11 · 12)가 EXP-PERF · EXP-FLOW, RLT · OBS는 EXP-FLOW가 주 화면이다(RLT의 무효화 신호 중계는 화면 없음(API 전용)이나 같은 도메인의 다른 기능이 주 화면을 가져 칸은 행이다). MST · TSQ · ALM · WRK는 D-14(2화면 전환)로 주 화면이 폐지돼 표면만 남은 화면 없음(API 전용)이다 — 정본 [../08_screen/02_traceability.md](../08_screen/02_traceability.md).
 
 ### 검산
 
 - 파일 = 02_features 11 + 03_requirements 11 + 07_api 8 + 12_security 1 = **31**
-- 행 = 05_data_stores 5 + 06_pipeline 10 + 08_screen 7 = **22**
+- 행 = 05_data_stores 5 + 06_pipeline 10 + 08_screen 4 = **19**
 - 횡단 = 01_overview 11 + 04_architecture 11 + 09_tech_stack 11 + 10_observability 11 + 11_glossary 11 + 12_security 10 = **65**
-- 공백(선언) = 05_data_stores 6 + 06_pipeline 1 + 07_api 3 + 08_screen 4 = **14**
+- 공백(선언) = 05_data_stores 6 + 06_pipeline 1 + 07_api 3 + 08_screen 7 = **17**
 - 공백(미선언) = **0**
-- 합계 31 + 22 + 65 + 14 + 0 = **132** = 12폴더 × 11도메인
+- 합계 31 + 19 + 65 + 17 + 0 = **132** = 12폴더 × 11도메인
 
 ### 공백 선언 이력
 

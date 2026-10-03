@@ -2,6 +2,7 @@
 
 > **대상**: AUTH-LOGIN(로그인) · ADM-MASTER(사이트 · 라인 · 설비 · Modbus 접속 설정 · 태그 — 스케일 변경 = 새 태그 발급 · master.scale_change_forbidden/409) · ADM-WORKORDER(작업지시 status 4 · 허용 전이 4쌍 · work_orders.invalid_status_transition/409 · 생산 실적) · ADM-AUDIT(감사 로그 · 태그 변경 이력 조회)
 > **작성일**: 2026-09-24
+> **개정일**: 2026-10-03 — D-14 2화면 전환(사용자 결정 2026-10-03) — **상태 — 폐지** 단락 신설 · 화면 4(AUTH-LOGIN · ADM-MASTER · ADM-WORKORDER · ADM-AUDIT) 폐지 · 이어받는 자리 EXP-FLOW 업무 줄 · 분배 표 업무 변경 행 · flow 실행 업무 명령 · 본문은 폐지 전 원문 보존(수치 · 계약 · 링크 미수정)
 > **개정일**: 2026-09-28 — 리드 정정 — Redis 불가 코드 신설 없음 · **common.postgres_unavailable/503 재사용**(07_api/01) — 오류 칸 코드명 교체
 > **개정일**: 2026-09-28 — 07_api/01 확정 값 반영 — Redis 불가 **common.command_bus_unavailable/503** · 명령 조회 GET /api/v1/commands/{cmdId} 확정(확정 대기 표면 1 → **0**) · 재시도는 같은 Idempotency-Key
 > **개정일**: 2026-09-28 — 업무 쓰기 명령 경로 반영(사용자 결정 2026-09-27 · 정본 06_pipeline/07 §업무 명령 경로) — 도입 단락 "쓰기는 Redis Stream을 타지 않고" → **명령 스트림(stream:biz:cmd)을 거쳐 워커가 커밋한 뒤 응답** · 실적 불릿의 ③ 비경유 근거 교체 · 상태 4행(ADM-MASTER · ADM-WORKORDER)에 202 pending · Redis 불가 503 · 호출 표면 모음에 명령 조회 확정 대기 · 스위치 영향 "해당 없음" → **SW-12**
@@ -9,6 +10,8 @@
 > **개정일**: 2026-09-26 — W1 검수 반영 — 감사 목록 무인증 기간 표기 S4~S6 → **인증 도입(S7 ②) 전**(S7 ① 알람 확인도 감사 NULL · 정본 05_data_stores/01 §인계 판정)
 > **개정일**: 2026-09-24 — 최종 정밀 검수 — Modbus 매핑 변경 행 닫힘(07_api/04 W5 판정) · 새 태그 발급 다이얼로그 펜스 앞 도입문 추가
 > **원천**: 원본 architecture.md §6 · §11 · §11.2 · §12(커밋 ff66a37) · 원본 data_flow.md §7 · §7.1 · §7.2(커밋 ff66a37) · 원본 implementation_plan.md §5 S4 · S7 · §7.4(커밋 ff66a37) · docs_plan.md 실행 계획 보정 #13 · REQ-AUT-01~06 · 14 · 15 · 17 · REQ-MST-01~15 · REQ-WRK-01~12 · AC-06 · AC-37 · AC-38 · 기능 AUT-01 · 03 · MST-01~06 · WRK-01 · 02 · 03 · 05 · [../06_pipeline/07_business_crud.md](../06_pipeline/07_business_crud.md) · [../07_api/03_auth.md](../07_api/03_auth.md) · [../07_api/04_master.md](../07_api/04_master.md) · [../11_glossary/03_enums_state_machines.md](../11_glossary/03_enums_state_machines.md) 상태 머신 4 · [01_standards.md](./01_standards.md)
+
+**상태 — 폐지(D-14 · 2026-10-03)** — AUTH-LOGIN(로그인) · ADM-MASTER(마스터 관리) · ADM-WORKORDER(작업지시 · 생산 실적) · ADM-AUDIT(감사 로그)는 웹에서 폐지됐다(사용자 결정 — [../01_overview/06_design_decisions.md](../01_overview/06_design_decisions.md) D-14). 화면 코드는 결번으로 두고 재사용하지 않는다. 업무 쓰기가 **Redis 명령 스트림을 거쳐 PostgreSQL 트랜잭션으로 적용되는 모습**은 [08_evidence_screens.md](./08_evidence_screens.md) EXP-FLOW가 이어받는다 — 흐름도 업무 줄(stream:biz:cmd → 명령 워커 → 트랜잭션 → 캐시 무효화 → 응답) · 분배 표 업무 변경 행 · flow 실행이 싣는 시연 전용 마스터 명령. 마스터 CRUD 폼 · 작업지시 전이 · 감사 목록 · 로그인 화면을 이어받는 현행 화면은 없다 — 인증 · 마스터 · 작업지시 · 감사 표면은 api에 남는다(D-14 결정 1). S7 로그인 자리는 [01_standards.md](./01_standards.md) §미확인 · 확정 대기 등재에 있다. 아래 본문은 폐지 전 원문이며 고치지 않는다.
 
 이 문서는 로그인과 업무 데이터 관리 화면 넷을 담는다(보정 #13 — 08_screen에 로그인 · 작업지시 자리가 따로 없어 이 파일이 함께 소유한다). 네 화면의 공통점은 **분기 ③계층의 화면**이라는 것이다 — 쓰기는 api가 검증한 뒤 명령 스트림(stream:biz:cmd)에 싣고 워커가 PostgreSQL 트랜잭션으로 커밋한 뒤에야 응답하며(사용자 결정 2026-09-27 · [../06_pipeline/07_business_crud.md](../06_pipeline/07_business_crud.md) §업무 명령 경로), 캐시 사본은 커밋 뒤 · 응답 전에 지워진다. 결과가 대기 상한 안에 오지 않으면 202 pending이 온다 — 화면 처리는 [01_standards.md](./01_standards.md) §업무 쓰기 응답 — 명령 경로가 공통으로 정한다. 그래서 이 화면들의 계약은 속도가 아니라 **쓴 사람이 저장 직후 새 값을 보는가**(read-your-writes)다.
 

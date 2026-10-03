@@ -2,6 +2,8 @@
 
 > **대상**: AUT 도메인이 소유하는 REST 표면 — 로그인 · 토큰 갱신 · 로그아웃의 요청 · 응답 · 실패 · 경로 계약 · 계정 · 역할 관리 표면의 부재 판정
 > **작성일**: 2026-09-24
+> **개정일**: 2026-10-03 — 리드 판정(웨이브 1 정합 · 정본 08_screen/02_traceability) — 로그아웃 #3 호출 화면 전 화면 → **화면 없음(API 전용)**(현행 셸에 사용자 메뉴 없음) · 호출 화면 해설 불릿 — 표면 · 기능 · 에러 코드 수 불변
+> **개정일**: 2026-10-03 — D-14 2화면 전환(사용자 결정 2026-10-03) — 로그인 #1 호출 화면 AUTH-LOGIN → **화면 없음(API 전용)** · 관련 문서 AUTH-LOGIN 링크에 폐지 표기 — 표면 · 기능 · 에러 코드 수 불변(api 표면은 지우지 않는다 — D-14 결정 1)
 > **개정일**: 2026-09-26 — 목적 적합성 실증 W1(EXP-40~45 채번) — 미확인 행 "카탈로그 39에 없다 · 필요해지면 EXP-40부터" → **카탈로그에 없다 · 말미 채번(다음 번호는 카탈로그 §분류와 검산)** — EXP-40이 역방향 대조로 채번돼 옛 문구가 다른 실험을 가리킨다
 > **개정일**: 2026-09-24 — W7 검수 반영 — 키 표기 auth:refresh:{id} → **auth:refresh:{refresh_token_id}**(정본 05_data_stores/05) — 표면 수 불변
 > **개정일**: 2026-09-24 — W7 보안 판정 반영 — BFF 인증 Route Handler **Origin 대조** 추가 · 미설계 3행(회전 · 로그인 시도 제한 · CORS 제외) 닫힘 — 표면 수 불변(정본 12_security/01 · 03)
@@ -33,13 +35,13 @@ AUT는 **표면 셋만 소유하고 나머지 전 표면에 끼어드는 도메�
 
 | # | 메서드 | 경로 | 기능 ID | 역할 | 캐시 | 에러 코드 | 호출 화면 | 원본 여부 |
 |:-:|------|------|------|------|------|------|------|------|
-| 1 | POST | /api/v1/auth/login | AUT-01 | 공개 | 없음 | auth.invalid_credentials/401 · common.validation_failed/400 · common.postgres_unavailable/503 · auth.token_store_unavailable/503 | AUTH-LOGIN | 원본 |
+| 1 | POST | /api/v1/auth/login | AUT-01 | 공개 | 없음 | auth.invalid_credentials/401 · common.validation_failed/400 · common.postgres_unavailable/503 · auth.token_store_unavailable/503 | 화면 없음(API 전용) — 폐지 화면 AUTH-LOGIN(D-14) | 원본 |
 | 2 | POST | /api/v1/auth/refresh | AUT-02 | 리프레시 쿠키 | 없음 | auth.refresh_invalid/401 · common.validation_failed/400 · auth.token_store_unavailable/503 | 전 화면 | 원본 |
-| 3 | POST | /api/v1/auth/logout | AUT-03 | 리프레시 쿠키 | 없음 | common.validation_failed/400 · auth.token_store_unavailable/503 | 전 화면 | 원본 |
+| 3 | POST | /api/v1/auth/logout | AUT-03 | 리프레시 쿠키 | 없음 | common.validation_failed/400 · auth.token_store_unavailable/503 | 화면 없음(API 전용) — 현행 셸에 사용자 메뉴 없음(리드 판정 2026-10-03) | 원본 |
 
 - 검산: 표면 = REST **3** · 원본 3 + 신설 0 = **3**
 - 역할 열 "리프레시 쿠키"는 액세스 토큰 Guard 밖이라는 뜻이다 — 역할이 0개인 사용자도 부른다(권한 매트릭스 §역할 정의). 그래서 공통 4종 중 auth.unauthenticated · token_expired · forbidden · rate_limited가 이 셋에는 나지 않는다.
-- #2 · #3의 호출 화면 "전 화면"은 BFF가 어느 화면의 요청에서든 만료 갱신 · 로그아웃을 대행한다는 뜻이다.
+- #2의 호출 화면 "전 화면"은 BFF가 어느 화면의 요청에서든 만료 갱신을 대행한다는 뜻이다(공통 셸 인증 가드). #3 로그아웃은 BFF 대행 계약은 그대로이나 현행 셸에 부르는 자리가 없다 — 정본 [../08_screen/02_traceability.md](../08_screen/02_traceability.md).
 
 ## 표면 계약
 
@@ -130,4 +132,4 @@ AUT는 **표면 셋만 소유하고 나머지 전 표면에 끼어드는 도메�
 - [../03_requirements/02_auth.md](../03_requirements/02_auth.md) — REQ-AUT 계약
 - [../02_features/12_permission_matrix.md](../02_features/12_permission_matrix.md) — 역할 × 표면
 - [../12_security/01_authn_authz.md](../12_security/01_authn_authz.md) — 수명 · 해시 · 방어선 리뷰
-- [../08_screen/06_master_admin.md](../08_screen/06_master_admin.md) — AUTH-LOGIN 화면
+- [../08_screen/06_master_admin.md](../08_screen/06_master_admin.md) — AUTH-LOGIN 화면(폐지 · D-14 — 폐지 전 원문 보존)

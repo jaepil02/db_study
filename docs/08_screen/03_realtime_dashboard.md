@@ -2,10 +2,13 @@
 
 > **대상**: DSH-REALTIME — 설비별 최신값 표 · 실시간 트렌드 · STALE 표시 · WebSocket 연결과 재연결 표시 · SW-02 · SW-06 · SW-07 · SW-11 영향 표시
 > **작성일**: 2026-09-24
+> **개정일**: 2026-10-03 — D-14 2화면 전환(사용자 결정 2026-10-03) — **상태 — 폐지** 단락 신설 · 화면 1(DSH-REALTIME) 폐지 · 이어받는 자리 EXP-FLOW 흐름도 · 분배 표 최신값 행(쓰기 수만) · 본문은 폐지 전 원문 보존(수치 · 계약 · 링크 미수정)
 > **개정일**: 2026-09-28 — SW-12 신설 반영 — 스위치 영향 검산 나머지 6 → **7**(SW-12 — 업무 쓰기는 대시보드 표시를 바꾸지 않는다) · 5 + 7 = **12**
 > **개정일**: 2026-09-24 — W6 실험 채번 반영 — EXP 번호 · 메트릭 이름 반영(정본 10_observability/01 · 06)
 > **개정일**: 2026-09-24 — W6 판정 반영 — 트렌드 창 길이 5분 · 최대 태그 8 현행값(09_tech_stack/01 · S2 고정)
 > **원천**: 원본 data_flow.md §5 · §9 · §9.1 · §9.2 · §12.2(커밋 ff66a37) · 원본 implementation_plan.md §5 S2 · §7.2(커밋 ff66a37) · 원본 architecture.md §11 · §17(커밋 ff66a37) · REQ-RLT-01~18 · REQ-TSQ-13 · AC-10 · AC-11 · AC-17 · AC-18 · AC-41 · 기능 RLT-01~09 · TSQ-01 · TSQ-08 · MST-01 · MST-02 · [../06_pipeline/05_realtime_read.md](../06_pipeline/05_realtime_read.md) · [../02_features/08_realtime.md](../02_features/08_realtime.md) · [01_standards.md](./01_standards.md)
+
+**상태 — 폐지(D-14 · 2026-10-03)** — DSH-REALTIME(설비 실시간 대시보드 · /realtime · 설비 · 태그 경로)은 웹에서 폐지됐다(사용자 결정 — [../01_overview/06_design_decisions.md](../01_overview/06_design_decisions.md) D-14). 화면 코드는 결번으로 두고 재사용하지 않는다. **이 화면의 표시를 그대로 이어받는 현행 화면은 없다** — 최신값 경로(Ingest 배치 → Redis rt:latest 조건부 쓰기)는 [08_evidence_screens.md](./08_evidence_screens.md) EXP-FLOW의 흐름도 Redis 노드와 분배 표 최신값 행이 **초당 쓰기 수로만** 보이고, 값 · STALE · 실시간 트렌드는 보이지 않는다. 최신값 조회 표면 · WebSocket 최신값 푸시는 api에 남는다(D-14 결정 1). 아래 본문은 폐지 전 원문이며 고치지 않는다 — 현행 공통 규칙은 [01_standards.md](./01_standards.md)가 갖는다.
 
 이 문서는 현장 운영자가 상시 띄워 두는 화면 하나를 명세한다. **이 화면은 거의 전부 Redis만 본다** — 최신값은 rt:latest HGETALL 1회, 실시간 변화는 ch:rt Pub/Sub 푸시다. ClickHouse에 닿는 것은 진입 시 트렌드 채움 한 번과 SW-02 off 실험뿐이며, 그래서 이 화면의 체감 속도는 대개 Redis 역할 스위치 하나의 상태로 설명된다([../01_overview/03_personas_roles.md](../01_overview/03_personas_roles.md)).
 

@@ -2,6 +2,8 @@
 
 > **대상**: ★★ 실험 전수 — **EXP-NN 채번 정본** · 대조군 실험 EXP-01~05 · 스위치 실험(12종 전부) · 장애 재현 · 생성기 처리량 · 부하 시나리오 · 확장 진입 판정 · 흐름 · 구조 · 기반 실험 · **역방향 대조 EXP-40~44 · 스트리밍 동시 적재 EXP-45** · 각 실험의 가설 · 조건 · 절차 · 판정 지표 · 확정되는 미확인 · 관련 AC · 학습 단계 · 결과 자리 · 대조 실험 조정값(Q5 문턱 · 디스크 예산 · 적재 시간 예산) · 스위치 → EXP · AC → EXP · REQ-NFR → EXP 대응 검산
 > **작성일**: 2026-09-24
+> **개정일**: 2026-10-03 — D-15 학습자 눈높이 한 화면(사용자 지시 2026-10-03 — 08_screen/08_evidence_screens · 01_standards §한 화면 원칙) — 관련 문서 08_evidence_screens 설명의 측정 조건 서랍 → **각주 툴팁** — 실험 · 대응 수 불변
+> **개정일**: 2026-10-03 — D-14 2화면 전환(사용자 결정 2026-10-03) — 관련 문서에 08_evidence_screens(측정 조건 서랍) · 07_experiment_console 링크에 폐지 표기 — 실험 · 대응 수 불변
 > **개정일**: 2026-09-28 — 라이브 실행 제어 AC-46 반영(사용자 요구 2026-09-28 · 03_requirements/14 §시연 기능 판정) — §AC → EXP 대응에 **AC-46 행 "EXP 없음 — 시연 판정"** · AC 45 → **46** · 대응 없는 AC 0 → **1**(시연 판정 명시) — 실험 수 불변
 > **개정일**: 2026-09-27 — **EXP-46 신설**(SW-12 BIZ_WRITE_PATH — 업무 쓰기 경로 direct 대 stream · 지연 · 처리량 · Redis 장애 시 가용성 · 사용자 결정 2026-09-27 · D-04 부분 개정) — 실험 45 → **46** · 분류 ② 10 → **11** · 다음 채번 EXP-47 · 스위치 → EXP 대응 SW-12 행 · 조합 제약 대응 9 → **10** · AC-43 대응 · REQ-NFR-09 대응 · S7 2 → **3** · EXP-36 ③ 비경유 → **③ 명령 경로** — 측정은 범위 밖(채번만)
 > **개정일**: 2026-09-27 — W6 종합(결과 자리 · 기록 034 · 042~054) — §EXP-29~39 끝 2026-09-27 확장 불릿에 EXP-33 인계 대기 p50 첫 칸 양자화 · EXP-01~05 역전 구간 우열 3/3 구조 판정 추가 · 확정되는 미확인 열의 닫힘 표지(EXP-01~05 구조 구간 · EXP-33 · 35 · 41~45 · EXP-40은 구조 사실만) · §대조군 실험과 §EXP-29~39 · §EXP-40~45에 결과 불릿 · §미확인 등재 "역방향 실행기 첫 실행 판별" **닫힘** — 채번 · 실험 수 불변
@@ -305,4 +307,5 @@
 - [../03_requirements/14_acceptance_criteria.md](../03_requirements/14_acceptance_criteria.md) — AC 정본
 - [../03_requirements/13_nonfunctional.md](../03_requirements/13_nonfunctional.md) — 성능 목표표
 - [../05_data_stores/10_olap_vs_rdb_control.md](../05_data_stores/10_olap_vs_rdb_control.md) — 대조군 설계
-- [../08_screen/07_experiment_console.md](../08_screen/07_experiment_console.md) — 스위치 상태 표시 · EXP-COMPARE
+- [../08_screen/08_evidence_screens.md](../08_screen/08_evidence_screens.md) — EXP-PERF · EXP-FLOW · 각주 툴팁(스위치 상태 표시)
+- [../08_screen/07_experiment_console.md](../08_screen/07_experiment_console.md) — 스위치 상태 표시 · EXP-COMPARE(폐지 · D-14 — 폐지 전 원문 보존)
