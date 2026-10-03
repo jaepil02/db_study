@@ -1,6 +1,5 @@
 import type { Metadata } from 'next';
 import type { ReactNode } from 'react';
-import 'uplot/dist/uPlot.min.css';
 import './globals.css';
 import { Shell } from '../components/shell/shell';
 import { Providers } from './providers';

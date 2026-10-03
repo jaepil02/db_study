@@ -4,18 +4,17 @@ import { readdirSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 import {
-  median,
-  PRINCIPLES,
-  principleEvidence,
-  quantileOf,
+  armLabel,
+  BUSINESS_TASKS,
+  INCOMPLETE_TEXT,
+  NO_VALUE_TEXT,
+  type ReverseRow,
   readEvidence,
-  reverseBars,
-  type StreamRow,
-  streamJudgement,
-  streamSeries,
-  structuralGrid,
-  structuralSummary,
+  SITUATIONS,
+  situationLines,
   structuralVerdict,
+  type TaskSummary,
+  taskSummary,
 } from '../lib/evidence';
 import { readMeasurements } from '../lib/measurements';
 
@@ -122,54 +121,7 @@ describe('readEvidence — 규칙 4 메모리 상한(10_observability/04 §조�
   });
 });
 
-describe('요약 — 분포(중앙값)', () => {
-  it('median', () => {
-    expect(median([3, 1, 2])).toBe(2);
-    expect(median([4, 1, 2, 3])).toBe(2.5);
-    expect(median([])).toBeNull();
-  });
-
-  it('EXP-40 — 업무 규모 축 · 변형 · 판독 설정별 계열 · 중앙값 없는 칸을 센다', () => {
-    const lat = reverseBars(d.reverse, { exp: 'EXP-40', metric: 'update_latency_p95', scale: null });
-    expect(lat.x).toEqual([10000, 100000]);
-    expect(lat.series.map((s) => s.label)).toEqual([
-      'PostgreSQL · pg_update · 동시성 1',
-      'ClickHouse · alter_update_async · 동시성 1',
-      'ClickHouse · lightweight_update · 동시성 1',
-    ]);
-    expect(lat.series[1]?.cells.map((c) => c?.median)).toEqual([5, 40]);
-    const vis = reverseBars(d.reverse, { exp: 'EXP-40', metric: 'visible_after_ack', scale: null });
-    expect(vis.series.map((s) => s.label)).toContain(
-      'ClickHouse · alter_update_async · apply_mutations_on_fly=0 · 동시성 1',
-    );
-    expect(vis.noMedian).toBe(2); // on_fly=0 — 상한 안 미관측(두 규모)
-  });
-
-  it('EXP-41 — 동시성 축 · 업무 규모 필터', () => {
-    const m = reverseBars(d.reverse, { exp: 'EXP-41', metric: 'read_rows', scale: 1_000_000 });
-    expect(m.x).toEqual([1, 8]);
-    expect(m.series.find((s) => s.label.includes('granularity_256'))?.cells.map((c) => c?.median)).toEqual([
-      256, 256,
-    ]);
-    expect(reverseBars(d.reverse, { exp: 'EXP-41', metric: 'read_rows', scale: 10 }).series).toHaveLength(0);
-  });
-
-  it('EXP-44 — 요청률 축', () => {
-    const m = reverseBars(d.reverse, { exp: 'EXP-44', metric: 'active_parts', scale: 10000 });
-    expect(m.x).toEqual([50, 200, 500]);
-    expect(m.series[0]?.cells.map((c) => c?.median)).toEqual([100, 400, 1000]);
-  });
-
-  it('구조 지표는 분포 막대에 넣지 않는다', () => {
-    expect(
-      reverseBars(d.reverse, { exp: 'EXP-42', metric: 'partial_apply_count', scale: null }).series,
-    ).toEqual([]);
-    const fin = reverseBars(d.reverse, { exp: 'EXP-43', metric: 'final_query_ms', scale: null });
-    expect(fin.series).toHaveLength(2);
-  });
-});
-
-describe('요약 — 구조 판정(3회 전부)', () => {
+describe('구조 판정(3회 전부) · 판독 팔 이름', () => {
   it('structuralVerdict — 일치 · 반복마다 다름 · 3회 미만', () => {
     expect(structuralVerdict([0, 0, 0])).toEqual({ kind: 'consistent', value: 0 });
     expect(structuralVerdict([0, 1, 1])).toEqual({ kind: 'varies', min: 0, max: 1 });
@@ -177,191 +129,264 @@ describe('요약 — 구조 판정(3회 전부)', () => {
     expect(structuralVerdict([0, null, 0])).toEqual({ kind: 'incomplete', present: 2 });
   });
 
-  it('EXP-42 그리드 — 저장소 × 사례', () => {
-    const g = structuralGrid(d.reverse, 'EXP-42');
-    expect(g.cases).toEqual(['partial_apply_count · atomic', 'race_violation_count · atomic']);
-    expect(g.rows.map((r) => r.label)).toEqual([
-      'PostgreSQL · pg_tx · 10^4행 · 동시성 2',
-      'ClickHouse · lightweight_update · 10^4행 · 동시성 2',
-    ]);
-    expect(g.rows[1]?.cells.map((c) => c?.values)).toEqual([
-      [1, 1, 1],
-      [0, 1, 1],
-    ]);
-  });
-
-  it('구조 판정 집계', () => {
-    expect(structuralSummary(d.reverse, 'EXP-42')).toEqual({
-      postgresql: { consistent: 2, varies: 0, incomplete: 0, nonZero: 0 },
-      clickhouse: { consistent: 1, varies: 1, incomplete: 0, nonZero: 2 },
-    });
-    expect(structuralSummary(d.reverse, 'EXP-43')).toEqual({
-      postgresql: { consistent: 1, varies: 0, incomplete: 0, nonZero: 1 },
-      clickhouse: { consistent: 1, varies: 0, incomplete: 1, nonZero: 2 },
-    });
+  it('판독 팔 이름 — 시나리오만이면 없음 · 동시 모드 · 윈도우', () => {
+    expect(armLabel('inject')).toBeNull();
+    expect(armLabel('pairs:upm_sync')).toBe('동시 모드 sync');
+    expect(armLabel('window_100')).toBe('윈도우 100');
+    expect(armLabel(null)).toBeNull();
   });
 });
 
-describe('요약 — EXP-45 계단', () => {
-  it('quantileOf — 지표 이름 끝의 분위수', () => {
-    expect(quantileOf('control_copy_seconds_p95')).toBe('p95');
-    expect(quantileOf('insert_duration_seconds_p50')).toBe('p50');
-    expect(quantileOf('p95_ms')).toBeNull();
+describe('업무 데이터 탭 — 뺀 기록 · 업무 작업 카드(판독기 상수 + 기록 수치)', () => {
+  it('뺀 기록을 사유와 함께 내린다 — 카드가 "기록 폐기"와 "기록 없음"을 가른다', () => {
+    expect(d.excludedRecords.map((x) => `${x.record}:${x.reason}`).sort()).toEqual([
+      '041:status',
+      '046:status',
+      '048:conditions',
+      '049:deviation',
+    ]);
+    expect(d.excludedRecords.every((x) => x.exps.length > 0)).toBe(true);
   });
 
-  it('분위수 하나에 두 싱크 선 — 저장소별 지표를 묶는다 · pps 오름차순', () => {
-    const p95 = streamSeries(d.stream, 'p95');
-    expect(p95.map((s) => s.metric)).toEqual(['control_copy_seconds_p95', 'insert_duration_seconds_p95']);
-    expect(p95[0]?.steps.map((x) => x.pps)).toEqual([10000, 50000, 100000, 150000]);
-    expect(p95[1]?.steps.map((x) => x.median)).toEqual([0.05, 0.1, null, null]); // 100,000 — 유효 2회 · 150,000 — 전부 무효
-    const p50 = streamSeries(d.stream, 'p50');
-    expect(p50.map((s) => s.metric)).toEqual(['control_copy_seconds_p50', 'insert_duration_seconds_p50']);
-    expect(p50.every((s) => s.steps.length === 4)).toBe(true);
-    expect(streamSeries([], 'p95').map((s) => s.metric)).toEqual([null, null]);
+  it('작업 5 · 구조 문장은 상수 · 수치를 박지 않는다', () => {
+    expect(BUSINESS_TASKS.map((t) => t.exp)).toEqual(['EXP-42', 'EXP-43', 'EXP-41', 'EXP-44', 'EXP-40']);
+    for (const t of BUSINESS_TASKS)
+      expect(`${t.structural.postgresql}${t.structural.clickhouse}`).not.toMatch(/\d+(\.\d+)? ?(ms|건|B)/);
   });
 
-  it('판정 점 — 기준 초과 · 관측 범위 안 없음 · 기준이 없으면 PG는 실패 계단', () => {
-    expect(streamJudgement(d.stream, 'postgresql')).toEqual({
-      kind: 'crossed',
-      pps: 50000,
-      reason: 'threshold',
-      thresholdSec: 0.5,
-    });
-    expect(streamJudgement(d.stream, 'clickhouse')).toEqual({
-      kind: 'none',
-      maxPps: 100000,
-      thresholdSec: 1,
-    });
-    const noTh: StreamRow[] = d.stream.map((s) => ({ ...s, thresholdSec: null }));
-    expect(streamJudgement(noTh, 'postgresql')).toEqual({
-      kind: 'crossed',
-      pps: 100000,
-      reason: 'failure',
-      thresholdSec: null,
-    });
-    expect(streamJudgement([], 'postgresql')).toEqual({ kind: 'insufficient' });
+  it('원자성 — 부분 반영 건수 · 3회 같으면 한 값 · 0이면 ✓', () => {
+    const t = BUSINESS_TASKS.find((x) => x.id === 'atomic');
+    const s = t ? taskSummary(d, t) : null;
+    expect(s?.source).toBe('measured');
+    expect(s?.postgresql.ok).toBe(true);
+    expect(s?.clickhouse.ok).toBe(false);
+    expect(s?.postgresql.text).toMatch(/^부분 반영 \d+(~\d+)?건$/);
   });
 
-  it('ClickHouse 판정 점은 삽입 p95 > W만 — 실패는 보지 않고 W가 없으면 판정하지 않는다', () => {
-    const chFail: StreamRow[] = d.stream.map((s) =>
-      s.store === 'clickhouse' && s.pps === 10000 ? { ...s, failures: [3, 3, 3] } : s,
-    );
-    expect(streamJudgement(chFail, 'clickhouse')).toEqual({ kind: 'none', maxPps: 100000, thresholdSec: 1 });
-    const noTh: StreamRow[] = d.stream.map((s) => ({ ...s, thresholdSec: null }));
-    expect(streamJudgement(noTh, 'clickhouse')).toEqual({ kind: 'noThreshold', maxPps: 100000 });
-  });
-
-  it('반복 자리 null · valid false 행 — 판정에서 빼고 관측 범위를 넓히지 않는다', () => {
-    const pg150k = d.stream.filter((s) => s.store === 'postgresql' && s.pps === 150000);
-    expect(pg150k.map((s) => s.judged)).toEqual([false, false]); // 러너 valid false — 그 저장소 유효 반복 0
-    const ch100k = d.stream.find((s) => s.store === 'clickhouse' && s.pps === 100000);
-    expect(ch100k?.failures).toEqual([0, null, 0]); // 재기동 반복 자리만 null
-    expect(ch100k?.judged).toBe(true);
-    // valid false를 판정 행으로 바꿔도 median null · failures 전부 null 계단은 관측 범위가 아니다
-    const allJudged: StreamRow[] = d.stream.map((s) => ({ ...s, judged: true }));
-    expect(streamJudgement(allJudged, 'clickhouse')).toEqual({
-      kind: 'none',
-      maxPps: 100000,
-      thresholdSec: 1,
-    });
-    // median null이어도 failures에 수가 있으면 관측이다 — 100,000 계단이 범위 끝
-    const only100k = d.stream.filter((s) => s.pps >= 100000);
-    expect(streamJudgement(only100k, 'clickhouse')).toEqual({
-      kind: 'none',
-      maxPps: 100000,
-      thresholdSec: 1,
-    });
-    const only150k = d.stream.filter((s) => s.pps === 150000).map((s) => ({ ...s, judged: true }));
-    expect(streamJudgement(only150k, 'clickhouse')).toEqual({ kind: 'insufficient' });
-  });
-
-  it('valid false · failures null 행은 판정에서 뺀다(그리기용 행에는 남는다)', () => {
-    const block = (files.find((f) => f.name.startsWith('045'))?.text ?? '')
-      .replace(
-        /("pps": 50000,\s*"store": "postgresql",\s*"metric": "control_copy_seconds_p95",[\s\S]*?"valid": )true/,
-        '$1false',
-      )
-      .replace(/("pps": 100000,\s*"store": "clickhouse",[\s\S]*?"failures": )\[[^\]]*\]/, '$1null');
-    const r = readEvidence([{ name: '045-control-stream-ingest.md', text: block }]);
-    expect(r.counts.invalidRows).toBe(0);
-    expect(r.stream).toHaveLength(16);
-    const pg50k = r.stream.find(
-      (s) => s.store === 'postgresql' && s.pps === 50000 && s.metric.endsWith('p95'),
-    );
-    expect(pg50k?.judged).toBe(false);
-    // 50,000 계단 p95 행이 빠져 100,000 계단의 실패가 첫 판정 점
-    expect(streamJudgement(r.stream, 'postgresql')).toEqual({
-      kind: 'crossed',
-      pps: 100000,
-      reason: 'failure',
-      thresholdSec: 0.5,
-    });
-    const ch100k = r.stream.filter((s) => s.store === 'clickhouse' && s.pps === 100000);
-    expect(ch100k.map((s) => s.judged)).toEqual([false, true]); // failures null은 p95 행 하나만
-    const bad = block.replace('"valid": false', '"valid": "no"');
-    expect(readEvidence([{ name: '045-control-stream-ingest.md', text: bad }]).counts.invalidRows).toBe(1);
-  });
-});
-
-describe('원리 대응', () => {
-  it('문서 표 7행을 옮긴 상수', () => {
-    expect(PRINCIPLES).toHaveLength(7);
-  });
-
-  it('기록 값 — EXP-40 두 관측을 지표로 가른다 · 구조 · 스트리밍', () => {
-    const [cost, vis, , atomic, , , stream] = PRINCIPLES;
-    const c = principleEvidence(d, cost as (typeof PRINCIPLES)[number]);
-    expect(c.records).toEqual(['040']);
-    expect(c.lines).toEqual(['update_latency_p95 @10^5행 — PG 1.20 · CH 2.50~40.00 ms']);
-    const v = principleEvidence(d, vis as (typeof PRINCIPLES)[number]);
-    expect(v.lines).toEqual(['visible_after_ack @10^5행 — PG 0.30 · CH 0.50 ms']);
-    // unit count 지표는 가시성 칸에서 빠지고 막대 카드에서는 그대로 고를 수 있다
-    expect(reverseBars(d.reverse, { exp: 'EXP-40', metric: 'visible_unobserved', scale: null }).unit).toBe(
-      'count',
-    );
-    const a = principleEvidence(d, atomic as (typeof PRINCIPLES)[number]);
-    expect(a.lines).toEqual(['PG 구조 3회 일치 2/2칸 · 0 아닌 칸 0', 'CH 구조 3회 일치 1/2칸 · 0 아닌 칸 2']);
-    const s = principleEvidence(d, stream as (typeof PRINCIPLES)[number]);
-    expect(s.records).toEqual(['045']);
-    expect(s.lines[0]).toBe('PG 50,000 pps에서 기준 초과');
-  });
-
-  it('EXP-40 비용 칸 — 측정 장부 지표(budget_exhausted · converged · unit bool)를 뺀다', () => {
-    const row = (metric: string, unit: string, median: number) => ({
-      record: '040',
-      exp: 'EXP-40' as const,
-      op: null,
-      store: 'clickhouse' as const,
-      variant: 'ch_lwu',
-      scale: 100_000,
-      concurrency: 1,
-      rate: null,
-      read: 'after_wait',
-      metric,
-      unit,
+  it('분포 작업 — 가장 큰 업무 규모 · 대표 손잡이(동시성 최소)의 중앙값 범위 · ✓ ✕ 없음', () => {
+    const t = BUSINESS_TASKS.find((x) => x.id === 'point');
+    if (!t) throw new Error('point');
+    // 픽스처 EXP-41은 read_rows뿐이라 지연 행을 같은 모양으로 만든다(값은 측정값이 아니다)
+    const base = d.reverse.find((r) => r.exp === 'EXP-41' && r.store === 'postgresql');
+    if (!base) throw new Error('EXP-41 행');
+    const row = (
+      store: 'postgresql' | 'clickhouse',
+      variant: string,
+      scale: number,
+      concurrency: number,
+      median: number,
+    ) => ({
+      ...base,
+      store,
+      variant,
+      scale,
+      concurrency,
+      metric: 'latency_p50',
+      unit: 'ms',
       values: [median, median, median],
       median,
       structural: false,
     });
-    const reverse = [
-      row('patch_parts', 'count', 3),
-      row('budget_exhausted', 'count', 0),
-      row('converged', 'bool', 1),
-      row('settled_flag', 'bool', 1),
-    ] as unknown as Parameters<typeof principleEvidence>[0]['reverse'];
-    const [cost] = PRINCIPLES;
-    const c = principleEvidence({ reverse, stream: [] }, cost as (typeof PRINCIPLES)[number]);
-    expect(c.lines).toEqual(['patch_parts @10^5행 — CH 3.00 count']);
+    const s = taskSummary(
+      {
+        excludedRecords: [],
+        reverse: [
+          row('postgresql', 'pg', 1e6, 1, 0.1),
+          row('postgresql', 'pg', 1e6, 8, 0.2),
+          row('postgresql', 'pg', 1e4, 1, 9),
+          row('clickhouse', 'ch_g256', 1e6, 1, 4),
+          row('clickhouse', 'ch_g8192', 1e6, 1, 4.3),
+        ],
+      },
+      t,
+    );
+    expect(s.postgresql).toMatchObject({ text: '지연 p50 0.10 ms', ok: null });
+    expect(s.clickhouse.text).toBe('지연 p50 4.00~4.30 ms');
+    expect(s.clickhouse.detail).toEqual([
+      'latency_p50 · 업무 규모 10^6행 · 동시성 1',
+      '그래뉼 256 4.00 ms',
+      '그래뉼 8192 4.30 ms',
+    ]);
   });
 
-  it('빈 상태 — 기록이 없으면 행이 비고 판독 불가만 센다', () => {
-    const e = readEvidence([{ name: '060-oltp-control-update.md', text: '# 블록 없음' }]);
-    expect(e.reverse).toEqual([]);
-    expect(e.stream).toEqual([]);
-    expect(e.counts.unreadable).toBe(1);
-    expect(principleEvidence(e, PRINCIPLES[6] as (typeof PRINCIPLES)[number])).toEqual({
-      records: [],
-      lines: [],
+  it('제약 — 판독 팔 · 동시성이 다른 행은 한 합에 섞지 않는다(같은 사례를 두 번 세지 않는다)', () => {
+    const t = BUSINESS_TASKS.find((x) => x.id === 'constraint');
+    if (!t) throw new Error('constraint');
+    const base = d.reverse[0] as ReverseRow;
+    const r = (metric: string, v: number, read: string | null) => ({
+      ...base,
+      exp: 'EXP-43' as const,
+      op: 'constraint',
+      store: 'clickhouse' as const,
+      variant: 'ch_mt',
+      scale: 10_000,
+      concurrency: 1,
+      read,
+      metric,
+      unit: 'count',
+      values: [v, v, v],
+      median: v,
+      structural: true,
     });
+    const s = taskSummary(
+      {
+        excludedRecords: [],
+        reverse: [
+          r('accepted_count.dup_order_no', 8, 'window_100'),
+          r('accepted_count.reinsert', 2, 'window_100'),
+          r('accepted_count.dup_order_no', 8, 'window_1000'),
+          r('accepted_count.reinsert', 1, 'window_1000'),
+        ],
+      },
+      t,
+    );
+    // 팔마다 따로 — 10건 · 9건(섞으면 19건 한 묶음)
+    expect(s.clickhouse.text).toBe(`${t.measure} 9~10건`);
+    expect(s.clickhouse.detail).toEqual([
+      'MergeTree · 윈도우 100 · 10^4행 — 10 · 10 · 10(규칙 어김 8 · 8 · 8)',
+      'MergeTree · 윈도우 1000 · 10^4행 — 9 · 9 · 9(규칙 어김 7 · 7 · 7)',
+    ]);
+  });
+
+  it('대표 지표(삽입 p50)가 기록에 없으면 수치를 지어내지 않고 구조 문장 상수', () => {
+    const t = BUSINESS_TASKS.find((x) => x.id === 'insert');
+    if (!t) throw new Error('insert');
+    const s = taskSummary(d, t); // 픽스처 044는 insert_latency_p95 · active_parts만
+    expect(s.source).toBe('measured');
+    expect(s.postgresql).toEqual({
+      text: t.structural.postgresql,
+      ok: null,
+      detail: [],
+      range: null,
+      unit: '',
+      of: null,
+      incomplete: false,
+    });
+  });
+
+  it('valid 행이 없으면 구조 문장 상수 — 뺀 기록이 있으면 discarded · 없으면 none', () => {
+    const t = BUSINESS_TASKS.find((x) => x.id === 'update');
+    if (!t) throw new Error('update');
+    const none = taskSummary({ reverse: [], excludedRecords: [] }, t);
+    expect(none.source).toBe('none');
+    expect(none.postgresql.text).toBe(t.structural.postgresql);
+    const disc = taskSummary(
+      { reverse: [], excludedRecords: [{ record: '047', exps: ['EXP-40'], reason: 'status' }] },
+      t,
+    );
+    expect(disc.source).toBe('discarded');
+  });
+});
+
+describe('상황 카드 — 쉬운 문장(situationLines) · 왜? 상수(SITUATIONS)', () => {
+  const side = (
+    text: string,
+    ok: boolean | null,
+    range: [number, number] | null,
+    unit: string,
+    of: number | null = null,
+  ) => ({ text, ok, detail: [], range, unit, of, incomplete: false });
+  const sum = (
+    id: TaskSummary['id'],
+    pg: TaskSummary['postgresql'],
+    ch: TaskSummary['clickhouse'],
+  ): TaskSummary => ({
+    id,
+    source: 'measured',
+    records: ['042'],
+    postgresql: pg,
+    clickhouse: ch,
+  });
+
+  it('원자성 · 제약 — 건수 범위를 쉬운 문장으로 · ✓ ✕는 taskSummary 판정 그대로', () => {
+    const a = situationLines(
+      sum(
+        'atomic',
+        side('부분 반영 0건', true, [0, 0], 'count', 20),
+        side('부분 반영 20건', false, [20, 20], 'count', 20),
+      ),
+    );
+    expect(a.postgresql).toEqual({ ok: true, text: '전부 되돌림 — 깨진 데이터 0건' });
+    expect(a.clickhouse).toEqual({ ok: false, text: '반만 저장 — 20번 중 20번 깨짐' });
+    // 대상 수를 모르면 분모 없이 · 3회가 엇갈리면 N~M번
+    const b = situationLines(
+      sum('atomic', side('', true, [0, 0], 'count'), side('', false, [18, 20], 'count')),
+    );
+    expect(b.clickhouse.text).toBe('반만 저장 — 18~20번 깨짐');
+    // 제약 CH — 받은 건수 전부(변형을 섞은 11~17)가 아니라 기본 변형의 "규칙을 어긴" 건수(받아도 되는 몫을 뺀 값)
+    const c = situationLines(
+      sum('constraint', side('수용 2건', true, [2, 2], 'count'), {
+        ...side('수용 11~17건', false, [11, 17], 'count'),
+        violated: [15, 15],
+      }),
+    );
+    expect(c.postgresql.text).toBe('막아 냄 — 받아도 되는 2건만 받음');
+    expect(c.clickhouse.text).toBe('규칙을 어긴 데이터 15건까지 받음');
+    // 어긴 몫을 셀 수 없으면 받은 건수를 그대로 말하고 그 사실을 밝힌다
+    const c2 = situationLines(
+      sum('constraint', side('', true, [2, 2], 'count'), side('', false, [11, 17], 'count')),
+    );
+    expect(c2.clickhouse.text).toBe('받은 데이터 11~17건(규칙을 어긴 몫은 못 셌어요)');
+  });
+
+  it('시간 작업 — 밀리초 범위 · CH 최솟값 ÷ PG 최댓값 배수(범위면 "이상") · 빠르지 않으면 배수 없음', () => {
+    const p = situationLines(
+      sum('point', side('', null, [0.1, 0.1], 'ms'), side('', null, [4.16, 4.27], 'ms')),
+    );
+    expect(p.postgresql).toEqual({ ok: null, text: '보통 0.1밀리초' });
+    // "N배 이상"은 하한 — 41.6을 반올림(42)하지 않고 내린다(41)
+    expect(p.clickhouse.text).toBe('보통 4.2~4.3밀리초 — 41배 이상 느림');
+    const low = situationLines(
+      sum('insert', side('', null, [0.55, 1.011], 'ms'), side('', null, [2.777, 708.868], 'ms')),
+    );
+    expect(low.clickhouse.text).toBe('보통 2.8~709밀리초 — 2.7배 이상 느림'); // 2.777 ÷ 1.011 = 2.747 → 2.7
+    const edge = situationLines(
+      sum('point', side('', null, [1, 2], 'ms'), side('', null, [19.99, 20], 'ms')),
+    );
+    expect(edge.clickhouse.text).toBe('보통 20밀리초 — 9.9배 이상 느림'); // 19.99 ÷ 2 = 9.995 → 9.9(반올림이면 "10배")
+    const same = situationLines(sum('insert', side('', null, [2, 2], 'ms'), side('', null, [8, 8], 'ms')));
+    expect(same.clickhouse.text).toBe('보통 8밀리초 — 4.0배 느림');
+    const none = situationLines(sum('insert', side('', null, [2, 2], 'ms'), side('', null, [1, 1], 'ms')));
+    expect(none.clickhouse.text).toBe('보통 1밀리초');
+  });
+
+  it('원천이 없으면 "잰 값 없음" · 3회 미만이면 "판정할 만큼 재지 않았어요"(수치를 지어내지 않는다)', () => {
+    const t = BUSINESS_TASKS.find((x) => x.id === 'insert');
+    const s = t ? taskSummary(readEvidence([]), t) : null;
+    if (!s) throw new Error('insert');
+    expect(s.postgresql.range).toBeNull();
+    expect(situationLines(s).postgresql).toEqual({ ok: null, text: NO_VALUE_TEXT });
+    const inc = situationLines(
+      sum('atomic', { ...side('', null, null, ''), incomplete: true }, side('', null, null, '')),
+    );
+    expect(inc.postgresql.text).toBe(INCOMPLETE_TEXT);
+    expect(inc.clickhouse.text).toBe(NO_VALUE_TEXT);
+  });
+
+  it('원자성 대상 수 — 판독 자리 시나리오(inject)에 맞는 기록 conditions 수 · 실제 기록 042는 20', () => {
+    const name = '042-oltp-control-atomic.md';
+    const real = readEvidence([
+      { name, text: readFileSync(path.resolve(__dirname, '../../../docs/measurements', name), 'utf8') },
+    ]);
+    const t = BUSINESS_TASKS.find((x) => x.id === 'atomic');
+    const s = t ? taskSummary(real, t) : null;
+    expect(s?.clickhouse.of).toBe(20);
+    expect(s && situationLines(s).clickhouse.text).toBe('반만 저장 — 20번 중 20번 깨짐');
+    expect(real.reverse.find((r) => r.read === 'probe:upm_auto')?.target).toBeNull();
+  });
+
+  it('taskSummary가 대표 수치 범위를 함께 낸다(픽스처 원자성)', () => {
+    const t = BUSINESS_TASKS.find((x) => x.id === 'atomic');
+    const s = t ? taskSummary(d, t) : null;
+    expect(s?.postgresql.unit).toBe('count');
+    expect(s?.postgresql.range?.[0]).toBe(0);
+  });
+
+  it('상황 4 — 상태 갱신 없음 · 왜? 문장에 전문 용어 · 수치 없음', () => {
+    expect(SITUATIONS.map((x) => x.id)).toEqual(['atomic', 'constraint', 'point', 'insert']);
+    for (const x of SITUATIONS) {
+      expect(x.why).not.toMatch(/MVCC|WAL|그래뉼|B-tree|BRIN|파트 머지|EXP-|\d+(\.\d+)? ?(ms|건)/);
+      expect(x.title.length).toBeLessThanOrEqual(20);
+    }
   });
 });

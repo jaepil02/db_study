@@ -16,7 +16,6 @@ import {
 
 /** 곡선 · 히트맵 · 원리 증거가 싣는 쿼리 — Q5x(auxPoints)는 싣지 않는다(§판독 규칙 아래 auxPoints 불릿) */
 export const PERF_QUERIES = ['Q1', 'Q2', 'Q3', 'Q4', 'Q5'] as const;
-export const PERF_CACHES = ['warm', 'cold'] as const;
 export const PG_VARIANTS = ['I1', 'I2'] as const;
 export type PgVariant = (typeof PG_VARIANTS)[number];
 /** 공통 논리 크기의 행당 바이트 — 설계 상수(05_data_stores/10 §비교 축 6 · 같은 변경 단위에서 따라간다) */
@@ -196,8 +195,18 @@ export function normalizeStore(v: unknown): Store | null {
 
 /** 행 수 → 지수 — log10을 0.25 단위로 반올림(P4) */
 export const exponentOf = (rows: number): number => Math.round(Math.log10(rows) * 4) / 4;
-/** 지수 → "10^7.25" */
-export const expLabel = (e: number): string => `10^${e}`;
+
+/**
+ * 비율 → 백분율 문구 — 작은 비율이 "0.0%"로 뭉개지지 않게 1% 미만은 유효 숫자 2자리(0.012% · 0.5%) · 1% 이상은 소수 1자리 ·
+ * 0.001% 미만은 "< 0.001%" · 정확히 0은 "0%". 기록이 0.01%를 냈는데 화면이 0.0%로 보이면 "읽지 않았다"로 읽힌다.
+ */
+export function ratioPercent(r: number): string {
+  const p = r * 100;
+  if (p === 0) return '0%';
+  if (Math.abs(p) >= 1) return `${p.toFixed(1)}%`;
+  if (Math.abs(p) < 0.001) return '< 0.001%';
+  return `${Number(p.toPrecision(2))}%`;
+}
 /** "10^7.25" → 7.25 */
 export const parseExp = (s: string): number => Number(s.slice(3));
 
@@ -613,121 +622,324 @@ export const findRange = (
 ): PerfRange | undefined =>
   ranges.find((r) => r.query === query && r.cache === cache && r.pgVariant === pgVariant);
 
-export interface HeatCell {
+/** 행 수 쉬운 말 — 정수 지수는 정확히("10만 행" · "10억 행") · 사이 값은 "약 3천만 행" · "약 1.8억 행" · "약 56만 행" */
+export function rowsWords(exponent: number): string {
+  const exact: Record<number, string> = {
+    4: '1만',
+    5: '10만',
+    6: '100만',
+    7: '1천만',
+    8: '1억',
+    9: '10억',
+    10: '100억',
+  };
+  const e = exact[exponent];
+  if (e) return `${e} 행`;
+  const n = 10 ** exponent;
+  if (n >= 1e8) {
+    const v = n / 1e8;
+    return `약 ${v >= 10 ? Math.round(v) : Math.round(v * 10) / 10}억 행`;
+  }
+  const man = n / 1e4;
+  if (man >= 1000) return `약 ${Math.round(man / 1000)}천만 행`;
+  return `약 ${Math.round(man)}만 행`;
+}
+
+/** 밀리초 쉬운 표기 — 100 이상 정수(천 단위 구분) · 1 이상 소수 1자리 · 1 미만 유효 숫자 2자리 */
+export function msText(v: number): string {
+  if (v >= 100) return Math.round(v).toLocaleString('ko-KR');
+  if (v >= 1) return String(Math.round(v * 10) / 10);
+  return String(Number(v.toPrecision(2)));
+}
+
+export interface SpeedBar {
   query: string;
+  /** 그림 1의 규모 — 원천에서 가장 큰 규모(모든 행이 같은 규모) */
   exponent: number;
-  /** PG ÷ CH 중앙값 배수(참고값) · 두 점 중 하나라도 없으면 null */
+  /**
+   * win = 3/3 우열로 방향이 섰다 · even = 3/3 우열은 섰지만 중간값 비가 그 방향과 어긋나거나 1.0배로 반올림된다(회색 "비슷" · 배수 없음 — 근거는 툴팁)
+   * · undetermined = 우열 미정(회색 "승패 미정" · 배수 없음) · none = 그 규모에 점 쌍이 없다("판정 없음")
+   */
+  kind: 'win' | 'even' | 'undetermined' | 'none';
+  /** PG ÷ CH 중앙값 배수(참고값) — none이면 null */
   ratio: number | null;
-  verdict: Verdict | null;
+  /** 빠른 쪽 — 그 점의 3/3 우열(정본) · win · even일 때 */
+  winner: Store | null;
+  /** 반올림한 배수(빠른 쪽 기준 — "101" · "1.7") · win일 때만 */
+  times: string | null;
 }
 
-/** 배수 히트맵 — 행(지수) × Q1~Q5 · 칸 = PG ÷ CH · 색 = 그 점의 3/3 우열 */
-export function heatCells(view: Pick<PerfView, 'points' | 'verdicts'>, cache: string, variant: PgVariant) {
-  const exps = [...new Set(view.points.map((p) => p.exponent))].sort((a, b) => a - b);
-  const cells: HeatCell[] = [];
-  for (const e of exps)
-    for (const q of PERF_QUERIES) {
-      const at = (f: (p: PerfPoint) => boolean) =>
-        view.points.find((p) => p.exponent === e && p.query === q && p.cache === cache && f(p));
-      const ch = at((p) => p.store === 'clickhouse');
-      const pg = at((p) => p.store === 'postgresql' && p.index === variant);
-      const v = view.verdicts.find(
-        (x) => x.exponent === e && x.query === q && x.cache === cache && x.pgVariant === variant,
-      );
-      cells.push({
-        query: q,
-        exponent: e,
-        ratio: ch && pg && ch.median > 0 ? pg.median / ch.median : null,
-        verdict: v?.verdict ?? null,
-      });
-    }
-  return { exponents: exps, cells };
+/**
+ * 그림 1 — 질문 5개 × 가장 큰 규모(보통 10억 행)에서 누가 몇 배 빠른가(08_screen/08 §표시 계약 승패 막대).
+ * 웜 · PG(B-tree) 기준 · 방향은 점 단위 3/3 우열(P4)만 · 미정이면 배수를 쓰지 않는다 · 그 규모에 점 쌍이 없으면 "판정 없음".
+ */
+export function speedBars(view: Pick<PerfView, 'points' | 'verdicts'>): SpeedBar[] {
+  const warm = view.points.filter((p) => p.cache === 'warm');
+  if (warm.length === 0) return [];
+  const e = Math.max(...warm.map((p) => p.exponent));
+  return PERF_QUERIES.map((q) => {
+    const at = (f: (p: PerfPoint) => boolean) => warm.find((p) => p.query === q && p.exponent === e && f(p));
+    const ch = at((p) => p.store === 'clickhouse');
+    const pg = at((p) => p.store === 'postgresql' && p.index === 'I2');
+    if (!ch || !pg || !(ch.median > 0) || !(pg.median > 0))
+      return { query: q, exponent: e, kind: 'none', ratio: null, winner: null, times: null };
+    const ratio = pg.median / ch.median;
+    const v = view.verdicts.find(
+      (x) => x.query === q && x.cache === 'warm' && x.pgVariant === 'I2' && x.exponent === e,
+    );
+    const winner = v?.verdict === 'clickhouse' || v?.verdict === 'postgresql' ? v.verdict : null;
+    if (!winner) return { query: q, exponent: e, kind: 'undetermined', ratio, winner: null, times: null };
+    // 승자 쪽으로 본 중간값 배수 — 1 이하(어긋남)거나 "1.0"이면 배수를 말하지 않는다("CH 0.9배" · "CH 1.0배"는 반대로 읽힌다)
+    const oriented = winner === 'clickhouse' ? ratio : 1 / ratio;
+    const times = timesText(oriented);
+    if (oriented <= 1 || times === '1.0')
+      return { query: q, exponent: e, kind: 'even', ratio, winner, times: null };
+    return { query: q, exponent: e, kind: 'win', ratio, winner, times };
+  });
 }
 
-/** 우열 미정 점 — 선택 쿼리 · 캐시의 undetermined와 P4 미정(변형별) */
-export function undeterminedMarks(
-  view: Pick<PerfView, 'verdicts' | 'ranges'>,
+/** 그림 1 행 툴팁 — 질문 코드 · 구간 판정 · 중간값 비 · 비슷이면 그 근거 */
+export function speedTip(b: SpeedBar, range: string): string {
+  const name = b.winner === 'clickhouse' ? 'CH' : 'PG';
+  return [
+    `${b.query} · ${range}`,
+    b.ratio !== null ? `PG ÷ CH 중간값 ${b.ratio.toFixed(2)}(참고값)` : null,
+    b.kind === 'even' ? `3번 모두 ${name}가 빨랐지만 중간값으로는 차이가 거의 없어요` : null,
+  ]
+    .filter(Boolean)
+    .join(' · ');
+}
+
+/** 그림 1 행 툴팁의 구간 판정 문장 — "1천만 행부터 CH" · "PG 우세 전 구간"(structuralRanges I2 · 웜) */
+export function rangeText(r: PerfRange | undefined): string {
+  if (!r) return '판정 행 없음';
+  const name = (s: Store) => (s === 'clickhouse' ? 'CH' : 'PG');
+  if (r.crossover === null)
+    return r.winner === 'postgresql' ? 'PG 우세 전 구간' : `전 구간 ${name(r.winner)}`;
+  const [a, b] = r.crossover.map(parseExp) as [number, number];
+  if (!r.direction) return `${rowsWords(a)}~${rowsWords(b)} 사이 역전 — 방향 미상`;
+  const head = r.direction.from === 'postgresql' ? `${rowsWords(a)}까지 PG · ` : '';
+  return `${head}${rowsWords(b)}부터 ${name(r.direction.to)}`;
+}
+
+/** 그림 2의 ? 표지 — 선택 질문 · 웜 · I2의 undetermined 지수와 P4 미정 점(08_screen/08 §표시 계약 우열 미정) */
+export function undeterminedExps(view: Pick<PerfView, 'ranges' | 'verdicts'>, query: string): number[] {
+  const out = new Set<number>();
+  const r = findRange(view.ranges, query, 'warm', 'I2');
+  for (const u of r?.undetermined ?? []) out.add(parseExp(u));
+  for (const v of view.verdicts)
+    if (v.query === query && v.cache === 'warm' && v.pgVariant === 'I2' && v.verdict === 'undetermined')
+      out.add(v.exponent);
+  return [...out].sort((x, y) => x - y);
+}
+
+/** 판독 계수 가운데 0이 아닌 것 — 각주 줄에 한 마디로 오른다(08_screen/08 §표시 계약 판독 계수) */
+export function countIssues(c: PerfCounts): string[] {
+  return [
+    c.unreadable ? `읽지 못한 기록 ${c.unreadable}` : null,
+    c.missingConditions ? `조건이 빠진 기록 ${c.missingConditions}` : null,
+    c.invalidRows ? `모양이 어긋난 줄 ${c.invalidRows}` : null,
+    c.invalidStructural || c.invalidRanges
+      ? `모양이 어긋난 판정 ${c.invalidStructural + c.invalidRanges}`
+      : null,
+    c.undrawn + c.nonPositive ? `그리지 않은 점 ${c.undrawn + c.nonPositive}` : null,
+  ].filter((x): x is string => x !== null);
+}
+
+/** 한계 2 — 각주 툴팁 상시(08_screen/08 §표시 계약 4요소 각주) */
+export const LIMIT_MARKS = [
+  '① ClickHouse 측정에 trace 로그 쓰기 부하가 포함됐다(clickhouseServerLogLevel)',
+  '② 동률 점(ClickHouse 10 ms 미만 · 두 저장소 차 1 ms 미만)은 서버 µs로 판정했고 PostgreSQL 서버 값은 계획 시간을 뺀다(serverTimeAsymmetry)',
+] as const;
+
+/** 각주 툴팁의 기록 쪽 줄 — 원천 · 단계 기록 · 4요소 · 기록 스위치 · 한계 2 · 판독 계수 전부(0이어도) · 판독 시각은 화면이 붙인다 */
+export function recordTipLines(view: PerfView): string[] {
+  const s = view.source;
+  if (!s) return ['원천 기록 없음(EXP-01~05 구조 판정 기록 없음)'];
+  const sw = Object.entries(s.switches)
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([k, v]) => `${k}=${Array.isArray(v) ? v.join('/') : String(v)}`);
+  const limit = s.run.memoryLimitMb === null ? (s.run.memoryLimitSource ?? '') : `${s.run.memoryLimitMb} MB`;
+  const stages = view.stageRecords
+    ? view.stageRecords.map((x) => `${x.record}${x.excluded ? `(${x.excluded} — 뺌)` : ''}`).join(' · ')
+    : '단계 기록 목록 없음';
+  const c = view.counts;
+  return [
+    `원천 기록 ${s.record}(${s.status}) · 단계 기록 ${stages}`,
+    `커밋 ${[...new Set(view.records.map((r) => r.run.commitHash))].join(' · ')} · 프로파일 ${s.run.memoryProfile} · 상한 ${limit} · 티어 ${s.run.capacityTier}`,
+    `기록 스위치 ${sw.join(' · ') || '없음'}(기록에 없는 스위치는 도입 전 · 기본값)`,
+    ...LIMIT_MARKS,
+    `판독 계수 — 파일 ${c.files} · 판독 불가 ${c.unreadable} · 4요소 누락 ${c.missingConditions} · 형식이 어긋난 행 ${c.invalidRows} · 형식이 어긋난 structuralRanges 기록 ${c.invalidStructural + c.invalidRanges} · 그리지 않은 점 ${c.undrawn + c.nonPositive} · 뒤 기록이 덮은 중복 ${c.duplicatePoints}`,
+    view.discardedRecords.length
+      ? `참고값 — 편차 기준 초과(구조 판정만 정본) · 기록 ${view.discardedRecords.join(' · ')}`
+      : '',
+  ].filter(Boolean);
+}
+
+/** 그림 2 아래 한 문장 — 역전 구간(structuralRanges · 정본)을 쉬운 말로 */
+export function crossSentence(r: PerfRange | undefined): string {
+  if (!r) return '이 질문은 누가 이기는지 판정한 기록이 없어요';
+  const name = (s: Store) => (s === 'clickhouse' ? 'CH' : 'PG');
+  if (r.crossover === null) return `이 범위에서는 뒤집히지 않아요 — 앞선 쪽 ${name(r.winner)}`;
+  const [a, b] = r.crossover.map(parseExp) as [number, number];
+  const where = `${rowsWords(a).replace(' 행', '')}~${rowsWords(b).replace('약 ', '')} 사이에서 역전`;
+  if (!r.direction) return `${where}돼요`;
+  return `${where} — 작으면 ${name(r.direction.from)}, 크면 ${name(r.direction.to)}가 빨라요`;
+}
+
+export interface ReadShare {
+  exponent: number;
+  record: string;
+  /** 전체 데이터 가운데 읽은 비율 — CH 읽은 바이트 ÷ 논리 크기 · PG 읽은 블록 ÷ 힙 블록(1을 넘으면 같은 페이지를 여러 번) */
+  ch: number;
+  pg: number;
+  /** PG가 CH보다 몇 배 많이 읽나 */
+  times: number;
+}
+
+/** 왜? 카드 ① — 선택 질문 · 가장 큰 단계 규모의 읽은 양(scan · 구조 사실) · 값이 없으면 null */
+export function readShare(view: Pick<PerfView, 'scan'>, query: string): ReadShare | null {
+  const stage = view.scan.at(-1);
+  const q = stage?.queries.find((x) => x.query === query);
+  const ch = q?.ch?.readBytesRatio;
+  const pg = q?.pg.I2?.bufferRatio;
+  // 분모(CH 몫)가 0이거나 없으면 배수를 만들지 않는다 — 화면은 "잰 값 없음"
+  if (!stage || ch == null || pg == null || !(ch > 0)) return null;
+  return { exponent: stage.exponent, record: stage.record, ch, pg, times: pg / ch };
+}
+
+/** 왜? 카드 ① 문장 한 조각 — strong이면 굵게 */
+export interface WhyPart {
+  text: string;
+  strong?: boolean;
+}
+
+export interface ReadWhy {
+  /** ch = 그림 1에서 CH가 이겼고 PG가 더 많이 읽었다 · pg = 그림 1에서 PG가 이겼다 · neutral = 비슷 · 미정 · 판정 없음 · 읽은 몫이 방향과 어긋남 */
+  kind: 'ch' | 'pg' | 'neutral';
+  parts: WhyPart[];
+  /** 읽은 몫 숫자 — "읽은 몫 PG 1.1% · CH 0.009%"(ch는 카드 아래 줄 · 나머지는 툴팁) */
+  shares: string;
+}
+
+/**
+ * 왜? 카드 ① 문장 — 선택 질문의 그림 1 결론(speedBars)과 같은 방향으로만 말한다(그림 1과 반대로 읽히는 조합 금지).
+ * CH 승리 · PG가 더 많이 읽음 → "같은 질문에 PG는 CH보다 전체 중 N배 많은 몫을 읽어요"
+ * PG 승리 → "이 질문은 몇 줄만 콕 집어 읽어서 PG가 빨라요(목차 · 인덱스)"(읽은 몫 숫자는 툴팁)
+ * 그 밖(비슷 · 승패 미정 · 판정 없음 · CH 승리인데 PG가 덜 읽음) → 방향 없는 사실 문장. 읽은 몫이 없으면 null(화면은 "잰 값 없음").
+ */
+export function readWhy(bar: SpeedBar | undefined, read: ReadShare | null): ReadWhy | null {
+  if (!read) return null;
+  const shares = `읽은 몫 PG ${shareText(read.pg)} · CH ${shareText(read.ch)}`;
+  if (bar?.kind === 'win' && bar.winner === 'postgresql')
+    return {
+      kind: 'pg',
+      parts: [
+        { text: '이 질문은 몇 줄만 콕 집어 읽어서 ' },
+        { text: 'PG가 빨라요', strong: true },
+        { text: '(목차 · 인덱스)' },
+      ],
+      shares,
+    };
+  const times = timesText(read.times);
+  if (bar?.kind === 'win' && bar.winner === 'clickhouse' && read.times > 1 && times !== '1.0')
+    return {
+      kind: 'ch',
+      parts: [
+        { text: '같은 질문에 PG는 CH보다 전체 중 ' },
+        { text: `${times}배`, strong: true },
+        { text: ' 많은 몫을 읽어요' },
+      ],
+      shares,
+    };
+  const head =
+    bar?.kind === 'even'
+      ? '이 질문은 두 DB가 비슷해요 — '
+      : bar?.kind === 'undetermined'
+        ? '이 질문은 3번 결과가 엇갈려요 — '
+        : '';
+  return { kind: 'neutral', parts: [{ text: `${head}${shares}` }], shares };
+}
+
+export interface RowBytes {
+  exponent: number;
+  record: string;
+  /** 1행 저장 바이트 — CH 압축된 열 · PG 힙 + B-tree 목차 */
+  ch: number;
+  pg: number;
+  times: number;
+}
+
+/** 왜? 카드 ② — 가장 큰 단계 규모의 행당 바이트(저장 비용 · 결정적 값) · 값이 없으면 null */
+export function rowBytes(view: Pick<PerfView, 'storage'>): RowBytes | null {
+  const s = view.storage.at(-1);
+  if (!s || s.perRowBytes.ch === null || s.perRowBytes.pg === null || !(s.perRowBytes.ch > 0)) return null;
+  const pg = s.perRowBytes.pg + (s.indexBytes.btree ?? 0) / s.rows;
+  return { exponent: s.exponent, record: s.record, ch: s.perRowBytes.ch, pg, times: pg / s.perRowBytes.ch };
+}
+
+/** 읽은 비율 쉬운 말 — 1 미만은 백분율 · 정확히 1은 "전부" · 1을 넘으면 같은 곳을 여러 번 읽은 것("전체의 1.3배") */
+export function shareText(r: number): string {
+  if (r > 1) return `전체의 ${timesText(r)}배`;
+  if (r === 1) return '전부';
+  return ratioPercent(r);
+}
+
+/** 진입 파라미터 — q(Q1~Q5 · 기본 Q2) 하나 · 벗어난 값은 기본값 */
+export function parsePerfParams(p: { q?: string | string[] }): { query: string } {
+  const q = Array.isArray(p.q) ? p.q[0] : p.q;
+  return { query: q && (PERF_QUERIES as readonly string[]).includes(q) ? q : 'Q2' };
+}
+
+/** 질문 쉬운 이름 — Q1~Q5 코드는 툴팁에만(05_data_stores/10 §동일 쿼리 5종) */
+export const QUERY_NAME: Record<string, string> = {
+  Q1: '센서 1개 · 최근 1시간',
+  Q2: '센서 1개 · 7일',
+  Q3: '설비 1대 · 하루',
+  Q4: '전체 설비 · 1분 평균',
+  Q5: '전체 데이터 훑기',
+};
+
+/**
+ * 대강의 크기 — 먼저 소수 1자리로 반올림하고 그 값으로 자릿수를 고른다(10 미만 소수 1자리 · 이상은 정수).
+ * 9.96을 "10.0"으로 · 99.6을 "100"이 아닌 다른 자릿수로 보이지 않게 — 반올림 전 값으로 고르면 경계에서 형식이 갈린다.
+ * 배수("24배")와 행당 바이트("4.5바이트")가 같은 규칙이라 화면의 나눗셈이 맞아 보인다(108 ÷ 4.5 = 24).
+ */
+export function roughText(x: number): string {
+  const r1 = Math.round(x * 10) / 10;
+  return r1 >= 10 ? Math.round(x).toLocaleString('ko-KR') : r1.toFixed(1);
+}
+
+/** 배수 크기 — roughText와 같은 규칙 */
+export const timesText = roughText;
+
+/**
+ * "N배 이상"의 N — 하한이라 반올림하지 않고 내린다(10 이상 정수 · 미만 소수 1자리). 40.8 → "40" · 9.97 → "9.9" · 2.75 → "2.7".
+ * 반올림하면 실제보다 큰 하한을 말하게 된다(40.8을 "41배 이상"으로).
+ */
+export function timesAtLeast(x: number): string {
+  return x >= 10 ? Math.floor(x).toLocaleString('ko-KR') : (Math.floor(x * 10) / 10).toFixed(1);
+}
+
+/** 가장 큰 규모 점의 배수(참고값) — 쿼리 · 캐시 · 변형에서 두 저장소 점이 함께 있는 가장 큰 지수 */
+export function topRatio(
+  points: readonly PerfPoint[],
   query: string,
   cache: string,
-): { exponent: number; pgVariant: string }[] {
-  const out = new Map<string, { exponent: number; pgVariant: string }>();
-  for (const r of view.ranges)
-    if (r.query === query && r.cache === cache)
-      for (const u of r.undetermined)
-        out.set(`${r.pgVariant}|${u}`, { exponent: parseExp(u), pgVariant: r.pgVariant });
-  for (const v of view.verdicts)
-    if (v.query === query && v.cache === cache && v.verdict === 'undetermined')
-      out.set(`${v.pgVariant}|${expLabel(v.exponent)}`, { exponent: v.exponent, pgVariant: v.pgVariant });
-  return [...out.values()].sort((a, b) => a.exponent - b.exponent || a.pgVariant.localeCompare(b.pgVariant));
-}
-
-export interface PgLead {
-  query: string;
-  cache: string;
-  pgVariant: string;
-  /** 앞서는 관측 구간 — 역전 없음이면 range · 역전이면 관측 하한 ~ 역전 전 마지막 점 a */
-  span: [string, string];
-  kind: 'no-crossover' | 'before-crossover';
-}
-
-/** 결론 카드 "PostgreSQL이 앞서는 경우" — winner postgresql 행과 역전 전 구간(from postgresql) */
-export function postgresLeads(ranges: readonly PerfRange[], minExponent: number): PgLead[] {
-  const out: PgLead[] = [];
-  for (const r of ranges) {
-    if (r.crossover === null && r.winner === 'postgresql')
-      out.push({
-        query: r.query,
-        cache: r.cache,
-        pgVariant: r.pgVariant,
-        span: r.range,
-        kind: 'no-crossover',
-      });
-    else if (r.crossover !== null && r.direction?.from === 'postgresql')
-      out.push({
-        query: r.query,
-        cache: r.cache,
-        pgVariant: r.pgVariant,
-        span: [expLabel(minExponent), r.crossover[0]],
-        kind: 'before-crossover',
-      });
+  variant: PgVariant,
+): { exponent: number; ratio: number } | null {
+  const at = new Map<number, { ch?: PerfPoint; pg?: PerfPoint }>();
+  for (const p of points) {
+    if (p.query !== query || p.cache !== cache) continue;
+    const slot = at.get(p.exponent) ?? {};
+    if (p.store === 'clickhouse') slot.ch = p;
+    else if (p.index === variant) slot.pg = p;
+    at.set(p.exponent, slot);
   }
-  return out.sort((a, b) => a.query.localeCompare(b.query) || a.cache.localeCompare(b.cache));
-}
-
-/** 10^7.25 = 17,780,000행(가로축 툴팁) */
-export const rowsTooltip = (p: Pick<PerfPoint, 'exponent' | 'rows'>): string =>
-  `${expLabel(p.exponent)} = ${p.rows.toLocaleString('ko-KR')}행`;
-
-/** 계획 노드 줄임 — 이어지는 같은 노드는 "Seq Scan ×10"으로 */
-export function compactNodes(nodes: readonly string[]): string {
-  const out: string[] = [];
-  let prev: string | null = null;
-  let n = 0;
-  const flush = () => {
-    if (prev !== null) out.push(n > 1 ? `${prev} ×${n}` : prev);
-  };
-  for (const x of nodes) {
-    if (x === prev) n++;
-    else {
-      flush();
-      prev = x;
-      n = 1;
-    }
+  const exps = [...at.keys()].sort((a, b) => b - a);
+  for (const e of exps) {
+    const { ch, pg } = at.get(e) ?? {};
+    if (ch && pg && ch.median > 0 && pg.median > 0) return { exponent: e, ratio: pg.median / ch.median };
   }
-  flush();
-  return out.join(' › ');
-}
-
-/** 딥링크 파라미터 — q(Q1~Q5 · 기본 Q2) · cache(warm · cold · 기본 warm) · 벗어난 값은 기본값 */
-export function parsePerfParams(p: { q?: string | string[]; cache?: string | string[] }): {
-  query: string;
-  cache: string;
-} {
-  const one = (v: string | string[] | undefined) => (Array.isArray(v) ? v[0] : v);
-  const q = one(p.q);
-  const c = one(p.cache);
-  return {
-    query: q && (PERF_QUERIES as readonly string[]).includes(q) ? q : 'Q2',
-    cache: c && (PERF_CACHES as readonly string[]).includes(c) ? c : 'warm',
-  };
+  return null;
 }

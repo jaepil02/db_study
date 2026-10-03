@@ -41,6 +41,7 @@ export type RunStep = { key: string; status: string };
 export type RunObj = {
   runId: string;
   type: 'perf' | 'flow';
+  params: Record<string, number>;
   status: 'running' | 'stopping' | 'completed' | 'stopped' | 'failed';
   startedAt: string;
   endedAt: string | null;

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { parsePrometheusText, ratePerSecond, summarizeS2 } from '../lib/metrics-parser';
+import { parsePrometheusText, ratePerSecond } from '../lib/metrics-parser';
 
 const TEXT = `# HELP consumer_lag 그룹 lag + pending
 # TYPE consumer_lag gauge
@@ -44,20 +44,6 @@ describe('parsePrometheusText', () => {
 
   it('형식이 깨진 줄은 건너뛴다', () => {
     expect(samples.find((s) => s.name === 'broken')).toBeUndefined();
-  });
-});
-
-describe('summarizeS2', () => {
-  it('S2 3계열 요약 — 생성기는 모드 A만 합한다', () => {
-    expect(summarizeS2(parsePrometheusText(TEXT))).toEqual({
-      consumerLag: 42,
-      e2e: { p50: 0.012, p95: 0.034, p99: 0.05, rows: 1200 },
-      genPointsModeA: 1500,
-    });
-  });
-
-  it('계열이 없으면 null(이 단계에서 아직 계측하지 않는다)', () => {
-    expect(summarizeS2([])).toEqual({ consumerLag: null, e2e: null, genPointsModeA: null });
   });
 });
 

@@ -6,7 +6,6 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useCallback, useEffect, useReducer, useRef, useState } from 'react';
 import {
   currentRunQueryOptions,
-  currentRunReadOptions,
   isActive,
   monoNow,
   PANEL_IDLE,
@@ -17,14 +16,10 @@ import {
   requestStart,
   requestStop,
   runKeys,
+  type StartOutcome,
   vanished,
 } from '../../lib/runs';
 import type { RunObjectBody, RunType } from '../../lib/shared';
-
-/** current 읽기 전용 구독(라이브 계열 · 흐름도 머리) — 폴링은 실행 패널(useRunPanel) 하나만 건다 */
-export function useCurrentRun() {
-  return useQuery(currentRunReadOptions());
-}
 
 /** 경과 틱 — 진행 중에만 1초마다 단조 시계를 읽는다 */
 export function useMonoTick(on: boolean): number {
@@ -57,7 +52,7 @@ export function useRunPanel(type: RunType) {
   const refetch = useCallback(() => qc.refetchQueries({ queryKey: runKeys.current }), [qc]);
 
   const start = useCallback(
-    async (params: Record<string, number>) => {
+    async (params: Record<string, number>): Promise<StartOutcome> => {
       dispatch({ kind: 'start-request' });
       const outcome = await requestStart(type, params);
       if (outcome.kind === 'started') put(outcome.run);
@@ -65,7 +60,8 @@ export function useRunPanel(type: RunType) {
         if (outcome.run) put(outcome.run);
         else void refetch();
       } else if (outcome.kind === 'failed') void refetch(); // 요청이 실제로는 닿았을 수 있다
-      dispatch({ kind: 'start-done', outcome });
+      dispatch({ kind: 'start-done', outcome, self: type });
+      return outcome; // 팝오버는 started(202)를 받은 뒤에만 닫는다(§배치 매개변수 팝오버 행)
     },
     [type, put, refetch],
   );

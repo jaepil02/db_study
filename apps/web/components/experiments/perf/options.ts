@@ -1,403 +1,198 @@
-// EXP-PERF 차트 옵션 — 규모 곡선 · 배수 히트맵(08_screen/08 §EXP-PERF §표시 계약 · 08_screen/01 §차트 표준 ECharts 보조).
-// 래퍼(components/experiments/echart.tsx)는 그대로 쓰고, 이 화면에만 필요한 조각(구간 음영 · 오차 막대 · 히트맵)을 여기서 더 등록한다.
-// 옵션 생성은 순수 함수다 — 판독은 lib/perf.ts가 하고 여기는 모양만 정한다.
-import { CustomChart, type CustomSeriesOption, HeatmapChart, type HeatmapSeriesOption } from 'echarts/charts';
-import {
-  type GridComponentOption,
-  MarkAreaComponent,
-  type MarkAreaComponentOption,
-  type TooltipComponentOption,
-  type VisualMapComponentOption,
-  VisualMapPiecewiseComponent,
-} from 'echarts/components';
-import { type ComposeOption, use } from 'echarts/core';
-import { formatRows, memoryLimitText, type Store } from '../../../lib/measurements';
+// 그림 2 — "데이터가 많아질수록 걸리는 시간"(선택 질문) 차트 옵션. 순수 함수 — 판독은 lib/perf.ts가 하고 여기는 모양만 정한다.
+// 선 2개(PostgreSQL 파랑 · ClickHouse 주황) · 가로 행 수 로그(10만~10억 행) · 세로 걸린 시간(밀리초) 로그 · 역전 구간 음영 "여기서 역전!"(방향은 툴팁) ·
+// 우열 미정 점에 ? · 직접 재 본 결과는 "내 측정(참고용)" 마름모(CH ◇ · PG ◆ — 범례 툴팁에 라이브 표지). 정본 08_screen/08 §EXP-PERF 그림 2 · §표시 계약.
+import { MarkAreaComponent } from 'echarts/components';
+import { use } from 'echarts/core';
+import type { Store } from '../../../lib/measurements';
 import {
   type CurveLine,
-  expLabel,
-  type HeatCell,
+  msText,
   type PerfPoint,
   type PerfRange,
-  type PerfRecord,
-  type PgVariant,
-  rowsTooltip,
-  type Verdict,
+  parseExp,
+  rowsWords,
 } from '../../../lib/perf';
-import type { LivePoint } from '../../../lib/runs';
+import { LIVE_LABEL, LIVE_MARK, type LivePoint } from '../../../lib/runs';
+import { STORE } from '../../ui/store';
 import type { ChartOption } from '../echart';
 
-use([CustomChart, HeatmapChart, MarkAreaComponent, VisualMapPiecewiseComponent]);
+use([MarkAreaComponent]);
 
-type PerfChartOption = ComposeOption<
-  | CustomSeriesOption
-  | HeatmapSeriesOption
-  | MarkAreaComponentOption
-  | GridComponentOption
-  | TooltipComponentOption
-  | VisualMapComponentOption
->;
+export const STORE_COLOR: Record<Store, string> = { postgresql: STORE.pg.color, clickhouse: STORE.ch.color };
+const STORE_NAME: Record<Store, string> = { postgresql: 'PostgreSQL', clickhouse: 'ClickHouse' };
+export const LIVE_NAME = LIVE_LABEL;
+/** 범례 "내 측정(참고용)" 툴팁 — 무엇인지 + 라이브 표지 고정 문구 */
+export const LIVE_TIP = `내 컴퓨터에서 직접 재 본 결과 · ${LIVE_MARK}`;
+export const UNDETERMINED_TIP = '3번 결과가 엇갈림';
+export const CROSS_LABEL = '여기서 역전!';
 
-/** 저장소 색 2 — 역전 지점 패널과 같은 값(색 계약: I1 · I2는 같은 색의 선 모양으로 가른다) */
-export const STORE_COLOR: Record<Store, string> = { postgresql: '#2563eb', clickhouse: '#d97706' };
-/** discarded 선 — 회색 점선(P3) · 마커는 저장소 색 */
-const DISCARDED_LINE = '#9ca3af';
-const UNDETERMINED_COLOR = '#e5e7eb';
-export const LINE_LABEL: Record<CurveLine['key'], string> = {
-  clickhouse: 'ClickHouse',
-  I1: 'PostgreSQL I1 (BRIN)',
-  I2: 'PostgreSQL I2 (BRIN + btree)',
-};
-/** 선 모양 — I1 긴 점선 · I2 짧은 점선(discarded) · 유효 기록이면 I1 실선 · I2 점-선 */
-const DASH: Record<CurveLine['key'], { discarded: number[]; valid: number[] | 'solid' }> = {
-  clickhouse: { discarded: [6, 4], valid: 'solid' },
-  I1: { discarded: [10, 4], valid: 'solid' },
-  I2: { discarded: [2, 3], valid: [8, 3, 2, 3] },
-};
-
-const esc = (s: string) =>
-  s.replace(
-    /[&<>"']/g,
-    (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c] ?? c,
-  );
-
-export function fmtMs(v: number): string {
-  return v >= 100 ? v.toFixed(0) : v >= 1 ? v.toFixed(2) : v.toFixed(3);
+/** 가로축 눈금 — 정수 지수만 "10만" · "1억"(그 사이 점은 눈금 없이 점만) */
+export function rowsTick(v: number): string {
+  const e = Math.round(Math.log10(v) * 1e6) / 1e6;
+  return Number.isInteger(e) ? rowsWords(e).replace(' 행', '') : '';
 }
-const pct = (v: number) => `${(v * 100).toFixed(1)}%`;
 
-/** 점 툴팁 — 3회 값 · 서버 µs 중앙값 · 판정 기준 · 결과 일치 · 4요소(§요소 규모 곡선) */
-export function pointTooltip(p: PerfPoint, rec: PerfRecord | undefined): string {
+/** 기록 점 툴팁 — 행 수(정확 · 지수) · 중간값 · 결과 일치 · 기록 번호 · 3번 차이가 큰 점 · 참고값(08_screen/08 §표시 계약 가로축 · 시간 참고값) */
+export function pointTip(store: Store, p: PerfPoint): string {
   const over = p.deviation !== null && p.deviation > p.threshold;
-  const lines = [
-    `<b>${esc(p.store === 'clickhouse' ? 'ClickHouse' : `PostgreSQL ${p.index ?? ''}`)}</b> · ${esc(rowsTooltip(p))}${p.point ? ` (${esc(p.point)})` : ''}`,
-    `${esc(p.query)} · ${p.cache === 'cold' ? '콜드' : '웜'} · client 중앙값 ${fmtMs(p.median)} ms(참고값)`,
-    `3회 ${p.values.map(fmtMs).join(' · ')} ms`,
-    p.serverMedian === null
-      ? '서버 값 기록 없음'
-      : `서버 중앙값 ${Math.round(p.serverMedian * 1000).toLocaleString('ko-KR')} µs${
-          p.serverValues ? ` · 3회 ${p.serverValues.map((v) => Math.round(v * 1000)).join(' · ')} µs` : ''
-        }`,
-    `판정 기준 ${esc(p.basis ?? '기록 없음')}${
-      p.deviation === null
-        ? ''
-        : over
-          ? ` · <span style="color:#b91c1c">편차 ${pct(p.deviation)} > 기준 ${pct(p.threshold)}</span>`
-          : ` · 편차 ${pct(p.deviation)}`
-    }`,
-    p.resultMatch === null ? '결과 대조 기재 없음' : p.resultMatch ? '결과 일치' : '결과 불일치(속이 빈 점)',
-    `기록 ${esc(p.record)} · ${esc(p.status)}`,
-  ];
-  if (rec) {
-    const sw = Object.entries(rec.switches)
-      .sort(([a], [b]) => a.localeCompare(b))
-      .map(([k, v]) => `${k}=${Array.isArray(v) ? v.join('/') : String(v)}`);
-    lines.push(
-      `커밋 ${esc(rec.run.commitHash)} · 프로파일 ${esc(rec.run.memoryProfile)} · 티어 ${esc(rec.run.capacityTier)}`,
-      esc(memoryLimitText(rec.run)),
-      esc(sw.slice(0, 6).join(' · ')),
-      esc(sw.slice(6).join(' · ')),
-    );
-  }
-  return lines.join('<br/>');
-}
-
-export interface CurveInput {
-  lines: CurveLine[];
-  /** 선택 쿼리 · 캐시의 I2 행 — 역전 음영 원천(I1 행은 결론 카드에만) */
-  i2Range: PerfRange | undefined;
-  undetermined: { exponent: number; pgVariant: string }[];
-  records: PerfRecord[];
-  yLog: boolean;
-  /** 라이브 계열 2(CH · PG I2 · 시연값) — 콜드면 화면이 넘기지 않는다(라이브 실행은 웜만) */
-  live?: { ch: LivePoint[]; pg: LivePoint[] };
-}
-
-/** 라이브 표지 고정 문구(08_evidence_screens EXP-PERF §표시 계약 라이브 표지) — 곡선 범례 머리 한 줄로 곡선 옆에 보인다 */
-export const LIVE_NOTE = '라이브 실행 — 앱 경유 · 시연값 · 기록 정본 아님';
-
-/** 라이브 계열 이름 — 기록 계열과 모양(마름모 · 실선 · 막대 없음)으로 가른다 · 전체 표지는 범례 머리 한 줄(LIVE_NOTE) */
-export const LIVE_LABEL = {
-  ch: '라이브 ClickHouse ◇(시연값)',
-  pg: '라이브 PostgreSQL I2 ◆(시연값)',
-} as const;
-
-/** 라이브 점 툴팁 — 3회 값 · 결과 행 수 일치 */
-export function liveTooltip(side: 'ch' | 'pg', p: LivePoint): string {
   return [
-    `<b>${side === 'ch' ? '라이브 ClickHouse' : '라이브 PostgreSQL I2'}</b> · ${esc(expLabel(p.exponent))} = ${p.rows.toLocaleString('ko-KR')}행`,
-    `중앙값 ${fmtMs(p.median)} ms · 3회 ${p.values.map(fmtMs).join(' · ')} ms`,
-    `결과 행 ${p.resultRows ?? '—'} · ${p.resultMatch === null ? '결과 대조 없음' : p.resultMatch ? '결과 일치' : '결과 불일치'}`,
-    LIVE_NOTE,
+    `<b>${STORE_NAME[store]}</b> · ${p.rows.toLocaleString('ko-KR')}행(10^${p.exponent})`,
+    `중간값 ${msText(p.median)}밀리초`,
+    p.resultMatch === null
+      ? '결과 대조 기록 없음'
+      : p.resultMatch
+        ? '두 DB 결과 일치'
+        : '두 DB 결과 불일치(속 빈 점)',
+    over ? '3번 값의 차이가 기준보다 큼' : '',
+    `기록 ${p.record}${p.status === 'valid' ? '' : ' · 참고값 — 편차 기준 초과(구조 판정만 정본)'}`,
+  ]
+    .filter(Boolean)
+    .join('<br/>');
+}
+
+/** 내 측정 점 툴팁 — 3회 값 · 결과 행 수 일치 · 라이브 표지 */
+export function liveTip(store: Store, p: LivePoint): string {
+  return [
+    `<b>${LIVE_NAME} ${STORE_NAME[store]}</b> · ${rowsWords(p.exponent)}`,
+    `중간값 ${msText(p.median)}밀리초 · 3번 ${p.values.map(msText).join(' · ')}`,
+    p.resultMatch === null
+      ? '결과 대조 없음'
+      : p.resultMatch
+        ? '두 DB 결과 행 수 일치'
+        : '두 DB 결과 행 수 불일치',
+    LIVE_MARK,
   ].join('<br/>');
 }
 
-function liveLine(side: 'ch' | 'pg', pts: LivePoint[]) {
-  return {
-    id: `live-${side}`,
-    name: LIVE_LABEL[side],
-    type: 'line' as const,
-    color: STORE_COLOR[side === 'ch' ? 'clickhouse' : 'postgresql'],
-    symbol: side === 'ch' ? 'emptyDiamond' : 'diamond',
-    symbolSize: 11,
-    lineStyle: { type: 'solid' as const, width: 1.5 },
-    z: 5,
-    data: pts.map((p) => [p.rows, p.median]),
-    tooltip: {
-      formatter: (params: { dataIndex?: number }) => {
-        const p = params.dataIndex === undefined ? undefined : pts[params.dataIndex];
-        return p ? liveTooltip(side, p) : '';
-      },
-    },
-  };
+export interface CurveInput {
+  /** 선택 질문 · 웜의 ClickHouse · PG(B-tree) 선(curveLines에서 I1을 뺀 것) */
+  lines: CurveLine[];
+  /** 선택 질문 · 웜 · I2 판정 행 — 역전 음영 원천 */
+  range: PerfRange | undefined;
+  /** 직접 재 본 값(라이브 실행) — 없으면 빈 배열 */
+  live: { ch: LivePoint[]; pg: LivePoint[] };
+  /** 우열 미정 지수(undeterminedExps) — ? 표지 */
+  undetermined?: number[];
 }
 
-/** 규모 곡선 — 가로 행 수 로그 · 세로 ms 로그(기본) · 선 3 · 반복 최소~최대 막대 · 역전 음영 · 미정 표지 */
-export function curveOption(input: CurveInput): ChartOption {
-  const { lines, i2Range, undetermined, records, yLog } = input;
-  // 로그 축이면 0 이하 점은 그리지 않는다(P6 — 계수 줄이 센다)
-  const drawable = (p: PerfPoint) => !yLog || p.median > 0;
-  const livePts = {
-    ch: (input.live?.ch ?? []).filter((p) => !yLog || p.median > 0),
-    pg: (input.live?.pg ?? []).filter((p) => !yLog || p.median > 0),
-  };
-  const allRows = [
-    ...lines.flatMap((l) => l.points.map((p) => p.rows)),
-    ...livePts.ch.map((p) => p.rows),
-    ...livePts.pg.map((p) => p.rows),
-  ];
-  const minRows = allRows.length > 0 ? 10 ** Math.floor(Math.log10(Math.min(...allRows))) : 1e5;
-  const maxRows = allRows.length > 0 ? 10 ** Math.ceil(Math.log10(Math.max(...allRows))) : 1e9;
-  const recOf = (r: string) => records.find((x) => x.record === r);
-  // 선(ChartOption) · 오차 막대(custom)가 섞이므로 계열 배열은 두 옵션 타입의 합으로 둔다
-  const series: (NonNullable<ChartOption['series']> | CustomSeriesOption)[] = [];
-  const lineSeries = lines.map((l) => {
-    const pts = l.points.filter(drawable);
-    const discarded = pts.some((p) => p.status !== 'valid');
-    const dash = discarded ? DASH[l.key].discarded : DASH[l.key].valid;
-    const color = STORE_COLOR[l.store];
-    const marks: { xAxis: number; name: string }[] = undetermined
-      .filter((u) => (l.key === 'clickhouse' ? false : u.pgVariant === l.key))
-      .map((u) => ({ xAxis: 10 ** u.exponent, name: `? ${expLabel(u.exponent)} ${u.pgVariant}` }));
+export function curveOption({ lines, range, live, undetermined = [] }: CurveInput): ChartOption {
+  const pos = <T extends { median: number }>(xs: readonly T[]) => xs.filter((p) => p.median > 0);
+  const series: Record<string, unknown>[] = lines.map((l) => {
+    const pts = pos(l.points);
+    const shade =
+      l.store === 'postgresql' && range && range.crossover !== null
+        ? {
+            markArea: {
+              tooltip: {
+                formatter: () =>
+                  range.direction
+                    ? `${range.direction.from === 'clickhouse' ? 'CH' : 'PG'} → ${range.direction.to === 'clickhouse' ? 'CH' : 'PG'} · 3번 모두 같은 판정`
+                    : '방향 미상',
+              },
+              itemStyle: { color: 'rgba(100, 116, 139, 0.14)' },
+              label: {
+                color: '#0f172a',
+                position: 'insideTop' as const,
+                fontWeight: 'bold' as const,
+                fontSize: 13,
+              },
+              data: [
+                [
+                  { name: CROSS_LABEL, xAxis: 10 ** parseExp(range.crossover[0]) },
+                  { xAxis: 10 ** parseExp(range.crossover[1]) },
+                ],
+              ],
+            },
+          }
+        : {};
     return {
-      id: `line-${l.key}`,
-      name: LINE_LABEL[l.key],
+      id: `line-${l.store}`,
+      name: STORE_NAME[l.store],
       type: 'line' as const,
-      color,
-      symbolSize: 8,
-      lineStyle: { color: discarded ? DISCARDED_LINE : color, type: dash, width: l.key === 'I2' ? 1.5 : 2 },
+      color: STORE_COLOR[l.store],
+      symbolSize: 6,
+      lineStyle: { width: 2.5 },
       data: pts.map((p) => ({
         value: [p.rows, p.median],
-        // 결과 불일치 점은 속이 빈 점(P6)
+        // 결과 불일치 점은 속 빈 점(P6)
         symbol: p.resultMatch === false ? 'emptyCircle' : 'circle',
       })),
       tooltip: {
-        formatter: (params: { dataIndex?: number }) => {
-          const p = params.dataIndex === undefined ? undefined : pts[params.dataIndex];
-          return p ? pointTooltip(p, recOf(p.record)) : '';
+        formatter: (x: { dataIndex?: number }) => {
+          const p = x.dataIndex === undefined ? undefined : pts[x.dataIndex];
+          return p ? pointTip(l.store, p) : '';
         },
       },
-      ...(marks.length > 0
+      ...shade,
+      ...(l.store === 'postgresql' && undetermined.length > 0
         ? {
             markLine: {
               symbol: 'none',
-              silent: true,
-              lineStyle: { type: 'dotted' as const, color: '#6b7280' },
-              label: { formatter: '{b}', color: '#374151' },
-              data: marks,
-            },
-          }
-        : {}),
-      ...(l.key === 'I2' && i2Range && i2Range.crossover !== null
-        ? {
-            markArea: {
-              silent: true,
-              itemStyle: { color: 'rgba(220, 38, 38, 0.08)' },
-              label: { color: '#b91c1c', position: 'insideTop' as const },
-              data: [
-                [
-                  {
-                    name: i2Range.direction
-                      ? `역전 구간 I2 → ${i2Range.direction.to === 'clickhouse' ? 'ClickHouse' : 'PostgreSQL'}`
-                      : '역전 구간(방향 미상)',
-                    xAxis: 10 ** Number(i2Range.crossover[0].slice(3)),
-                  },
-                  { xAxis: 10 ** Number(i2Range.crossover[1].slice(3)) },
-                ],
-              ],
+              lineStyle: { type: 'dotted' as const, color: '#94a3b8' },
+              label: { formatter: '?', color: '#334155', fontWeight: 'bold' as const },
+              tooltip: { formatter: UNDETERMINED_TIP },
+              data: undetermined.map((e) => ({ xAxis: 10 ** e, name: UNDETERMINED_TIP })),
             },
           }
         : {}),
     };
   });
-  series.push(...(lineSeries as NonNullable<ChartOption['series']>[]));
-  // 반복 최소~최대 막대 — 점마다 세로선과 머리(계열 색 · 툴팁 없음)
-  for (const l of lines) {
-    const pts = l.points.filter(drawable).filter((p) => p.values.length > 0);
-    const bars: CustomSeriesOption = {
-      id: `bar-${l.key}`,
-      name: LINE_LABEL[l.key],
-      type: 'custom',
-      silent: true,
-      tooltip: { show: false },
-      data: pts.map((p) => [
-        p.rows,
-        Math.max(Math.min(...p.values), yLog ? Number.MIN_VALUE : Number.NEGATIVE_INFINITY),
-        Math.max(...p.values),
-      ]),
-      renderItem: (_params, api) => {
-        const lo = api.coord([api.value(0), api.value(1)]);
-        const hi = api.coord([api.value(0), api.value(2)]);
-        const x = lo[0] ?? 0;
-        const y1 = lo[1] ?? 0;
-        const y2 = hi[1] ?? 0;
-        const style = { stroke: STORE_COLOR[l.store], lineWidth: 1 };
-        return {
-          type: 'group',
-          children: [
-            { type: 'line', shape: { x1: x, y1, x2: x, y2 }, style },
-            { type: 'line', shape: { x1: x - 3, y1, x2: x + 3, y2: y1 }, style },
-            { type: 'line', shape: { x1: x - 3, y1: y2, x2: x + 3, y2 }, style },
-          ],
-        };
+  for (const side of ['pg', 'ch'] as const) {
+    const pts = pos(live[side]);
+    if (pts.length === 0) continue;
+    const store: Store = side === 'ch' ? 'clickhouse' : 'postgresql';
+    series.push({
+      id: `live-${side}`,
+      name: LIVE_NAME,
+      type: 'line' as const,
+      color: STORE_COLOR[store],
+      // CH 속 빈 마름모 ◇ · PG 속 찬 마름모 ◆(§표시 계약 라이브 계열)
+      symbol: side === 'ch' ? 'emptyDiamond' : 'diamond',
+      symbolSize: 12,
+      lineStyle: { width: 0 },
+      z: 5,
+      data: pts.map((p) => [p.rows, p.median]),
+      tooltip: {
+        formatter: (x: { dataIndex?: number }) => {
+          const p = x.dataIndex === undefined ? undefined : pts[x.dataIndex];
+          return p ? liveTip(store, p) : '';
+        },
       },
-    };
-    series.push(bars);
+    });
   }
-  const liveSides = (['ch', 'pg'] as const).filter((k) => livePts[k].length > 0);
-  for (const k of liveSides) series.push(liveLine(k, livePts[k]) as NonNullable<ChartOption['series']>);
+  const hasLive = live.ch.length + live.pg.length > 0;
   const option = {
     animation: false,
-    grid: { left: 64, right: 24, top: liveSides.length > 0 ? 84 : 48, bottom: 52 },
-    // 라이브 계열이 있으면 범례 머리 한 줄에 정본 고정 문구 — 범례가 줄바꿈돼도 곡선 바로 위에 남는다
-    ...(liveSides.length > 0
-      ? {
-          graphic: [
-            {
-              type: 'text',
-              left: 'center',
-              top: 0,
-              style: { text: LIVE_NOTE, fontSize: 12, fontWeight: 'bold', fill: '#b45309' },
-            },
-          ],
-        }
-      : {}),
+    grid: { left: 48, right: 12, top: 28, bottom: 24 },
     legend: {
-      top: liveSides.length > 0 ? 20 : 0,
-      data: [...lines.map((l) => LINE_LABEL[l.key]), ...liveSides.map((k) => LIVE_LABEL[k])],
+      top: 0,
+      right: 0,
+      itemWidth: 14,
+      textStyle: { fontSize: 12 },
+      data: ['PostgreSQL', 'ClickHouse', ...(hasLive ? [LIVE_NAME] : [])],
+      // 범례 "내 측정(참고용)"에 마우스를 올리면 무엇인지(직접 재 본 결과)와 라이브 표지
+      tooltip: {
+        show: true,
+        formatter: (x: { name?: string }) => (x.name === LIVE_NAME ? LIVE_TIP : (x.name ?? '')),
+      },
     },
     tooltip: { trigger: 'item' },
     xAxis: {
       type: 'log',
       logBase: 10,
-      min: minRows,
-      max: maxRows,
-      name: '행 수(로그)',
-      nameLocation: 'middle',
-      nameGap: 30,
-      // 눈금은 10^k 정수 지수만 — 정밀화 점은 눈금 없이 점만(§표시 계약 가로축)
-      axisLabel: {
-        formatter: (v: number) =>
-          Number.isInteger(Math.round(Math.log10(v) * 1e6) / 1e6) ? formatRows(v) : '',
-      },
+      min: 1e5,
+      max: 1e9,
+      axisLabel: { formatter: rowsTick, fontSize: 11 },
     },
     yAxis: {
-      type: yLog ? 'log' : 'value',
-      name: 'ms · client 중앙값(참고값)',
-      scale: !yLog,
+      type: 'log',
+      name: '걸린 시간(밀리초)',
+      nameLocation: 'end',
+      nameGap: 8,
+      nameTextStyle: { align: 'left', fontSize: 11 },
+      axisLabel: { fontSize: 11 },
     },
     series,
-  };
-  return option as unknown as ChartOption;
-}
-
-/** 세기 단계 — 배수 크기(참고값)의 |log10| 을 4단계로(발산 · 0이 가장 옅다) */
-const STRENGTH_ALPHA = ['4d', '80', 'b3', 'e6'] as const;
-const strengthOf = (ratio: number | null): number =>
-  ratio && ratio > 0 ? Math.min(3, Math.floor(Math.abs(Math.log10(ratio)) * 2)) : 1;
-
-/**
- * 히트맵 칸 색 부호 — ECharts 히트맵은 visualMap이 색을 칠한다(칸별 itemStyle을 쓰지 못한다).
- * 저장소 우열(정본) × 세기 4 · 미정 · 방향 미상 · 판정 없음을 정수 부호로 두고 조각 visualMap이 색으로 바꾼다.
- */
-export function cellCode(verdict: Verdict | null, ratio: number | null): number {
-  if (verdict === null) return 0;
-  if (verdict === 'undetermined') return 1;
-  if (verdict === 'unknown-direction') return 2;
-  return (verdict === 'clickhouse' ? 10 : 20) + strengthOf(ratio);
-}
-
-/** 부호 → 색 조각 — 우열 색은 저장소 색 · 세기는 불투명도 · 미정은 무채색 */
-export const CELL_PIECES: { value: number; color: string }[] = [
-  { value: 0, color: '#ffffff' },
-  { value: 1, color: UNDETERMINED_COLOR },
-  { value: 2, color: '#d1d5db' },
-  ...STRENGTH_ALPHA.flatMap((a, i) => [
-    { value: 10 + i, color: `${STORE_COLOR.clickhouse}${a}` },
-    { value: 20 + i, color: `${STORE_COLOR.postgresql}${a}` },
-  ]),
-];
-
-/** 칸 글자 — 배수 소수 1자리 · 미정은 ? · 방향 미상은 ↕? */
-export function cellText(c: Pick<HeatCell, 'ratio' | 'verdict'>): string {
-  const r = c.ratio === null ? '—' : `${c.ratio.toFixed(1)}×`;
-  if (c.verdict === 'undetermined') return `${r} ?`;
-  if (c.verdict === 'unknown-direction') return `${r} ↕?`;
-  return r;
-}
-
-const VERDICT_TEXT: Record<Verdict, string> = {
-  clickhouse: 'ClickHouse 우세(3/3)',
-  postgresql: 'PostgreSQL 우세(3/3)',
-  undetermined: '우열 미정',
-  'unknown-direction': '방향 미상(역전 구간은 있으나 방향 기록 없음)',
-};
-
-/** 배수 히트맵 — 행 지수 × 쿼리 5 · 칸 = PG ÷ CH(참고값) · 색 = 3/3 우열(정본) */
-export function heatmapOption(
-  exponents: number[],
-  cells: HeatCell[],
-  queries: readonly string[],
-  variant: PgVariant,
-): ChartOption {
-  const option: PerfChartOption = {
-    animation: false,
-    grid: { left: 64, right: 16, top: 8, bottom: 32 },
-    tooltip: {
-      trigger: 'item',
-      formatter: (params) => {
-        const p = Array.isArray(params) ? params[0] : params;
-        const c = p?.dataIndex === undefined ? undefined : cells[p.dataIndex];
-        if (!c) return '';
-        return [
-          `<b>${esc(c.query)}</b> · ${esc(expLabel(c.exponent))}행 · PG ${variant}`,
-          c.ratio === null
-            ? '두 저장소 점이 함께 있지 않다'
-            : `PG ÷ CH 중앙값 ${c.ratio.toFixed(2)}×(참고값)`,
-          c.verdict === null ? '점 단위 우열 기록 없음' : VERDICT_TEXT[c.verdict],
-        ].join('<br/>');
-      },
-    },
-    visualMap: { type: 'piecewise', show: false, dimension: 2, pieces: CELL_PIECES },
-    xAxis: { type: 'category', data: [...queries], position: 'top', splitArea: { show: false } },
-    yAxis: { type: 'category', data: exponents.map(expLabel), inverse: true },
-    series: [
-      {
-        type: 'heatmap',
-        label: {
-          show: true,
-          fontSize: 11,
-          color: '#111827',
-          formatter: (p) => cellText(cells[p.dataIndex] ?? { ratio: null, verdict: null }),
-        },
-        itemStyle: { borderColor: '#ffffff', borderWidth: 1 },
-        // 셋째 값 = 색 부호(cellCode) — 배수는 칸 글자 · 툴팁이 cells에서 읽는다
-        data: cells.map((c) => [
-          queries.indexOf(c.query),
-          exponents.indexOf(c.exponent),
-          cellCode(c.verdict, c.ratio),
-        ]),
-      },
-    ],
   };
   return option as unknown as ChartOption;
 }

@@ -20,9 +20,11 @@ export const FLOW_RING = 20;
 export const FLOW_MIN_ANIM_MS = 1_500;
 /** 간선 굵기 · 초당 값 — 최근 10초 totals 차 */
 export const FLOW_RATE_WINDOW_MS = 10_000;
+/** 게이트웨이 병합 창 — 연결마다 250 ms 고정(07_api/11_websocket §flow 프레임 계약) · 업무 트랙 첫 샘플의 기준점 시각 */
+export const FLOW_MERGE_WINDOW_MS = 250;
 /** 요약 없음 — 구독 중인데 이 동안 flow 프레임이 없으면 띠 */
 export const FLOW_NO_SUMMARY_MS = 10_000;
-/** 저장소 누적 메트릭 폴링 5초(리드 판정 2 — EXP-CONSOLE 15초와 다르다) */
+/** 저장소 누적 메트릭 폴링 5초(리드 판정 2) */
 export const FLOW_METRICS_POLL_MS = 5_000;
 /** 구독 확인 빈 프레임을 기다리는 시간 — 넘으면 빈 값 ③(기능 미도입 단계)로 본다 · 화면 판정값(문서에 수치 없음) */
 export const FLOW_ACK_WAIT_MS = 5_000;
@@ -84,12 +86,6 @@ export function isDirect(b: Pick<FlowBizSummaryBody, 'role'>): boolean {
 export function animScale(totalMs: number): number {
   if (totalMs >= FLOW_MIN_ANIM_MS) return 1;
   return FLOW_MIN_ANIM_MS / Math.max(totalMs, 1);
-}
-
-/** 머리 표기 — "×N 느리게"(배율 1이면 "실시간 속도") */
-export function formatScale(scale: number): string {
-  if (scale <= 1) return '실시간 속도';
-  return `×${scale >= 10 ? Math.round(scale).toLocaleString('ko-KR') : scale.toFixed(1)} 느리게`;
 }
 
 function sumStages(stages: Record<string, number | null>): number {
@@ -157,8 +153,10 @@ export interface BizMark {
 
 /**
  * 업무 점 — api → stream:biz:cmd → 워커 → PG 트랜잭션 → cache DEL · ch:cacheinv → biz:result · ch:bizreply → api 응답.
+ * 흐름도(diagram-layout BIZ_AT)에서 cache · result는 둘 다 Redis 기둥 ④ 칸(옛 사본 지움 → 결과 알림)의 점 길 위다(오른쪽 → 왼쪽).
  * duplicate · expired는 트랜잭션을 건너뛰고(↺ · ⌛), rejected는 트랜잭션 노드에서 ✕, failed는 같은 노드에서 ⚠(txMs null이어도 들른다).
- * role api-direct(SW-12 direct)는 스트림 · 워커 · 결과 노드를 건너뛰고 api에서 곧바로 트랜잭션으로 간다.
+ * role api-direct(SW-12 direct)는 스트림 · 워커 · 결과 알림을 건너뛰고 api에서 곧바로 트랜잭션으로 간다 — 무효화는 ④ 칸 점 길을
+ * 오른쪽 → 왼쪽으로 지나며 그린다(invalidateMs를 두 다리에 반씩 · 결과 알림 단계는 없다 · 점이 ④ 글자를 가로지르지 않게).
  */
 export function bizPlan(b: FlowBizSummaryBody): DotPlan<BizNode> & { mark: BizMark | null } {
   const s = b.stages;
@@ -186,7 +184,12 @@ export function bizPlan(b: FlowBizSummaryBody): DotPlan<BizNode> & { mark: BizMa
       mark = { symbol: OUTCOME_MARK[outcome], at: 'pgTx', code: b.result };
     }
   }
-  if (s.invalidateMs !== null) legs.push({ to: 'cache', ms: s.invalidateMs, stage: 'invalidateMs' });
+  if (s.invalidateMs !== null) {
+    if (direct) {
+      legs.push({ to: 'cache', ms: s.invalidateMs / 2, stage: 'invalidateMs' });
+      legs.push({ to: 'result', ms: s.invalidateMs / 2, stage: 'invalidateMs' });
+    } else legs.push({ to: 'cache', ms: s.invalidateMs, stage: 'invalidateMs' });
+  }
   if (!direct && s.replyMs !== null) {
     legs.push({ to: 'result', ms: s.replyMs / 2, stage: 'replyMs' });
     legs.push({ to: 'api', ms: s.replyMs / 2, stage: 'replyMs' });
@@ -230,13 +233,14 @@ export function arriveAt<N extends string>(plan: DotPlan<N>, node: N): number | 
 
 /** 점 크기 ∝ log10(행 수) */
 export function batchDotRadius(rows: number): number {
-  return 3 + 1.5 * Math.log10(Math.max(rows, 1));
+  // 상한 7 — 흐름도 점 길(노드 아래 13px)과 저장소 노드 글자 사이 여백 안에 든다(components/experiments/flow/diagram-layout.ts DOT_R_MAX)
+  return Math.min(2 + Math.log10(Math.max(rows, 1)), 7);
 }
 
-/** 간선 굵기 — 로그 · 0이면 기본 1 */
+/** 간선 굵기 — 로그 · 0이면 기본 1 · 상한 6(통로 안 나란한 선 간격 16 · 무거운 화살 방지 — diagram-layout.ts EDGE_W_MAX) */
 export function edgeWidth(perSec: number | null): number {
   if (perSec === null || perSec <= 0) return 1;
-  return Math.min(1 + 1.6 * Math.log10(1 + perSec), 12);
+  return Math.min(1 + Math.log10(1 + perSec), 6);
 }
 
 // ── 화면 상태(프레임 → 상태) ──
@@ -338,10 +342,47 @@ function counters(e: FlowTotalsEntryBody): Record<string, number> {
 /** totals 이력 보존 — 창 10초 밖 샘플은 창 시작 직전 하나만 남긴다 */
 const TOTALS_KEEP_MS = FLOW_RATE_WINDOW_MS * 3;
 
+/** 드문 트랙 — 업무 명령은 요청이 있을 때만 요약 · totals가 온다(창에 요약이 없으면 그 (source · role)는 프레임에 없다) */
+function isSparseRole(role: FlowRole): boolean {
+  return role === 'biz-writer' || role === 'api-direct';
+}
+
+/**
+ * 업무 트랙을 처음 본 프레임의 기준점 — 누적(이 창 마지막 값) − 이 창의 같은 (source · role) 요약 수.
+ * 구독 뒤 요약만 프레임에 오므로 그 직전 누적이 이 값이다 — 첫 명령 1건만 와도 초당 값이 생긴다.
+ * 계수 갈래는 계약(commands = applied + rejected + expired + failed · duplicates는 부분집합)을 따른다.
+ * 창에서 버린 업무 요약이 있으면(dropped.biz > 0) 몇 건이 이 트랙 몫인지 모르므로 만들지 않는다(옛 규칙 — 다음 샘플부터).
+ */
+function sparseBaseline(
+  e: FlowTotalsEntryBody,
+  values: Record<string, number>,
+  biz: readonly FlowBizSummaryBody[],
+  droppedBiz: number,
+): Record<string, number> | null {
+  if (droppedBiz > 0) return null;
+  const mine = biz.filter((b) => b.source === e.source && b.role === e.role);
+  if (mine.length === 0) return null;
+  const base = { ...values };
+  const dec = (k: string) => {
+    if (base[k] !== undefined) base[k] -= 1;
+  };
+  for (const b of mine) {
+    dec('commands');
+    if (b.result === 'ok') dec('applied');
+    else if (b.result === 'expired') dec('expired');
+    else if (b.result === 'common.postgres_unavailable') dec('failed');
+    else dec('rejected');
+    if (b.duplicate) dec('duplicates');
+  }
+  return Object.values(base).some((v) => v < 0) ? null : base;
+}
+
 function applyTotals(
   tracks: Record<string, TotalsTrack>,
   entries: readonly FlowTotalsEntryBody[],
   at: number,
+  biz: readonly FlowBizSummaryBody[] = [],
+  droppedBiz = 0,
 ): Record<string, TotalsTrack> {
   if (entries.length === 0) return tracks;
   const next = { ...tracks };
@@ -351,7 +392,9 @@ function applyTotals(
     const prev = next[key];
     const sample = { at, values };
     if (!prev) {
-      next[key] = { source: e.source, role: e.role, startedAt: e.startedAt, samples: [sample], restarts: 0 };
+      const base = isSparseRole(e.role) ? sparseBaseline(e, values, biz, droppedBiz) : null;
+      const samples = base ? [{ at: at - FLOW_MERGE_WINDOW_MS, values: base }, sample] : [sample];
+      next[key] = { source: e.source, role: e.role, startedAt: e.startedAt, samples, restarts: 0 };
       continue;
     }
     const last = prev.samples[prev.samples.length - 1];
@@ -414,7 +457,7 @@ export function applyFlowFrame(state: FlowViewState, f: FlowFrameBody, receivedA
       timeline: trimTimeline(timeline),
       biz: [...biz, ...state.biz].slice(0, FLOW_RING),
       lastSeq,
-      totals: applyTotals(state.totals, f.totals, f.windowEnd),
+      totals: applyTotals(state.totals, f.totals, f.windowEnd, f.biz, f.dropped.biz),
       lastFrameAt: receivedAt,
       lastBatchAt: latest ? Math.max(latest.at, state.lastBatchAt ?? 0) : state.lastBatchAt,
       clockOffset,
@@ -434,25 +477,57 @@ export function serverNow(state: Pick<FlowViewState, 'clockOffset'>, browserNow:
   return browserNow - state.clockOffset;
 }
 
+/** 마지막 요약이 이보다 오래되면 "멈춤"으로 보고 지금 시각까지 창을 민다 — 묶음은 약 1초마다 오므로 3초면 멈춘 것이다 */
+export const FLOW_RATE_STALE_MS = 3_000;
+
 /**
- * 한 (source · role) 누적의 최근 10초 초당 값 — 값(지금) − 값(지금 − 10초)을 경과 초로 나눈다.
- * 값(t)는 t 이전 마지막 샘플이고, 창 시작보다 오래된 샘플이 없으면 첫 샘플부터 잰다.
+ * 한 (source · role) 누적의 최근 10초 초당 값.
+ * 요약이 계속 오는 동안은 **창 끝을 마지막 샘플 시각에 둔다** — 값(마지막) − 값(마지막 − 10초 이전 마지막 샘플)을 두 샘플 시각 차로 나눈다.
+ * 창 끝을 브라우저가 추정한 지금(serverNow)에 두면 요약 간격 · 시계 차이만큼 분모가 늘어 모든 초당 값이 작게 나온다
+ * (리드 확인 2026-10-03 — 메트릭 5초 차분 10,004개/초 대 흐름 요약 8,412개/초, 밀린 데이터 0인데 16% 차).
+ * 마지막 샘플이 FLOW_RATE_STALE_MS보다 오래되면(요약이 끊김 — 적재 멈춤) 창 끝을 지금으로 밀어 값이 줄어들게 한다 — 멈춘 그림이 곧 멈춘 적재다.
  * 샘플이 둘 미만(구독 직후 · 재기동 직후)이면 null — 재기동 한 창 건너뛰기.
+ * 업무 명령 트랙(biz-writer · api-direct)은 드물게 오므로 sparseRate(분모 10초 고정)로 잰다.
  */
 export function trackRate(track: TotalsTrack, field: string, now: number): number | null {
   const s = track.samples;
   const last = s[s.length - 1];
   if (s.length < 2 || last === undefined) return null;
-  const from = now - FLOW_RATE_WINDOW_MS;
+  if (isSparseRole(track.role)) return sparseRate(s, last, field, now);
+  const stale = now - last.at > FLOW_RATE_STALE_MS;
+  const end = stale ? now : last.at;
+  const from = end - FLOW_RATE_WINDOW_MS;
   let base = s[0] as TotalsSample;
   for (const x of s) if (x.at <= from) base = x;
-  const end = Math.max(now, last.at);
-  const start = Math.max(base.at, from);
+  // 요약이 오는 동안은 두 샘플 사이 실제 시간 · 멈췄으면 창 [from, 지금]
+  const start = stale ? Math.max(base.at, from) : base.at;
   const sec = (end - start) / 1000;
   const lv = last.values[field];
   const bv = base.values[field];
   if (sec <= 0 || lv === undefined || bv === undefined || lv < bv) return null;
   return (lv - bv) / sec;
+}
+
+/**
+ * 드문 트랙(업무 명령)의 초당 값 — 최근 10초 창 [지금 − 10초, 지금] 안 증가분 ÷ 10초.
+ * 기준은 창 시작 이전 마지막 샘플(없으면 첫 샘플 — 첫 명령의 기준점) · 분모는 늘 10초다.
+ * 촘촘한 트랙처럼 두 샘플 사이 시간으로 나누면 명령 간격(수십 초)이 분모가 되어 1건이 "0.1 미만"으로 묻히고,
+ * 샘플이 창 밖으로 나가면 다음 명령까지 값이 남지 않는다 — 10초 동안 1건이면 0.1, 그 뒤 10초가 지나면 0.
+ */
+function sparseRate(
+  s: readonly TotalsSample[],
+  last: TotalsSample,
+  field: string,
+  now: number,
+): number | null {
+  const end = Math.max(now, last.at);
+  const from = end - FLOW_RATE_WINDOW_MS;
+  let base = s[0] as TotalsSample;
+  for (const x of s) if (x.at <= from) base = x;
+  const lv = last.values[field];
+  const bv = base.values[field];
+  if (lv === undefined || bv === undefined || lv < bv) return null;
+  return (lv - bv) / (FLOW_RATE_WINDOW_MS / 1000);
 }
 
 /** 역할(들)의 초당 값 합 — source 여럿(워커 여럿)을 더한다 · 계산 가능한 track이 없으면 null */
@@ -478,15 +553,31 @@ export interface FlowRates {
   chRows: number | null;
   controlCopyRows: number | null;
   latestWrites: number | null;
-  judgedRows: number | null;
   transitions: number | null;
   commands: number | null;
   commandsWriter: number | null;
   commandsDirect: number | null;
+  /** 업무 커밋(biz-writer · api-direct applied) — PostgreSQL 노드 · 카드의 업무 건수 */
+  applied: number | null;
+  rejected: number | null;
+  failed: number | null;
+  expired: number | null;
 }
 
-export function flowRates(tracks: Record<string, TotalsTrack>, now: number): FlowRates {
+/**
+ * subscribed — 흐름 구독이 확인된 동안(flowSubStatus 'subscribed')이면 업무 트랙이 하나도 없는 것은 "구독 뒤 명령 0건"이다
+ * (totals는 요약이 있는 (source · role)만 오므로 없음 = 요약 없음) — 업무 요청 · 업무 커밋(commands · applied)을 null 대신 0으로 둔다
+ * (리드 판정 2026-10-03 — 주니어에게 "—"는 고장으로 읽힌다). 트랙이 있는데 값을 모르면(샘플 하나 · 버린 요약 · 재기동) null 그대로다.
+ */
+export function flowRates(
+  tracks: Record<string, TotalsTrack>,
+  now: number,
+  opts: { subscribed?: boolean } = {},
+): FlowRates {
   const ing = (f: string) => roleRate(tracks, ['ingest'], f, now);
+  const biz = (f: string) => roleRate(tracks, ['biz-writer', 'api-direct'], f, now);
+  const noBiz = opts.subscribed === true && !Object.values(tracks).some((t) => isSparseRole(t.role));
+  const bizOrZero = (v: number | null) => (v === null && noBiz ? 0 : v);
   const opened = ing('opened');
   const closed = ing('closed');
   return {
@@ -495,21 +586,28 @@ export function flowRates(tracks: Record<string, TotalsTrack>, now: number): Flo
     chRows: ing('chRows'),
     controlCopyRows: ing('controlCopyRows'),
     latestWrites: ing('latestWrites'),
-    judgedRows: ing('judgedRows'),
     transitions: opened === null && closed === null ? null : (opened ?? 0) + (closed ?? 0),
-    commands: roleRate(tracks, ['biz-writer', 'api-direct'], 'commands', now),
+    commands: bizOrZero(biz('commands')),
     commandsWriter: roleRate(tracks, ['biz-writer'], 'commands', now),
     commandsDirect: roleRate(tracks, ['api-direct'], 'commands', now),
+    applied: bizOrZero(biz('applied')),
+    rejected: biz('rejected'),
+    failed: biz('failed'),
+    expired: biz('expired'),
   };
 }
 
-/** 구독 표지 3상태 — 셸 WS 3상태를 따른다 */
-export type FlowSubStatus = 'subscribed' | 'requesting' | 'disconnected';
+/**
+ * 구독 표지 상태 — 셸 WS 3상태를 따른다 · 첫 연결 전(idle · connecting)은 끊김이 아니라 연결 중이다
+ * (끊김 띠 · 흐림 없음 — 진입 직후 한 순간 "끊김"이 깜박이면 고장으로 읽힌다).
+ */
+export type FlowSubStatus = 'subscribed' | 'requesting' | 'connecting' | 'disconnected';
 
 export function flowSubStatus(
   conn: 'idle' | 'connecting' | 'open' | 'reconnecting' | 'closed',
   flow: 'off' | 'requesting' | 'subscribed',
 ): FlowSubStatus {
+  if (conn === 'idle' || conn === 'connecting') return 'connecting';
   if (conn !== 'open') return 'disconnected';
   return flow === 'subscribed' ? 'subscribed' : 'requesting';
 }
@@ -577,6 +675,22 @@ export interface FlowMetrics {
     /** biz_commands_total{result} 합(kind 전부 · 누적) — api · 워커 두 주체가 한 명령을 두 번 셀 수 있다 */
     bizCommands: Record<string, number> | null;
   };
+  /**
+   * 조회(설계 §9 조회 줄 · 10_observability/01 §RLT · TSQ · MST) — 모두 누적 · 레이블별.
+   * tsq · rlt_latest_requests · mst는 요청 건수(요청 1건 = 1)고, latestPoints는 **응답한 점 수**(설비당 약 200)라 요청 수로 쓰지 않는다(툴팁에만).
+   */
+  reads: {
+    /** tsq_cache_requests_total{result} — 센서 시계열 조회 사본(cache:q) · miss면 ClickHouse */
+    series: Record<string, number> | null;
+    /** rlt_latest_requests_total{result hit · restored · bypass · error} — 센서 지금 값(rt:latest) · restored = 없어서 ClickHouse에서 복원 · bypass = 스위치로 Redis를 건너뛰고 ClickHouse */
+    latest: Record<string, number> | null;
+    /** mst_cache_requests_total{result} — 업무 목록 사본(cache:devlist) · miss면 PostgreSQL */
+    master: Record<string, number> | null;
+    /** rlt_latest_points_served_total{freshness} — 지금 값 조회가 응답한 태그 값 수(Redis rt:latest) */
+    latestPoints: Record<string, number> | null;
+  };
+  /** e2e_latency{quantile}(초 · 최근 창 ingested_at − ts) · e2e_latency_rows(0이면 게이지가 비었다) — 숫자 4 "측정 → 저장까지"(OBS-04 · p50) */
+  e2e: { p50: number | null; p95: number | null; p99: number | null; rows: number | null };
   /** obs_collect_last_success_timestamp_seconds{store} — epoch 초 */
   collectedAt: Record<FlowStore, number | null>;
 }
@@ -600,6 +714,10 @@ export function summarizeFlow(samples: readonly MetricSample[]): FlowMetrics {
   const backpressure: Record<string, number> = {};
   const latestUpdates: Record<string, number> = {};
   const bizCommands: Record<string, number> = {};
+  const readSeries: Record<string, number> = {};
+  const readMaster: Record<string, number> = {};
+  const readLatest: Record<string, number> = {};
+  const latestPoints: Record<string, number> = {};
   const m: FlowMetrics = {
     source: { pointsEmitted: null, genByMode: null, streamAdded: null },
     clickhouse: {
@@ -620,6 +738,8 @@ export function summarizeFlow(samples: readonly MetricSample[]): FlowMetrics {
       bizStreamLag: null,
       bizCommands: null,
     },
+    reads: { series: null, latest: null, master: null, latestPoints: null },
+    e2e: { p50: null, p95: null, p99: null, rows: null },
     collectedAt: { clickhouse: null, postgres: null, redis: null },
   };
   const ch = (t: string | undefined): FlowChTable => {
@@ -723,6 +843,26 @@ export function summarizeFlow(samples: readonly MetricSample[]): FlowMetrics {
       case 'biz_commands_total':
         add(bizCommands, l.result, v);
         break;
+      case 'tsq_cache_requests_total':
+        add(readSeries, l.result, v);
+        break;
+      case 'rlt_latest_requests_total':
+        add(readLatest, l.result, v);
+        break;
+      case 'mst_cache_requests_total':
+        add(readMaster, l.result, v);
+        break;
+      case 'rlt_latest_points_served_total':
+        add(latestPoints, l.freshness, v);
+        break;
+      case 'e2e_latency':
+        if (l.quantile === '0.5') m.e2e.p50 = v;
+        else if (l.quantile === '0.95') m.e2e.p95 = v;
+        else if (l.quantile === '0.99') m.e2e.p99 = v;
+        break;
+      case 'e2e_latency_rows':
+        m.e2e.rows = v;
+        break;
       case 'obs_collect_last_success_timestamp_seconds':
         if (l.store === 'clickhouse' || l.store === 'postgres' || l.store === 'redis')
           m.collectedAt[l.store] = v;
@@ -740,19 +880,13 @@ export function summarizeFlow(samples: readonly MetricSample[]): FlowMetrics {
   m.redis.backpressure = orNull(backpressure);
   m.redis.latestUpdates = orNull(latestUpdates);
   m.redis.bizCommands = orNull(bizCommands);
+  m.reads = {
+    series: orNull(readSeries),
+    latest: orNull(readLatest),
+    master: orNull(readMaster),
+    latestPoints: orNull(latestPoints),
+  };
   return m;
-}
-
-/** 행당 바이트 — 분모는 테이블 전체 행 수 계열(누적 삽입 수 아님) · 분모 0 · 수집 없음이면 null("행 수 계측 없음") */
-export function perRowBytes(bytes: number | null, rows: number | null): number | null {
-  if (bytes === null || rows === null || rows <= 0) return null;
-  return bytes / rows;
-}
-
-/** 압축률 — 비압축 ÷ 디스크 */
-export function compressionRatio(t: FlowChTable): number | null {
-  if (t.bytesOnDisk === null || t.uncompressedBytes === null || t.bytesOnDisk <= 0) return null;
-  return t.uncompressedBytes / t.bytesOnDisk;
 }
 
 export interface FlowMetricsPoll {
@@ -770,6 +904,11 @@ export interface FlowMetricRates {
   commitsPerSec: number | null;
   bizCommandsPerSec: Record<string, number | null>;
   latestUpdatesPerSec: Record<string, number | null>;
+  /** 조회 — tsq_cache_requests_total · rlt_latest_requests_total · mst_cache_requests_total(건/초 · result별) · rlt_latest_points_served_total(점/초 · freshness별) */
+  readSeriesPerSec: Record<string, number | null>;
+  readLatestPerSec: Record<string, number | null>;
+  readMasterPerSec: Record<string, number | null>;
+  latestPointsPerSec: Record<string, number | null>;
 }
 
 function rateMap(
@@ -805,13 +944,73 @@ export function flowMetricRates(prev: FlowMetricsPoll | null, cur: FlowMetricsPo
     commitsPerSec: one(p?.postgres.xactCommitTotal, c.postgres.xactCommitTotal),
     bizCommandsPerSec: rateMap(p?.redis.bizCommands, c.redis.bizCommands, pAt, cur.fetchedAt),
     latestUpdatesPerSec: rateMap(p?.redis.latestUpdates, c.redis.latestUpdates, pAt, cur.fetchedAt),
+    // 옛 BFF 응답(reads 없음)도 받는다 — 배포가 엇갈린 동안 화면이 깨지지 않게
+    readSeriesPerSec: rateMap(p?.reads?.series, c.reads?.series ?? null, pAt, cur.fetchedAt),
+    readLatestPerSec: rateMap(p?.reads?.latest, c.reads?.latest ?? null, pAt, cur.fetchedAt),
+    readMasterPerSec: rateMap(p?.reads?.master, c.reads?.master ?? null, pAt, cur.fetchedAt),
+    latestPointsPerSec: rateMap(p?.reads?.latestPoints, c.reads?.latestPoints ?? null, pAt, cur.fetchedAt),
   };
 }
 
-/** 발생원 초당 포인트 합(Collector + 생성기 전 모드) — 요약 없음 띠 · 발생원 간선 라벨 */
+/** 조회 줄 숫자(설계 §9.2 · 명세 08 §EXP-FLOW 조회 줄) — 모두 메트릭 5초 차분 · 단위는 요청 건/초(latestPoints만 점/초) */
+export interface ReadRates {
+  /** 조회 건/초 — 센서 시계열 + 센서 지금 값 + 업무 목록(전 결과 합) */
+  requests: number | null;
+  /** Redis에 있어 바로 답한 건/초(세 계열 hit 합) */
+  hit: number | null;
+  /** ClickHouse까지 간 건/초 — 시계열 miss + 지금 값 restored + 지금 값 bypass */
+  chMiss: number | null;
+  /** 그중 스위치로 Redis를 건너뛴 건/초(지금 값 bypass) — 툴팁 */
+  bypass: number | null;
+  /** PostgreSQL까지 간 건/초(업무 목록 miss) */
+  pgMiss: number | null;
+  /** Redis 읽기 실패 건/초(세 계열 error 합) — 0이 아닐 때만 툴팁 */
+  error: number | null;
+  /** 지금 값 조회가 응답한 점/초(설비당 약 200 — 요청 수가 아니다 · 툴팁) */
+  latestPoints: number | null;
+}
+
+const sumKnown = (vals: readonly (number | null | undefined)[]): number | null => {
+  const v = vals.filter((x): x is number => typeof x === 'number');
+  return v.length === 0 ? null : v.reduce((a, b) => a + b, 0);
+};
+
+/** 조회 줄 숫자 — 원천 계열이 하나도 없으면 null(만들지 않는다) */
+export function readRates(r: FlowMetricRates | null): ReadRates {
+  const s = r?.readSeriesPerSec ?? {};
+  const l = r?.readLatestPerSec ?? {};
+  const m = r?.readMasterPerSec ?? {};
+  return {
+    requests: sumKnown([...Object.values(s), ...Object.values(l), ...Object.values(m)]),
+    hit: sumKnown([s.hit, l.hit, m.hit]),
+    chMiss: sumKnown([s.miss, l.restored, l.bypass]),
+    bypass: sumKnown([l.bypass]),
+    pgMiss: sumKnown([m.miss]),
+    error: sumKnown([s.error, l.error, m.error]),
+    latestPoints: sumKnown(Object.values(r?.latestPointsPerSec ?? {})),
+  };
+}
+
+/** 비율(%) — 조회가 없거나(0) 모르면 null */
+export function readShare(part: number | null, rr: Pick<ReadRates, 'requests'>): number | null {
+  if (part === null || rr.requests === null || rr.requests <= 0) return null;
+  return (part / rr.requests) * 100;
+}
+
+/**
+ * 센서 대기줄(Stream)로 들어가는 생성 모드 — B(생성기 → XADD 직결) · C(HTTP 표면) · run(라이브 flow 실행).
+ * A는 레지스터만 갱신하고 행은 Collector가 폴링해 만든다(points_emitted가 그 수 — 10_observability/01 §무손실 차 S2 판정) — 더하면 두 번 센다.
+ * D는 ClickHouse 직행 · standalone은 수집 경로 없는 생성기 단독 측정이라 대기줄을 지나지 않는다(06_pipeline/10 §모드 표).
+ */
+export const STREAM_GEN_MODES: readonly string[] = ['B', 'C', 'run'];
+
+/** 발생원 초당 포인트 — Collector 발행 + 대기줄로 가는 생성 모드만(공장 센서 노드 · 대기줄 간선 라벨) */
 export function sourcePps(r: FlowMetricRates | null): number | null {
   if (!r) return null;
-  const vals = [r.collectorPps, ...Object.values(r.genPpsByMode)].filter((v): v is number => v !== null);
+  const gen = Object.entries(r.genPpsByMode)
+    .filter(([mode]) => STREAM_GEN_MODES.includes(mode))
+    .map(([, v]) => v);
+  const vals = [r.collectorPps, ...gen].filter((v): v is number => v !== null);
   return vals.length === 0 ? null : vals.reduce((a, b) => a + b, 0);
 }
 
@@ -836,7 +1035,7 @@ function isAlt(switches: Record<string, SwitchStateBody> | null, id: string): bo
 
 /**
  * 요약이 있으면 요약의 필드가 이긴다(지금 실제로 지난 길) — controlCopy null → SW-09 off · latestWrites null → SW-11 collector ·
- * stream null → SW-01 대안 · 업무는 마지막 요약의 role. 요약이 없을 때만 health 스위치(셸 배지의 것)로 그린다.
+ * stream null → SW-01 대안 · 업무는 마지막 요약의 role. 요약이 없을 때만 health 스위치로 그린다.
  */
 export function flowSwitchFlags(
   latestBatch: FlowBatchSummaryBody | null,
@@ -851,4 +1050,86 @@ export function flowSwitchFlags(
     deadband: isAlt(switches, 'SW-10'),
     bizDirect: lastBiz ? isDirect(lastBiz) : isAlt(switches, 'SW-12'),
   };
+}
+
+// ── 숫자 4 · 모아서 vs 하나씩(설계 .omc/plans/web-junior-redesign.md §3) ──
+
+export interface StageAvg<K extends string> {
+  key: K;
+  label: string;
+  /** 그 단계가 null이 아닌 요약만으로 낸 평균 · 표본이 없으면 null */
+  avg: number | null;
+  n: number;
+}
+
+function stageAvgs<K extends string>(
+  stages: readonly { key: K; label: string }[],
+  items: readonly { stages: Record<K, number | null> }[],
+): StageAvg<K>[] {
+  return stages.map(({ key, label }) => {
+    const vals = items.map((i) => i.stages[key]).filter((v): v is number => v !== null);
+    return {
+      key,
+      label,
+      avg: vals.length === 0 ? null : vals.reduce((a, b) => a + b, 0) / vals.length,
+      n: vals.length,
+    };
+  });
+}
+
+/** 처리 방식 비교 — 대용량 1배치(최근 20배치 단계 6 평균 · null 단계는 그 배치에서 뺀다) */
+export function batchStageAverages(timeline: readonly TimelineEntry[]): {
+  stages: StageAvg<BatchStageKey>[];
+  total: number | null;
+  n: number;
+} {
+  const batches = timeline.flatMap((e) => (e.kind === 'batch' ? [e.batch] : [])).slice(-FLOW_RING);
+  const stages = stageAvgs(BATCH_STAGES, batches);
+  return { stages, total: sumAvgs(stages), n: batches.length };
+}
+
+/** 처리 방식 비교 — 업무 1명령(최근 20명령 단계 4 평균 · 같은 규칙) */
+export function bizStageAverages(biz: readonly FlowBizSummaryBody[]): {
+  stages: StageAvg<BizStageKey>[];
+  total: number | null;
+  n: number;
+} {
+  const ring = biz.slice(0, FLOW_RING);
+  const stages = stageAvgs(BIZ_STAGES, ring);
+  return { stages, total: sumAvgs(stages), n: ring.length };
+}
+
+function sumAvgs(stages: readonly { avg: number | null }[]): number | null {
+  const v = stages.map((s) => s.avg).filter((x): x is number => x !== null);
+  return v.length === 0 ? null : v.reduce((a, b) => a + b, 0);
+}
+
+/**
+ * 캐시 무효화 키/초 — 링 버퍼 biz[] 중 최근 10초(게이트웨이 시계) invalidatedKeys 합 ÷ 10초.
+ * totals에 없는 값이라 병합 창 상한으로 버려진 업무 요약(dropped.biz)이 있으면 실제보다 작다 — lowerBound 표지.
+ */
+export function invalidationRate(
+  biz: readonly FlowBizSummaryBody[],
+  droppedBiz: number,
+  now: number,
+): { value: number; lowerBound: boolean } {
+  const from = now - FLOW_RATE_WINDOW_MS;
+  const keys = biz.filter((b) => b.at > from && b.at <= now).reduce((a, b) => a + b.invalidatedKeys, 0);
+  return { value: keys / (FLOW_RATE_WINDOW_MS / 1000), lowerBound: droppedBiz > 0 };
+}
+
+/** 센서 대기줄에 밀린 데이터(plc:raw 랙) — 마지막 배치 stream.lag(null이면 메트릭 consumer_lag) · SW-01 대안(stream null)이면 없음 */
+export function plcRawLag(
+  latestBatch: FlowBatchSummaryBody | null,
+  consumerLag: number | null,
+): number | null {
+  if (latestBatch && latestBatch.stream === null) return null;
+  return latestBatch?.stream?.lag ?? consumerLag;
+}
+
+/** 백프레셔 단계 — publisher별 중 가장 높은 단계(0이면 null) · null이 아니면 숫자 4가 "처리가 밀리는 중"(주황) */
+export function maxBackpressure(bp: Record<string, number> | null): number | null {
+  if (!bp) return null;
+  const m = Math.max(0, ...Object.values(bp));
+  return m > 0 ? m : null;
 }

@@ -1,44 +1,70 @@
 'use client';
-// EXP-FLOW — 분산 처리 모니터링 · 정본 docs/08_screen/08_evidence_screens.md §EXP-FLOW
+// EXP-FLOW — 분산 처리 모니터링(/monitoring) · 설계 .omc/plans/web-junior-redesign.md §3(화면 B) · §5 픽셀 예산 · 정본 docs/08_screen/08_evidence_screens.md §EXP-FLOW
+// 한 화면 한 장(1440 × 900 스크롤 0 · 서랍 0): 제목 · 설명 52 → 숫자 4(60) → 흐름도(남는 높이 — 진행 띠가 생기면 흐름도가 줄어 흡수) → 왜 나눌까 카드 3 · 모아서 vs 하나씩(124) → 회색 각주(24).
+// 높이 셈(본문 804 = 900 − 셸 머리 56 − 안쪽 여백 40 · 칸 사이 8): 띠 있음 804 − 52 − 32 − 60 − 124 − 24 − 8 × 5 = 472 · 띠 없음 512 —
+//   흐름도 세 줄(viewBox 1132 × 474)이 테두리 · 안쪽 여백 18을 뺀 454 ~ 494 높이에 0.96 ~ 1배로 든다(§9.2 조회 줄 · 숫자 4 84 → 60 · 아래 줄 170 → 124로 흡수).
 // 진입이 곧 subscribe_flow이고 이탈이 unsubscribe_flow다 — 셸의 WebSocket 연결 하나를 그대로 쓴다(재연결 재구독은 lib/realtime-socket.ts).
-// 관찰 보조 — 기록 정본 아님. flow 프레임은 캐시 층이 없다(Pub/Sub · 링 버퍼 20). 저장소 누적은 BFF 흐름 보기 5초 폴링.
-// 실행 패널(GEN-12)은 머리 아래 — flow 실행 중에는 흐름도 머리에 "라이브 flow 실행 중 — pps N · 업무 N/초"(표시 계약 실행 발행 원천).
+// 관찰 보조 — 기록 정본 아님. flow 프레임은 캐시 층이 없다(Pub/Sub · 링 버퍼 20). 저장소 값은 BFF 흐름 보기 5초 폴링.
+// 직접 보내 보기(GEN-12)는 셸 머리 동작 자리(RunControl) · 머리 아래 진행 띠(RunProgress) — 결과는 흐름도가 바로 보여 준다.
 import { useQuery } from '@tanstack/react-query';
 import { useEffect, useRef, useState } from 'react';
 import { ApiError } from '../../../lib/api';
 import {
   applyFlowFrame,
+  batchStageAverages,
+  bizStageAverages,
   emptyFlowState,
   FLOW_ACK_WAIT_MS,
   FLOW_METRICS_KEY,
   FLOW_METRICS_POLL_MS,
   type FlowMetricRates,
   type FlowMetricsPoll,
-  type FlowSubStatus,
   flowMetricRates,
   flowRates,
   flowSubStatus,
   flowSwitchFlags,
-  formatScale,
+  invalidationRate,
+  maxBackpressure,
   noSummary,
+  plcRawLag,
+  readRates,
   serverNow,
   sourcePps,
 } from '../../../lib/flow';
+import { useShellHealth } from '../../../lib/health';
 import { realtimeSocket, useConnectionStore } from '../../../lib/realtime-socket';
-import { isActive, panelRun } from '../../../lib/runs';
+import { healthTip } from '../../../lib/switches';
 import { formatAge } from '../../../lib/time';
 import { useNow } from '../../../lib/use-now';
-import { cn } from '../../../lib/utils';
-import { FlowProgressBar, FlowResultTable } from '../../runs/flow-run';
-import { RunPanel } from '../../runs/run-panel';
-import { useCurrentRun } from '../../runs/use-run';
-import { useShellHealth } from '../../shell/experiment-badge';
-import { Band } from '../../ui/band';
-import { Card, CardContent, CardHeader, CardTitle } from '../../ui/card';
-import { BatchTimeline } from './batch-timeline';
-import { BizList } from './biz-list';
+import { RunProvider } from '../../runs/run-context';
+import { RunControl } from '../../runs/run-control';
+import { RunProgress } from '../../runs/run-progress';
+import { FLOW_PARAM_DEFS } from '../../runs/run-spec';
+import { HeaderActions, HeaderStatus } from '../../shell/header-actions';
 import { DotEngine, FlowDiagram } from './flow-diagram';
-import { StoreCards } from './store-cards';
+import { BatchVsOne, HeadlineRow, WhyCards } from './flow-panels';
+import {
+  bizSrcLines,
+  bizStreamLines,
+  compareBars,
+  footnoteText,
+  headlines,
+  latestLines,
+  offPaths,
+  pillarFootText,
+  readCacheLines,
+  readCacheTip,
+  readMissLabel,
+  readSrcLines,
+  readSrcTip,
+  replyLines,
+  sourceLines,
+  sourceTip,
+  storeLines,
+  streamLines,
+  whyCards,
+  workerLines,
+} from './node-lines';
 
 async function fetchFlowMetrics(): Promise<FlowMetricsPoll> {
   let res: Response;
@@ -51,21 +77,9 @@ async function fetchFlowMetrics(): Promise<FlowMetricsPoll> {
   return (await res.json()) as FlowMetricsPoll;
 }
 
-const SUB_LABEL: Record<FlowSubStatus, string> = {
-  subscribed: '구독 중',
-  requesting: '구독 요청 중',
-  disconnected: '끊김',
-};
-const SUB_DOT: Record<FlowSubStatus, string> = {
-  subscribed: 'bg-emerald-500',
-  requesting: 'bg-amber-400',
-  disconnected: 'bg-red-500',
-};
-
-function perSec(v: number | null): string {
-  if (v === null) return '—';
-  return v >= 100 ? Math.round(v).toLocaleString('ko-KR') : v.toFixed(1);
-}
+export const FLOW_TITLE = '데이터가 Redis를 거쳐 어디로 가는지 실시간으로 보기';
+export const FLOW_LEAD =
+  '공장 센서 데이터와 업무 데이터가 Redis 대기줄을 거쳐, 각자에게 맞는 DB로 나뉘어 저장되는 모습이에요. 움직이는 점 하나가 실제 데이터 묶음 하나예요.';
 
 export function FlowScreen() {
   const conn = useConnectionStore((s) => s.status);
@@ -122,148 +136,141 @@ export function FlowScreen() {
     prevPoll.current = d;
   }, [metricsQ.data]);
 
-  const health = useShellHealth().data?.body ?? null;
+  const healthQ = useShellHealth({ entry: true });
+  const health = healthQ.data?.body ?? null;
   const flags = flowSwitchFlags(state.latestBatch, state.biz[0] ?? null, health?.switches ?? null);
   const sNow = serverNow(state, now);
-  const rates = flowRates(state.totals, sNow);
+  const rates = flowRates(state.totals, sNow, { subscribed: sub === 'subscribed' });
   const pps = sourcePps(metricRates);
   const metrics = metricsQ.data?.flow ?? null;
 
-  const batchAge = state.lastBatchAt === null ? null : formatAge(sNow - state.lastBatchAt);
+  const skeleton = state.lastFrameAt === null;
+  const shown = skeleton ? null : rates;
+  const inval = skeleton ? null : invalidationRate(state.biz, state.dropped.biz, sNow);
+  const lag = flags.streamOff ? null : plcRawLag(state.latestBatch, metrics?.redis.consumerLag ?? null);
+  const bizLag = metrics?.redis.bizStreamLag ?? null;
+  const dim = sub === 'disconnected';
+
+  const dataAge = state.lastBatchAt === null ? null : formatAge(sNow - state.lastBatchAt);
   const silent = noSummary(state, sub, now);
   const ackOverdue = sub === 'requesting' && requestedAt !== null && now - requestedAt >= FLOW_ACK_WAIT_MS;
-  const hasBatch = state.timeline.some((e) => e.kind === 'batch');
-  const skeleton = state.lastFrameAt === null;
-  const flowRun = panelRun(useCurrentRun().data, 'flow');
-  const liveFlow = flowRun && isActive(flowRun.status) ? flowRun.params : null;
+  const notice = dim
+    ? `연결이 끊겨 점을 멈췄어요 — 다시 연결되면 이어서 보여 줘요`
+    : silent
+      ? '10초째 새 데이터가 오지 않아요 — 센서 데이터 적재가 멈췄을 수 있어요'
+      : ackOverdue
+        ? '연결 확인이 늦어지고 있어요'
+        : null;
+
+  const stores = storeLines(shown, metrics);
+  // 조회 줄 — 메트릭 5초 차분(첫 폴링 뒤 한 번 더 와야 값이 생긴다) · 원천이 없으면 "—"
+  const reads = metricRates ? readRates(metricRates) : null;
+  const off = offPaths(flags);
 
   return (
-    <div className="flex flex-col gap-4">
-      {/* 머리 — 흐름 구독 표지(화면 제목 h1은 셸 콘텐츠 머리가 낸다) */}
+    <RunProvider type="flow">
+      {/* 한 화면 높이 — 본문(100dvh − 셸 머리) − 본문 안쪽 여백 40 */}
       <div
-        data-flow="header"
-        className="flex flex-wrap items-center gap-x-3 gap-y-1 rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm"
+        data-testid="flow-screen"
+        className="flex h-[calc(100dvh-var(--header-height)-40px)] min-h-[600px] flex-col gap-2"
       >
-        <span className="flex items-center gap-2 font-medium">
-          <span className={cn('inline-block h-2.5 w-2.5 rounded-full', SUB_DOT[sub])} />
-          흐름 구독 {SUB_LABEL[sub]}
-        </span>
-        <span className="text-slate-600">
-          {sub === 'disconnected' ? '끊김 — ' : ''}
-          마지막 배치 {batchAge === null ? '없음' : `${batchAge} 전`}
-        </span>
-        <span className="tabular-nums text-slate-600">배치 {perSec(rates.batches)}/초</span>
-        <span className="tabular-nums text-slate-600">업무 명령 {perSec(rates.commands)}/초</span>
-        <span
-          className="text-slate-600"
-          title="단계 ms에 한 배율을 곱한다 — 배치 전체가 1.5초보다 짧으면 늘리고 비율은 유지"
-        >
-          배치 점 {engine.lastBatchScale === null ? '—' : formatScale(engine.lastBatchScale)} · 업무 점{' '}
-          {engine.lastBizScale === null ? '—' : formatScale(engine.lastBizScale)}
-        </span>
-        {state.skipped > 0 && (
-          <span className="text-slate-600">병합 생략 {state.skipped.toLocaleString('ko-KR')}배치</span>
-        )}
-        {state.dropped.batches + state.dropped.biz > 0 && (
-          <span
-            className="text-slate-600"
-            title="게이트웨이 병합 창(250 ms) 상한을 넘어 버린 요약 — 합계는 totals에서 계산"
-          >
-            창 상한 버림 배치 {state.dropped.batches} · 업무 {state.dropped.biz}
+        <HeaderStatus>
+          <span data-testid="flow-sub" className="text-slate-600">
+            · {silent || dataAge === null ? '데이터 기다리는 중' : `마지막 데이터 ${dataAge} 전`}
           </span>
-        )}
-        <span className="ml-auto rounded bg-slate-100 px-2 py-0.5 text-xs text-slate-600">
-          관찰 보조 — 기록 정본 아님
-        </span>
-      </div>
+        </HeaderStatus>
+        <HeaderActions>
+          <RunControl
+            params={FLOW_PARAM_DEFS}
+            buttonLabel="직접 보내 보기"
+            intro="센서 데이터 · 업무 요청 · 조회 요청을 정한 양만큼 보내 봐요 — 결과는 흐름도가 바로 보여 줘요"
+          />
+        </HeaderActions>
 
-      <RunPanel
-        type="flow"
-        progress={(run, receivedAt, at) => <FlowProgressBar run={run} receivedAt={receivedAt} now={at} />}
-        result={(run) => <FlowResultTable run={run} />}
-      />
+        {/* 제목 · 설명 52 */}
+        <header className="h-[52px] shrink-0">
+          <h2 className="truncate text-lg leading-7 font-semibold text-slate-900">{FLOW_TITLE}</h2>
+          <p className="truncate text-sm leading-6 text-slate-600">{FLOW_LEAD}</p>
+        </header>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>흐름도 — 점 하나가 요약 하나 · 머묾 비율이 실제 단계 ms 비율</CardTitle>
-          {liveFlow ? (
-            <p data-testid="flow-live-run" className="text-xs font-medium text-sky-800">
-              라이브 flow 실행 중 — pps {(liveFlow.pps ?? 0).toLocaleString('ko-KR')} · 업무{' '}
-              {liveFlow.bizPerSec ?? 0}/초
+        {/* 진행 띠 — 직접 보내 보기 중일 때만(32) · 흐름도가 그만큼 줄어든다 */}
+        <RunProgress className="shrink-0" />
+
+        <HeadlineRow
+          items={headlines({
+            rates: shown,
+            lag,
+            bizLag: flags.bizDirect ? null : bizLag,
+            slowing: maxBackpressure(metrics?.redis.backpressure ?? null) !== null,
+            e2eP50: metrics?.e2e.p50 ?? null,
+            e2eRows: metrics?.e2e.rows ?? null,
+          })}
+          dim={dim}
+        />
+
+        {/* 흐름도 — 남는 높이(1440 × 900 · 띠 있음 472 · 없음 512) */}
+        <section
+          aria-label="흐름도"
+          className="relative min-h-0 flex-1 rounded-lg border border-slate-200 bg-white px-3 py-2"
+        >
+          {notice ? (
+            <p
+              data-testid="flow-notice"
+              className="absolute top-2 right-3 rounded-full border border-amber-200 bg-amber-50 px-3 py-0.5 text-xs text-amber-800"
+            >
+              {notice}
             </p>
           ) : null}
-        </CardHeader>
-        <CardContent className="flex flex-col gap-2">
-          {sub === 'disconnected' && (
-            <Band tone="warning">
-              끊김 — 마지막 배치 {batchAge === null ? '없음' : `${batchAge} 전`} · 점 애니메이션을 멈췄다 ·
-              재연결 뒤 다시 구독한다(끊긴 동안의 요약은 오지 않는다)
-            </Band>
-          )}
-          {ackOverdue && (
-            <Band tone="info">
-              이 단계에서 아직 흐름 이벤트를 발행하지 않는다 — 구독 확인 프레임이 {FLOW_ACK_WAIT_MS / 1000}초
-              동안 오지 않았다
-            </Band>
-          )}
-          {silent && (
-            <Band tone="warning">
-              배치 요약 없음 — 적재가 멈췄거나 발행이 꺼져 있다(표지 cache:flow:subscribed를 읽지 못한
-              발행자는 발행하지 않는다) · 컨슈머 랙{' '}
-              {metrics?.redis.consumerLag?.toLocaleString('ko-KR') ?? '—'} · 발생원{' '}
-              {pps === null ? '—' : `${perSec(pps)} 점/초`}
-            </Band>
-          )}
           <FlowDiagram
             engine={engine}
             rates={rates}
             flags={flags}
-            sourcePps={pps}
-            stream={state.latestBatch?.stream ?? null}
-            bizLag={metrics?.redis.bizStreamLag ?? null}
+            lines={{
+              src: sourceLines(skeleton ? null : rates.rows),
+              stream: streamLines(skeleton ? null : lag, flags.streamOff),
+              latest: latestLines(shown, flags),
+              bizStream: bizStreamLines(bizLag, flags.bizDirect),
+              reply: replyLines(shown, flags.bizDirect),
+              worker: workerLines(shown),
+              bizSrc: bizSrcLines(shown),
+              ch: stores.ch,
+              pg: stores.pg,
+              readSrc: readSrcLines(reads),
+              readCache: readCacheLines(reads),
+            }}
+            reads={reads}
+            readMissLabel={readMissLabel(reads)}
+            readSrcTip={readSrcTip(reads)}
+            readCacheTip={readCacheTip(reads)}
+            pillarFoot={pillarFootText(metrics)}
+            sourceTip={skeleton ? null : sourceTip(pps, metricRates)}
+            invalidation={inval?.value ?? null}
             skeleton={skeleton}
           />
-        </CardContent>
-      </Card>
+        </section>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>배치 타임라인 — 최근 20배치 · 단계 막대 · 병합 생략 표지</CardTitle>
-        </CardHeader>
-        <CardContent>
-          {sub === 'subscribed' && !hasBatch && (
-            <p className="mb-2 text-sm text-slate-500">
-              배치 요약이 아직 없다 — 발생원이 발행 중인지 메트릭 초당 포인트로 확인(발생원{' '}
-              {pps === null ? '—' : `${perSec(pps)} 점/초`})
-            </p>
-          )}
-          <BatchTimeline entries={state.timeline} />
-        </CardContent>
-      </Card>
+        {/* 아래 줄 124 — 왜 나눌까 카드 3 · 모아서 vs 하나씩 */}
+        <div className="grid h-[124px] shrink-0 grid-cols-[2fr_1fr] gap-3">
+          <WhyCards cards={whyCards(shown, flags)} dim={dim} />
+          <BatchVsOne
+            bars={compareBars(
+              batchStageAverages(state.timeline),
+              bizStageAverages(state.biz),
+              state.timeline,
+            )}
+            dim={dim}
+          />
+        </div>
 
-      <StoreCards
-        metrics={metrics}
-        rates={metricRates}
-        fetchedAt={metricsQ.data?.fetchedAt ?? null}
-        failed={metricsQ.isError}
-        lastSuccessAt={metricsQ.dataUpdatedAt}
-        now={now}
-      />
-
-      <Card>
-        <CardHeader>
-          <CardTitle>
-            업무 명령 — 최근 20건{flags.bizDirect ? ' · SW-12 direct — 옛 경로(비교 실험용)' : ''}
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <BizList items={state.biz} />
-        </CardContent>
-      </Card>
-
-      <p className="text-xs text-slate-500">
-        관찰 보조 — 기록 정본 아님 · 구독 중에는 워커(SW-12 direct면 api)가 요약을 발행한다(측정 중 닫는다)
-      </p>
-    </div>
+        {/* 회색 각주 24 — 마우스를 올리면 스위치 · 저장소 상태(health) */}
+        <p
+          data-testid="flow-footnote"
+          className="h-6 shrink-0 truncate text-xs leading-6 text-slate-500"
+          title={healthTip(health, healthQ.isError && !health)}
+        >
+          {footnoteText(off)}
+        </p>
+      </div>
+    </RunProvider>
   );
 }

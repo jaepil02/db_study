@@ -2,14 +2,10 @@ import { describe, expect, it } from 'vitest';
 import type { HealthBody } from '../lib/shared';
 import {
   buildSwitchRows,
-  COMBO_10_NOTICE,
   comboWarnings,
+  conditionsSummary,
   countNonDefault,
-  recordConditionBlock,
-  SW12_DIRECT_BADGE,
-  SW12_DIRECT_NOTE,
-  shellBadgeNotes,
-  switchRowNote,
+  healthTip,
 } from '../lib/switches';
 import { backoffMs, shouldReconnect } from '../lib/ws-policy';
 
@@ -72,25 +68,6 @@ describe('조합 경고', () => {
   });
 });
 
-describe('기록 조건 블록', () => {
-  it('4요소를 health에서 채우고 게이트만 수기', () => {
-    const text = recordConditionBlock(health);
-    expect(text).toContain('| 커밋 | a1b2c3d |');
-    expect(text).toContain('| 프로파일 · 상한 | load · 4096 MB |');
-    expect(text).toContain('| 용량 티어 | S |');
-    expect(text).toContain('| 스위치 | SW-02=off · 그 외 기본값 |');
-    expect(text).toContain('| 게이트 | ? |');
-  });
-
-  it('run 값이 null이면 인용 불가 표지', () => {
-    const text = recordConditionBlock({
-      ...health,
-      run: { commitHash: null, memoryProfile: null, memoryLimitMb: null, capacityTier: null },
-    });
-    expect(text).toContain('| 커밋 | (없음 — 4요소 누락 · 인용 불가) |');
-  });
-});
-
 describe('impl null — 도입 전 스위치(health가 11키 전부를 싣는다)', () => {
   const withNull: HealthBody['switches'] = {
     ...health.switches,
@@ -111,15 +88,6 @@ describe('impl null — 도입 전 스위치(health가 11키 전부를 싣는다
 
   it('impl null은 조합 경고를 판정하지 않는다(SW-09 on · SW-11 collector여도 #4 · #9 없음)', () => {
     expect(comboWarnings(withNull).map((w) => w.no)).toEqual([7]);
-  });
-
-  it('기록 블록 전수 줄은 11키를 다 싣고 도입 전은 value(도입 전)', () => {
-    const text = recordConditionBlock({ ...health, switches: withNull });
-    const line = text.split('\n').find((l) => l.startsWith('| 스위치 전수')) ?? '';
-    for (let i = 1; i <= 11; i++) expect(line).toContain(`SW-${String(i).padStart(2, '0')}=`);
-    expect(line).toContain('SW-09=on(도입 전)');
-    expect(line).toContain('SW-11=collector(도입 전)');
-    expect(line).toContain('SW-02=off(ClickHouseLatestValueReader)');
   });
 
   it('목록에 없는 스위치의 impl null도 행으로 보인다', () => {
@@ -150,48 +118,51 @@ describe('SW-12 BIZ_WRITE_PATH', () => {
   const stream = { name: 'BIZ_WRITE_PATH', value: 'stream', impl: 'StreamBizWriter', warning: null };
   const direct = { name: 'BIZ_WRITE_PATH', value: 'direct', impl: 'DirectBizWriter', warning: null };
 
-  it('direct는 다름으로 세고 행 문구 · 배지 툴팁을 붙인다', () => {
+  it('direct는 다름으로 센다 · stream(기본값)은 같음 · 둘 다 조합 경고 없음(#10은 판정하지 않는다)', () => {
     const rows = buildSwitchRows({ 'SW-12': direct });
-    const r = rows.find((x) => x.kind === 'present' && x.spec.id === 'SW-12');
-    expect(r).toMatchObject({ sameAsDefault: false, defaultImpl: 'StreamBizWriter' });
+    expect(rows.find((x) => x.kind === 'present' && x.spec.id === 'SW-12')).toMatchObject({
+      sameAsDefault: false,
+      defaultImpl: 'StreamBizWriter',
+    });
     expect(countNonDefault(rows)).toBe(1);
-    expect(r && switchRowNote(r)).toEqual({ tone: 'warning', text: SW12_DIRECT_NOTE });
-    expect(SW12_DIRECT_NOTE).toBe('업무 쓰기 옛 경로(비교 실험 EXP-46용) — 202 · 명령 멱등 없음');
-    expect(shellBadgeNotes({ 'SW-12': direct })).toEqual([SW12_DIRECT_BADGE]);
-    expect(SW12_DIRECT_BADGE).toBe('업무 쓰기 옛 경로 — 202 · 명령 멱등 없음');
-  });
-
-  it('stream(기본값)은 경고가 아니라 행 안내 #10 · 배지 문구 없음', () => {
-    const rows = buildSwitchRows({ 'SW-12': stream });
-    const r = rows.find((x) => x.kind === 'present' && x.spec.id === 'SW-12');
-    expect(r).toMatchObject({ sameAsDefault: true });
-    expect(r && switchRowNote(r)).toEqual({ tone: 'info', text: `조합 제약 #10 — ${COMBO_10_NOTICE}` });
+    expect(countNonDefault(buildSwitchRows({ 'SW-12': stream }))).toBe(0);
     expect(comboWarnings({ 'SW-12': stream })).toEqual([]);
     expect(comboWarnings({ 'SW-12': direct })).toEqual([]);
-    expect(shellBadgeNotes({ 'SW-12': stream })).toEqual([]);
   });
+});
 
-  it('도입 전(impl null)이면 안내 · 배지 문구 없음 · 기록 전수 줄에 SW-12가 실린다', () => {
-    const rows = buildSwitchRows({ 'SW-12': { ...stream, impl: null } });
-    const r = rows.find((x) => x.kind === 'not_introduced' && x.spec.id === 'SW-12');
-    expect(r && switchRowNote(r)).toBeNull();
-    expect(recordConditionBlock({ ...health, switches: { ...health.switches, 'SW-12': direct } })).toContain(
-      'SW-12=direct(DirectBizWriter)',
+describe('각주 툴팁 — 스위치 코드 · 조합 경고 · 저장소 상태는 마우스 올림에만', () => {
+  it('응답 전 · 실패 · 다른 스위치 · 조합 경고 · 저장소', () => {
+    expect(healthTip(null, false)).toBe('구성을 읽는 중이에요');
+    expect(healthTip(null, true)).toBe('구성을 읽지 못했어요');
+    const tip = healthTip(health, false);
+    expect(tip).toContain('스위치: SW-02=off');
+    expect(tip).toContain('조합 경고 #7');
+    expect(tip).toContain('postgres up');
+    expect(healthTip({ ...health, switches: {} }, false)).toContain('스위치: 전부 기본값');
+    // 조합 경고 문장도 쉬운 존댓말(D-15)
+    expect(tip).toContain(
+      '조합 경고 #7 — SW-11 비교는 이 구성으로 재지 않아요 — 최신값 조회가 rt:latest를 읽지 않아요',
     );
+    expect(tip).not.toMatch(/다(\n|$| )/); // 반말 종결(…다) 없음
   });
+});
 
-  it('SW-01 대안 행 문구는 빨간 경고', () => {
-    const r = buildSwitchRows({
-      'SW-01': {
-        name: 'REDIS_STREAM_BUFFER',
-        value: 'off',
-        impl: 'InProcessQueueBuffer',
-        warning: 'stream_boundary_bypassed',
-      },
-    }).find((x) => x.kind === 'present');
-    expect(r && switchRowNote(r)).toEqual({
-      tone: 'danger',
-      text: '실험 전용 · 정상 경로 아님 (stream_boundary_bypassed)',
-    });
+describe('구성 요약 한 줄', () => {
+  it('응답 전 · 실패 · 기본값 · 다름 · 저장소 down', () => {
+    expect(conditionsSummary(null, false)).toBe('읽는 중이에요');
+    expect(conditionsSummary(null, true)).toBe('구성을 읽지 못했어요');
+    expect(conditionsSummary({ ...health, switches: {} }, false)).toBe('스위치는 전부 기본값이에요');
+    expect(conditionsSummary(health, false)).toBe('기본값과 다른 스위치 1개');
+    expect(
+      conditionsSummary(
+        {
+          ...health,
+          status: 'degraded',
+          stores: { ...health.stores, redis: { status: 'down', latencyMs: null, error: 'refused' } },
+        },
+        false,
+      ),
+    ).toBe('기본값과 다른 스위치 1개 · 내려간 저장소 1개');
   });
 });

@@ -1,15 +1,19 @@
 // BFF — GET /metrics 텍스트를 서버에서 해석해 내린다(08_screen/01 — 브라우저가 텍스트 전체를 받아 파싱하지 않는다).
-// 응답 모양은 웹 내부 계약(08_screen/07 §미확인 등재) — 기본은 fetchedAt(epoch ms) + summary(EXP-CONSOLE 순간 요약 · S5 확장 — 앱 · 파이프라인 · 저장소)
-// · ?view=window는 fetchedAt + samples(EXP-COMPARE 창 계산용 누적 계열 · 히스토그램 버킷까지 — 요약만으로는 창 분위수를 못 낸다).
-// · ?view=flow는 fetchedAt + flow(EXP-FLOW 흐름 보기 — 08_screen/08 §데이터 원천의 이름만 요약 · 초당 값은 화면이 두 응답의 차로).
+// 응답 모양은 웹 내부 계약(08_screen/08_evidence_screens.md) — ?view=flow 하나뿐이다: fetchedAt(epoch ms) + flow(EXP-FLOW 흐름 보기 —
+// 08_screen/08 §데이터 원천의 이름만 요약 · 초당 값은 화면이 두 응답의 차로). 다른 보기(옛 콘솔 요약 · 스위치 비교 창)는 화면 폐지 D-14로 걷었다 — 400.
 import { NO_STORE, serverApiBase, unreachable } from '../../../lib/bff';
-import { WINDOW_METRIC_NAMES } from '../../../lib/compare';
 import { summarizeFlow } from '../../../lib/flow';
-import { parsePrometheusText, summarizeConsole } from '../../../lib/metrics-parser';
+import { parsePrometheusText } from '../../../lib/metrics-parser';
 
 export const dynamic = 'force-dynamic';
 
 export async function GET(req: Request): Promise<Response> {
+  if (new URL(req.url).searchParams.get('view') !== 'flow') {
+    return Response.json(
+      { error: { message: '지원하는 보기는 view=flow 하나다' } },
+      { status: 400, headers: NO_STORE },
+    );
+  }
   let res: Response;
   try {
     res = await fetch(`${serverApiBase()}/metrics`, { cache: 'no-store' });
@@ -24,16 +28,5 @@ export async function GET(req: Request): Promise<Response> {
   }
   const fetchedAt = Date.now();
   const samples = parsePrometheusText(await res.text());
-  const view = new URL(req.url).searchParams.get('view');
-  if (view === 'flow') {
-    return Response.json({ fetchedAt, flow: summarizeFlow(samples) }, { headers: NO_STORE });
-  }
-  if (view === 'window') {
-    return Response.json(
-      { fetchedAt, samples: samples.filter((s) => WINDOW_METRIC_NAMES.has(s.name)) },
-      { headers: NO_STORE },
-    );
-  }
-  const summary = summarizeConsole(samples);
-  return Response.json({ fetchedAt, summary }, { headers: NO_STORE });
+  return Response.json({ fetchedAt, flow: summarizeFlow(samples) }, { headers: NO_STORE });
 }

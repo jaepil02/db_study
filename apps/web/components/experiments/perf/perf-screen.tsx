@@ -1,361 +1,112 @@
 'use client';
-// EXP-PERF — 규모별 성능 비교. 정본 docs/08_screen/08_evidence_screens.md §EXP-PERF(기록 판독 요소 9 · 표시 계약 8 · 상태 4행 · 판독 P1~P6).
-// 원천은 BFF 기록 읽기(/bff/measurements?view=perf — docs/measurements 읽기 전용)다. api 표면이 아니고 폴링하지 않는다(진입 · 새로고침 때만).
-// 곡선 · 히트맵의 ms · 배수는 discarded 기록의 참고값이고, 역전 음영 · 결론 카드 · 히트맵 색은 structuralRanges · 점 단위 3/3 우열(정본)만 쓴다.
-// 실행 패널(GEN-11)은 툴바 아래 — 라이브 실행(앱 경유 · 시연값)은 곡선에 라이브 계열 2로만 겹치고 음영 · 결론 카드 · 히트맵에 들어가지 않는다.
-import { useQuery } from '@tanstack/react-query';
-import { useEffect, useMemo, useState } from 'react';
-import { TIMESERIES_GC_MS } from '../../../lib/config';
-import { QUERY_LABELS } from '../../../lib/measurements';
-import {
-  curveLines,
-  findRange,
-  heatCells,
-  PERF_CACHES,
-  PERF_QUERIES,
-  type PerfView,
-  type PgVariant,
-  undeterminedMarks,
-} from '../../../lib/perf';
-import { liveSeries, panelRun } from '../../../lib/runs';
+// EXP-PERF — 성능 비교(/performance) 한 장 화면. 설계 .omc/plans/web-junior-redesign.md §1 원칙 · §2 화면 A · §4 용어표 · §5 픽셀 예산.
+// 1440 × 900에서 스크롤 · 서랍 · 탭 없이: 제목(질문형) · 설명 → 두 열(① 센서 데이터 주황 · ② 업무 데이터 파랑) → 한 줄 정리 · 회색 각주.
+// 화면 높이는 본문 높이(100dvh − 셸 머리 − 위아래 여백 40)로 고정하고 그림 2만 늘거나 준다 — 진행 띠가 생기면 그림 2가 흡수한다.
+// 직접 재 보기(GEN-11)는 셸 머리 버튼 → 규모 선택 팝오버 → 진행 띠 한 줄 · 결과는 그림 2에 "내 측정" 점. URL은 선택 질문 q 하나만 남긴다.
+import { useEffect, useState } from 'react';
+import { useShellHealth } from '../../../lib/health';
+import { countIssues, recordTipLines } from '../../../lib/perf';
+import type { HealthBody } from '../../../lib/shared';
+import { buildSwitchRows, conditionsSummary } from '../../../lib/switches';
 import { formatKst } from '../../../lib/time';
-import { cn } from '../../../lib/utils';
-import { Button, Select } from '../../master/field';
-import { RunPanel } from '../../runs/run-panel';
-import { useCurrentRun } from '../../runs/use-run';
-import { Band } from '../../ui/band';
-import { Card, CardContent, CardHeader, CardTitle } from '../../ui/card';
-import { EChart } from '../echart';
-import { curveOption, heatmapOption } from './options';
-import {
-  CACHE_LABEL,
-  ConclusionCard,
-  ConditionPanel,
-  CountsLine,
-  curveHeadline,
-  EMPTY_SOURCE,
-  LiveResultTable,
-  NO_STAGE,
-  OBSERVATION_NOTE,
-  PrincipleTable,
-  REFERENCE_BADGE,
-  StorageTable,
-} from './panels';
+import { RunProvider } from '../../runs/run-context';
+import { RunControl } from '../../runs/run-control';
+import { RunProgress } from '../../runs/run-progress';
+import { PERF_PARAM_DEFS } from '../../runs/run-spec';
+import { HeaderActions } from '../../shell/header-actions';
+import { useEvidence } from '../evidence';
+import { BusinessColumn } from './business-column';
+import { usePerfView } from './perf-data';
+import { SensorColumn } from './sensor-column';
 
-export type PerfResponse = PerfView & { readAt: number };
+export const PERF_TITLE = 'PostgreSQL과 ClickHouse, 어떤 데이터에 무엇이 맞을까?';
+export const PERF_LEAD =
+  '같은 데이터를 두 DB에 넣고 같은 일을 시켜 봤어요. 데이터의 성격에 따라 이기는 쪽이 바뀝니다.';
+export const PERF_SUMMARY =
+  '많이 쌓아 두고 크게 훑는 데이터 → ClickHouse · 정확하게 한 건씩 다루는 데이터 → PostgreSQL';
+/** 각주 고정 문구(08_screen/08 §표시 계약 시간 참고값) */
+export const PERF_FOOTNOTE =
+  '같은 일을 3번씩 시킨 중간값 · 걸린 시간은 참고용 · 누가 이기는지는 3번 모두 같을 때만';
 
-async function fetchPerf(): Promise<PerfResponse> {
-  const res = await fetch('/bff/measurements?view=perf', { cache: 'no-store' });
-  if (!res.ok) throw new Error(`HTTP ${res.status}`);
-  return (await res.json()) as PerfResponse;
-}
-
-function Toggle<T extends string>({
-  label,
-  value,
-  options,
-  onChange,
-  text,
-}: {
-  label: string;
-  value: T;
-  options: readonly T[];
-  onChange: (v: T) => void;
-  text?: (v: T) => string;
-}) {
-  return (
-    <fieldset className="flex items-center gap-1">
-      <legend className="sr-only">{label}</legend>
-      <span className="text-slate-500">{label}</span>
-      {options.map((o) => (
-        <button
-          key={o}
-          type="button"
-          aria-pressed={o === value}
-          onClick={() => onChange(o)}
-          className={cn(
-            'rounded border px-2 py-0.5',
-            o === value
-              ? 'border-slate-800 bg-slate-800 text-white'
-              : 'border-slate-300 bg-white text-slate-700 hover:bg-slate-50',
-          )}
-        >
-          {text ? text(o) : o}
-        </button>
-      ))}
-    </fieldset>
+/** 각주 툴팁의 지금 기동 줄 — health 스위치 전수(기본값과 다르면 *) · 저장소별 상태 · 실패면 "구성을 읽지 못했어요" */
+export function healthTipLines(health: HealthBody | null, failed: boolean): string[] {
+  if (!health) return [failed ? '지금 기동 — 구성을 읽지 못했어요' : '지금 기동 — 읽는 중이에요'];
+  const sw = buildSwitchRows(health.switches).map((r) =>
+    r.kind === 'present'
+      ? `${r.spec.id}=${r.value}${r.sameAsDefault ? '' : '*'}`
+      : r.kind === 'not_introduced'
+        ? `${r.spec.id}(도입 전)`
+        : `${r.id}=${r.value}`,
   );
+  const stores = Object.entries(health.stores).map(([k, v]) => `${k} ${v.status}`);
+  return [
+    `지금 기동 — ${conditionsSummary(health, false)} · 저장소 ${stores.join(' · ')}`,
+    `지금 스위치(*는 기본값과 다름) ${sw.join(' · ')}`,
+  ];
 }
+export const RUN_INTRO =
+  '같은 질문 5개를 두 DB에 3번씩 시켜 봐요. 끝나면 그림 2에 "내 측정" 점으로 나와요. 어디까지 넣어 볼까요?';
 
-const Skeleton = ({ className }: { className: string }) => (
-  <div className={cn('animate-pulse rounded bg-slate-100', className)} />
-);
-
-export function PerfScreen({ initialQuery, initialCache }: { initialQuery: string; initialCache: string }) {
-  const q = useQuery({
-    queryKey: ['measurements', 'perf'],
-    queryFn: fetchPerf,
-    staleTime: 0,
-    // 응답이 수백 KB(정밀화 180점 + 단계 30점 × 5)라 시계열과 같은 짧은 gcTime(09_tech_stack/01 §gcTime)
-    gcTime: TIMESERIES_GC_MS,
-    retry: false,
-  });
-  const d = q.data;
+export function PerfScreen({ initialQuery }: { initialQuery: string }) {
+  const perf = usePerfView();
+  const evidence = useEvidence({ entry: true });
+  const health = useShellHealth({ entry: true });
   const [query, setQuery] = useState(initialQuery);
-  const [cache, setCache] = useState(initialCache);
-  const [yLog, setYLog] = useState(true);
-  const [variant, setVariant] = useState<PgVariant>('I2');
-  const [scanExp, setScanExp] = useState<number | null>(null);
 
-  // 딥링크 되쓰기 — 선택을 주소에 남겨 공유 · 새로고침이 같은 곡선 · 결론 카드로 열린다(렌더를 다시 일으키지 않게 replaceState)
+  // 선택 질문만 주소에 남긴다(공유 · 새로고침이 같은 질문으로 열린다 · 기록을 쌓지 않게 replaceState)
   useEffect(() => {
     const url = new URL(window.location.href);
     url.searchParams.set('q', query);
-    url.searchParams.set('cache', cache);
     window.history.replaceState(window.history.state, '', url);
-  }, [query, cache]);
+  }, [query]);
 
-  const lines = useMemo(() => curveLines(d?.points ?? [], query, cache), [d, query, cache]);
-  // 라이브 계열 — 이 화면 종류의 실행 결과만 · 툴바 캐시가 콜드면 숨긴다(라이브 실행은 웜만)
-  const liveRun = panelRun(useCurrentRun().data, 'perf');
-  const liveAll = useMemo(() => liveSeries(liveRun, query), [liveRun, query]);
-  const hasLive = liveAll.ch.length + liveAll.pg.length > 0;
-  const live = cache === 'warm' ? liveAll : undefined;
-  const i2Range = useMemo(() => (d ? findRange(d.ranges, query, cache, 'I2') : undefined), [d, query, cache]);
-  const undetermined = useMemo(() => (d ? undeterminedMarks(d, query, cache) : []), [d, query, cache]);
-  const curveOpt = useMemo(
-    () => curveOption({ lines, i2Range, undetermined, records: d?.records ?? [], yLog, live }),
-    [lines, i2Range, undetermined, d, yLog, live],
-  );
-  const heat = useMemo(
-    () => heatCells(d ?? { points: [], verdicts: [] }, cache, variant),
-    [d, cache, variant],
-  );
-  const heatOpt = useMemo(
-    () => heatmapOption(heat.exponents, heat.cells, PERF_QUERIES, variant),
-    [heat, variant],
-  );
-  const scanExps = useMemo(() => (d?.scan ?? []).map((s) => s.exponent), [d]);
-  const scanSel = scanExp !== null && scanExps.includes(scanExp) ? scanExp : (scanExps.at(-1) ?? null);
-
-  const sourceLabel = d?.source
-    ? `${d.source.record}${
-        d.records.length > 1
-          ? `(+${d.records
-              .map((r) => r.record)
-              .filter((r) => r !== d.source?.record)
-              .join(' · ')})`
-          : ''
-      }`
-    : '없음';
-  const hasSource = !!d?.source;
-  const hasPoints = lines.some((l) => l.points.length > 0) || (live !== undefined && hasLive);
-  const dim = q.isFetching && d ? 'opacity-60 transition-opacity' : '';
+  const view = perf.data;
+  const issues = view ? countIssues(view.counts) : [];
+  const footTip = [
+    ...(view ? recordTipLines(view) : ['기록을 읽는 중']),
+    view ? `판독 ${formatKst(view.readAt, true)}` : '',
+    ...healthTipLines(health.data?.body ?? null, health.isError),
+  ]
+    .filter(Boolean)
+    .join('\n');
 
   return (
-    <div className="flex flex-col gap-3">
-      {/* 툴바 — 쿼리 · 캐시 · 세로 축 · 원천 기록 · 판독 시각 · 새로고침 */}
-      <div className="flex flex-wrap items-center gap-x-4 gap-y-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs">
-        <Toggle label="쿼리" value={query} options={PERF_QUERIES} onChange={setQuery} />
-        <Toggle
-          label="캐시"
-          value={cache}
-          options={PERF_CACHES}
-          onChange={setCache}
-          text={(c) => CACHE_LABEL[c] ?? c}
-        />
-        <Toggle
-          label="세로"
-          value={yLog ? 'log' : 'linear'}
-          options={['log', 'linear'] as const}
-          onChange={(v) => setYLog(v === 'log')}
-          text={(v) => (v === 'log' ? '로그' : '선형')}
-        />
-        <span className="text-slate-500">
-          원천 기록 <span className="text-slate-800">{sourceLabel}</span>
-        </span>
-        <span className="text-slate-500">
-          판독 <span className="text-slate-800">{d ? formatKst(d.readAt, true) : '—'}</span>
-        </span>
-        <Button variant="outline" onClick={() => q.refetch()} disabled={q.isFetching}>
-          새로고침
-        </Button>
-      </div>
-      <RunPanel
-        type="perf"
-        result={(run) =>
-          run.result && 'scales' in run.result ? <LiveResultTable result={run.result.scales} /> : null
-        }
-      />
-
-      {/* 참고값 배지 — discarded 점이 하나라도 그려지면 한 자리(곡선 · 히트맵 · 결론 카드 전체에 걸린다) */}
-      {d && d.discardedRecords.length > 0 ? (
-        <Band tone="warning">
-          ⚠ {REFERENCE_BADGE} · 기록 {d.discardedRecords.join(' · ')} discarded · 막대 = 반복 3회 최소~최대
-        </Band>
-      ) : !d && q.isPending ? (
-        <Skeleton className="h-9 w-full" />
-      ) : null}
-
-      {q.isError ? (
-        <Band>
-          기록을 읽지 못했다 ({String(q.error)}){d ? ' — 앞서 판독한 결과를 그대로 보인다' : ''}
-        </Band>
-      ) : null}
-
-      <div className={cn('grid gap-3 xl:grid-cols-[minmax(0,1fr)_20rem]', dim)}>
-        <Card>
-          <CardHeader>
-            <CardTitle>
-              규모 곡선 — {QUERY_LABELS[query] ?? query} · {CACHE_LABEL[cache] ?? cache}
-            </CardTitle>
-            {d && hasSource ? (
-              <p
-                className={cn('text-xs', i2Range?.crossover ? 'font-medium text-red-700' : 'text-slate-600')}
-              >
-                {curveHeadline(i2Range)}
-              </p>
-            ) : null}
-            {hasLive && cache !== 'warm' ? (
-              <p className="text-xs text-slate-500">라이브 실행은 웜만 — 라이브 계열을 숨겼다</p>
-            ) : null}
-          </CardHeader>
-          <CardContent>
-            {!d ? (
-              <Skeleton className="h-96 w-full" />
-            ) : !hasSource ? (
-              <p className="flex h-96 items-center justify-center text-sm text-slate-500">{EMPTY_SOURCE}</p>
-            ) : hasPoints ? (
-              <EChart option={curveOpt} className="h-96 w-full" />
-            ) : (
-              <p className="flex h-96 items-center justify-center text-sm text-slate-500">
-                이 쿼리 · 캐시의 점이 없다
-              </p>
-            )}
-            <p className="mt-1 text-xs text-slate-500">
-              점 = client 중앙값(참고값) · 회색 점선 = discarded 기록 · 속이 빈 점 = 결과 불일치 · 음영 = 역전
-              구간(I2 · 구조 판정 · 정본) · ? = 우열 미정 · Q5x(조건 없는 count)는 싣지 않는다
-              {live && hasLive
-                ? ' · 마름모(◇ CH · ◆ PG I2) = 라이브 실행(시연값 · 앱 경유 · 기록 정본 아님)'
-                : ''}
-            </p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader>
-            <CardTitle>결론 카드</CardTitle>
-          </CardHeader>
-          <CardContent>
-            {!d ? (
-              <Skeleton className="h-64 w-full" />
-            ) : !hasSource ? (
-              <p className="text-sm text-slate-500">{EMPTY_SOURCE}</p>
-            ) : (
-              <ConclusionCard view={d} query={query} cache={cache} />
-            )}
-          </CardContent>
-        </Card>
-      </div>
-
-      <Card className={dim}>
-        <CardHeader>
-          <CardTitle>배수 히트맵 — PG ÷ CH · {CACHE_LABEL[cache] ?? cache}</CardTitle>
-          <div className="flex flex-wrap items-center gap-3 text-xs">
-            <Toggle label="PG 변형" value={variant} options={['I2', 'I1'] as const} onChange={setVariant} />
-            <span className="text-slate-500">
-              칸 숫자 = 중앙값 배수(참고값 · 소수 1자리) · 칸 색 = 그 점의 3/3 우열(정본 — 빠른 쪽 저장소 색 ·
-              짙을수록 배수가 크다) · ? = 우열 미정 · 캐시는 툴바를 따른다
-            </span>
-          </div>
-        </CardHeader>
-        <CardContent>
-          {!d ? (
-            <Skeleton className="h-80 w-full" />
-          ) : !hasSource ? (
-            <p className="flex h-40 items-center justify-center text-sm text-slate-500">{EMPTY_SOURCE}</p>
-          ) : (
-            <div style={{ height: `${Math.max(160, heat.exponents.length * 30 + 48)}px` }}>
-              <EChart option={heatOpt} className="h-full w-full" />
-            </div>
-          )}
-        </CardContent>
-      </Card>
-
-      <Card className={dim}>
-        <CardHeader>
-          <CardTitle>원리 증거 — 읽은 양 · 계획</CardTitle>
-          <div className="flex items-center gap-2 text-xs">
-            <span className="text-slate-500">규모</span>
-            <Select
-              value={scanSel === null ? '' : String(scanSel)}
-              onChange={(e) => setScanExp(Number(e.target.value))}
-              aria-label="원리 증거 규모"
-              disabled={scanExps.length === 0}
-              className="w-auto"
+    <RunProvider type="perf">
+      <HeaderActions>
+        <RunControl params={PERF_PARAM_DEFS} buttonLabel="내 컴퓨터에서 직접 재 보기" intro={RUN_INTRO} />
+      </HeaderActions>
+      <div className="flex flex-col gap-3 lg:h-[max(calc(100dvh-var(--header-height)-2.5rem),46rem)]">
+        <header className="shrink-0">
+          <h2 className="text-lg leading-7 font-bold text-slate-900">{PERF_TITLE}</h2>
+          <p className="text-sm text-slate-600">{PERF_LEAD}</p>
+        </header>
+        <RunProgress className="shrink-0" />
+        <div className="grid min-h-0 flex-1 gap-4 lg:grid-cols-2">
+          <SensorColumn view={perf.data} failed={perf.isError} query={query} onQuery={setQuery} />
+          <BusinessColumn d={evidence.data?.evidence} failed={evidence.isError} />
+        </div>
+        <footer className="shrink-0">
+          <p data-testid="perf-summary" className="text-sm font-semibold text-slate-900">
+            한 줄 정리: {PERF_SUMMARY}
+          </p>
+          <p
+            data-testid="perf-footnote"
+            className="flex items-center gap-1.5 truncate text-xs text-slate-500"
+          >
+            {PERF_FOOTNOTE}
+            {issues.length > 0 ? <span className="text-amber-700">· {issues.join(' · ')}</span> : null}
+            <span
+              data-testid="perf-footnote-tip"
+              role="img"
+              aria-label="기록 조건 · 판독 계수 · 지금 기동"
+              title={footTip}
+              className="inline-flex h-4 w-4 shrink-0 cursor-help items-center justify-center rounded-full border border-slate-400 text-[10px] leading-none text-slate-600"
             >
-              {scanExps.map((e) => (
-                <option key={e} value={e}>
-                  10^{e}
-                </option>
-              ))}
-            </Select>
-            <span className="text-slate-500">캐시 구분 없음 — 툴바 캐시를 적용하지 않는다</span>
-          </div>
-        </CardHeader>
-        <CardContent>
-          {!d ? (
-            <TableSkeleton />
-          ) : !hasSource || d.scan.length === 0 ? (
-            <p className="text-xs text-slate-500">{hasSource ? NO_STAGE : EMPTY_SOURCE}</p>
-          ) : (
-            <PrincipleTable view={d} exponent={scanSel} />
-          )}
-        </CardContent>
-      </Card>
-
-      <Card className={dim}>
-        <CardHeader>
-          <CardTitle>저장 비용 — 결정적 값 · 단계 5</CardTitle>
-        </CardHeader>
-        <CardContent>
-          {!d ? (
-            <TableSkeleton />
-          ) : !hasSource ? (
-            <p className="text-xs text-slate-500">{EMPTY_SOURCE}</p>
-          ) : (
-            <StorageTable view={d} />
-          )}
-        </CardContent>
-      </Card>
-
-      {d?.source ? (
-        <Card className={dim}>
-          <CardHeader>
-            <CardTitle>조건 표지</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <ConditionPanel view={d} />
-          </CardContent>
-        </Card>
-      ) : null}
-
-      {/* 판독 계수 줄 — 빈 값 ①에서도 보인다 */}
-      <div className="rounded-lg border border-slate-200 bg-white px-3 py-2">
-        {d ? (
-          <CountsLine view={d} yLog={yLog} />
-        ) : (
-          <p className="text-xs text-slate-500">판독 전 · {OBSERVATION_NOTE}</p>
-        )}
+              i
+            </span>
+          </p>
+        </footer>
       </div>
-    </div>
-  );
-}
-
-function TableSkeleton() {
-  return (
-    <div className="flex flex-col gap-1">
-      <div className="h-6 w-full rounded bg-slate-50" />
-      <Skeleton className="h-24 w-full" />
-    </div>
+    </RunProvider>
   );
 }

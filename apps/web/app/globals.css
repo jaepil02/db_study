@@ -15,6 +15,13 @@
   --color-sidebar-fg-muted: #636e7e;
   --color-sidebar-active: #eff6ff;
   --color-sidebar-active-fg: #1d4ed8;
+  /* 저장소 색 3 — components/ui/store.ts와 같은 값(perf options.ts STORE_COLOR와 동일) · 연한 짝은 칩 · 띠 배경용 */
+  --color-store-ch: #d97706;
+  --color-store-ch-soft: #fffbeb;
+  --color-store-pg: #2563eb;
+  --color-store-pg-soft: #eff6ff;
+  --color-store-redis: #dc2626;
+  --color-store-redis-soft: #fef2f2;
 }
 
 :root {

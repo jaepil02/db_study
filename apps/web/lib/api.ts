@@ -1,6 +1,5 @@
-// 직결 · BFF 요청 공통 — 에러 봉투 해석(07_api/01 §에러 봉투). 클라이언트는 code로만 분기하고 message로 분기하지 않는다.
-import { API_BASE_URL } from './config';
-import { ErrorEnvelope } from './shared';
+// 직결 · BFF 요청 공통 — 에러 값(07_api/01 §에러 봉투)과 진입 읽기 옵션. 봉투 해석은 요청하는 쪽(lib/runs.ts errorOf)이 한다.
+// 클라이언트는 code로만 분기하고 message로 분기하지 않는다.
 
 export class ApiError extends Error {
   /** HTTP 상태 — 네트워크 실패는 0 */
@@ -23,45 +22,15 @@ export class ApiError extends Error {
   }
 }
 
-async function toApiError(res: Response): Promise<ApiError> {
-  let body: unknown = null;
-  try {
-    body = await res.json();
-  } catch {
-    // 봉투가 아닌 본문 — code 없이 상태만 남긴다
-  }
-  const env = ErrorEnvelope.safeParse(body);
-  if (env.success)
-    return new ApiError(
-      res.status,
-      env.data.error.code ?? null,
-      env.data.error.message,
-      env.data.error.details ?? null,
-    );
-  return new ApiError(res.status, null, `HTTP ${res.status}`);
-}
-
-/** JSON 요청 — 성공 본문과 응답 수신 시각(STALE 오프셋 계산용)을 함께 돌려준다 */
-export async function requestJson(
-  url: string,
-  init?: RequestInit,
-): Promise<{ body: unknown; status: number; receivedAt: number }> {
-  let res: Response;
-  try {
-    res = await fetch(url, { cache: 'no-store', ...init });
-  } catch {
-    throw new ApiError(0, null, 'api에 닿지 못했다');
-  }
-  const receivedAt = Date.now();
-  if (!res.ok) throw await toApiError(res);
-  return { body: await res.json(), status: res.status, receivedAt };
-}
-
-export function directUrl(path: string): string {
-  return `${API_BASE_URL.replace(/\/$/, '')}${path}`;
-}
-
-/** 503 계열은 백오프 재시도(TanStack 기본 지수 지연) · 나머지 코드는 재시도하지 않는다(08_screen/01 §에러 코드별 사용자 표시) */
-export function retryOn503(failureCount: number, error: unknown): boolean {
-  return error instanceof ApiError && error.status === 503 && failureCount < 3;
+/**
+ * 진입 읽기 갱신 옵션 — 폴링 없는 읽기(health · 기록 보기)가 "진입 1회 · 새로고침"만 부르게 한다(08_screen/08 §호출 표면 · 갱신).
+ * 화면 맨 위(진입 관찰자)만 staleTime 0 — 화면이 붙을 때마다 1회 다시 읽는다. 탭 · 서랍 안의 관찰자는 staleTime 무한 —
+ * 탭을 오가며 다시 붙어도 캐시를 그대로 쓴다(데이터가 아직 없으면 그때는 읽는다). 창 포커스 · 네트워크 복귀 재조회는 끈다.
+ */
+export function entryReadOptions(entry: boolean) {
+  return {
+    staleTime: entry ? 0 : Number.POSITIVE_INFINITY,
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: false,
+  } as const;
 }

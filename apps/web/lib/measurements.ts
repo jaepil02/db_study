@@ -1,4 +1,4 @@
-// 측정 기록 판독기 — EXP-COMPARE 대조군 역전 지점 패널의 원천(08_screen/07 §대조군 역전 지점).
+// 측정 기록 판독기 — 두 화면의 기록 원천(08_screen/08_evidence_screens.md).
 // 형식 정본 10_observability/04_experiment_protocol.md §기계 판독 블록 · §BFF 판독 규칙 7.
 // 순수 함수만 둔다 — 파일 읽기는 BFF 라우트(app/bff/measurements)가 하고, 여기는 (파일명, 본문) 목록을 판정한다.
 // BFF는 읽기만 한다 — 기록을 만들거나 고치는 경로가 없다.
@@ -6,22 +6,6 @@
 export const SCHEMA_V1 = 'measurement/v1';
 /** 역전 지점 패널이 쓰는 실험 — 대조군 쿼리 5종(규칙 6 · 채번 정본 10_observability/06) */
 export const CONTROL_EXPS = ['EXP-01', 'EXP-02', 'EXP-03', 'EXP-04', 'EXP-05'] as const;
-/** EXP ↔ 쿼리 1:1(05_data_stores/10 §EXP 예약 대역 연결) */
-export const QUERY_LABELS: Record<string, string> = {
-  Q1: 'Q1 단일 태그 1시간 (EXP-01)',
-  Q2: 'Q2 단일 태그 7일 (EXP-02)',
-  Q3: 'Q3 설비 전체 1일 (EXP-03)',
-  Q4: 'Q4 분 단위 롤업 재계산 (EXP-04)',
-  Q5: 'Q5 전체 스캔 count (EXP-05)',
-};
-/** 비 쿼리 축 5(axes.axis 값) — 쿼리 시간(points) 1과 합쳐 비교 축 6(05_data_stores/10 §비교 축 6) */
-export const AXIS_LABELS: Record<string, string> = {
-  storage_bytes: '저장 용량',
-  compression_ratio: '압축률',
-  insert_rows_per_sec: '삽입 처리량',
-  write_amplification: 'VACUUM/WAL 증폭',
-  index_bytes: '인덱스 크기',
-};
 const SWITCH_IDS = Array.from({ length: 11 }, (_, i) => `SW-${String(i + 1).padStart(2, '0')}`);
 export const RECORD_FILE = /^(\d{3})-[a-z0-9]+(?:-[a-z0-9]+)*\.md$/;
 
@@ -50,11 +34,7 @@ export function memoryLimitOf(
   return undefined;
 }
 
-/** 툴팁의 상한 문구 — null이면 memoryLimitSource 문구(08_screen/07 §대조군 역전 지점 계약 4요소) */
-export const memoryLimitText = (run: RunInfo): string =>
-  run.memoryLimitMb === null ? (run.memoryLimitSource ?? '') : `${run.memoryLimitMb} MB`;
-
-/** 점마다 붙는 4요소 — 툴팁에 싣는다(08_screen/07 §대조군 역전 지점 계약 "4요소") */
+/** 점마다 붙는 4요소 — 툴팁에 싣는다(08_screen/08_evidence_screens.md 계약 "4요소") */
 export interface RecordRef {
   record: string;
   run: RunInfo;
@@ -110,7 +90,7 @@ export interface ReadResult {
   unreadableFiles: string[];
   points: ControlPoint[];
   axes: AxisEntry[];
-  /** 구조 판정 역전 구간의 원천 — 없으면 null(08_screen/07 §대조군 역전 지점 계약 "구조 판정 원천 선택") */
+  /** 구조 판정 역전 구간의 원천 — 없으면 null(08_screen/08_evidence_screens.md 계약 "구조 판정 원천 선택") */
   structural: StructuralSource | null;
 }
 
@@ -331,11 +311,6 @@ function pickStructural(
   return null;
 }
 
-/** 역전 구간(반개구간) — "(10^7, 10^7.25]행" */
-export const formatCrossover = ([a, b]: readonly [string, string]): string => `(${a}, ${b}]행`;
-/** 역전 없음의 관측 범위(닫힌 범위) — "10^5 ~ 10^9행" */
-export const formatExpRange = ([a, b]: readonly [string, string]): string => `${a} ~ ${b}행`;
-
 /** 기록 파일 목록 → 역전 지점 패널 입력. 규칙 1~7을 이 순서로 적용한다(규칙 6은 판독 뒤 · 3 · 5 · 4보다 먼저 — 다른 실험의 폐기 · 누락을 패널 수에 섞지 않는다) */
 export function readMeasurements(files: readonly { name: string; text: string }[]): ReadResult {
   const counts: ReadCounts = {
@@ -416,76 +391,6 @@ export function readMeasurements(files: readonly { name: string; text: string }[
     axes: [...axesByKey.values()],
     structural: pickStructural(blocks, superseded),
   };
-}
-
-// ── 역전 판정 ──
-
-export interface SeriesPoint {
-  rows: number;
-  medianMs: number;
-  point: ControlPoint;
-}
-
-export type Crossover =
-  | { kind: 'crossed'; rows: number; prevRows: number | null; before: Store | 'tie'; after: Store | 'tie' }
-  | { kind: 'none'; maxRows: number; leader: Store | 'tie' }
-  | { kind: 'insufficient' };
-
-/** 선택(쿼리 · 인덱스 변형 · 캐시 상태)에 맞는 두 선 — PostgreSQL은 고른 변형 · ClickHouse는 변형 없음(index null)이 기본이다 */
-export function selectSeries(
-  points: readonly ControlPoint[],
-  sel: { query: string; index: string; cache: string },
-): { postgresql: SeriesPoint[]; clickhouse: SeriesPoint[] } {
-  const pick = (store: Store) =>
-    points
-      .filter(
-        (p) =>
-          p.store === store &&
-          p.query === sel.query &&
-          (p.cache ?? '') === sel.cache &&
-          (store === 'postgresql' ? p.index === sel.index : p.index === null || p.index === sel.index),
-      )
-      .map((p) => ({ rows: p.rows, medianMs: p.medianMs, point: p }))
-      .sort((a, b) => a.rows - b.rows);
-  // ClickHouse 쪽에 변형 없는 점과 같은 변형 점이 함께 있으면 변형 없는 점을 쓴다(행 수당 1점)
-  const dedupe = (xs: SeriesPoint[]) => {
-    const m = new Map<number, SeriesPoint>();
-    for (const x of xs) {
-      const had = m.get(x.rows);
-      if (!had || (had.point.index !== null && x.point.index === null)) m.set(x.rows, x);
-    }
-    return [...m.values()].sort((a, b) => a.rows - b.rows);
-  };
-  return { postgresql: pick('postgresql'), clickhouse: dedupe(pick('clickhouse')) };
-}
-
-const faster = (pg: number, ch: number): Store | 'tie' =>
-  pg < ch ? 'postgresql' : ch < pg ? 'clickhouse' : 'tie';
-
-/**
- * 두 선이 처음 교차하는 용량 단계 — 두 저장소가 모두 있는 행 수만 본다.
- * 첫 공통 단계의 앞선 쪽(더 빠른 쪽)이 바뀌는 첫 단계가 역전 단계다. 같음(tie)은 그 단계에서 교차한 것으로 본다.
- * 첫 단계들이 같음이면 처음으로 한쪽이 앞선 단계를 기준으로 삼는다.
- */
-export function findCrossover(pg: readonly SeriesPoint[], ch: readonly SeriesPoint[]): Crossover {
-  const chBy = new Map(ch.map((c) => [c.rows, c.medianMs]));
-  const common = pg
-    .filter((p) => chBy.has(p.rows))
-    .map((p) => ({ rows: p.rows, lead: faster(p.medianMs, chBy.get(p.rows) as number) }))
-    .sort((a, b) => a.rows - b.rows);
-  if (common.length === 0) return { kind: 'insufficient' };
-  let base: Store | 'tie' = 'tie';
-  let prevRows: number | null = null;
-  for (const c of common) {
-    if (base === 'tie') {
-      base = c.lead;
-    } else if (c.lead !== base) {
-      return { kind: 'crossed', rows: c.rows, prevRows, before: base, after: c.lead };
-    }
-    prevRows = c.rows;
-  }
-  const last = common[common.length - 1] as { rows: number; lead: Store | 'tie' };
-  return { kind: 'none', maxRows: last.rows, leader: base };
 }
 
 /** 10^k 표기 — 격자 단계 행 수(10^5 · 10^6 …)는 지수로, 그 밖은 천 단위 구분 */

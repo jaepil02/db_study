@@ -1,6 +1,6 @@
-// health 읽기(BFF 경유) — EXP-CONSOLE 폴링 · 공통 셸 실험 조건 배지 · DSH 구성 배지가 같은 쿼리 키(obs · health)를 나눠 쓴다
-// (08_screen/01 §갱신 주기와 캐시 층 정렬 — health staleTime 0 · 화면별 폴링 · 셸은 진입 1회).
-import { ApiError } from './api';
+// health 읽기(BFF 경유) — 두 화면의 측정 조건(스위치 상태) 읽기가 같은 쿼리 키(obs · health)를 나눠 쓴다.
+import { useQuery } from '@tanstack/react-query';
+import { ApiError, entryReadOptions } from './api';
 import { HealthResponse } from './shared';
 
 export const HEALTH_KEY = ['obs', 'health'] as const;
@@ -15,4 +15,21 @@ export async function fetchHealth() {
   // 200 · 503 모두 같은 본문 — 503은 오류가 아니라 저장소별 상태로 그린다(REQ-OBS-09)
   if (res.status !== 200 && res.status !== 503) throw new ApiError(res.status, null, `HTTP ${res.status}`);
   return { httpStatus: res.status, body: HealthResponse.parse(await res.json()) };
+}
+
+/**
+ * health 쿼리 옵션 — 진입 1회 · 폴링 · 포커스 재조회 없음(08_screen/08 §호출 표면 · 갱신) · 두 화면의 각주 툴팁이 읽는다.
+ * entry는 화면 맨 위 관찰자(EXP-PERF · EXP-FLOW 화면)만 — 다시 붙는 다른 관찰자는 다시 읽지 않는다.
+ */
+export function healthQueryOptions({ entry = false }: { entry?: boolean } = {}) {
+  return {
+    queryKey: HEALTH_KEY,
+    queryFn: fetchHealth,
+    retry: false,
+    ...entryReadOptions(entry),
+  };
+}
+
+export function useShellHealth(opts: { entry?: boolean } = {}) {
+  return useQuery(healthQueryOptions(opts));
 }

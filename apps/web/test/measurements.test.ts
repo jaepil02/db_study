@@ -1,15 +1,6 @@
-// 기록 판독기 — 10_observability/04 §BFF 판독 규칙 7 · 08_screen/07 §대조군 역전 지점. 픽스처는 이 파일 안에서 만든다(docs/measurements에 가짜 기록을 두지 않는다).
+// 기록 판독기 — 10_observability/04 §BFF 판독 규칙 7 · 08_screen/08_evidence_screens.md. 픽스처는 이 파일 안에서 만든다(docs/measurements에 가짜 기록을 두지 않는다).
 import { describe, expect, it } from 'vitest';
-import {
-  type ControlPoint,
-  findCrossover,
-  formatRows,
-  jsonFences,
-  memoryLimitText,
-  readMeasurements,
-  type SeriesPoint,
-  selectSeries,
-} from '../lib/measurements';
+import { formatRows, jsonFences, readMeasurements } from '../lib/measurements';
 
 const SWITCHES = {
   'SW-01': 'on',
@@ -209,12 +200,10 @@ describe('readMeasurements — 판독 규칙', () => {
     const num = read(RUN);
     expect(num.counts.missingConditions).toBe(0);
     expect(num.points[0]?.run).toEqual(RUN);
-    expect(memoryLimitText(num.points[0]?.run as ControlPoint['run'])).toBe('4096 MB');
     const tool = read({ ...RUN, memoryLimitMb: null, memoryLimitSource: SOURCE });
     expect(tool.counts.missingConditions).toBe(0);
     expect(tool.points).toHaveLength(2);
     expect(tool.points[0]?.run).toEqual({ ...RUN, memoryLimitMb: null, memoryLimitSource: SOURCE });
-    expect(memoryLimitText(tool.points[0]?.run as ControlPoint['run'])).toBe(SOURCE);
     for (const run of [
       { ...RUN, memoryLimitMb: null },
       { ...RUN, memoryLimitMb: null, memoryLimitSource: ' ' },
@@ -299,109 +288,6 @@ describe('readMeasurements — 판독 규칙', () => {
     expect(r.axes).toHaveLength(1);
     expect(r.axes[0]?.value).toBe(80_000_000);
     expect(r.counts.duplicatePoints).toBe(1);
-  });
-});
-
-// ── 교차 판정 ──
-
-function pt(
-  store: 'postgresql' | 'clickhouse',
-  rows: number,
-  ms: number,
-  over: Partial<ControlPoint> = {},
-): ControlPoint {
-  return {
-    record: '031',
-    run: RUN,
-    switches: SWITCHES,
-    query: 'Q1',
-    rows,
-    stage: null,
-    store,
-    index: store === 'postgresql' ? 'I1' : null,
-    cache: 'warm',
-    valuesMs: [ms, ms, ms],
-    medianMs: ms,
-    resultMatch: true,
-    ...over,
-  };
-}
-const sp = (p: ControlPoint): SeriesPoint => ({ rows: p.rows, medianMs: p.medianMs, point: p });
-
-describe('findCrossover', () => {
-  it('앞선 쪽이 바뀌는 첫 공통 단계에 표지 — 직전 단계를 함께 낸다', () => {
-    const pg = [
-      pt('postgresql', 1e5, 2),
-      pt('postgresql', 1e6, 8),
-      pt('postgresql', 1e7, 90),
-      pt('postgresql', 1e8, 900),
-    ].map(sp);
-    const ch = [
-      pt('clickhouse', 1e5, 5),
-      pt('clickhouse', 1e6, 6),
-      pt('clickhouse', 1e7, 7),
-      pt('clickhouse', 1e8, 9),
-    ].map(sp);
-    expect(findCrossover(pg, ch)).toEqual({
-      kind: 'crossed',
-      rows: 1e6,
-      prevRows: 1e5,
-      before: 'postgresql',
-      after: 'clickhouse',
-    });
-  });
-
-  it('교차가 없으면 역전 없음과 관측 최대 행 수(두 저장소 공통)', () => {
-    const pg = [pt('postgresql', 1e5, 20), pt('postgresql', 1e6, 30), pt('postgresql', 1e8, 50)].map(sp);
-    const ch = [pt('clickhouse', 1e5, 5), pt('clickhouse', 1e6, 6)].map(sp);
-    expect(findCrossover(pg, ch)).toEqual({ kind: 'none', maxRows: 1e6, leader: 'clickhouse' });
-  });
-
-  it('같음은 그 단계에서 교차한 것으로 본다 · 첫 단계가 같음이면 처음 앞선 쪽을 기준으로 삼는다', () => {
-    const tieAt2 = findCrossover(
-      [pt('postgresql', 1e5, 1), pt('postgresql', 1e6, 5)].map(sp),
-      [pt('clickhouse', 1e5, 3), pt('clickhouse', 1e6, 5)].map(sp),
-    );
-    expect(tieAt2).toMatchObject({ kind: 'crossed', rows: 1e6, before: 'postgresql', after: 'tie' });
-    const tieFirst = findCrossover(
-      [pt('postgresql', 1e5, 5), pt('postgresql', 1e6, 4), pt('postgresql', 1e7, 9)].map(sp),
-      [pt('clickhouse', 1e5, 5), pt('clickhouse', 1e6, 6), pt('clickhouse', 1e7, 7)].map(sp),
-    );
-    expect(tieFirst).toMatchObject({ kind: 'crossed', rows: 1e7, prevRows: 1e6, before: 'postgresql' });
-  });
-
-  it('공통 단계가 없으면 판정 불가', () => {
-    expect(findCrossover([sp(pt('postgresql', 1e5, 1))], [sp(pt('clickhouse', 1e6, 1))])).toEqual({
-      kind: 'insufficient',
-    });
-    expect(findCrossover([], [])).toEqual({ kind: 'insufficient' });
-  });
-});
-
-describe('selectSeries', () => {
-  const points = [
-    pt('postgresql', 1e6, 40),
-    pt('postgresql', 1e6, 12, { index: 'I2' }),
-    pt('postgresql', 1e6, 90, { cache: 'cold' }),
-    pt('postgresql', 1e5, 4, { query: 'Q2' }),
-    pt('clickhouse', 1e6, 9),
-    pt('clickhouse', 1e6, 11, { index: 'I2' }),
-    pt('clickhouse', 1e5, 3),
-  ];
-
-  it('PostgreSQL은 고른 변형만 · ClickHouse는 변형 없는 점을 우선 · 행 수 오름차순', () => {
-    const s = selectSeries(points, { query: 'Q1', index: 'I2', cache: 'warm' });
-    expect(s.postgresql.map((x) => x.medianMs)).toEqual([12]);
-    expect(s.clickhouse.map((x) => [x.rows, x.medianMs])).toEqual([
-      [1e5, 3],
-      [1e6, 9],
-    ]);
-  });
-
-  it('캐시 상태 · 쿼리로 가른다', () => {
-    const s = selectSeries(points, { query: 'Q1', index: 'I1', cache: 'cold' });
-    expect(s.postgresql.map((x) => x.medianMs)).toEqual([90]);
-    expect(s.clickhouse).toHaveLength(0);
   });
 });
 

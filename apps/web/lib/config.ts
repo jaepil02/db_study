@@ -1,14 +1,6 @@
 // 화면 조정값 현행값 — 정본 docs/09_tech_stack/01_frontend.md §화면 조정값 현행값 · §TanStack Query 설정값
 // 계약은 08_screen(01 · 03 · 07)이 갖고 값은 09_tech_stack/01이 갖는다 — 여기서 새 값을 정하지 않는다.
 
-/** 트렌드 창 길이 5분(S2 고정) */
-export const TREND_WINDOW_MS = 5 * 60_000;
-/** 링 버퍼 태그당 슬롯 = 트렌드 창 ÷ SW-07 스로틀 창(100 ms) = 3,000 */
-export const RING_CAPACITY = 3_000;
-/** 트렌드 최대 태그 수 8 */
-export const TREND_MAX_TAGS = 8;
-/** 콘솔 폴링 15초 — 스크레이프 주기보다 짧지 않게(08_screen/07) */
-export const CONSOLE_POLL_MS = 15_000;
 /** 시계열 쿼리 gcTime 60초 */
 export const TIMESERIES_GC_MS = 60_000;
 
@@ -31,15 +23,3 @@ export const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL ?? 'http://loca
 export function wsUrl(base: string = API_BASE_URL): string {
   return `${base.replace(/^http/, 'ws').replace(/\/$/, '')}/ws/realtime`;
 }
-
-// S4 — staleTime 현행값(09_tech_stack/01 §TanStack Query 설정값 — 관계식의 파생 · 여기서 새 값을 정하지 않는다)
-/** 시계열 완전 과거 300초 × 0.8 · 현재 버킷 포함 30초 × 0.8 · 최근 구간 0 */
-export const TS_STALE_PAST_MS = 240_000;
-export const TS_STALE_CURRENT_MS = 24_000;
-/** 서버 최근 창 5분(06_pipeline/06 현행 참고) — 끝이 이 안이면 서버가 캐시하지 않는다 */
-export const TS_RECENT_WINDOW_MS = 5 * 60_000;
-/** 사이트 · 라인 · 설비 · 태그 목록 — BFF revalidate 창 30초와 같다 */
-export const MASTER_STALE_MS = 30_000;
-export const BFF_REVALIDATE_S = 30;
-/** 실험 비교 — 조건당 창 최대 3 */
-export const COMPARE_WINDOWS_PER_CONDITION = 3;
