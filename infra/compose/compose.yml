@@ -53,7 +53,7 @@ services:
       - ../clickhouse/users.d/profiles.xml:/etc/clickhouse-server/users.d/profiles.xml:ro
     ports:
       - "127.0.0.1:8123:8123"
-      - "127.0.0.1:9000:9000"
+      - "127.0.0.1:19000:9000"  # 호스트 19000 → 컨테이너 네이티브 9000(다른 프로젝트 MinIO가 호스트 9000을 써서 옮김 · 사용자 결정 2026-10-03)
       - "127.0.0.1:9363:9363"
     ulimits:
       nofile:
