@@ -2,6 +2,7 @@
 
 > **대상**: 설계 문서군이 인용하는 외부 공식 문서 · 릴리스 노트 · 표준의 URL 전수 — 런타임 · 저장소 · 저장소 확장 · 백엔드 라이브러리 · 프론트엔드 · 도구 · 부하 · 관측 · 실행 환경 · 프로토콜 표준 · 보안 참고 · 인용처 · 재확인 규칙
 > **작성일**: 2026-09-24
+> **개정일**: 2026-10-03 — UI/UX 다듬기(사용자 지시 2026-10-03) — 프론트엔드 행 1(Pretendard 공식 저장소 — 버전 고정표 Pretendard 행 신설 38 → **39**행 대응) 신설 · 미확인 — 등재 79 → **80** · 프론트엔드 10 → **11** · 미확인 63 → **64** · 확인 16 불변
 > **개정일**: 2026-09-28 — DB 시각 UTC(ADR-27) 근거 등재 — 저장소 행 8(ClickHouse DateTime · ALTER COLUMN · 사용자 정의 파티션 키 · 서버 설정 timezone · 세션 설정 session_timezone · PostgreSQL 18 날짜 · 시각 타입 · 함수 · ALTER DATABASE) · 저장소 확장 행 1(pg_partman 문서) 신설 · 전부 확인일 2026-09-28 — 등재 70 → **79** · 저장소 10 → **18** · 저장소 확장 3 → **4** · 확인 7 → **16** · 미확인 63 불변
 > **개정일**: 2026-09-26 — 마지막 검수 반영 — 부분 확인 항목 수는 표 셀 한 자리에서만 센다(검산 불릿은 셀을 가리킴)
 > **개정일**: 2026-09-26 — 리드 판정 — ClickHouse 문서 행 부분 확인 항목 5 → **6**(비동기 삽입 세션 설정 — context7 대조) — 확인 7 · 미확인 63 · 등재 70 불변
@@ -13,7 +14,7 @@
 > **개정일**: 2026-09-24 — ClickHouse 26.8 LTS 전환(사용자 결정 · 25.x 보안 지원 종료) — ClickHouse 변경 이력 행의 확인 대상 25.8 → **26.8** LTS 패치 태그
 > **개정일**: 2026-09-24 — 착수 체크리스트 7 반영 — 저장소 6행 확인일 채움(릴리스 · 레지스트리 대조) · ClickHouse 보안 정책 행 신설(25.x 지원 종료 확인) · Python 행 신설(버전 고정표 36 → **37**행 대응) — 등재 68 → **70** · 저장소 9 → **10** · 도구 · 부하 · 관측 13 → **14** · 미확인 68 → **63**
 > **개정일**: 2026-09-24 — W7 검수 반영 — 보안 참고 10 · Compose 변수 치환 1 추가 57 → **68** · 버전 고정표 35 → **36**행 대응 · 도입문의 역링크 서술을 인용처 열 기준으로
-> **원천**: [../09_tech_stack/03_data_infra.md](../09_tech_stack/03_data_infra.md) 버전 고정표 38행 · 각 문서의 "공식 참조로 재확인" 등재 행 · 원본 tech_stack.md §12 · 원본 implementation_plan.md §9 착수 체크리스트 7번(커밋 ff66a37) · 신설
+> **원천**: [../09_tech_stack/03_data_infra.md](../09_tech_stack/03_data_infra.md) 버전 고정표 39행 · 각 문서의 "공식 참조로 재확인" 등재 행 · 원본 tech_stack.md §12 · 원본 implementation_plan.md §9 착수 체크리스트 7번(커밋 ff66a37) · 신설
 
 이 문서는 **외부 URL의 유일한 등재처**다. 다른 문서는 URL을 쓰지 않고 무엇을 확인해야 하는지만 적으며, 그 사실이 어느 URL로 확인되는지는 이 문서의 인용처 열이 역으로 잇는다([../CLAUDE.md](../CLAUDE.md) 외부 URL 규칙). URL을 한 자리에 모으는 이유는 하나다 — 공식 문서의 주소는 버전마다 바뀌고, 여러 문서에 흩어진 URL은 한 번에 고칠 수 없어 낡은 주소가 조용히 남는다.
 
@@ -111,8 +112,9 @@
 | Tailwind CSS | 공식 문서 | [https://tailwindcss.com/docs](https://tailwindcss.com/docs) | 부 버전 | [../09_tech_stack/01_frontend.md](../09_tech_stack/01_frontend.md) | 미확인 |
 | shadcn/ui | 공식 문서 | [https://ui.shadcn.com/docs](https://ui.shadcn.com/docs) | 컴포넌트 복사 절차 | [../09_tech_stack/01_frontend.md](../09_tech_stack/01_frontend.md) | 미확인 |
 | zod | 공식 사이트 | [https://zod.dev/](https://zod.dev/) | 부 버전 · 공유 스키마 | [../09_tech_stack/01_frontend.md](../09_tech_stack/01_frontend.md) · [../09_tech_stack/05_tooling_devops.md](../09_tech_stack/05_tooling_devops.md) | 미확인 |
+| Pretendard | 공식 저장소 | [https://github.com/orioncactus/pretendard](https://github.com/orioncactus/pretendard) | 1.3.9 · 가변 woff2 경로(dist/web/variable) · 굵기 축 범위 · 라이선스(SIL OFL 1.1) | [../09_tech_stack/03_data_infra.md](../09_tech_stack/03_data_infra.md) · [../09_tech_stack/01_frontend.md](../09_tech_stack/01_frontend.md) | 미확인 |
 
-- 검산: 프론트엔드 = **10**
+- 검산: 프론트엔드 = **11**
 
 ## 도구 · 부하 · 관측
 
@@ -174,9 +176,9 @@
 
 ## 검산
 
-- 검산: 등재 = 런타임 4 + 저장소 18 + 저장소 확장 4 + 백엔드 라이브러리 13 + 프론트엔드 10 + 도구 · 부하 · 관측 14 + 실행 환경 2 + 프로토콜 표준 4 + 보안 참고 10 = **79**
-- **버전 고정표 38행이 모두 이 문서의 행 하나 이상에 닿는다**(Fastify 어댑터는 NestJS 문서 행 · 비밀번호 해시 라이브러리는 라이브러리 미선정이라 Argon2 RFC 9106 행 — 선정 시 그 공식 저장소 행을 더한다) — 고정표의 묶음 행(Zustand · React Hook Form · Tailwind CSS · Biome · Vitest · Supertest · Testcontainers)은 구성요소마다 한 행씩 나눠 등재했다. 해당 없음 행(shadcn/ui)도 복사 절차 확인을 위해 등재한다. pg_stat_statements · auto_explain은 엔진을 따르므로 버전이 아니라 적재 설정을 확인한다.
-- **등재했지만 대부분 확인하지 않았다** — 확인일 열 확인 16(저장소 릴리스 · 이미지 · ClickHouse 보안 정책 7 — 착수 체크리스트 7번 · 2026-09-24 + DB 시간대 전환 근거 9 — ADR-27 · 2026-09-28) + 미확인 63 = **79**. 미확인 63에는 부분 확인 1행(ClickHouse 문서 — 그 행 확인일 칸이 적은 역방향 대조 근거 항목만 대조 · 나머지 확인할 것은 미대조)이 들어 있다 — 행 전체를 확인으로 세면 대조하지 않은 기본값 항목(merge_with_ttl_timeout 등)까지 확인된 것으로 읽힌다. 나머지 대조는 각 구성요소를 쓰는 단계의 착수 때 한다.
+- 검산: 등재 = 런타임 4 + 저장소 18 + 저장소 확장 4 + 백엔드 라이브러리 13 + 프론트엔드 11 + 도구 · 부하 · 관측 14 + 실행 환경 2 + 프로토콜 표준 4 + 보안 참고 10 = **80**
+- **버전 고정표 39행이 모두 이 문서의 행 하나 이상에 닿는다**(Fastify 어댑터는 NestJS 문서 행 · 비밀번호 해시 라이브러리는 라이브러리 미선정이라 Argon2 RFC 9106 행 — 선정 시 그 공식 저장소 행을 더한다) — 고정표의 묶음 행(Zustand · React Hook Form · Tailwind CSS · Biome · Vitest · Supertest · Testcontainers)은 구성요소마다 한 행씩 나눠 등재했다. 해당 없음 행(shadcn/ui)도 복사 절차 확인을 위해 등재한다. pg_stat_statements · auto_explain은 엔진을 따르므로 버전이 아니라 적재 설정을 확인한다.
+- **등재했지만 대부분 확인하지 않았다** — 확인일 열 확인 16(저장소 릴리스 · 이미지 · ClickHouse 보안 정책 7 — 착수 체크리스트 7번 · 2026-09-24 + DB 시간대 전환 근거 9 — ADR-27 · 2026-09-28) + 미확인 64 = **80**. 미확인 64에는 부분 확인 1행(ClickHouse 문서 — 그 행 확인일 칸이 적은 역방향 대조 근거 항목만 대조 · 나머지 확인할 것은 미대조)이 들어 있다 — 행 전체를 확인으로 세면 대조하지 않은 기본값 항목(merge_with_ttl_timeout 등)까지 확인된 것으로 읽힌다. 나머지 대조는 각 구성요소를 쓰는 단계의 착수 때 한다.
 
 ## 재확인 규칙
 

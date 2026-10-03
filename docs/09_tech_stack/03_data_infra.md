@@ -2,6 +2,7 @@
 
 > **대상**: 저장소 3종(PostgreSQL · ClickHouse · Redis)의 이미지 · 확장 · 설정 파일의 모양 · ClickHouse 서버 timezone 판정 · pg_partman 미리 만들기 · TTL 머지 주기 · Compose healthcheck와 health 타임아웃의 관계 · **observability 프로파일 구성원 판정(보정 #17)** · **버전 고정표(버전 문자열의 유일한 기재처)**
 > **작성일**: 2026-09-24
+> **개정일**: 2026-10-03 — UI/UX 다듬기(사용자 지시 2026-10-03 · 리드 판정 .omc/plans/web-ux-polish.md §2.1 · §7.1 R10) — 프론트엔드 **Pretendard(웹 글꼴) 행 신설 · 버전 고정 1.3.9**(apps/web/package.json 정확 고정 · next/font/local이 패키지 안 가변 woff2 파일을 직접 가리킨다) — 행 38 → **39**(프론트엔드 6 → **7**) · 버전 고정 27 → **28** · 원본에 없던 행 3 → **4**
 > **개정일**: 2026-09-28 — DB 시각 UTC(ADR-27 · 사용자 요구 2026-09-28) — 서버 timezone 판정 Asia/Seoul → **UTC**(§서버 timezone 판정에 상태 항목 · W6 원문 보존) · postgresql.conf 시간대 timezone · log_timezone → **UTC** · pg_partman 미리 만들기 기준 달력 Asia/Seoul → **UTC**(유지 작업 세션 시간대 = 세트 경계 시간대) · 공식 문서 확인(서버 timezone은 기동 시점에 읽는다 · pg_partman은 유지 작업 클라이언트까지 UTC 요구) — 조정값 · 안 수 불변
 > **개정일**: 2026-09-26 — S7 ① 계정 시드 착수 — 비밀번호 해시 라이브러리(Argon2id) 행 미고정 → **버전 고정** hash-wasm 4.12 — 버전 고정 26 → **27** · 미고정 2 → **1**(행 38 불변)
 > **개정일**: 2026-09-25 — S4 반영 — client-output-buffer-limit pubsub 값 미정 → **32mb 8mb 60**(명시 · 게이트웨이 소켓 한도 1 MiB와 같은 변경 단위 — 07_api/11)
@@ -16,7 +17,7 @@
 > **개정일**: 2026-09-24 — 최종 정밀 검수 — §조정값 현행값 → §화면 조정값 현행값(절 이름 교정)
 > **개정일**: 2026-09-24 — W7 보안 판정 반영 — Redis 설정 바인드 · 보호 모드 행에 **requirepass 필수** 명시 · 버전 고정표에 Argon2id 해시 라이브러리 행 추가 35 → **36**(백엔드 12 → **13** · 미고정 10 → **11**)(정본 12_security/01 · 02)
 > **개정일**: 2026-09-24 — W6 실험 채번 반영 — EXP 번호 반영(정본 10_observability/01 · 06)
-> **원천**: ADR-27(사용자 요구 2026-09-28) · 원본 tech_stack.md §2 · §5 · §9 · §10.1 · §10.4 · §12(커밋 ff66a37) · 원본 architecture.md §3 · §7.5 · §13 · §14(커밋 ff66a37) · 원본 implementation_plan.md §2.1 · §9(커밋 ff66a37) · ADR-03 · ADR-05 · ADR-18 · ADR-19 · ADR-20 · docs_plan 실행 계획 보정 #17 · 웨이브 인계 W6 09_tech_stack 행(ClickHouse 서버 timezone · pg_partman 미리 만들기 · TTL 머지 주기 · healthcheck timeout) · [../05_data_stores/01_postgresql_schema.md](../05_data_stores/01_postgresql_schema.md) · [../05_data_stores/03_clickhouse_schema.md](../05_data_stores/03_clickhouse_schema.md) · [../07_api/10_metrics.md](../07_api/10_metrics.md) §저장소 확인과 타임아웃 판정
+> **원천**: ADR-27(사용자 요구 2026-09-28) · 원본 tech_stack.md §2 · §5 · §9 · §10.1 · §10.4 · §12(커밋 ff66a37) · 원본 architecture.md §3 · §7.5 · §13 · §14(커밋 ff66a37) · 원본 implementation_plan.md §2.1 · §9(커밋 ff66a37) · ADR-03 · ADR-05 · ADR-18 · ADR-19 · ADR-20 · docs_plan 실행 계획 보정 #17 · 웨이브 인계 W6 09_tech_stack 행(ClickHouse 서버 timezone · pg_partman 미리 만들기 · TTL 머지 주기 · healthcheck timeout) · [../05_data_stores/01_postgresql_schema.md](../05_data_stores/01_postgresql_schema.md) · [../05_data_stores/03_clickhouse_schema.md](../05_data_stores/03_clickhouse_schema.md) · [../07_api/10_metrics.md](../07_api/10_metrics.md) §저장소 확인과 타임아웃 판정 · 다듬기 판정 .omc/plans/web-ux-polish.md(사용자 지시 2026-10-03 — 웹 글꼴) · apps/web/package.json
 
 이 문서는 **정확 버전이 적히는 유일한 자리**다. 다른 문서는 스택을 Next.js · NestJS · PostgreSQL 18 · ClickHouse 26.8 · Redis 8 · Docker Compose로만 적고 이미지 태그 · 라이브러리 메이저는 §버전 고정표를 링크한다. 같은 폴더의 01 · 02 · 05도 버전을 적지 않는다 — 버전이 두 자리에 적히면 착수 시점 재확인이 한 자리만 고친다.
 
@@ -218,6 +219,7 @@ docs_plan 실행 계획 보정 #17을 닫는다. 원본 넷이 서로 다른 구
 | 프론트엔드 | TanStack Query | 5.x | 부 버전까지 | 브라우저 쿼리 캐시 | **버전 고정** 5.103 |
 | 프론트엔드 | Zustand · React Hook Form · Tailwind CSS | 원본 미기재 | 부 버전까지 | 스토어 · 폼 · 스타일 | **버전 고정** Zustand 5.0 · Tailwind CSS 4.3 — React Hook Form은 폼 화면이 생기는 단계에서 고정 |
 | 프론트엔드 | shadcn/ui | 버전 없음 — 컴포넌트 소스를 저장소에 복사 | 복사 시점 커밋 | UI 컴포넌트 | 해당 없음 |
+| 프론트엔드 | **Pretendard**(웹 글꼴 · npm pretendard) | 원본 미기재 | 패치까지(정확 고정) | 웹 전체 글꼴 — Pretendard Variable 가변 woff2 한 벌을 next/font/local로 자체 호스팅([01_frontend.md](./01_frontend.md) §구성 선택) | **버전 고정** 1.3.9(apps/web/package.json 정확 고정 · 2026-10-03) — 패치까지 박는 이유: next/font/local이 패키지 안 파일 경로(dist/web/variable/woff2)를 직접 가리키고, 화면의 줄 수 예산(숫자 4 문장 두 줄 · 그림 1 라벨 칸 84px · 흐름도 노드 폭 어림)이 이 글꼴의 글자 폭 실측 위에 서 있다 |
 | 공유 | zod | 원본 미기재 | 부 버전까지 | packages/shared | **버전 고정** 4.6 |
 | 도구 | pnpm | 원본 미기재(원본 체크리스트는 latest 활성화 — 금지) | 패키지 관리자 필드 | 워크스페이스 | **버전 고정** 12.6(루트 package.json packageManager · corepack) |
 | 도구 | Biome · Vitest | 원본 미기재 | 부 버전까지 | 품질 게이트 ① · ③ | **버전 고정** Biome 2.5 · Vitest 5.0 |
@@ -230,9 +232,9 @@ docs_plan 실행 계획 보정 #17을 닫는다. 원본 넷이 서로 다른 구
 | 관측 | Prometheus | 3.x | 부 버전 태그 | observability 프로파일 | 재확인 대기 |
 | 관측 | Grafana | 12.x | 부 버전 태그 | observability 프로파일 | 재확인 대기 |
 
-- 검산: 행 = 런타임 3 + 저장소 3 + 저장소 확장 2 + 백엔드 13 + 프론트엔드 6 + 공유 1 + 도구 7 + 부하 1 + 관측 2 = **38** · 상태 태그 고정 4 + 버전 고정 27 + 재확인 대기 5 + 미고정 1 + 해당 없음 1 = **38**
+- 검산: 행 = 런타임 3 + 저장소 3 + 저장소 확장 2 + 백엔드 13 + 프론트엔드 7 + 공유 1 + 도구 7 + 부하 1 + 관측 2 = **39** · 상태 태그 고정 4 + 버전 고정 28 + 재확인 대기 5 + 미고정 1 + 해당 없음 1 = **39**
 - **원본 고정표에서 뺀 행 1** — Prisma(원본 "pg + Prisma")는 마이그레이션 도구 판정에서 채택하지 않았다([05_tooling_devops.md](./05_tooling_devops.md) §마이그레이션 도구 판정 · [06_decisions_rationale.md](./06_decisions_rationale.md)). 원본의 pg 행은 남았다.
-- **원본에 없던 행 3** — pg-copy-streams(대조군 COPY가 스트림 복사를 요구) · 보안 헤더 플러그인(원본 tech_stack.md §10.4가 이름만 적음) · Python(S0의 docs:lint · 실습 스크립트 — 사용자 지정 3.14). 보안 헤더 플러그인만 미고정이다.
+- **원본에 없던 행 4** — pg-copy-streams(대조군 COPY가 스트림 복사를 요구) · 보안 헤더 플러그인(원본 tech_stack.md §10.4가 이름만 적음) · Python(S0의 docs:lint · 실습 스크립트 — 사용자 지정 3.14) · Pretendard(UI/UX 다듬기의 웹 글꼴 — 사용자 지시 2026-10-03). 보안 헤더 플러그인만 미고정이다.
 - **고정 단위가 "부 버전까지"인 이유** — 메이저만 고정하면 부 버전 갱신이 설치 시점마다 달라 같은 커밋의 두 설치가 다른 코드를 받는다. 잠금 파일이 패치까지 고정하고, 이 표는 잠금 파일을 갱신할 때 넘지 않을 경계를 준다.
 - **Node 22.15 이상의 근거는 zstd 요청 압축이다**(원본 tech_stack.md §3.3 · §12). @clickhouse/client 1.23은 zstd 요청 압축을 지원한다 — S2 적재 경로가 zstd로 보낸다(§미확인 · 미설계 등재 닫힘).
 

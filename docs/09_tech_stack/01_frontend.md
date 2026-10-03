@@ -1,14 +1,15 @@
 # 프론트엔드 스택
 
-> **대상**: 웹(Next.js App Router · 호스트 프로세스)의 구성 선택 — BFF 역할과 경로 분담 · 차트(uPlot 주력 · ECharts 보조) · TanStack Query 설정값(staleTime · gcTime) · Zustand 실시간 스토어 · 네이티브 WebSocket 래퍼 · Tailwind CSS · shadcn/ui · 폼 · zod 공유 · **화면 조정값 현행값(링 버퍼 창 · 트렌드 창 · 콘솔 폴링 주기 · BFF revalidate)**
+> **대상**: 웹(Next.js App Router · 호스트 프로세스)의 구성 선택 — BFF 역할과 경로 분담 · 차트(uPlot 주력 · ECharts 보조) · TanStack Query 설정값(staleTime · gcTime) · Zustand 실시간 스토어 · 네이티브 WebSocket 래퍼 · Tailwind CSS · shadcn/ui · **웹 글꼴(Pretendard Variable 자체 호스팅)** · 폼 · zod 공유 · **화면 조정값 현행값(링 버퍼 창 · 트렌드 창 · 콘솔 폴링 주기 · BFF revalidate)**
 > **작성일**: 2026-09-24
+> **개정일**: 2026-10-03 — UI/UX 다듬기(사용자 지시 2026-10-03 · 리드 판정 .omc/plans/web-ux-polish.md §2.1 · §7.1 R10) — 구성 선택에 **글꼴 행 신설**(Pretendard Variable 자체 호스팅 · next/font/local · 가변 woff2 한 벌 · 굵기 축 45~930 · display swap · 외부 CDN 없음 — 버전은 03_data_infra §버전 고정표) · 영역 8 → **9** · 스타일과 화면 규격에 **글자 · 표면 규격 행 신설**(글자 단계 12 · 13 · 14 · 16 · 20 · 28 중 13 · 28 두 칸만 테마에 더함 · 전역 스타일의 어절 줄바꿈 · 선택 · 포커스 — 규격 정본 08_screen/01 §글자와 화면 표면) · 항목 4 → **5** · BFF 파일 읽기 행의 화면 값 이름을 D-15 · 다듬기 뒤 요소로(배수 지도 값 → **그림 1 · 그림 2 · 왜? 두 줄 · 업무 네 줄 값**) — 경로 수 불변
 > **개정일**: 2026-10-03 — D-14 2화면 전환(사용자 결정 2026-10-03) — BFF 파일 읽기 행의 화면 EXP-COMPARE 비교 값(폐지) → **EXP-PERF 기록 곡선 · 배수 지도 값** — 요청 경로 수 불변
 > **개정일**: 2026-09-28 — 증거 화면 반영 — gcTime 표에 성능 보기(measurements · perf) 60초 행 · 계열 2 → **3**
 > **개정일**: 2026-09-25 — S2 완료 반영(AC-17 기록 014) — 화면 조정값 S2 행 넷(트렌드 창 5분 · 링 버퍼 3,000 · 최대 태그 8 · 콘솔 폴링 15초) W6 초기값 → **S2 고정** · 미확인 행 닫힘
 > **개정일**: 2026-09-24 — 최종 정밀 검수 — 미확인 등재에 12_security/01이 넘긴 쿠키 이름 · 인증 경로 행 수용
 > **개정일**: 2026-09-24 — W7 검수 반영 — uPlot 번들 크기 **원본 예상치 약 45 KB** 추가(W7 이관 누락) · 미확인 표 웨이브 표지 (W7) 제거
 > **개정일**: 2026-09-24 — W6 실험 채번 반영 — EXP 번호 반영(정본 10_observability/01 · 06)
-> **원천**: 원본 tech_stack.md §2 · §4 · §4.1 · §4.2 · §4.3 · §10.1 · §10.4(커밋 ff66a37) · 원본 data_flow.md §7.2(커밋 ff66a37) · ADR-02 · ADR-07 · ADR-12 · 웨이브 인계 W6 10_observability/04 행(staleTime · gcTime · 링 버퍼 창 · 트렌드 창 · 콘솔 폴링 주기 현행값) · [../08_screen/01_standards.md](../08_screen/01_standards.md) §갱신 주기와 캐시 층 정렬(관계식) · [../08_screen/03_realtime_dashboard.md](../08_screen/03_realtime_dashboard.md) · [../08_screen/07_experiment_console.md](../08_screen/07_experiment_console.md) · [../06_pipeline/07_business_crud.md](../06_pipeline/07_business_crud.md)
+> **원천**: 원본 tech_stack.md §2 · §4 · §4.1 · §4.2 · §4.3 · §10.1 · §10.4(커밋 ff66a37) · 원본 data_flow.md §7.2(커밋 ff66a37) · ADR-02 · ADR-07 · ADR-12 · 웨이브 인계 W6 10_observability/04 행(staleTime · gcTime · 링 버퍼 창 · 트렌드 창 · 콘솔 폴링 주기 현행값) · [../08_screen/01_standards.md](../08_screen/01_standards.md) §갱신 주기와 캐시 층 정렬(관계식) · [../08_screen/03_realtime_dashboard.md](../08_screen/03_realtime_dashboard.md) · [../08_screen/07_experiment_console.md](../08_screen/07_experiment_console.md) · [../06_pipeline/07_business_crud.md](../06_pipeline/07_business_crud.md) · 다듬기 판정 .omc/plans/web-ux-polish.md(사용자 지시 2026-10-03 · §2.1 · §7.1 R10) · [../08_screen/01_standards.md](../08_screen/01_standards.md) §글자와 화면 표면 · as-built apps/web/app/layout.tsx · globals.css
 
 웹은 **컨테이너가 아니라 호스트 프로세스**로 도는 Next.js다(루트 README 고정 기준 실행 구성). 선택의 결정은 ADR-02이고, 이 문서는 그 결정 아래의 **라이브러리 구성과 설정값**을 갖는다. 라이브러리 버전은 적지 않는다 — 정본은 [03_data_infra.md](./03_data_infra.md) §버전 고정표다.
 
@@ -27,9 +28,10 @@
 | 클라이언트 상태 | Zustand | 실시간 태그 값 스토어 · 링 버퍼를 구독자 밖에서 갱신 | Redux — 초당 10프레임마다 액션 · 리듀서를 거쳐 보일러플레이트와 복사가 는다 | 상동 |
 | 실시간 채널 | 네이티브 WebSocket + 재연결 래퍼 | 프레임 오버헤드 최소 · 서버 게이트웨이와 같은 프로토콜 | Socket.IO — 자체 프로토콜 오버헤드가 고빈도 푸시에 붙는다 | 상동 |
 | 스타일 | Tailwind CSS + shadcn/ui | 대시보드 레이아웃 · 컴포넌트 소스를 저장소에 둔다 | 디자인 토큰 문서 · 별도 컴포넌트 라이브러리 — 학습 대상이 아닌 층이 는다 | 이 문서 |
+| 글꼴 | **Pretendard Variable 자체 호스팅** — 웹 패키지 의존성 pretendard의 가변 woff2 한 벌을 next/font/local로 싣는다(굵기 축 45~930 · display swap · CSS 변수 --font-pretendard를 html에 달아 전역 --font-sans가 읽는다 · 대체 글꼴 system-ui · -apple-system · Apple SD Gothic Neo · Noto Sans KR · sans-serif · 대체 글꼴 크기 보정은 끈다 — 기본 보정 대상이 Arial이라 한글 대체 글꼴에 맞지 않는다) | 한국어 UI 표준 글꼴 · 한글 1.0em · 숫자 고정 폭 변형(tabular-nums)을 숫자 자리에 건다 · 외부 요청 없음(localhost에서 약 2 MB를 한 번 받는다 — 판정 R10 유지) | 시스템 글꼴 — OS마다 한글 폭이 달라 줄 수 예산(숫자 4 문장 두 줄 · 그림 1 라벨 칸 · 흐름도 노드 폭)이 OS마다 어긋난다 · 글꼴 CDN — 로컬 전용 구성에 외부 요청이 생긴다 | [../08_screen/01_standards.md](../08_screen/01_standards.md) §글자와 화면 표면 |
 | 폼 · 검증 | React Hook Form + zod | zod 스키마를 NestJS DTO와 공유 | 폼 전용 검증 규칙 — 서버와 규칙이 두 벌이 된다 | 이 문서 §zod 공유 |
 
-- 검산: 영역 = **8**
+- 검산: 영역 = **9**
 - 선택의 결정은 ADR-02(BFF) 하나이고 나머지는 결정이 아니라 구성이다 — 채택하지 않은 기술의 실패 시나리오 전수는 [06_decisions_rationale.md](./06_decisions_rationale.md)가 갖는다.
 
 ## BFF 역할과 경로 분담
@@ -41,7 +43,7 @@ ADR-02의 결정을 라이브러리 경계로 옮긴 표다. 경로별 전수의
 | 브라우저 → BFF → api | 로그인 · 토큰 갱신 · 로그아웃 | 없음 | 리프레시 토큰(httpOnly 쿠키)을 브라우저 JS가 보지 않는다 | 리프레시 토큰이 JS에 노출된다 — BFF를 두는 가장 큰 이유가 사라진다 |
 | 브라우저 → BFF → api | 저빈도 업무 조회(사이트 · 라인 · 설비 · 태그 목록) | 서버 fetch 캐시 revalidate · 태그 무효화(ADR-12 ⑤) | 요청 오리진을 하나로 모으고 저빈도 응답을 짧게 흡수 | 무효화 체인 ⑤단이 걸릴 자리가 없다 |
 | 브라우저 → BFF → api | 업무 조회 중 Redis 캐시가 있는 것(알람 규칙 · 이벤트 · 작업지시) | **no-store** | 서버 층이 Redis 하나여야 staleTime 관계식이 성립한다 | BFF 캐시와 Redis가 겹쳐 옛 값의 창이 두 층의 합이 된다 |
-| 브라우저 → BFF(파일 읽기) | EXP-PERF 기록 곡선 · 배수 지도 값 — docs/measurements 읽기 | 없음 | api 표면이 없다(07_api/10 판정) | 해당 없음 — 기록 파일이 원천이다 |
+| 브라우저 → BFF(파일 읽기) | EXP-PERF 그림 1 · 그림 2 · 왜? 두 줄 · 업무 네 줄 값 — docs/measurements 읽기 | 없음 | api 표면이 없다(07_api/10 판정) | 해당 없음 — 기록 파일이 원천이다 |
 | 브라우저 → api 직결 | 최신값 · 시계열 조회 · WebSocket | 없음 | 고빈도 요청에 중계 1홉을 더할 이유가 없다 | 초당 수 회 요청마다 Node 개발 서버 1홉이 더해져 측정 대상 밖 지연이 섞인다 |
 
 - 검산: 경로 = **5** — BFF 경유 4 · 직결 1
@@ -132,8 +134,9 @@ ADR-02의 결정을 라이브러리 경계로 옮긴 표다. 경로별 전수의
 | 컴포넌트 | shadcn/ui 소스를 웹 패키지에 복사해 소유 | 컴포넌트 라이브러리 버전 갱신이 화면을 조용히 바꾸지 않는다 |
 | 차트 색 | 품질 코드 표현(끊김 · 표지 · 범례)은 08_screen/01 §차트 표준 | 색 선택은 구현이 정한다 · 의미 규칙만 계약 |
 | 시각 표시 | Asia/Seoul 표시 · 저장 epoch | 정본 [../11_glossary/05_units_and_time.md](../11_glossary/05_units_and_time.md) |
+| 글자 · 표면 규격 | 글자 단계 12 · 13 · 14 · 16 · 20 · 28 — Tailwind 기본 단계(12 · 14 · 16 · 20)에 빠진 두 칸(13 · 28)만 테마에 더한다 · 저장소 색 3과 연한 짝 · 진한 짝은 테마 토큰과 화면 상수 하나가 같은 값 · 전역 스타일에 한국어 어절 줄바꿈 · 글자 선택 색 · 키보드 포커스 링(2px 강조 색 · 바깥 2px) · 고정 폭 숫자는 본문이 아니라 숫자 자리 클래스로 | 규격 정본 [../08_screen/01_standards.md](../08_screen/01_standards.md) §글자와 화면 표면 — 이 문서는 값이 놓인 자리만 적는다 |
 
-- 검산: 항목 = **4**
+- 검산: 항목 = **5**
 - **디자인 토큰 문서를 두지 않는다.** 이 시스템의 화면은 측정을 보이는 도구이고, 토큰 체계는 학습 목표 두 축 어디에도 걸리지 않는다.
 
 ## 미확인 · 미설계 등재
