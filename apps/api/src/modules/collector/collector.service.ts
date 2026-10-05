@@ -4,6 +4,7 @@
 // Redis 재연결 뒤에는 전 설비를 한 번 다시 읽는다(끊긴 동안의 신호는 다시 오지 않는다).
 // 위상: 기존 설비는 기동 때 위상을 유지하고, 새로 붙는 설비는 (n + 0.5) ÷ (n + 1) 칸에 둔다(재위상 없음 — S4 판정).
 // SIM · 모드 A는 기동 1회 로드 그대로다 — 새 모의 설비의 서버 · 레지스터 갱신은 재기동에 붙는다(S4 판정).
+// SENSOR_AUTOGEN=off면 폴러도 ch:cacheinv 구독도 띄우지 않는다 — 기동 · 마스터 변경 재로드 · 재연결 대조가 모두 없다(직접 보내 보기는 stream에 직접 XADD).
 import {
   Inject,
   Injectable,
@@ -14,6 +15,8 @@ import {
 import type Redis from 'ioredis';
 import { RedisConnections } from '../../common/redis/connections';
 import type { GroupBacklog } from '../../common/redis/durable-key-client';
+import type { AppConfig } from '../../config/app-config';
+import { APP_CONFIG } from '../../config/config.module';
 import { CollectDefinitionService } from './collect-definition.service';
 import { pointsEmitted } from './collector-metrics';
 import { DEADBAND_FILTER_PORT, type DeadbandFilterPort } from './deadband-filter';
@@ -37,9 +40,15 @@ export class CollectorService implements OnApplicationBootstrap, OnModuleDestroy
     @Inject(POINT_BUFFER_PORT) private readonly buffer: PointBufferPort,
     @Inject(DEADBAND_FILTER_PORT) private readonly filter: DeadbandFilterPort,
     private readonly redis: RedisConnections,
+    @Inject(APP_CONFIG) private readonly cfg: AppConfig,
   ) {}
 
   onApplicationBootstrap() {
+    // 꺼짐이면 구독도 하지 않는다 — 마스터 변경 신호 · 재연결이 폴러를 되살릴 길이 없다(ready도 false라 reload는 늘 빈손)
+    if (this.cfg.sensorAutogen === 'off') {
+      this.log.log('센서 자동 생성 꺼짐(SENSOR_AUTOGEN=off) — 직접 보내 보기만 센서 데이터를 보낸다');
+      return;
+    }
     void this.definitions.whenLoaded().then((defs) => {
       if (this.stopped) return;
       const polled = defs.filter((def) => {
@@ -143,5 +152,10 @@ export class CollectorService implements OnApplicationBootstrap, OnModuleDestroy
   /** 설비별 마지막 적체 — 보관값(백프레셔 단계 반응은 S6) */
   lastBacklog(deviceId: number): GroupBacklog | null {
     return this.pollers.get(deviceId)?.lastBacklog ?? null;
+  }
+
+  /** 지금 돌고 있는 설비 폴러 수 — SENSOR_AUTOGEN=off면 늘 0 */
+  pollerCount(): number {
+    return this.pollers.size;
   }
 }

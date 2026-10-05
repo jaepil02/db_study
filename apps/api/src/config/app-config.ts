@@ -6,6 +6,7 @@
 // S2 추가: 저장소 접속 3(POSTGRES_URL · CLICKHOUSE_URL · REDIS_URL) — 비밀번호 자리는 Compose 변수 치환이 채운다(09_tech_stack/04).
 // S3 추가: SIM_FAULT_PLAN(정본 목록에 이미 있다) · INGEST_BATCH_PLAN · INGEST_LAB_FAULT · GEN_PROFILE(S3 신설 — 09_tech_stack/04 갱신).
 // S7 ① 추가: ALARM_ACK_ACTOR_EMAIL(인증 전 확인 행위자 — 판정 정본 07_api/07 §인증 전 확인 행위자 판정 · 인증 도입 S7 ②에서 폐기).
+// 2026-10-03 추가: SENSOR_AUTOGEN(센서 자동 생성 게이트 — 스위치가 아니다 · 09_tech_stack/04 §환경변수 · 판정 .omc/plans/sensor-autogen-switch.md §1).
 import { readFileSync } from 'node:fs';
 import { CAPACITY_TIER_NAMES, type CapacityTier, SIGNAL_PROFILES } from '@db-study/shared';
 import { z } from 'zod';
@@ -57,6 +58,10 @@ const EnvSchema = z.object({
   GEN_PROFILE: z.enum(['mixed', 'all', ...SIGNAL_PROFILES] as [string, ...string[]]).default('SINE'),
   // S5 — 모드 C 부하 주입 표면 게이트(스위치가 아니다 · 07_api/09) — 'true'일 때만 켜진다 · 그 밖은 전부 꺼짐(기본 비활성)
   DATAGEN_BULK_ENABLED: z.string().optional(),
+  // 센서 자동 생성 게이트(스위치가 아니다 — 운영 게이트) — off면 SIM 포트 · 모드 A 틱 · 수집기 폴링을 띄우지 않는다(직접 보내 보기만 센서 데이터를 보낸다).
+  // 측정 조건이라(health run.sensorAutogen) 허용값 밖이면 기동 거부 — 'of' 같은 오타가 조용히 on이 되면 하루 약 8.6억 행이 쌓이고, off가 되면 실험 조건이 바뀐다.
+  // 앱 기본 on(요구 · 시험 · 실험 조건 보존) · 로컬 Compose 기본 off(infra/compose/compose.yml)
+  SENSOR_AUTOGEN: z.preprocess((v) => (v === '' ? undefined : v), z.enum(['on', 'off']).default('on')),
   // S7 ① — 인증 전 확인(ACK) 행위자 email · 기본값 없음 · 없어도 기동한다(확인만 401 — 09_tech_stack/04 §환경변수)
   // 형식 검사를 걸지 않는다 — 시드 값 learner@localhost는 최상위 도메인이 없어 일반 email 정규식을 통과하지 못한다
   ALARM_ACK_ACTOR_EMAIL: optional(z.string().trim().min(1)),
@@ -79,6 +84,8 @@ export interface AppConfig {
   genProfile: string;
   /** 모드 C 부하 주입 표면 게이트 — DATAGEN_BULK_ENABLED === 'true' */
   datagenBulkEnabled: boolean;
+  /** 센서 자동 생성 게이트 — off면 PlcSim · 모드 A · 수집기가 기동 시 아무것도 띄우지 않는다(SENSOR_AUTOGEN) */
+  sensorAutogen: 'on' | 'off';
   /** 인증 전 확인 행위자 email — null이면 확인만 401(계정 조회는 확인 트랜잭션마다 · 07_api/07) */
   alarmAckActorEmail: string | null;
 }
@@ -123,6 +130,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
       : null,
     genProfile: base.data.GEN_PROFILE,
     datagenBulkEnabled: base.data.DATAGEN_BULK_ENABLED === 'true',
+    sensorAutogen: base.data.SENSOR_AUTOGEN,
     alarmAckActorEmail: base.data.ALARM_ACK_ACTOR_EMAIL,
   };
 }
@@ -233,4 +241,15 @@ export function runInfo(cfg: AppConfig, memoryLimitMb = readMemoryLimitMb()) {
     },
     switches: cfg.switches,
   };
+}
+
+/** 센서 자동 생성을 띄우는 역할 — SIM · 모드 A · 수집기가 한 프로세스에 함께 뜬다(app.module ROLE_MODULES all · collector · ADR-22) */
+export const SENSOR_AUTOGEN_ROLES: ReadonlySet<AppRole> = new Set(['all', 'collector']);
+
+/**
+ * health run.sensorAutogen — 실효값(게이트 × 역할 · 07_api/10). 게이트가 on이어도 수집기가 없는 역할(api · worker)은 이 프로세스가
+ * 센서 데이터를 만들지 않는다 — 게이트 값을 그대로 실으면 api · worker 분리 실행의 기록이 배경 적재가 있었던 것처럼 읽힌다.
+ */
+export function sensorAutogenEffective(cfg: Pick<AppConfig, 'appRole' | 'sensorAutogen'>): 'on' | 'off' {
+  return cfg.sensorAutogen === 'on' && SENSOR_AUTOGEN_ROLES.has(cfg.appRole) ? 'on' : 'off';
 }

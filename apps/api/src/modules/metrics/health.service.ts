@@ -7,7 +7,7 @@ import { ClickHouse } from '../../common/clickhouse/clickhouse.module';
 import { SwitchRegistry } from '../../common/ports/switch-registry';
 import { Postgres } from '../../common/postgres/postgres.module';
 import { RedisConnections } from '../../common/redis/connections';
-import { type AppConfig, runInfo } from '../../config/app-config';
+import { type AppConfig, runInfo, sensorAutogenEffective } from '../../config/app-config';
 import { APP_CONFIG } from '../../config/config.module';
 
 export const STORE_CHECK_TIMEOUT_MS = 1000;
@@ -61,7 +61,10 @@ export class HealthService {
         checkedAt,
         stores: { postgres, clickhouse, redis },
         switches: this.switches.snapshot(),
-        run: runInfo(this.cfg).run,
+        // sensorAutogen은 health에만 싣는다 — 도구 출력(bench · 모드 B · 모드 D · oltp-lab)의 runInfo에 넣으면
+        // 수집기를 띄우지 않는 별도 프로세스가 api의 SENSOR_AUTOGEN을 모른 채 자기 기본값(on)을 적는다.
+        // 값은 실효값(게이트 × 역할) — 수집기가 없는 역할(api · worker)은 게이트가 on이어도 off다(07_api/10)
+        run: { ...runInfo(this.cfg).run, sensorAutogen: sensorAutogenEffective(this.cfg) },
       },
     };
   }

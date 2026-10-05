@@ -133,8 +133,20 @@ describe('API 계약 — 정본 문서와 같다', () => {
       switches: {
         'SW-07': { name: 'WS_THROTTLE_MS', value: 100, impl: 'WindowMergeThrottle', warning: null },
       },
-      run: { commitHash: 'a1b2c3d', memoryProfile: 'load', memoryLimitMb: 4096, capacityTier: 'M' },
+      run: {
+        commitHash: 'a1b2c3d',
+        memoryProfile: 'load',
+        memoryLimitMb: 4096,
+        capacityTier: 'M',
+        sensorAutogen: 'on',
+      },
     };
     expect(HealthResponse.safeParse(health).success).toBe(true);
+    // run.sensorAutogen — 빠지면 · on | off 밖이면 계약 위반(측정 조건이라 기록에 늘 남는다)
+    const noGate = Object.fromEntries(Object.entries(health.run).filter(([k]) => k !== 'sensorAutogen'));
+    expect(HealthResponse.safeParse({ ...health, run: noGate }).success).toBe(false);
+    expect(
+      HealthResponse.safeParse({ ...health, run: { ...health.run, sensorAutogen: 'yes' } }).success,
+    ).toBe(false);
   });
 });

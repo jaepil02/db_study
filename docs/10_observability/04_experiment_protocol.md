@@ -2,6 +2,7 @@
 
 > **대상**: ★ 실험 규칙 정본 — 실험 한 번의 절차 · 3회 중앙값과 편차 폐기 기준 · 구조 판정과 분포 판정 · 역전 구간 우열 3/3 구조 판정 · 스냅샷과 복원 · 캐시 키 초기화 · 기준선 · 회복 관측 · 조건 칸(4요소 + 부가 조건) · 조건 분리 강제 · **측정 기록 템플릿(docs/measurements/NNN-{slug}.md)** · **기계 판독 블록 형식(EXP-PERF BFF가 읽는다)** · 기록 상태와 정정 · 결과를 정본 문서에 올리는 절차
 > **작성일**: 2026-09-24
+> **개정일**: 2026-10-05 — 센서 자동 생성 게이트 반영(SENSOR_AUTOGEN · 사용자 결정 2026-10-03 · health run.sensorAutogen — 07_api/10 · 검수 반영 리드 판정 M2) — §조건 칸에 **센서 자동 생성 행 신설** — 부가 10 → **11** · 칸 14 → **15** · 기계 판독 블록 run 행 health run 네 필드 그대로 → **health run 그대로 — 4요소 넷 + sensorAutogen(2026-10-03 전 기록은 넷)** — 판독 규칙 4의 run 네 필드 필수 불변 · 필드 행 · 규칙 수 · schema measurement/v1 불변(판독 규칙 7)
 > **개정일**: 2026-10-03 — D-15 학습자 눈높이 한 화면(사용자 지시 2026-10-03 — 08_screen/08_evidence_screens · 01_standards §한 화면 원칙) — 4요소 표시 자리 측정 조건 서랍 → **각주 툴팁** · 화면 참고값 예외의 표시 방식 점선 · 회색 · 배지 · 최소~최대 막대 → **각주 고정 문구(시간은 참고용 · 승패는 3번 모두 같을 때만) + 툴팁 배지 문구** — 예외의 범위(표시만 · 정본 문장 인용 금지 · 역전 구간은 structuralRanges만) 불변
 > **개정일**: 2026-10-03 — D-14 2화면 전환(사용자 결정 2026-10-03) — 기계 판독 블록을 읽는 화면 EXP-COMPARE(폐지) → **EXP-PERF**(대상 줄 · 도입 · structuralRanges 소비 자리) · 4요소 표시 자리 EXP-CONSOLE 기록 조건 블록 → **두 실증 화면 측정 조건 서랍** · 조합 제약 경고 문장 — 기록 형식 · 필드 수 불변
 > **개정일**: 2026-09-28 — DB 시각 UTC(ADR-27) — 격자 2차 절차 사실의 S = KST 자정 − 50,020초에 ADR-27 전 기록 사실임과 러너의 UTC 자정 전환(구현 목록 #21) 병기 — 기록 사실 불변
@@ -122,6 +123,7 @@ AC의 합격선은 두 종류다([../03_requirements/14_acceptance_criteria.md](
 | 용량 티어 | health run.capacityTier | S · M · M+ · L | 상동 |
 | 스위치 상태 | health switches 12종 전부의 value · impl | on · off · 정수(SW-07) · ingest · collector · stream · direct(SW-12) | 상동 |
 | 주입 모드 | 실행 명령 | A · B · C · D · 없음 | 모드를 섞었는지 판정할 수 없다 |
+| 센서 자동 생성 | health run.sensorAutogen — 실효값(게이트 × 역할 · [../07_api/10_metrics.md](../07_api/10_metrics.md)) | on · off | 수집기가 늘 싣는 배경 적재 위에서 잰 측정과 주입한 양만 흐른 측정이 한 조건으로 묶인다 — 2026-10-03 전 기록은 칸이 없다 |
 | 관측 스택 | 기동 명령 | off(정밀 세션) · on(탐색 — 상대 비교용) | 절대값 인용 여부를 가를 수 없다 |
 | 생성기 CPU | 호스트 도구 · 생성기 지표 | 실행 중 최대 사용률 | 포화 구간을 폐기할 수 없다(REQ-GEN-13) |
 | CPU 배치 · 대조 메모리 | cpuset 표준 · 대조 동일화 · 대조 표준 메모리(ClickHouse 3.5 GB · PostgreSQL 3.5 GB — 정본 [../09_tech_stack/04_local_environment.md](../09_tech_stack/04_local_environment.md)) | 이름 · 값 | 자원 배분 차이가 결과에 섞인다 |
@@ -132,7 +134,7 @@ AC의 합격선은 두 종류다([../03_requirements/14_acceptance_criteria.md](
 | WSL 네트워킹 모드 | .wslconfig | mirrored · NAT | 루프백 경로 길이가 다른 지연이 비교된다([07_measurement_limits.md](./07_measurement_limits.md)) |
 | 라이브 실행 없음 | 착수 전 확인 — gen_run_active{type} 전부 0 · GET /api/v1/runs/current의 run이 null이거나 status가 running · stopping이 아님 | 확인 여부 · 확인 시각 | 증거 화면의 라이브 실행(perf 쿼리 · flow 발행)이 저장소 · Stream에 부하를 더해 지연 · 처리량에 섞인다 — 동시 1은 실행끼리만 막고 실험은 모른다([../06_pipeline/10_datagen_inject.md](../06_pipeline/10_datagen_inject.md) §한 번에 한 계층) |
 
-- 검산: 칸 = 4요소 4 + 부가 10 = **14**
+- 검산: 칸 = 4요소 4 + 부가 11 = **15**
 - 환경변수 이름(MEMORY_PROFILE — load · dev · mid · CAPACITY_TIER · 빌드 인자 COMMIT_HASH · WORKER_POOL_SIZE · SIM_FAULT_PLAN)의 정본은 [../09_tech_stack/04_local_environment.md](../09_tech_stack/04_local_environment.md)다. health run의 memoryProfile 값은 MEMORY_PROFILE 값 그대로다.
 - **스위치는 기계 판독 블록에서 12종 전부를 적는다**(기록 시점 스위치 정본의 전부 — SW-12 도입 전 기록은 11종이고 판독은 규칙 4가 맞춘다). 사람이 읽는 조건 표는 "바꾼 것만 명시 · 나머지 기본값"을 허용하지만(REQ-TEC-10), 기본값 자체가 바뀌면(스위치 기본값 변경 절차) 옛 기록의 "기본값"이 다른 조건을 가리킨다 — 블록은 값 전부를 싣는다.
 - **health 값이 null이면 그 기록은 4요소가 빠진 기록이다.** 추정값으로 채우지 않는다 — null은 인용 불가 표지이고 BFF가 그 점을 그리지 않는다.
@@ -232,7 +234,7 @@ AC의 합격선은 두 종류다([../03_requirements/14_acceptance_criteria.md](
 |------|:--:|------|------|
 | schema · record · exp · status · supersedes | 예 | measurement/v1 · 3자리 · EXP-NN 배열 · valid · discarded · superseded · 기록 번호 또는 null | BFF 필터 |
 | window | 예 | UTC ISO 시작 · 끝 | 사람 · 재현 |
-| run | 예 | health run 네 필드 그대로 | 4요소 툴팁 · 비교 성립 판정 |
+| run | 예 | health run 그대로 — 4요소 넷 + sensorAutogen(2026-10-03 전 기록은 넷 · 도구 컨테이너 경로의 run도 넷 — sensorAutogen은 api health에만 있다) | 4요소 툴팁 · 비교 성립 판정 |
 | switches | 예 | 스위치 12종 전부(기록 시점 스위치 정본의 전부 — SW-12 도입 2026-09-27 전 기록은 11종) · health switches.*.value 그대로 — **스위치 비교 기록(on/off 두 팔)은 대상 스위치만 results의 arm 순서대로 값 배열**(예: ["on", "off"]) · 나머지는 스칼라 | 상동 |
 | conditions | 예 | injectionMode · observability · cpuset · seed · generatorCpuMax · compression · swapUsed · wslNetworking · simFaultPlan(경로 · 해시 또는 null) 필수 · controlMemoryMb(대조 기록) · **EXP-45 기록은 flushWindowSeconds · copyTimeoutSeconds(초 · 판정 점 기준) · batchPlan · controlCopySyncCommit — 반복끼리 다르면 기록을 만들지 않는다** · 나머지 실험별 | 조건 분리 판정 · EXP-45 판정 점 기준 |
 | repeat | 예 | runs · deviation · threshold | 폐기 판정 |

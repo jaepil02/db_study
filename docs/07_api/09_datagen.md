@@ -2,6 +2,7 @@
 
 > **대상**: GEN 도메인 표면 둘 묶음 — ① 모드 C 부하 주입 POST /api/v1/ingest/bulk의 게이트(환경변수 이름) · 인증 · 요청 본문(엔트리 계약 변환) · 백프레셔 거절 datagen.stream_full/503 · 부분 수용 · 레이트 리밋 등급 ② **라이브 실행 제어 #2~#5**(EXP-PERF 성능 비교 · EXP-FLOW 흐름 시연의 시작 · 현재 · 단건 · 중단 — 실행 객체 스키마 · status · step status · 매개변수 두 종류 · 동시 실행 하나 datagen.run_in_progress/409 · 중단 · 실패 의미) · 생성기 실행 제어 표면 판정 · 실행 중 주입 제어 표면 판정
 > **작성일**: 2026-09-24
+> **개정일**: 2026-10-03 — 센서 자동 생성 게이트(사용자 결정 2026-10-03 · SENSOR_AUTOGEN — 이름 정본 09_tech_stack/04) — 공통 규약(라이브 실행) 게이트 행에 **SENSOR_AUTOGEN과 무관**(off여도 flow 실행은 돈다) — 표면 · 항목 수 불변
 > **개정일**: 2026-10-03 — 사용자 선택 2026-10-03 — 조회 경로 보이기 · D-15(설계 정본 .omc/plans/web-junior-redesign.md §9) — flow 매개변수 **readsPerSec 신설**(0 · 5 · 20 · 50 · 기본 20 — 조회 3종을 publish 동안 섞는다 · 기전 06_pipeline/10) · 매개변수 키 4 → **5** · 값 수 17 → **21** · flow 결과 수치 8 → **9**(**readsSent**) · publish detail에 readsSent · readsFailed · readsSkipped · 응답 예시 params · result에 반영 · 라이브 실행 판정 행의 "닫힌 매개변수 4키" → 개수 없이 §매개변수 인용 — 표면 · 기능 · 에러 코드 수 불변
 > **개정일**: 2026-10-03 — D-15 학습자 눈높이 한 화면(사용자 지시 2026-10-03 — 08_screen/08_evidence_screens) — 생성기 원격 손잡이 반론 불릿 측정 조건 서랍 → **각주 툴팁** — 표면 · 기능 · 에러 코드 수 불변
 > **개정일**: 2026-10-03 — D-14 2화면 전환(사용자 결정 2026-10-03) — 생성기 원격 손잡이 반론 불릿의 실험 콘솔(EXP-CONSOLE) → **두 실증 화면 · 측정 조건 서랍** — 표면 · 기능 · 에러 코드 수 불변(api 표면은 지우지 않는다 — D-14 결정 1)
@@ -136,7 +137,7 @@ GEN이 가진 표면은 **두 묶음 다섯이다.** ① 모드 C 부하 주입 
 | 항목 | 규칙 | 근거 |
 |------|------|------|
 | 경로 | 브라우저 → BFF → api · **BFF no-store** — 실행 객체는 순간값이라 캐시할 것이 없다 | [01_conventions.md](./01_conventions.md) §BFF 경유와 직결 · 캐시하면 running이 revalidate 창만큼 남아 끝난 실행을 진행 중으로 보인다 |
-| 게이트 | **없다** — 기본 존재한다 · 방어는 127.0.0.1 바인드 · 동시 실행 하나 · 매개변수 화이트리스트(§매개변수) | 리드 판정 2026-09-28 · 잔여(로컬 사용자의 대량 적재 · 디스크 소모)는 [../12_security/04_threat_model.md](../12_security/04_threat_model.md) |
+| 게이트 | **없다** — 기본 존재한다 · 방어는 127.0.0.1 바인드 · 동시 실행 하나 · 매개변수 화이트리스트(§매개변수) · 센서 자동 생성 게이트(SENSOR_AUTOGEN — 스위치 밖 · 이름 정본 [../09_tech_stack/04_local_environment.md](../09_tech_stack/04_local_environment.md))와도 무관하다 — 그 게이트는 SIM · 모드 A · Collector만 끄고, flow 실행은 stream에 직접 발행하므로 off 스택에서 화면의 센서 원천이 된다 | 리드 판정 2026-09-28 · 잔여(로컬 사용자의 대량 적재 · 디스크 소모)는 [../12_security/04_threat_model.md](../12_security/04_threat_model.md) |
 | 인증 · 인가 | 인증 도입(S7 ②) 전 무인증 · 뒤에는 시작 · 중단 **ENGINEER · ADMIN** · 조회 전원 | [../02_features/12_permission_matrix.md](../02_features/12_permission_matrix.md) §GEN · OBS 표면 인가 |
 | 레이트 리밋 | S7 ②부터 class **general** 계수(한도 정본 [../12_security/03_api_surface_defense.md](../12_security/03_api_surface_defense.md)) · **실행 패널 탭 하나의 1초 폴링은 분당 60 요청이다** — 폴링 항은 실행 패널 탭 수(현행 참고 2 — EXP-PERF · EXP-FLOW) × 60이고, 한도가 이보다 낮으면 폴링이 429로 끊겨 진행 표시가 멈춘다 · 관계식 R5가 막는다 | [01_conventions.md](./01_conventions.md) §한도 등급이 갈리는 표면 묶음 |
 | 동시 실행 | **두 종류를 합쳐 한 번에 하나** — 진행 중(running · stopping)이 있으면 시작 요청은 datagen.run_in_progress/409 · details {runId, type} | REQ-GEN-16 |

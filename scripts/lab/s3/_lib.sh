@@ -3,6 +3,9 @@
 set -euo pipefail
 cd "$(dirname "${BASH_SOURCE[0]}")/../../.."
 COMPOSE="docker compose --env-file .env -f infra/compose/compose.yml -f infra/compose/compose.load.yml"
+# 센서 자동 생성 on — 로컬 Compose 기본이 off라(2026-10-03) 러너가 기존 측정 조건(모드 A · 수집기 상시)을 지킨다
+# 셸에 남은 값에 끌려가지 않게 고정한다 — 한 호출만 바꾸려면 앞에 붙인다(예: SENSOR_AUTOGEN=off api_up)
+export SENSOR_AUTOGEN=on
 
 # 이미지에 들어갈 경로가 커밋과 같아야 기록의 커밋 해시가 실행 코드를 가리킨다
 require_clean() {

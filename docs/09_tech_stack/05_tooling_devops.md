@@ -2,6 +2,7 @@
 
 > **대상**: 개발 도구 구성 — pnpm workspace · Biome · tsc strict · Vitest · Supertest · Testcontainers · 품질 게이트 · **마이그레이션 도구 판정** · Taskfile 작업 6(migrate · seed · snapshot · restore · bench · docs:lint) · 리포지터리의 도구 파일 자리 · **SIM 주입 계획 파일 형식(판정)** · 착수 체크리스트의 도구 항목
 > **작성일**: 2026-09-24
+> **개정일**: 2026-10-05 — 센서 자동 생성 게이트 후속(SENSOR_AUTOGEN — 이름 정본 04_local_environment · 검수 반영 · 리드 판정 H1 · M3 — restore 설계는 사용자 결정 2026-10-05) — restore 행 동작 컨테이너 정지 → … → 재기동 → **api 컨테이너 제거 → 컨테이너 정지 → … → 저장소 재기동(api는 task up)** · **restore B형 불릿 신설**(restore 뒤 api 없음) · **test-surface 자동 생성 off 전제 불릿 신설** — 작업 수 불변
 > **개정일**: 2026-09-24 — S2 구현 반영 — Taskfile migrate · seed 구현(api 이미지 안 명령 · seed --tier · --slice) · 보조 작업 api-build · up · test-surface · Supertest 표면 계약 가동(Testcontainers 미사용)
 > **개정일**: 2026-09-24 — S1 실측 반영(EXP-21 기록 006 · 410a146 · EXP-39 기록 007~009 · 019e54d) — pnpm workspace 가동(apps/api · packages/shared · 잠금 파일 커밋) · 품질 게이트 ①~④ 전부 가동 · 빌드 스크립트 허용 목록 규칙 신설
 > **개정일**: 2026-09-24 — S0 구현 반영 — docs:lint 편입 완료(.omc/docs_lint.py → **scripts/docs_lint.py** · 품질 게이트 ④ 가동 — .githooks/pre-commit) · Taskfile S0분 3작업 구현(snapshot · restore · docs:lint) · 도구 파일 자리에 .nvmrc · .githooks · scripts 3행 추가
@@ -86,16 +87,18 @@
 | migrate | PostgreSQL 순번 마이그레이션 → ClickHouse DDL 순번 → Dictionary 재적재 | 저장소 3 healthy | 적용 이력으로 멱등 | 적용된 순번에서 멈춘다 · 다음 실행이 이어서 적용 |
 | seed | 사이트 · 라인 · 설비 · 접속 설정 · 태그 · 계정 · 역할(티어 인자) | migrate 완료 · 빈 마스터 | 빈 볼륨 전용 — 채워진 볼륨이면 거부 | 부분 시드를 남기지 않게 한 트랜잭션 |
 | snapshot | 컨테이너 정지 → 볼륨 4개를 볼륨별 아카이브로 snapshots/에 | 부하 없음 | 이름이 같으면 거부 | 정지 상태로 남는다 — 재기동은 사람이 |
-| restore | 컨테이너 정지 → 볼륨 비우기 → 아카이브 역전개 → 재기동 | 대상 아카이브 존재 | 같은 아카이브면 같은 상태 | 볼륨이 빈 채로 남을 수 있다 — 복원 전 snapshot을 먼저 |
+| restore | api 컨테이너 제거 → 컨테이너 정지 → 볼륨 비우기 → 아카이브 역전개 → 저장소 재기동 — **api는 만들지 않는다**(task up이 만든다) | 대상 아카이브 존재 | 같은 아카이브면 같은 상태 | 볼륨이 빈 채로 남을 수 있다 — 복원 전 snapshot을 먼저 |
 | bench | 부하 시나리오 하나를 k6로 실행 · k6를 전용 CPU 집합에 고정 · 조건 칸 초안 생성 | 기준선 관측 완료 · 캐시 계열 키 비움 | 해당 없음 — 실행마다 새 기록 | 기록 초안만 남고 수치는 기록하지 않는다 |
 | docs:lint | 문서군 기계 검사 | 없음 | 읽기 전용 | 오류 목록 · 비정상 종료 |
 
 - 검산: 작업 = 원본 5 + 코드 착수 1 = **6**
 - **S0 구현(2026-09-24) — snapshot · restore · docs:lint가 저장소 루트 Taskfile.yml에 있다.** migrate · seed(S3) · bench(S5)는 배정 단계에서 더한다. snapshot은 아직 없는 볼륨(api 이전의 spooldata)을 manifest에 absent로 적고 건너뛰며, restore는 아카이브에 있는 볼륨만 되돌린 뒤 저장소 3개 healthy까지 기다린다. 묶기와 풀기에 같은 태그 고정 이미지를 써서 볼륨 파일의 소유자 번호를 보존한다.
 - **S2 구현(2026-09-24) — migrate · seed가 Taskfile.yml에 있다.** 둘 다 api 이미지 안 명령이다(스키마 소유권 api — docker compose run --rm --no-deps api node dist/db/migrate.js · seed.js). migrate는 관리자 계정으로 001을 적용하고 역할 비밀번호를 .env 값으로 설정한 뒤 나머지 순번을 app_owner로 적용하며, ClickHouse 순번 파일을 매번 전부 멱등 적용한다 — Dictionary 재적재는 dict_tag가 생기는 S3부터다. seed는 --tier S · --slice s2 인자를 받고 계정 · 역할은 AUT 테이블이 생기는 단계(S7)에서 더한다. 보조 작업 셋 — api-build(작업 트리가 깨끗할 때만 커밋 해시를 빌드 인자로 · 아니면 null) · up(저장소 healthy → migrate → SEED가 있으면 seed → api healthy · 기동 순서 정본 [../04_architecture/03_execution_topology.md](../04_architecture/03_execution_topology.md)) · test-surface(기동한 api에 표면 계약 테스트) — 은 원본 6작업 밖의 편의 작업이라 위 검산에 넣지 않는다.
+- **test-surface는 센서 자동 생성 off 스택에서도 돈다(2026-10-05).** WS rt 시험이 health run.sensorAutogen을 읽어 off면 짧은 flow 실행(pps 1000 · 30초 · 업무 0 · 조회 0 — [../07_api/09_datagen.md](../07_api/09_datagen.md) #2)을 api로 시작해 rt의 원천으로 쓰고, 끝나면 중단 · 종결까지 기다린다. 실행은 동시 1이라 진행 중인 실행이 있으면 시작 전에 먼저 중단하고, 그 몇 초의 센서 데이터가 스트림 → ClickHouse에 남으며, 빈 DB의 첫 실행이면 시연 전용 행(DEMO-FLOW)이 생긴다. on이면 수집기가 늘 싣는 데이터를 그대로 기다린다.
 - **seed가 채워진 볼륨을 거부하는 이유** — 시드 고정 생성기의 재현성은 빈 상태에서 출발할 때만 성립한다. 두 번 시드한 볼륨은 tag_id 공간이 달라 같은 시드의 두 실험이 다른 태그를 본다.
 - **bench의 CPU 집합 고정** — k6를 측정 대상과 겹치지 않는 집합에 둔다(배치 정본 [../04_architecture/03_execution_topology.md](../04_architecture/03_execution_topology.md) §cpuset 배치). 시나리오 정의의 정본은 [../10_observability/05_load_scenarios.md](../10_observability/05_load_scenarios.md), 기록 형식은 [../10_observability/04_experiment_protocol.md](../10_observability/04_experiment_protocol.md)다.
 - **snapshot · restore는 컨테이너를 정지한다.** 실행 중 볼륨을 묶으면 ClickHouse 파트 · PostgreSQL WAL이 중간 상태로 묶여 복원이 기동에 실패하거나 조용히 손상된다.
+- **B형 — restore 뒤에 api가 없는 것은 결함이 아니다(사용자 결정 2026-10-05).** 결론 — 스냅샷은 볼륨만 담고 api 설정(env)은 담지 않으므로 restore는 볼륨 · 저장소만 되돌리고 api 컨테이너는 지우기만 한다. 반대 시나리오 — ① 남은 api를 재기동으로 되살리면 실험 러너가 만든 컨테이너(SENSOR_AUTOGEN=on 등)가 그 env 그대로 복원한 볼륨에 센서 데이터를 쌓는다 ② restore 안에서 api를 새로 만들면 migrate 없이 스냅샷의 옛 스키마(스냅샷은 만든 커밋의 마이그레이션까지만 담는다) 위에서 새 코드가 돌고, 러너의 기준선(api 없이 저장소 유휴)과 시드 스냅샷 준비(restore → seed → snapshot)가 그 api의 적재로 오염된다. 파생 지침 — api를 만드는 길은 둘뿐이다: 사람은 restore 뒤 task up(저장소 → migrate → api · 지금 env), 실험 러너는 자기 기동 함수(러너가 정한 env)다([04_local_environment.md](./04_local_environment.md) §환경변수 SENSOR_AUTOGEN B형).
 
 ## 리포지터리의 도구 파일 자리
 

@@ -621,6 +621,61 @@ export function noSummary(
   return sub === 'subscribed' && state.lastFrameAt !== null && now - state.lastFrameAt >= FLOW_NO_SUMMARY_MS;
 }
 
+/**
+ * 센서 배치가 안 온다 — 구독 중인데 배치 요약을 한 번도 받지 못했거나 마지막 배치가 10초 넘게 지났다.
+ * 업무 요약만 오는 동안(직접 보낸 업무 요청)도 센서는 안 오는 것이다 — 그래서 프레임이 아니라 배치 시각(발행자 시계 · serverNow와 비교)으로 본다.
+ */
+export function sensorQuiet(
+  state: Pick<FlowViewState, 'lastBatchAt'>,
+  sub: FlowSubStatus,
+  serverNowMs: number,
+): boolean {
+  return (
+    sub === 'subscribed' &&
+    (state.lastBatchAt === null || serverNowMs - state.lastBatchAt >= FLOW_NO_SUMMARY_MS)
+  );
+}
+
+// ── 흐름도 위 알림 한 줄(08_evidence_screens §EXP-FLOW 빈 값 · 알림) ──
+export const FLOW_DISCONNECTED_NOTICE = '연결이 끊겨 점을 멈췄어요 — 다시 연결되면 이어서 보여 줘요';
+export const FLOW_NO_DATA_WARNING = '10초째 새 데이터가 오지 않아요 — 센서 데이터 적재가 멈췄을 수 있어요';
+export const FLOW_ACK_LATE_NOTICE = '연결 확인이 늦어지고 있어요';
+/** 센서 자동 생성 꺼짐(health run.sensorAutogen off) — 고장이 아니라 꺼 둔 상태라 경고가 아니라 길 안내다 */
+export const FLOW_AUTOGEN_OFF_NOTICE =
+  "센서 자동 생성이 꺼져 있어요 — 오른쪽 위 '직접 보내 보기'로 데이터를 보내 보세요";
+
+/** warn = 경고 색(앰버) · info = 차분한 안내(회색) */
+export interface FlowNotice {
+  text: string;
+  tone: 'warn' | 'info';
+}
+
+export interface FlowNoticeInput {
+  sub: FlowSubStatus;
+  silent: boolean;
+  ackOverdue: boolean;
+  sensorQuiet: boolean;
+  sensorAutogen: 'on' | 'off' | null;
+  /** 이 화면의 flow 실행이 running · stopping인가(실행 패널 current 폴링 · lib/runs isActive) */
+  flowRunActive: boolean;
+}
+
+/**
+ * 알림 한 줄 고르기 — 끊김 > 자동 생성 꺼짐 안내 > 10초 무데이터 경고 > 확인 지연.
+ * 꺼짐 안내는 health가 off라고 말할 때만 — health를 아직 못 읽었거나(null) on이면 지금 경고 그대로다.
+ * off인데 센서가 안 오는 것은 고장이 아니다: 경고로 띄우면 학습자가 멈춘 적재를 고치려 든다.
+ * 직접 보내 보기(flow 실행)가 running · stopping이면 꺼짐 안내를 띄우지 않는다 — 보내는 중에 "보내 보세요"는 모순이다.
+ * 그동안의 침묵은 아래 규칙(10초 무데이터 경고 · 확인 지연)이 그대로 본다.
+ */
+export function flowNotice(o: FlowNoticeInput): FlowNotice | null {
+  if (o.sub === 'disconnected') return { text: FLOW_DISCONNECTED_NOTICE, tone: 'warn' };
+  if (o.sensorAutogen === 'off' && o.sensorQuiet && !o.flowRunActive)
+    return { text: FLOW_AUTOGEN_OFF_NOTICE, tone: 'info' };
+  if (o.silent) return { text: FLOW_NO_DATA_WARNING, tone: 'warn' };
+  if (o.ackOverdue) return { text: FLOW_ACK_LATE_NOTICE, tone: 'warn' };
+  return null;
+}
+
 // ── 메트릭 흐름 보기(BFF ?view=flow — 웹 내부 계약 · §데이터 원천의 이름만 요약) ──
 
 export interface FlowChTable {

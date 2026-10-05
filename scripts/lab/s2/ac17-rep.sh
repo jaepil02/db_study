@@ -16,6 +16,8 @@ if [ -n "$DIRTY" ]; then echo "이미지 · 웹에 들어갈 변경이 커밋되
 HASH=$(git rev-parse --short HEAD)
 : "${PLAYWRIGHT_CORE:?PLAYWRIGHT_CORE — playwright-core 경로}"
 export COMMIT_HASH=$HASH CAPACITY_TIER=S
+# 센서 자동 생성(모드 A · 수집기) 전제 측정 — compose 기본 off를 덮어 기존 측정 조건을 지킨다(s3/_lib.sh와 같은 규칙)
+export SENSOR_AUTOGEN=on
 COMPOSE="docker compose --env-file .env -f infra/compose/compose.yml -f infra/compose/compose.load.yml"
 docker image inspect "db_study-api:$HASH" >/dev/null
 mkdir -p "$SHOTS"

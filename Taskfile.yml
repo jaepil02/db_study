@@ -67,16 +67,21 @@ tasks:
       - echo "스냅샷 완료 — 컨테이너는 정지 상태다. 재기동은 {{.COMPOSE}} start"
 
   restore:
-    desc: 컨테이너 정지 → 볼륨 비우기 → snapshots/NAME/ 아카이브 역전개 → 재기동 · healthy 대기
+    desc: api 컨테이너 제거 → 컨테이너 정지 → 볼륨 비우기 → snapshots/NAME/ 아카이브 역전개 → 저장소 재기동 · healthy 대기(api는 task up이 다시 만든다)
     summary: |
-      사용: task restore NAME=<이름>
+      사용: task restore NAME=<이름> → task up
       아카이브에 있는 볼륨은 되돌리고, 스냅샷 때 없던 볼륨(manifest absent)은 비운다. 복원 전 현재 상태가 필요하면 snapshot을 먼저 뜬다.
+      스냅샷은 볼륨만 담고 api 설정(env)은 담지 않는다 — restore는 볼륨 · 저장소만 되돌리고 api는 지우기만 한다.
+      api를 만드는 길은 사람은 task up(저장소 → migrate → api · 지금 env), 실험 러너는 api_up(러너가 정한 env) 둘뿐이다(09_tech_stack/04 §환경변수).
     requires:
       vars: [NAME]
     preconditions:
       - sh: 'ls snapshots/{{.NAME}}/*.tar.gz >/dev/null 2>&1'
         msg: 'snapshots/{{.NAME}} 에 볼륨 아카이브가 없다'
     cmds:
+      # api 컨테이너를 되살리지 않는다 — 실험 러너가 남긴 컨테이너(SENSOR_AUTOGEN=on 등)를 start가 그 env 그대로 띄우면
+      # 복원한 볼륨 위에서 센서 자동 생성이 다시 돈다. 없으면 아무 일도 없다(러너의 restore_snap은 먼저 지우고 부른다)
+      - '{{.COMPOSE}} rm -sf api'
       - '{{.COMPOSE}} stop'
       - |
         for f in snapshots/{{.NAME}}/*.tar.gz; do
@@ -98,8 +103,12 @@ tasks:
             echo "emptied $v (absent in snapshot)"
           fi
         done
+      # 저장소만 다시 뜬다 — api는 위에서 지워 컨테이너가 없다
       - '{{.COMPOSE}} start'
       - task: wait-healthy
+      # restore 안에서 api를 만들지 않는다 — 스냅샷이 지금 코드보다 옛 스키마일 수 있어 migrate를 먼저 도는 task up이 만든다.
+      # 러너의 기준선(api 없이 저장소 유휴)과 시드 스냅샷 준비(restore → seed → snapshot)도 api가 없어야 성립한다
+      - echo "복원 완료 — 저장소 3개만 떠 있고 api는 없다. api는 task up(저장소 → migrate → api · 지금 env)으로 띄운다"
 
   wait-healthy:
     internal: true

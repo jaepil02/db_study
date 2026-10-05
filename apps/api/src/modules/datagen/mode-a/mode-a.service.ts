@@ -1,4 +1,5 @@
 // GEN 모드 A 기동 — SIM 포트가 뜬 뒤 시뮬레이션 설비의 태그마다 Buffer 갱신 대상을 만들고 틱을 돈다
+// SENSOR_AUTOGEN=off면 틱을 돌지 않는다 — 기동 로그 한 줄은 수집기가 낸다(CollectorService)
 import type { SignalProfile } from '@db-study/shared';
 import {
   Inject,
@@ -48,6 +49,7 @@ export class ModeAService implements OnApplicationBootstrap, OnModuleDestroy {
   ) {}
 
   onApplicationBootstrap() {
+    if (this.cfg.sensorAutogen === 'off') return;
     const mix = parseMix(this.cfg.genProfile);
     void this.definitions.whenLoaded().then(async (defs) => {
       await this.sim.whenStarted();
@@ -84,5 +86,10 @@ export class ModeAService implements OnApplicationBootstrap, OnModuleDestroy {
   onModuleDestroy() {
     this.stopped = true;
     if (this.timer) clearInterval(this.timer);
+  }
+
+  /** 틱이 돌고 있는가 — SENSOR_AUTOGEN=off면 늘 false */
+  ticking(): boolean {
+    return this.timer !== null;
   }
 }

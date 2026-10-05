@@ -27,6 +27,8 @@ export const RunInfo = z.strictObject({
   memoryProfile: z.enum(['load', 'dev', 'mid']).nullable(),
   memoryLimitMb: z.number().int().nullable(),
   capacityTier: z.enum(CAPACITY_TIER_NAMES as unknown as [string, ...string[]]).nullable(),
+  /** 센서 자동 생성 게이트(SENSOR_AUTOGEN · 스위치가 아니다) — off면 직접 보내 보기만 센서 데이터를 보낸다 · 측정 조건이라 기록에 남는다 */
+  sensorAutogen: z.enum(['on', 'off']),
 });
 export type RunInfoBody = z.infer<typeof RunInfo>;
 

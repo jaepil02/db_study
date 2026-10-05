@@ -2,6 +2,8 @@
 
 > **대상**: 비밀과 설정을 위협 관점에서 다시 읽는 리뷰 — **비밀 목록(정본)** · .env 비커밋 · .env.example의 자리표시 규칙 · 비밀이 새는 자리 · Dictionary 전용 읽기 계정 · 부하 주입 표면 게이트(DATAGEN_BULK_ENABLED) 리뷰 · 백업 정책의 보안 함의 · 설정 전환의 경계
 > **작성일**: 2026-09-24
+> **개정일**: 2026-10-05 — 센서 자동 생성 게이트 검수 반영(리드 판정 M1) — SENSOR_AUTOGEN 행 문구 → **health는 게이트 값이 아니라 실효값(게이트 × 역할)을 싣는다** — 묶음 수 불변
+> **개정일**: 2026-10-03 — 센서 자동 생성 게이트(사용자 결정 2026-10-03 · SENSOR_AUTOGEN — 이름 정본 09_tech_stack/04) — 비밀이 아닌 것 표에 **SENSOR_AUTOGEN 행** — 묶음 4 → **5**
 > **개정일**: 2026-09-28 — 웨이브 1 검수 반영(B-M3) — 비밀 아님 표 · 변경 수단 표 스위치 11종 → **12종** — 행 수 불변
 > **원천**: 원본 architecture.md §3 · §7.4 · §18(커밋 ff66a37) · 원본 tech_stack.md §10.3(커밋 ff66a37) · REQ-TEC-06 · 08 · 14 · REQ-GEN-08 · REQ-AUT-01 · 17 · REQ-OBS-10 · REQ-MST-11 · D-06 · ADR-16 · ADR-18 · [../09_tech_stack/04_local_environment.md](../09_tech_stack/04_local_environment.md) 환경변수 정본 · [../09_tech_stack/05_tooling_devops.md](../09_tech_stack/05_tooling_devops.md) · [../05_data_stores/02_postgresql_constraints.md](../05_data_stores/02_postgresql_constraints.md) DB 역할 · [../05_data_stores/09_migrations_seed.md](../05_data_stores/09_migrations_seed.md) · [../07_api/09_datagen.md](../07_api/09_datagen.md) · docs_plan.md 웨이브 인계 W7 12_security 행
 
@@ -39,8 +41,9 @@
 | 스위치 상태 12종 · APP_ROLE | 측정 조건이다 | health switches · /metrics 레이블 |
 | 호스트 포트 · 서비스명 · DB 이름 · 계정 이름 | 설계 값이다 — 고정 기준에 있다 | 문서 · .env.example |
 | DATAGEN_BULK_ENABLED | 게이트 상태 — 비밀이 아니라 **방치 위험**이다(§부하 주입 표면 게이트) | 측정 기록 조건 칸 |
+| SENSOR_AUTOGEN | 측정 조건이다 — 센서 자동 생성이 켜졌는지는 배경 적재가 있었는지를 가른다 · 스위치 밖 운영 게이트 | health run.sensorAutogen — 게이트 값이 아니라 **실효값(게이트 × 역할)**([../07_api/10_metrics.md](../07_api/10_metrics.md)) |
 
-- 검산: 비밀 아닌 값 묶음 = **4**
+- 검산: 비밀 아닌 값 묶음 = **5**
 - **계정 이름(app_rw · ch_reader)이 비밀이 아닌 이유** — 이름은 권한 설계의 일부라 문서가 이미 말한다([../05_data_stores/02_postgresql_constraints.md](../05_data_stores/02_postgresql_constraints.md)). 이름을 숨겨 얻는 방어는 없고, 숨기면 권한 검토가 불가능해진다.
 
 ## .env와 .env.example

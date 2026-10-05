@@ -2,12 +2,17 @@
 // 실행: task test-surface(스택 기동 뒤 · 티어 S 시드). 정본 07_api/01 · 04 · 05 · 06 · 11 · 12_security/03.
 // 마스터 쓰기는 데이터를 바꾸지 않는 거절 갈래(409 · 400 · 404)만 부른다 — 성공 쓰기와 체인은 통합 확인(S4 W5)이 본다.
 // Redis 정지 503(realtime.latest_unavailable)은 저장소를 멈춰야 해서 통합 확인(W3)에서 수동으로 본다.
+// rt 프레임의 원천 — 센서 자동 생성(health run.sensorAutogen)이 on이면 수집기가 늘 싣고, off(로컬 Compose 기본)이면 아무도 싣지 않는다.
+// off면 WS 시험이 짧은 flow 실행(직접 보내 보기 · 07_api/09 #2)을 api로 시작하고 끝에 정리한다 — 그 몇 초의 센서 데이터가 스트림 → ClickHouse에
+// 남고, 빈 DB의 첫 실행이면 시연 전용 행(DEMO-FLOW)도 생긴다(e2e support의 startFlowRun · settleRuns와 같은 방식).
 import {
   ErrorEnvelope,
   HealthResponse,
   LatestDeviceResponse,
   LatestTagResponse,
   ModbusConfigObject,
+  RUN_TERMINAL,
+  RunCurrentBody,
   SiteObject,
   SWITCHES,
   TagObject,
@@ -38,6 +43,29 @@ function wsClose(
 
 function isoAgo(ms: number) {
   return new Date(Date.now() - ms).toISOString();
+}
+
+/** 자동 생성이 꺼진 스택의 rt 원천 — 가장 작은 flow 실행(업무 · 조회는 섞지 않는다) */
+const SENSOR_ONLY_RUN = { pps: 1000, durationSec: 30, bizPerSec: 0, readsPerSec: 0 };
+
+/** flow 실행을 api로 바로 시작한다(화면 조작 없이) — 202가 아니면 던진다 */
+async function startSensorRun(): Promise<void> {
+  await request(BASE as string)
+    .post('/api/v1/runs')
+    .send({ type: 'flow', params: SENSOR_ONLY_RUN })
+    .expect(202);
+}
+
+/** 진행 중 실행이 있으면 중단하고 종결까지 기다린다 — 실행은 두 종류를 합쳐 동시 1이라 남은 실행이 다음 시작을 409로 막는다 */
+async function settleRuns(timeoutMs = 60_000): Promise<void> {
+  const until = Date.now() + timeoutMs;
+  for (;;) {
+    const { run } = RunCurrentBody.parse((await request(BASE as string).get('/api/v1/runs/current')).body);
+    if (!run || RUN_TERMINAL.has(run.status)) return;
+    if (run.status === 'running') await request(BASE as string).post(`/api/v1/runs/${run.runId}/stop`);
+    if (Date.now() > until) throw new Error(`실행 ${run.runId}이 ${timeoutMs}ms 안에 끝나지 않았다`);
+    await new Promise((res) => setTimeout(res, 500));
+  }
 }
 
 describe.skipIf(!BASE)('api 표면 계약', () => {
@@ -182,29 +210,44 @@ describe.skipIf(!BASE)('api 표면 계약', () => {
     });
   });
 
-  it('WS — subscribe → subscribed · rt 프레임', async () => {
+  it('WS — subscribe → subscribed · rt 프레임(자동 생성 off면 짧은 flow 실행이 원천)', async () => {
+    const autogen = HealthResponse.parse((await api().get('/api/v1/health')).body).run.sensorAutogen;
+    if (autogen === 'off') await settleRuns();
     const ws = new WebSocket(`${(BASE as string).replace(/^http/, 'ws')}/ws/realtime`, {
       headers: { Origin: ORIGIN },
     });
     const got: { type: string }[] = [];
-    await new Promise<void>((resolve, reject) => {
-      const timer = setTimeout(() => reject(new Error(`rt 프레임 없음 — ${JSON.stringify(got)}`)), 5000);
-      ws.on('open', () => ws.send(JSON.stringify({ type: 'subscribe', devices: [1, 999999] })));
-      ws.on('message', (d) => {
-        const m = JSON.parse(d.toString());
-        got.push(m);
-        if (m.type === 'rt') {
-          clearTimeout(timer);
-          resolve();
-        }
+    try {
+      await new Promise<void>((resolve, reject) => {
+        // off는 실행 준비(태그 로드 · 빈 DB면 시연 행 생성) → 첫 발행 → 적재 → 팬아웃 몫을 더 기다린다
+        const waitMs = autogen === 'off' ? 30_000 : 5000;
+        const timer = setTimeout(() => reject(new Error(`rt 프레임 없음 — ${JSON.stringify(got)}`)), waitMs);
+        ws.on('open', () => ws.send(JSON.stringify({ type: 'subscribe', devices: [1, 999999] })));
+        ws.on('message', (d) => {
+          const m = JSON.parse(d.toString());
+          got.push(m);
+          // subscribed는 ch:rt 구독이 선 뒤에 온다 — 그 뒤에 보내야 설비 1의 첫 발행을 놓치지 않는다
+          if (m.type === 'subscribed' && autogen === 'off') {
+            startSensorRun().catch((e: unknown) => {
+              clearTimeout(timer);
+              reject(e);
+            });
+          }
+          if (m.type === 'rt') {
+            clearTimeout(timer);
+            resolve();
+          }
+        });
       });
-    });
-    ws.close();
+    } finally {
+      ws.close();
+      if (autogen === 'off') await settleRuns();
+    }
     const sub = got.find((m) => m.type === 'subscribed') as unknown as {
       devices: number[];
       rejected: { deviceId: number; reason: string }[];
     };
     expect(sub.devices).toEqual([1]);
     expect(sub.rejected).toEqual([{ deviceId: 999999, reason: 'not_found' }]);
-  });
+  }, 180_000);
 });

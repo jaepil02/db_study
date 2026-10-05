@@ -131,6 +131,9 @@ services:
       INGEST_LAB_FAULT: ${INGEST_LAB_FAULT:-}
       # S5 — 모드 C 부하 주입 표면 게이트(스위치가 아님 · 07_api/09 · 기본 false · true면 기동 경고 1줄)
       DATAGEN_BULK_ENABLED: ${DATAGEN_BULK_ENABLED:-false}
+      # 센서 자동 생성 게이트(스위치가 아님 · 09_tech_stack/04) — 로컬 기본 off(사용자 결정 2026-10-03 · 직접 보내 보기만 센서 데이터를 보낸다)
+      # 실험 러너는 on — scripts/lab/s3/_lib.sh(s4 · s5가 상속) · s2 러너 3개는 각자 export
+      SENSOR_AUTOGEN: ${SENSOR_AUTOGEN:-off}
       TZ: UTC
       # MEMORY_PROFILE · WORKER_POOL_SIZE · NODE_OPTIONS · UV_THREADPOOL_SIZE는 프로파일 덮어쓰기 파일이 준다 — 상한과 이름이 한 파일에서 나온다
     volumes:

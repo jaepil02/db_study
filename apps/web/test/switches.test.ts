@@ -22,7 +22,13 @@ const health: HealthBody = {
     'SW-03': { name: 'REDIS_QUERY_CACHE', value: 'on', impl: 'RedisTimeseriesCache', warning: null },
     'SW-99': { name: 'FUTURE', value: 'on', impl: 'X', warning: null },
   },
-  run: { commitHash: 'a1b2c3d', memoryProfile: 'load', memoryLimitMb: 4096, capacityTier: 'S' },
+  run: {
+    commitHash: 'a1b2c3d',
+    memoryProfile: 'load',
+    memoryLimitMb: 4096,
+    capacityTier: 'S',
+    sensorAutogen: 'on',
+  },
 };
 
 describe('스위치 표', () => {

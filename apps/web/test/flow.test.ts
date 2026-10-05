@@ -45,8 +45,11 @@ import {
   bizStageAverages,
   durationText,
   emptyFlowState,
+  FLOW_AUTOGEN_OFF_NOTICE,
+  FLOW_NO_DATA_WARNING,
   FLOW_RING,
   flowMetricRates,
+  flowNotice,
   flowRates,
   flowSubStatus,
   flowSwitchFlags,
@@ -59,18 +62,20 @@ import {
   readRates,
   readShare,
   restNode,
+  sensorQuiet,
   sourcePps,
   summarizeFlow,
   trackRate,
 } from '../lib/flow';
 import { parsePrometheusText } from '../lib/metrics-parser';
+import { isActive } from '../lib/runs';
 import type {
   FlowBatchSummaryBody,
   FlowBizSummaryBody,
   FlowFrameBody,
   FlowTotalsEntryBody,
 } from '../lib/shared';
-import { FlowFrame } from '../lib/shared';
+import { FlowFrame, RUN_STATUSES } from '../lib/shared';
 
 /** 노드 줄 글자만(줄 종류는 test/flow-layout.test.ts가 본다) */
 const tx = (lines: readonly { text: string }[]): string[] => lines.map((l) => l.text);
@@ -631,6 +636,74 @@ describe('스위치 표지 · 구독 상태', () => {
     expect(noSummary({ lastFrameAt: 0 }, 'subscribed', 9_999)).toBe(false);
     expect(noSummary({ lastFrameAt: 0 }, 'subscribed', 10_000)).toBe(true);
     expect(noSummary({ lastFrameAt: 0 }, 'disconnected', 20_000)).toBe(false);
+  });
+
+  it('센서가 안 온다 — 배치를 한 번도 못 받았거나 마지막 배치가 10초 넘게 지났다(구독 중일 때만)', () => {
+    expect(sensorQuiet({ lastBatchAt: null }, 'subscribed', 0)).toBe(true);
+    expect(sensorQuiet({ lastBatchAt: 0 }, 'subscribed', 9_999)).toBe(false);
+    expect(sensorQuiet({ lastBatchAt: 0 }, 'subscribed', 10_000)).toBe(true);
+    expect(sensorQuiet({ lastBatchAt: null }, 'requesting', 0)).toBe(false);
+    expect(sensorQuiet({ lastBatchAt: null }, 'disconnected', 0)).toBe(false);
+  });
+
+  it('알림 한 줄 — off + 무데이터면 차분한 안내(경고 색 아님) · on + 무데이터면 경고 그대로 · health 모름도 경고 그대로', () => {
+    const base = {
+      sub: 'subscribed' as const,
+      silent: false,
+      ackOverdue: false,
+      sensorQuiet: false,
+      flowRunActive: false,
+    };
+    // off + 무데이터(진입 직후 — 확인 프레임만 받음 · 10초 뒤 요약 없음까지)
+    const calm = { text: FLOW_AUTOGEN_OFF_NOTICE, tone: 'info' };
+    expect(flowNotice({ ...base, sensorQuiet: true, sensorAutogen: 'off' })).toEqual(calm);
+    expect(flowNotice({ ...base, sensorQuiet: true, silent: true, sensorAutogen: 'off' })).toEqual(calm);
+    expect(FLOW_AUTOGEN_OFF_NOTICE).toBe(
+      "센서 자동 생성이 꺼져 있어요 — 오른쪽 위 '직접 보내 보기'로 데이터를 보내 보세요",
+    );
+    // on + 무데이터 — 지금 경고 그대로(진입 직후 무알림 · 10초 요약 없음이면 경고)
+    const warn = { text: FLOW_NO_DATA_WARNING, tone: 'warn' };
+    expect(flowNotice({ ...base, sensorQuiet: true, sensorAutogen: 'on' })).toBeNull();
+    expect(flowNotice({ ...base, sensorQuiet: true, silent: true, sensorAutogen: 'on' })).toEqual(warn);
+    expect(flowNotice({ ...base, sensorQuiet: true, silent: true, sensorAutogen: null })).toEqual(warn);
+    expect(FLOW_NO_DATA_WARNING).toBe('10초째 새 데이터가 오지 않아요 — 센서 데이터 적재가 멈췄을 수 있어요');
+    // off라도 데이터가 오면(직접 보내 보기 중) 알림 없음 · 끊김은 늘 먼저
+    expect(flowNotice({ ...base, sensorAutogen: 'off' })).toBeNull();
+    expect(flowNotice({ ...base, sub: 'disconnected', sensorQuiet: true, sensorAutogen: 'off' })?.tone).toBe(
+      'warn',
+    );
+    // 구독 확인이 늦으면 확인 지연(꺼짐 안내는 구독이 선 뒤에만)
+    expect(flowNotice({ ...base, sub: 'requesting', ackOverdue: true, sensorAutogen: 'off' })?.text).toBe(
+      '연결 확인이 늦어지고 있어요',
+    );
+  });
+
+  it('알림 한 줄 — 직접 보내 보기(flow 실행)가 running · stopping이면 꺼짐 안내를 숨긴다 · 그동안의 침묵은 다른 규칙 그대로', () => {
+    const quietOff = {
+      sub: 'subscribed' as const,
+      silent: false,
+      ackOverdue: false,
+      sensorQuiet: true,
+      sensorAutogen: 'off' as const,
+    };
+    // 화면이 넘기는 값 — 이 화면 종류(flow) 실행의 status가 running · stopping일 때만 true(lib/runs isActive)
+    expect(RUN_STATUSES.filter(isActive)).toEqual(['running', 'stopping']);
+    // 실행 없음 · 종결 — 꺼짐 안내
+    expect(flowNotice({ ...quietOff, flowRunActive: false })?.text).toBe(FLOW_AUTOGEN_OFF_NOTICE);
+    // 실행 중(준비 단계라 아직 배치가 없다) — 꺼짐 안내 없음
+    expect(flowNotice({ ...quietOff, flowRunActive: true })).toBeNull();
+    // 실행 중인데 10초 넘게 아무 프레임도 없다 — 꺼짐 안내 대신 요약 없음 경고(보내는 중의 침묵은 고장일 수 있다)
+    expect(flowNotice({ ...quietOff, silent: true, flowRunActive: true })).toEqual({
+      text: FLOW_NO_DATA_WARNING,
+      tone: 'warn',
+    });
+    // 끊김은 실행과 무관하게 먼저
+    expect(flowNotice({ ...quietOff, sub: 'disconnected', flowRunActive: true })?.tone).toBe('warn');
+    // on이면 실행 상태와 무관하게 지금 규칙 그대로
+    expect(flowNotice({ ...quietOff, sensorAutogen: 'on', flowRunActive: false })).toBeNull();
+    expect(flowNotice({ ...quietOff, sensorAutogen: 'on', silent: true, flowRunActive: true })?.text).toBe(
+      FLOW_NO_DATA_WARNING,
+    );
   });
 });
 

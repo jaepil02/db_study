@@ -2,6 +2,8 @@
 // 포트 · 레지스터 주소는 COL과 같은 기동 로드 사본에서 안다(modbus_config.port · tag_master.address · function_code).
 // 기동 실패는 SIM이 오류를 내지 않는다 — 기동 로그와 sim_listen_failed_ports로 남기고 COL 쪽 결측으로 드러난다(REQ-SIM-03).
 // 주입 계획(SIM_FAULT_PLAN)은 검증 실패면 기동을 거부한다(09_tech_stack/05) — 스키마는 모듈 초기화, 시드 포트 규칙은 기동 로드 뒤.
+// SENSOR_AUTOGEN=off면 포트를 열지 않는다 — Buffer를 쓰는 모드 A와 읽는 수집기가 둘 다 꺼져 열 까닭이 없다(다른 모듈은 SIM에 의존하지 않는다).
+// 계획 파일의 스키마 검증은 그대로 한다 — 설정 오류는 게이트와 무관하게 기동에서 드러난다.
 
 import type { SimFaultPlanBody } from '@db-study/shared';
 import {
@@ -74,6 +76,10 @@ export class PlcSimService implements OnModuleInit, OnApplicationBootstrap, OnMo
   }
 
   onApplicationBootstrap() {
+    if (this.cfg.sensorAutogen === 'off') {
+      this.resolveStarted(); // 기다리는 쪽이 매달리지 않게 — 서버 0개로 기동 완료
+      return;
+    }
     void this.definitions.whenLoaded().then((defs) => this.startServers(defs));
   }
 
@@ -128,6 +134,11 @@ export class PlcSimService implements OnModuleInit, OnApplicationBootstrap, OnMo
   /** 포트 기동이 끝나면 풀린다 — 모드 A가 Buffer를 받기 전에 기다린다 */
   whenStarted(): Promise<void> {
     return this.started;
+  }
+
+  /** 열린 Modbus 서버 수 — SENSOR_AUTOGEN=off면 늘 0 */
+  serverCount(): number {
+    return this.servers.size;
   }
 
   /** 설비의 레지스터 영역 — 모드 A 전용 쓰기 자리 · 서버가 없으면 null */

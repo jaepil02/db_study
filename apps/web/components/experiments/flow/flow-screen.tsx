@@ -25,7 +25,9 @@ import {
   FLOW_METRICS_POLL_MS,
   type FlowMetricRates,
   type FlowMetricsPoll,
+  type FlowNoticeInput,
   flowMetricRates,
+  flowNotice,
   flowRates,
   flowSubStatus,
   flowSwitchFlags,
@@ -34,15 +36,18 @@ import {
   noSummary,
   plcRawLag,
   readRates,
+  sensorQuiet,
   serverNow,
   sourcePps,
 } from '../../../lib/flow';
 import { useShellHealth } from '../../../lib/health';
 import { realtimeSocket, useConnectionStore } from '../../../lib/realtime-socket';
+import { isActive, panelRun } from '../../../lib/runs';
 import { healthTip } from '../../../lib/switches';
 import { formatAge } from '../../../lib/time';
 import { useNow } from '../../../lib/use-now';
-import { RunProvider } from '../../runs/run-context';
+import { cn } from '../../../lib/utils';
+import { RunProvider, useRunContext } from '../../runs/run-context';
 import { RunControl } from '../../runs/run-control';
 import { RunProgress } from '../../runs/run-progress';
 import { FLOW_PARAM_DEFS } from '../../runs/run-spec';
@@ -86,6 +91,31 @@ async function fetchFlowMetrics(): Promise<FlowMetricsPoll> {
 export const FLOW_TITLE = '데이터가 Redis를 거쳐 어디로 가는지 실시간으로 보기';
 export const FLOW_LEAD =
   '공장 센서 데이터와 업무 데이터가 Redis 대기줄을 거쳐, 각자에게 맞는 DB로 나뉘어 저장되는 모습이에요. 움직이는 점 하나가 실제 데이터 묶음 하나예요.';
+
+/**
+ * 흐름도 머리 알림 한 줄 — 직접 보내 보기 실행 상태(running · stopping이면 꺼짐 안내를 숨긴다)가 필요해 RunProvider 안에서 그린다
+ * (current 1초 폴링은 Provider 한 곳 — run-context).
+ */
+function FlowNoticeLine({ input }: { input: Omit<FlowNoticeInput, 'flowRunActive'> }) {
+  const { snapshot, type } = useRunContext();
+  const run = panelRun(snapshot, type);
+  const notice = flowNotice({ ...input, flowRunActive: run !== null && isActive(run.status) });
+  if (!notice) return null;
+  return (
+    <p
+      data-testid="flow-notice"
+      data-tone={notice.tone}
+      className={cn(
+        'absolute top-2 right-3 rounded-full border px-3 py-0.5 text-xs',
+        notice.tone === 'info'
+          ? 'border-slate-200 bg-slate-50 text-slate-600'
+          : 'border-amber-200 bg-amber-50 text-amber-800',
+      )}
+    >
+      {notice.text}
+    </p>
+  );
+}
 
 export function FlowScreen() {
   const conn = useConnectionStore((s) => s.status);
@@ -160,13 +190,14 @@ export function FlowScreen() {
   const dataAge = state.lastBatchAt === null ? null : formatAge(sNow - state.lastBatchAt);
   const silent = noSummary(state, sub, now);
   const ackOverdue = sub === 'requesting' && requestedAt !== null && now - requestedAt >= FLOW_ACK_WAIT_MS;
-  const notice = dim
-    ? `연결이 끊겨 점을 멈췄어요 — 다시 연결되면 이어서 보여 줘요`
-    : silent
-      ? '10초째 새 데이터가 오지 않아요 — 센서 데이터 적재가 멈췄을 수 있어요'
-      : ackOverdue
-        ? '연결 확인이 늦어지고 있어요'
-        : null;
+  // 센서 자동 생성이 꺼져 있으면(health run.sensorAutogen off) 센서가 안 오는 것이 정상 — 경고 대신 차분한 안내(실행 상태는 FlowNoticeLine이 더한다)
+  const noticeInput = {
+    sub,
+    silent,
+    ackOverdue,
+    sensorQuiet: sensorQuiet(state, sub, sNow),
+    sensorAutogen: health?.run.sensorAutogen ?? null,
+  };
 
   const stores = storeLines(shown, metrics);
   // 조회 줄 — 메트릭 5초 차분(첫 폴링 뒤 한 번 더 와야 값이 생긴다) · 원천이 없으면 "—"
@@ -220,14 +251,7 @@ export function FlowScreen() {
           aria-label="흐름도"
           className="relative min-h-[454px] flex-1 rounded-lg border border-slate-200 bg-white px-3 py-1.5"
         >
-          {notice ? (
-            <p
-              data-testid="flow-notice"
-              className="absolute top-2 right-3 rounded-full border border-amber-200 bg-amber-50 px-3 py-0.5 text-xs text-amber-800"
-            >
-              {notice}
-            </p>
-          ) : null}
+          <FlowNoticeLine input={noticeInput} />
           <FlowDiagram
             engine={engine}
             rates={rates}

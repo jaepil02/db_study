@@ -53,6 +53,30 @@ export async function currentRun(): Promise<RunObj | null> {
   return (await apiGet<{ run: RunObj | null }>('runs/current')).run;
 }
 
+/** 센서 자동 생성 게이트(health run.sensorAutogen) — 로컬 Compose 기본 off · 실험 러너는 on(09_tech_stack/04) */
+export async function sensorAutogen(): Promise<'on' | 'off'> {
+  const res = await fetch(`${API}/api/v1/health`);
+  // 200 · 503 모두 같은 본문(저장소 하나가 내려가도 run은 읽힌다)
+  if (res.status !== 200 && res.status !== 503) throw new Error(`GET health → ${res.status}`);
+  return ((await res.json()) as { run: { sensorAutogen: 'on' | 'off' } }).run.sensorAutogen;
+}
+
+/** flow 실행을 api로 바로 시작한다(화면 조작 없이) — 202가 아니면 던진다 */
+export async function startFlowRun(params: {
+  pps: number;
+  durationSec: number;
+  bizPerSec: number;
+  readsPerSec: number;
+}): Promise<RunObj> {
+  const res = await fetch(`${API}/api/v1/runs`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ type: 'flow', params }),
+  });
+  if (res.status !== 202) throw new Error(`POST runs → ${res.status} ${await res.text()}`);
+  return (await res.json()) as RunObj; // 본문 = 실행 객체(07_api/09 #2)
+}
+
 /** 진행 중 실행이 있으면 중단하고 종결까지 기다린다 — 다음 spec이 409를 맞지 않게 */
 export async function settleRuns(timeoutMs = 60_000): Promise<void> {
   const until = Date.now() + timeoutMs;

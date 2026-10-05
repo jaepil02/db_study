@@ -2,6 +2,8 @@
 
 > **대상**: OBS 도메인 표면 — GET /api/v1/health(저장소별 상태 · 스위치 12종의 실제 주입 구현 · 부분 실패 503) · GET /metrics(Prometheus 텍스트 · 스위치 상태 레이블) · 두 표면의 공개 판정 반영 · **health 본문 필드 이름 판정** · **저장소별 타임아웃 판정**
 > **작성일**: 2026-09-24
+> **개정일**: 2026-10-05 — 센서 자동 생성 게이트 검수 반영(리드 판정 M1) — run.sensorAutogen 게이트 값 → **실효값(게이트 × 역할)** — 게이트 on이고 APP_ROLE이 수집기를 띄우는 역할일 때만 on(api · worker는 off) — 필드 행 · 공통 규약 응답 내용 · run 행 문구 · **실효값 근거 불릿 신설** — 필드 수 · 표면 · 에러 코드 수 불변
+> **개정일**: 2026-10-03 — 센서 자동 생성 게이트 SENSOR_AUTOGEN 신설(사용자 결정 2026-10-03 · 스위치 밖 운영 게이트 · 이름 정본 09_tech_stack/04) — health run에 **sensorAutogen**(on · off) — 필드 행 10 → **11** · 최상위 필드 5 불변 · 공통 규약 응답 내용 · #1 호출 화면(EXP-FLOW 꺼짐 안내) · 응답 예시 run · run 근거 불릿 — 표면 · 에러 코드 수 불변
 > **개정일**: 2026-10-03 — D-15 학습자 눈높이 한 화면(사용자 지시 2026-10-03 — 08_screen/08_evidence_screens · 01_standards §한 화면 원칙) — 측정 조건 서랍 → **각주 툴팁**(읽기 전용 단락 · #1 호출 화면 · EXP-PERF 불릿 · run 근거 불릿 · 관련 문서) · EXP-PERF 불릿의 기록 곡선 · 배수 지도 → 그림 1 · 그림 2 — 표면 · 기능 불변
 > **개정일**: 2026-10-03 — D-14 2화면 전환(사용자 결정 2026-10-03) — 호출 화면 EXP-CONSOLE · EXP-COMPARE → **#1 EXP-FLOW · EXP-PERF(측정 조건 서랍) · #2 EXP-FLOW** · 읽기 전용 · 경로 · run 근거 · 메트릭 요약 JSON 행의 화면 서술 · 관련 문서에 08_evidence_screens — 표면 · 기능 · 에러 코드 수 불변(api 표면은 지우지 않는다 — D-14 결정 1)
 > **개정일**: 2026-09-28 — 웨이브 1 검수 반영(B-M3) — 대상 줄 스위치 11종 → **12종** · 도입 전 스위치 불릿 "스위치 11키" → **스위치 키(현재 12 — 정본 링크)** · switches 노출 표에 **SW-12 행**(stream · direct · StreamBizWriter · DirectBizWriter) — 스위치 행 11 → **12** · 표면 수 불변
@@ -22,7 +24,7 @@ metrics 네임스페이스는 정의만 있고 코드가 0이다. health의 503�
 | 항목 | 규칙 | 근거 |
 |------|------|------|
 | 인증 · 인가 | 공개 — Authorization을 보지 않는다 · 레이트 리밋 계수 대상 아님(user_id 없음) | REQ-OBS-10 · REQ-AUT-16 |
-| 응답 내용 | 업무 데이터 · 비밀(접속 문자열 · 자격 증명 · 토큰)을 싣지 않는다 · health는 저장소별 상태 · 스위치 상태 · 측정 조건(커밋 해시 · 메모리 프로파일 · 용량 티어)만 | REQ-OBS-10 · 11 |
+| 응답 내용 | 업무 데이터 · 비밀(접속 문자열 · 자격 증명 · 토큰)을 싣지 않는다 · health는 저장소별 상태 · 스위치 상태 · 측정 조건(커밋 해시 · 메모리 프로파일 · 용량 티어 · 센서 자동 생성 실효값)만 | REQ-OBS-10 · 11 |
 | 경로 | 기계 호출 직결 · 화면(EXP-PERF · EXP-FLOW)은 BFF 경유 | [01_conventions.md](./01_conventions.md) §BFF 경유와 직결 |
 | 쓰기 | 없음 — GET만 | REQ-OBS-12 |
 | 캐시 | 없음 · Cache-Control no-store | [01_conventions.md](./01_conventions.md) §캐시 헤더 |
@@ -35,7 +37,7 @@ metrics 네임스페이스는 정의만 있고 코드가 0이다. health의 503�
 
 | # | 메서드 | 경로 | 기능 ID | 역할 | 캐시 | 에러 코드 | 호출 화면 | 원본 여부 |
 |:-:|------|------|------|------|------|------|------|------|
-| 1 | GET | /api/v1/health | OBS-05 · 06 | 공개 | 없음 | 없음 — 부분 실패는 코드 없는 503 | EXP-FLOW · EXP-PERF(각주 툴팁) | 원본 |
+| 1 | GET | /api/v1/health | OBS-05 · 06 | 공개 | 없음 | 없음 — 부분 실패는 코드 없는 503 | EXP-FLOW(각주 툴팁 · 자동 생성 꺼짐 안내) · EXP-PERF(각주 툴팁) | 원본 |
 | 2 | GET | /metrics | OBS-01 · 02 · 03 · 04 · 06 | 공개 | 없음 | 없음 | EXP-FLOW | 원본 |
 
 - 검산: 표면 = **2** · REST JSON 1 + 메트릭 텍스트 1 = **2** · 원본 2 + 신설 0
@@ -73,12 +75,16 @@ metrics 네임스페이스는 정의만 있고 코드가 0이다. health의 503�
 | stores.*.error | 문자열 · null | timeout · refused · error 중 하나 — up이면 null · 원문 오류 메시지를 싣지 않는다 |
 | switches | 객체 | 키 = 스위치 ID(SW-01 · …) · 값 = 아래 넷 |
 | switches.*.name · value · impl · warning | 문자열 · 문자열 또는 정수 · 문자열 또는 null · 문자열 또는 null | 환경변수 이름 · 실제 값 · 실제 주입된 구현 이름(**포트가 아직 코드에 없는 도입 전 스위치는 null** — value는 기동 설정값) · 경고 |
-| **run** | 객체 | 측정 기록 4요소 중 스위치 밖 3요소 — 아래 넷 |
+| **run** | 객체 | 측정 조건 — 기록 4요소 중 스위치 밖 3요소(아래 넷) · 센서 자동 생성 실효값(아래 하나) |
 | **run.commitHash · memoryProfile · memoryLimitMb · capacityTier** | 문자열 · 문자열 · 정수 · 문자열(S · M · M+ · L) — 각각 null 가능 | 빌드된 커밋 해시 · 메모리 프로파일 이름 · api 컨테이너의 실제 메모리 상한(cgroup에서 읽음) · 기동 시 주입된 용량 티어 |
+| **run.sensorAutogen** | 문자열 on · off — null 없음 | 센서 자동 생성 **실효값(게이트 × 역할)** — 환경변수 SENSOR_AUTOGEN(스위치가 아니다)이 on이고 이 프로세스의 APP_ROLE이 수집기를 띄우는 역할일 때만 on · 그 밖은 off(예: 수집기가 없는 api · worker는 게이트가 on이어도 off) — off면 이 프로세스에 SIM 포트 · 모드 A 틱 · 수집기 폴링이 없어 화면의 센서 데이터는 직접 보내 보기(07_api/09 flow 실행)가 보낸다 — 측정용 주입 모드(B · C · D)는 게이트와 무관하다 |
 
-- 검산: 필드 행 = **10** · 최상위 필드 = status · checkedAt · stores · switches · run = **5**
+- 검산: 필드 행 = **11** · 최상위 필드 = status · checkedAt · stores · switches · run = **5**
 - **run을 싣는 이유(W5 리드 판정)** — 측정 기록의 4요소(커밋 해시 · 메모리 프로파일 · 용량 티어 · 스위치 상태 — REQ-GLB-17)를 한 응답에서 읽게 한다. 두 실증 화면의 각주 툴팁이 기록 조건을 손으로 옮겨 적지 않는다 — 옮겨 적다 틀리면 같은 조건이라 믿은 두 측정의 조건이 다르다. 셋 다 비밀이 아니다.
 - **값은 기동 시 주입값이며 모르면 null이다.** 커밋 해시는 이미지 빌드 인자, 메모리 프로파일 · 용량 티어는 기동 환경변수에서 읽는다(환경변수 MEMORY_PROFILE · CAPACITY_TIER · 빌드 인자 COMMIT_HASH — 이름 정본 [../09_tech_stack/04_local_environment.md](../09_tech_stack/04_local_environment.md)). 추정값으로 채우지 않는다 — null은 "그 측정 기록은 4요소가 빠져 인용할 수 없다"는 표지다. memoryLimitMb만은 프로파일 이름과 별도로 cgroup의 실제 상한을 읽는다 — 스위치와 같은 "실제 적용값" 원칙(REQ-OBS-11)이다.
+- **sensorAutogen을 run에 싣는 이유(사용자 결정 2026-10-03)** — 자동 생성이 켜진 실행은 수집기가 늘 스트림에 싣는 배경 적재 위에서 재고, 꺼진 실행은 직접 보낸 양만 흐른다. 이 칸이 없으면 배경 적재가 있고 없는 두 측정이 같은 조건으로 읽힌다. 기동 시 1회 · 허용값 밖이면 기동 거부라 모르는 값(null)이 없다 — 기본값(앱 on · 로컬 Compose off)은 이름 정본 [../09_tech_stack/04_local_environment.md](../09_tech_stack/04_local_environment.md)가 갖는다. 기록 4요소의 정의는 바꾸지 않는다 — 4요소에 더해지는 조건 칸이다.
+- **sensorAutogen은 health에만 싣는다.** 도구 출력(bench · 모드 B · 모드 D · oltp-lab)의 run에 넣으면 수집기를 띄우지 않는 별도 프로세스가 api의 SENSOR_AUTOGEN을 모른 채 자기 기본값(on)을 적는다 — 그 칸은 실제 실행과 어긋난다.
+- **sensorAutogen은 게이트 값이 아니라 실효값이다(검수 반영 2026-10-05).** 게이트 값을 그대로 실으면 역할 분리 실행(APP_ROLE api · worker — 수집기 없음)의 기록이 게이트 on이라 배경 적재가 있었던 것처럼 읽힌다 — 실제로는 그 프로세스가 센서 데이터를 하나도 만들지 않았다. 역할 판정의 기준은 그 프로세스가 SIM · 모드 A · 수집기를 띄우는가 하나다 — 어느 역할이 띄우는지는 역할 배정 정본 [../04_architecture/02_module_boundaries.md](../04_architecture/02_module_boundaries.md) §APP_ROLE 배정이 갖는다. 값은 이 프로세스 기준이다 — 다른 컨테이너의 collector 역할이 싣는 데이터는 그 프로세스의 health가 말한다.
 - **error에 원문 메시지를 싣지 않는 이유** — 드라이버 오류 문자열에는 접속 문자열 · 호스트 · 사용자 이름이 섞인다. 공개 표면의 응답에 비밀이 실리면 공개 판정이 무효다(REQ-OBS-10).
 - **도입 전 스위치의 impl은 null이다(S2 as-built).** 주입되지 않은 구현 이름을 적으면 "실제 주입 구현"이 거짓이 되고, 키를 빼면 측정 기록의 스위치 키(현재 12 — 정본 [../02_features/13_switch_matrix.md](../02_features/13_switch_matrix.md))가 비어 4요소가 성립하지 않는다([../10_observability/04_experiment_protocol.md](../10_observability/04_experiment_protocol.md) BFF 판독 규칙 4) — 키는 싣고 impl만 비운다. obs_switch_info는 impl 레이블이 비지 않게 주입된 스위치만 낸다.
 - **switches의 키 집합은 정본의 스위치 전부다.** 개수를 이 문서가 세지 않는다 — 스위치가 늘면 키가 늘 뿐이고 응답 필드 추가 규칙(v1 유지)을 따른다. 정본 [../02_features/13_switch_matrix.md](../02_features/13_switch_matrix.md).
@@ -123,7 +129,13 @@ metrics 네임스페이스는 정의만 있고 코드가 0이다. health의 503�
     "SW-07": { "name": "WS_THROTTLE_MS", "value": 100, "impl": "WindowMergeThrottle", "warning": null },
     "SW-11": { "name": "LATEST_VALUE_WRITER", "value": "ingest", "impl": "IngestLatestValueWriter", "warning": null }
   },
-  "run": { "commitHash": "a1b2c3d", "memoryProfile": "load", "memoryLimitMb": 4096, "capacityTier": "M" }
+  "run": {
+    "commitHash": "a1b2c3d",
+    "memoryProfile": "load",
+    "memoryLimitMb": 4096,
+    "capacityTier": "M",
+    "sensorAutogen": "on"
+  }
 }
 ```
 

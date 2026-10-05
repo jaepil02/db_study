@@ -1,10 +1,18 @@
-// EXP-FLOW — 분산 처리 모니터링(/monitoring · 관찰 보조) 한 장 화면. 직접 보내 보기는 run-flow.spec.ts가 본다.
+// EXP-FLOW — 분산 처리 모니터링(/monitoring · 관찰 보조) 한 장 화면. 직접 보내 보기의 화면 조작은 run-flow.spec.ts가 본다.
 // 설계 .omc/plans/web-junior-redesign.md §1 원칙(한 화면 = 한 장 · 쉬운 말) · §3 화면 B · §5 픽셀 예산(1440 × 900 스크롤 0) · §9 조회 줄
-// 적재(Collector → 스트림 → 컨슈머)가 돌고 있어야 배치 요약이 온다 — api 컨테이너(APP_ROLE=all)가 그 구성이다.
+// 배치 요약은 스트림에 센서 데이터가 들어와야 온다. 센서 자동 생성(SENSOR_AUTOGEN)이 on이면 수집기가 늘 싣고,
+// off(로컬 Compose 기본)이면 아무도 싣지 않는다 — 그때는 차분한 안내 문구를 먼저 확인하고, 직접 보내 보기를 api로 짧게 시작해
+// 같은 데이터 단언(센서 숫자 넷이 한 값 · 대기줄 대기 · 한 장)을 그대로 본다(.omc/plans/sensor-autogen-switch.md §1 e2e).
 import { expect, type Page, test } from '@playwright/test';
-import { apiWrite, shot } from './support';
+import { apiWrite, currentRun, sensorAutogen, settleRuns, shot, startFlowRun } from './support';
 
 test.use({ viewport: { width: 1440, height: 900 } });
+test.describe.configure({ mode: 'serial' });
+test.beforeEach(() => settleRuns());
+test.afterEach(() => settleRuns());
+
+/** 자동 생성이 꺼진 스택의 센서 원천 — 업무 · 조회는 섞지 않는다(업무 요청 단언은 이 테스트가 직접 보낸 1건만 센다) */
+const SENSOR_ONLY_RUN = { pps: 1000, durationSec: 60, bizPerSec: 0, readsPerSec: 0 };
 
 type Rule = { ruleId: number; threshold: number };
 
@@ -29,9 +37,11 @@ async function expectOneGlance(page: Page) {
   expect(text).not.toMatch(/\bQ[1-5]\b|\bI2\b|EXP-|SW-|10\^/);
 }
 
-test('한 장 화면 — 실시간 연결됨 · 10초 안에 데이터 · 숫자 4 · 흐름도 노드 12(Redis 기둥 칸 5 · 조회 줄) · 카드 3 · 막대 · 각주 · 스크롤 0 · 업무 요청이 숫자와 막대에 보인다', async ({
+test('한 장 화면 — 실시간 연결됨 · 자동 생성 꺼짐 안내(off) · 10초 안에 데이터 · 숫자 4 · 흐름도 노드 12(Redis 기둥 칸 5 · 조회 줄) · 카드 3 · 막대 · 각주 · 스크롤 0 · 업무 요청이 숫자와 막대에 보인다', async ({
   page,
 }, info) => {
+  test.setTimeout(120_000);
+  const autogen = await sensorAutogen();
   // 이 테스트 전용 규칙(사용 해제 · 큰 임계값) — 업무 요청 하나를 보낼 대상
   const rule = (await apiWrite('POST', 'alarms/rules', {
     tagId: 1,
@@ -53,8 +63,41 @@ test('한 장 화면 — 실시간 연결됨 · 10초 안에 데이터 · 숫자
   ).toBeVisible();
   await expect(page.getByRole('heading', { level: 1 })).toHaveCount(1);
 
-  // 10초 안에 데이터 — 마지막 데이터 나이 · 센서 데이터 초당 > 0
-  await expect(ws.getByTestId('flow-sub')).toContainText('마지막 데이터', { timeout: 10_000 });
+  const notice = page.getByTestId('flow-notice');
+  if (autogen === 'off') {
+    // 자동 생성 꺼짐 + 센서 없음 — 경고("적재가 멈췄을 수 있어요") 대신 차분한 안내(경고 색 아님 · 직접 보내 보기로 가는 길)
+    await expect(notice).toHaveText(
+      "센서 자동 생성이 꺼져 있어요 — 오른쪽 위 '직접 보내 보기'로 데이터를 보내 보세요",
+      {
+        timeout: 15_000,
+      },
+    );
+    await expect(notice).toHaveAttribute('data-tone', 'info');
+    await expect(notice).not.toHaveClass(/amber/);
+    await expect(ws.getByTestId('flow-sub')).toContainText('데이터 기다리는 중');
+    await expectOneGlance(page);
+    await shot(page, info, 'flow-autogen-off');
+    // 센서 원천 — 직접 보내 보기를 api로 시작(화면 조작은 run-flow가 본다) · 데이터가 오면 안내가 사라진다
+    await startFlowRun(SENSOR_ONLY_RUN);
+    // 빈 DB의 첫 실행은 prepare가 시연 전용 행을 업무 명령으로 만든다 — 그 업무 요약이 링에 남지 않게 prepare 뒤 새로 연다
+    // (아래 "업무 1건" 단언은 이 테스트가 직접 보낸 PATCH 하나만 센다)
+    await expect
+      .poll(async () => (await currentRun())?.steps.find((st) => st.key === 'prepare')?.status, {
+        timeout: 30_000,
+        message: 'flow 실행 prepare 완료',
+      })
+      .toBe('done');
+    await page.reload();
+    await expect(ws).toContainText('실시간 연결됨');
+  } else {
+    await expect(page.locator('[data-testid="flow-notice"][data-tone="info"]')).toHaveCount(0);
+  }
+
+  // 10초 안에 데이터 — 마지막 데이터 나이 · 센서 데이터 초당 > 0(off는 실행 준비 몫을 더 기다린다)
+  await expect(ws.getByTestId('flow-sub')).toContainText('마지막 데이터', {
+    timeout: autogen === 'off' ? 20_000 : 10_000,
+  });
+  await expect(notice).toHaveCount(0);
   const head = page.getByTestId('flow-headline');
   for (const label of ['센서 데이터', 'Redis에 밀린 데이터', '측정 → 저장까지', '업무 요청']) {
     await expect(head.getByText(label, { exact: true })).toBeVisible();
@@ -191,6 +234,9 @@ test.describe('1280 × 800', () => {
   test('새로 연 페이지는 사이드바 레일 · 흐름도 배율 ≥ 0.999 · 화면 글자 최소 12px · 숫자 4 문장 잘림 없음 · 가로 스크롤 없음', async ({
     page,
   }, info) => {
+    test.setTimeout(90_000);
+    // 글자 크기는 데이터가 그려진 흐름도로 잰다 — 자동 생성이 꺼졌으면 직접 보내 보기를 api로 시작한다(진행 띠가 생겨도 이 테스트는 세로 스크롤 허용)
+    if ((await sensorAutogen()) === 'off') await startFlowRun(SENSOR_ONLY_RUN);
     await page.goto('/monitoring');
     await expect(page.getByRole('button', { name: '사이드바 펼치기' })).toBeVisible();
     const nav = page.locator('[data-shell="nav"]');
@@ -209,7 +255,7 @@ test.describe('1280 × 800', () => {
     await expect.poll(svgScale, { message: '1280 × 800 흐름도 배율 1' }).toBeGreaterThanOrEqual(0.999);
 
     // 실제 글자 크기 — SVG는 글자 크기 × 그려진 배율 · HTML은 글자를 직접 가진 요소의 계산된 크기
-    await expect(page.getByTestId('flow-sub')).toContainText('마지막 데이터', { timeout: 10_000 });
+    await expect(page.getByTestId('flow-sub')).toContainText('마지막 데이터', { timeout: 20_000 });
     const sizes = await page.getByTestId('flow-screen').evaluate((root) => {
       const svg = root.querySelector('[data-testid="flow-diagram"]') as SVGSVGElement;
       const r = svg.getBoundingClientRect();
