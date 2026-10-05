@@ -154,15 +154,22 @@ describe('최신값 필드 · 출처 방어', () => {
   });
 
   it('Host는 localhost · 127.0.0.1 · api(포트 무관)만', () => {
-    for (const h of ['localhost', 'localhost:3000', '127.0.0.1:3000', 'api:3000', 'API'])
+    for (const h of ['localhost', 'localhost:13000', '127.0.0.1:13000', 'api:3000', 'API'])
       expect(isAllowedHost(h)).toBe(true);
     for (const h of [undefined, '', 'evil.com', 'localhost.evil.com', 'api.evil.com:3000', '10.0.0.1'])
       expect(isAllowedHost(h)).toBe(false);
   });
 
-  it('Origin은 http://localhost:3001 하나', () => {
-    expect(isAllowedOrigin('http://localhost:3001')).toBe(true);
-    for (const o of [undefined, 'http://127.0.0.1:3001', 'https://localhost:3001', 'http://localhost:3000'])
+  it('Origin은 http://localhost:13001 하나', () => {
+    expect(isAllowedOrigin('http://localhost:13001')).toBe(true);
+    // 옛 웹 포트 3001(2026-10-05 전)도 이제 다른 오리진이다
+    for (const o of [
+      undefined,
+      'http://127.0.0.1:13001',
+      'https://localhost:13001',
+      'http://localhost:13000',
+      'http://localhost:3001',
+    ])
       expect(isAllowedOrigin(o)).toBe(false);
   });
 });

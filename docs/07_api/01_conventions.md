@@ -2,6 +2,7 @@
 
 > **대상**: db_study api 컨테이너 표면 전체에 걸리는 규약 — 경로 버전 · 표면 계층 · BFF 경유와 직결의 배정(ADR-02 정본) · 인증 헤더 · 요청 검증 · 성공 본문 · **에러 봉투** · 시각 직렬화(points 시각 형식 판정) · 수치 직렬화 · 페이지네이션 · **업무 쓰기 경로(커밋 뒤 동기 응답 · 202 pending · Idempotency-Key · Redis 불가 503)** · **명령 조회 표면** · 멱등 · 캐시 헤더 · 레이트 리밋 헤더 · 응답 필드 변경 규칙 · 표면 번호 규약 · 표면 요약 표 어휘
 > **작성일**: 2026-09-24
+> **개정일**: 2026-10-05 — 웹 · api 호스트 포트 이동(같은 머신의 다른 프로젝트가 호스트 3000 · 3001을 점유 · 사용자 결정 2026-10-05) — 웹 3001 → **13001** · api 호스트 3000 → **13000**(컨테이너 3000 · 서비스명 그대로) · CORS 허용 오리진 http://localhost:3001 → **http://localhost:13001** — 오리진 수 · 바인드 규칙 불변
 > **개정일**: 2026-10-03 — D-15 학습자 눈높이 한 화면(사용자 지시 2026-10-03 — 08_screen/08_evidence_screens · 01_standards §한 화면 원칙) — 헬스 · 메트릭(화면) 행의 측정 조건 서랍 → **각주 툴팁** — 표면 · 배정 불변
 > **개정일**: 2026-10-03 — D-14 2화면 전환(사용자 결정 2026-10-03) — 명령 조회 #1 호출 화면 ADM-MASTER · ALM-CONSOLE · ALM-RULES · ADM-WORKORDER → **화면 없음(API 전용)** · 요청 경로 표 명령 조회 · 헬스 · 메트릭 행의 화면 서술을 현행 화면으로 — 표면 · 기능 · 에러 코드 수 불변(api 표면은 지우지 않는다 — D-14 결정 1)
 > **개정일**: 2026-09-28 — 라이브 실행 제어 반영(사용자 요구 2026-09-28 · 09_datagen #2~#5) — BFF 경유와 직결 표에 라이브 실행 제어 행(no-store) · 요청 묶음 10 → **11** · 멱등 표 조건부 갱신에 실행 시작(409) · 결과 동일에 실행 중단 — 수단 없음 표면 수 불변
@@ -52,7 +53,7 @@
 | 기계 호출 | Compose · Prometheus · k6 → api | 해당 없음 | 10_metrics #1 · #2 · 09_datagen #1 | 호출 주체가 브라우저가 아니다 | 해당 없음 |
 
 - 검산: 요청 묶음 = **11** · BFF 7 + 직결 3 + 기계 1 = **11**
-- **auth 표면 3종은 CORS 응답 헤더를 내지 않는다(판정).** CORS 허용 오리진 http://localhost:3001은 직결 표면에만 붙는다. 브라우저 JS가 login을 직결로 부르면 응답을 읽지 못해 리프레시 토큰이 JS에 닿지 않는다 — BFF 서버 fetch는 CORS 대상이 아니므로 정상 경로는 막히지 않는다. 판정 근거는 REQ-AUT-04, 방어 리뷰는 [../12_security/03_api_surface_defense.md](../12_security/03_api_surface_defense.md)다.
+- **auth 표면 3종은 CORS 응답 헤더를 내지 않는다(판정).** CORS 허용 오리진 http://localhost:13001은 직결 표면에만 붙는다. 브라우저 JS가 login을 직결로 부르면 응답을 읽지 못해 리프레시 토큰이 JS에 닿지 않는다 — BFF 서버 fetch는 CORS 대상이 아니므로 정상 경로는 막히지 않는다. 판정 근거는 REQ-AUT-04, 방어 리뷰는 [../12_security/03_api_surface_defense.md](../12_security/03_api_surface_defense.md)다.
 - **BFF는 무효화 체인의 ⑤단이다**(ADR-12). BFF를 거치지 않은 쓰기는 ⑤가 빠져 revalidate 창만큼 옛 목록이 남는다 — 마스터 쓰기를 직결로 두지 않는 이유다. 체인 번호 정본은 [../06_pipeline/07_business_crud.md](../06_pipeline/07_business_crud.md)다.
 
 ## 인증 헤더와 출처 방어
@@ -64,7 +65,7 @@
 | 만료 처리 | auth.token_expired/401 → BFF가 쿠키 리프레시로 갱신(03_auth #2) → 원요청 1회 재시도 | REQ-AUT-05 | 두 번 이상 재시도하면 서명 불량 토큰이 갱신 루프를 돈다 |
 | 서명 불량 · 헤더 없음 | auth.unauthenticated/401 — 갱신하지 않는다 | REQ-AUT-07 | 만료와 같은 코드면 클라이언트가 서명 불량에도 갱신을 시도한다 |
 | 역할 판정 | 역할 집합의 합집합으로 표면 권한을 대조 · 권한 밖 auth.forbidden/403 | REQ-AUT-09 · [../02_features/12_permission_matrix.md](../02_features/12_permission_matrix.md) | 표면별 권한을 코드에 하드코딩하면 매트릭스와 구현이 두 정본이 된다 |
-| CORS | 허용 오리진 http://localhost:3001 하나 · 와일드카드 금지 · **S2부터** | REQ-AUT-12 | S7까지 미루면 S2 웹 화면의 직결 호출이 막힌다 |
+| CORS | 허용 오리진 http://localhost:13001 하나 · 와일드카드 금지 · **S2부터** | REQ-AUT-12 | S7까지 미루면 S2 웹 화면의 직결 호출이 막힌다 |
 | 보안 헤더 | X-Content-Type-Options · Referrer-Policy 등 부여 · **HSTS 끔** · S7부터 | REQ-AUT-13 | 로컬 http에서 HSTS를 켜면 브라우저가 localhost를 https로 고정해 웹 접속이 끊긴다 |
 | Host 헤더 | 허용 목록 localhost · 127.0.0.1(포트 포함) · 컨테이너 사이 호출의 서비스명 api — 밖이면 common.validation_failed/400(fields path header.host · reason enum)으로 거절 · WebSocket 핸드셰이크는 업그레이드 전 같은 400 · **S2부터** | REQ-AUT-13 · [../12_security/04_threat_model.md](../12_security/04_threat_model.md) | DNS 재바인딩 페이지가 브라우저에게 같은 오리진으로 보여 CORS를 거치지 않고 응답을 읽는다 — 무인증 기간에는 전 표면이 읽힌다 |
 

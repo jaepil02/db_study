@@ -2,6 +2,7 @@
 
 > **대상**: 로컬 실행 구성 — Compose 서비스 4 · healthcheck · 기동 순서 · 네트워크 · 호스트 포트 · named volume 4 · 메모리 프로파일 2 + 조건부 중간 · CPU 가중 · **cpuset 배치(정본)** · 스냅샷과 복원 · 재빌드 · 재시작 영향 · 조정값 소유처
 > **작성일**: 2026-09-24
+> **개정일**: 2026-10-05 — 웹 · api 호스트 포트 이동(같은 머신의 다른 프로젝트가 호스트 3000 · 3001을 점유 · 사용자 결정 2026-10-05) — 웹 3001 → **13001** · api 호스트 3000 → **13000**(컨테이너 3000 · 서비스명 그대로) · CORS 허용 오리진 http://localhost:3001 → **http://localhost:13001** — 오리진 수 · 바인드 규칙 불변
 > **개정일**: 2026-09-28 — 웨이브 1 검수 반영(B-L1 · B-M7) — 명령 워커 그룹 보장 불릿에 **XGROUP CREATE … 0 MKSTREAM**(시작 ID 0) · **lock:biz:writer를 쥔 워커 하나만 소비 · TTL 뒤 이어받아 PEL부터** — 기동 단계 수 불변
 > **개정일**: 2026-09-28 — 업무 쓰기 Redis 경유 개정(사용자 결정 2026-09-27) — 기동 ⑤에 **명령 워커 grp:biz-writer 그룹 보장**(XGROUP CREATE MKSTREAM · APP_ROLE worker · all) · postgres 담는 것 업무 14 → **15** — 기동 단계 수 불변
 > **개정일**: 2026-09-25 — S3 구현 반영 — postgres 이미지 공식 alpine → **공식 18.6-alpine 위 pg_partman 파생 이미지**(로컬 빌드 · 정본 09_tech_stack/03) · **datagen 프로파일 서비스 신설**(APP_ROLE=datagen · 모드 B · cpuset 11-12 — 기본 기동 밖이라 서비스 4는 그대로) · 미확인 postgres healthcheck 계정 닫힘(pg_isready -U app_rw — 인증하지 않아 migrate 전에도 성립)
@@ -42,7 +43,7 @@
 ④ api 기동              APP_ROLE에 따라 모듈 초기화 · 스위치 포트 주입 · 부팅 경고(SW-01 off) · Collector 기동 로드
 ⑤ Ingest 기동 복원       컨슈머 그룹 보장(grp:ingest · 명령 워커 grp:biz-writer) · rt:latest를 ClickHouse argMax 1회로 재구성
 ⑥ api healthy           /api/v1/health가 세 저장소 왕복을 통과
-⑦ 웹 기동               호스트에서 Next.js 개발 서버(3001)
+⑦ 웹 기동               호스트에서 Next.js 개발 서버(13001)
 ⑧ 관측(선택)             observability 프로파일 기동
 ```
 

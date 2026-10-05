@@ -24,7 +24,7 @@ import { describe, expect, it } from 'vitest';
 import WebSocket from 'ws';
 
 const BASE = process.env.SURFACE_BASE_URL;
-const ORIGIN = 'http://localhost:3001';
+const ORIGIN = 'http://localhost:13001';
 
 function wsClose(
   headers: Record<string, string>,

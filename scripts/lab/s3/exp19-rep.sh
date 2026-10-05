@@ -20,7 +20,7 @@ echo "── rep $REP · 복원 s3-empty-s"
 restore_snap s3-empty-s
 baseline "$BASE" "$TMP/baseline"
 APP_ROLE=worker api_up
-curl -s http://127.0.0.1:3000/api/v1/health > "$TMP/health"
+curl -s http://127.0.0.1:13000/api/v1/health > "$TMP/health"
 WS=$(date -u +%Y-%m-%dT%H:%M:%S.000Z)
 # 발행은 이 명령 안에서 끝나는 자식 프로세스다 — 아래 wait로 거둔다(백그라운드로 남기지 않는다)
 $COMPOSE --profile datagen run --rm --no-deps datagen node dist/mode-b.js --tier S --mix mixed --seed 42 --duration "$DUR" --undecodable-every "$EVERY" 2>/dev/null | tail -1 > "$TMP/modeb" &
@@ -33,7 +33,7 @@ wait "$DG"
 T=$(date +%s); until [ $(( $(date +%s) - T )) -ge 5 ]; do sleep 1; done
 until [ "$(metric consumer_lag)" = 0 ] || [ $(( $(date +%s) - T )) -ge 180 ]; do sleep 2; done
 WE=$(date -u +%Y-%m-%dT%H:%M:%S.000Z)
-curl -s http://127.0.0.1:3000/metrics | grep -E '^(dlq_count|ing_insert_retries_total|rows_inserted|ing_consumer_paused_seconds_total|consumer_lag)' > "$TMP/metrics" || true
+curl -s http://127.0.0.1:13000/metrics | grep -E '^(dlq_count|ing_insert_retries_total|rows_inserted|ing_consumer_paused_seconds_total|consumer_lag)' > "$TMP/metrics" || true
 api_stop
 verify --phase stopped --window-start "$WS" --window-end "$WE" > "$TMP/verify" || { cat "$TMP/verify" >&2; echo "랙이 0이 아니다" >&2; exit 1; }
 python3 - "$TMP" "$REP" "$WS" "$WE" "$S0" "$S1" >> "$OUT" <<'PY'

@@ -2,6 +2,7 @@
 
 > **대상**: /ws/realtime 한 표면의 프로토콜 — 핸드셰이크 Origin 검증 · 첫 메시지 인증 · **구독 방식 판정(쿼리 파라미터 대 subscribe 메시지)** · 메시지 봉투와 스키마 · 스로틀 병합(SW-07) · 알람 · 무효화 신호 중계 · **흐름 이벤트(flow · subscribe_flow · unsubscribe_flow — EXP-FLOW)** · ping · 재연결 · 종료 코드 정본
 > **작성일**: 2026-09-24
+> **개정일**: 2026-10-05 — 웹 · api 호스트 포트 이동(같은 머신의 다른 프로젝트가 호스트 3000 · 3001을 점유 · 사용자 결정 2026-10-05) — 웹 3001 → **13001** · api 호스트 3000 → **13000**(컨테이너 3000 · 서비스명 그대로) · CORS 허용 오리진 http://localhost:3001 → **http://localhost:13001** — 오리진 수 · 바인드 규칙 불변
 > **개정일**: 2026-10-03 — 리드 판정(웨이브 1 정합 · 정본 08_screen/02_traceability) — #1 호출 화면 공통 셸(무효화 신호) → **공통 셸(연결만 — cacheinv는 받지 않는다)** · 무효화 신호 중계(RLT-09) 화면 없음(API 전용) — 표면 · 메시지 type · 종료 코드 수 불변(cacheinv 중계 계약은 그대로)
 > **개정일**: 2026-10-03 — D-14 2화면 전환(사용자 결정 2026-10-03) — #1 호출 화면 DSH-REALTIME · ALM-CONSOLE · EXP-FLOW · 전 화면 → **EXP-FLOW(subscribe_flow · flow) · 공통 셸(무효화 신호)** — rt · alarm을 받던 화면은 폐지 — 표면 · 기능 · 에러 코드 수 불변(api 표면은 지우지 않는다 — D-14 결정 1)
 > **개정일**: 2026-09-28 — 웨이브 1 검증 반영(v-wave1 M1) — 업무 요약 발행자 행의 direct 구분 "source로" → **role api-direct로**(같은 문서 페이로드 행 · 08_screen/08과 일치)
@@ -37,7 +38,7 @@ WebSocket은 **RLT가 소유하는 횡단 표면**이다. 설비 최신값 푸�
 원본 푸시 시퀀스(원본 data_flow.md §9)를 연결 한 번으로 옮긴다. 우측은 실패의 종료 코드다.
 
 ```plain
-① 핸드셰이크     Origin 헤더 = CORS 허용 목록(http://localhost:3001)     아니면 업그레이드 뒤 즉시 4403
+① 핸드셰이크     Origin 헤더 = CORS 허용 목록(http://localhost:13001)    아니면 업그레이드 뒤 즉시 4403
 ② 인증 대기      첫 메시지 auth(토큰) — 인증 대기 시간 안에                 시간 초과 · 다른 type · 토큰 불량 4401
 ③ 인증 성공      auth_ok(userId · expiresAt)                               역할 0 사용자 4403
 ④ 구독           subscribe(devices) → ch:rt:{device_id} SUBSCRIBE          형식 위반 4400 · 없는 설비는 거절 목록

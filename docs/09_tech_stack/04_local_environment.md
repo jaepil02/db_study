@@ -2,6 +2,7 @@
 
 > **대상**: 로컬 머신 1대의 요구사항 · 원본 실측 환경(WSL2 · 20스레드 · 가용 RAM) · WSL2 메모리 조정 · **컨테이너 메모리 상한(정본)** · 메모리 프로파일 2 + 조건부 중간 · 대조 실험 메모리 조건 · networkingMode=mirrored · **환경변수 목록(정본)** · 기동 · 정지 · 스냅샷 명령 · 아카이브 위치 · 착수 전 조정
 > **작성일**: 2026-09-24
+> **개정일**: 2026-10-05 — 웹 · api 호스트 포트 이동(같은 머신의 다른 프로젝트가 호스트 3000 · 3001을 점유 · 사용자 결정 2026-10-05) — 웹 3001 → **13001** · api 호스트 3000 → **13000**(컨테이너 3000 · 서비스명 그대로) · CORS 허용 오리진 http://localhost:3001 → **http://localhost:13001** — 오리진 수 · 바인드 규칙 불변
 > **개정일**: 2026-10-05 — 센서 자동 생성 게이트 2차 수정(검수 반영 · 리드 판정 L1 · L2 · M1 · M3 — restore 설계는 사용자 결정 2026-10-05) — SENSOR_AUTOGEN 행의 실험 러너 출처 scripts/lab/s3/_lib.sh → **s3/_lib.sh(s4 · s5가 상속) · s2 러너 3개는 각자 export** · health 칸 → **실효값(게이트 × 역할)** · 기동 명령 ⑤ run 5필드 → **개수 없이**(run · switches 확인) · B형 불릿 파생 지침에 **러너 뒤에는 task up으로 api를 다시 만든다**(restore는 api를 지우기만 한다 — 05_tooling_devops) — 표 행 · 이름 수 불변
 > **개정일**: 2026-10-03 — 센서 자동 생성 게이트 신설(사용자 결정 2026-10-03 · 스위치 밖 운영 게이트 — DATAGEN_BULK_ENABLED와 같은 결) — 환경변수 1행 신설(SENSOR_AUTOGEN · 앱 기본 on · 로컬 Compose 기본 off · 실험 러너 on) — 표 행 17 → **18** · 이름 39 → **40**(스위치 12 + 스위치 밖 27 → **28**) · 검산 불릿 괄호 목록의 끝 수 38 → **28**(괄호 안 항목 수 27과 어긋나 있던 것 교정 후 신설 반영) · 기동 명령 ⑤ run 4필드 → **5필드** · 같은 줄 switches 11(SW-12 반영 때 남은 옛 수) → **개수 없이**(수는 정본 02_features/13이 센다) · 기본값이 갈린 이유 B형 불릿
 > **개정일**: 2026-09-28 — SW-12 BIZ_WRITE_PATH 반영(사용자 결정 2026-09-27 · 업무 쓰기 Redis 경유) — 역할 스위치 행 SW-01~SW-11의 11 → **SW-01~SW-12의 12** — 표 행 17 불변 · 이름 38 → **39**
@@ -144,9 +145,9 @@ swap=8GB
 
 | 항목 | 영향 | 규칙 |
 |------|------|------|
-| Windows 브라우저 → WSL2 서비스 | localhost:3001 · localhost:3000으로 포트 포워딩 없이 직결 | NAT 모드의 포워딩 설정을 두지 않는다 |
+| Windows 브라우저 → WSL2 서비스 | localhost:13001 · localhost:13000으로 포트 포워딩 없이 직결 | NAT 모드의 포워딩 설정을 두지 않는다 |
 | 127.0.0.1 바인드의 안전성 | 유지 — mirrored는 루프백을 호스트와 공유할 뿐 LAN에 노출하지 않는다 | 바인드 주소 규칙 그대로(ADR-18) |
-| CORS 오리진 | 변화 없음 — http://localhost:3001 하나 | 해당 없음 |
+| CORS 오리진 | 변화 없음 — http://localhost:13001 하나 | 해당 없음 |
 | 측정 | 루프백 경로가 한 단계 짧아 E2E 지연이 NAT 모드보다 낙관적이다 | 기록 조건 칸에 네트워킹 모드를 적는다 · 측정 한계 정본 [../10_observability/07_measurement_limits.md](../10_observability/07_measurement_limits.md) |
 
 - 검산: 항목 = **4**
@@ -174,7 +175,7 @@ swap=8GB
 | 알람 확인 행위자(인증 전) | **ALARM_ACK_ACTOR_EMAIL** | 시드 학습자 계정 email | 없음 | 기동 시 1회 | 알람 확인(07_api/07 #2)의 acked_by — 확인 트랜잭션이 이 email의 활성 · OPERATOR 계정을 조회한다 · 인증 도입(S7 ②)에서 폐기 · 판정 정본 [../07_api/07_alarms.md](../07_api/07_alarms.md) §인증 전 확인 행위자 판정 | 없거나 계정이 없으면 **확인만 401** — 기동 거부가 아니다(계정 없는 옛 스냅샷에서 측정까지 막지 않는다) |
 | 저장소 접속 | **POSTGRES_URL · CLICKHOUSE_URL · REDIS_URL** | 서비스명 DNS 기반 접속 문자열 — **비밀번호 자리는 아래 비밀 변수를 Compose 변수 치환으로 참조한다** | .env.example의 로컬 값(호스트 · 포트 · DB 이름 · 계정 이름) · 비밀번호 자리는 치환식 | 기동 시 1회 | 각 클라이언트 | 자격 증명이 들어 있어 .env를 커밋하지 않는다(REQ-TEC-14) · 비밀번호를 문자열에 직접 적으면 같은 비밀이 두 변수에 나뉘어 바꿀 때 한쪽이 남는다 |
 | 비밀 | **JWT_SIGNING_KEY · POSTGRES_ADMIN_PASSWORD · APP_OWNER_PASSWORD · APP_RW_PASSWORD · CH_READER_PASSWORD · CLICKHOUSE_PASSWORD · REDIS_PASSWORD · SEED_USER_PASSWORD · GRAFANA_ADMIN_PASSWORD** | 비밀 값 — 비밀 목록 정본 [../12_security/02_secrets_config.md](../12_security/02_secrets_config.md)의 9종과 1:1 | 없음 — .env.example에는 자리표시만 | 기동 시 1회(migrate · seed는 실행 시 1회) | 서명 키 api · 관리자 비밀번호 postgres 이미지 초기화 · app_owner migrate · app_rw 접속 문자열 치환과 migrate 역할 생성 · ch_reader ClickHouse 설정 파일과 migrate · ClickHouse · Redis 비밀번호 이미지 초기화와 접속 문자열 치환 · 학습자 seed · Grafana 이미지 | 비었거나 자리표시와 같으면 **기동 거부** — 허용하면 모든 환경이 같은 서명 키 · 같은 저장소 비밀번호로 돈다 · 서명 키는 256비트 무작위 미만이면 거부 · 공개 접두(NEXT_PUBLIC_) 이름을 쓰지 않는다 |
-| 웹 | **API_BASE_URL · NEXT_PUBLIC_API_BASE_URL** | BFF 서버 측 · 브라우저 직결 api 주소 | http://127.0.0.1:3000 · http://localhost:3000 | 웹 기동 시 | BFF fetch · 브라우저 직결(ADR-02) | 브라우저 쪽을 BFF 주소로 두면 고빈도 요청이 1홉 늘어난다 |
+| 웹 | **API_BASE_URL · NEXT_PUBLIC_API_BASE_URL** | BFF 서버 측 · 브라우저 직결 api 주소 | http://127.0.0.1:13000 · http://localhost:13000 | 웹 기동 시 | BFF fetch · 브라우저 직결(ADR-02) | 브라우저 쪽을 BFF 주소로 두면 고빈도 요청이 1홉 늘어난다 |
 
 - 검산: 표 행 = **18** · 이름 수 = 1 + 12 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 3 + 9 + 2 = **40** — 스위치 12 + 스위치 밖 28(APP_ROLE · DATAGEN_BULK_ENABLED · SENSOR_AUTOGEN · MEMORY_PROFILE · CAPACITY_TIER · COMMIT_HASH · NODE_OPTIONS · UV_THREADPOOL_SIZE · WORKER_POOL_SIZE · SIM_FAULT_PLAN · INGEST_BATCH_PLAN · INGEST_LAB_FAULT · GEN_PROFILE · ALARM_ACK_ACTOR_EMAIL · POSTGRES_URL · CLICKHOUSE_URL · REDIS_URL · 비밀 9 · API_BASE_URL · NEXT_PUBLIC_API_BASE_URL) = **28**
 - **이 표에서 이름을 새로 정한 것은 이 문서의 판정이다** — MEMORY_PROFILE · CAPACITY_TIER · COMMIT_HASH(health run 주입 · 인계 W5 07_api 행) · WORKER_POOL_SIZE · SIM_FAULT_PLAN · 접속 3 · 웹 2. 원본 이름은 APP_ROLE · NODE_OPTIONS · UV_THREADPOOL_SIZE이고, DATAGEN_BULK_ENABLED는 07_api/09가, 비밀 9는 W7 보안 리뷰([../12_security/02_secrets_config.md](../12_security/02_secrets_config.md))가, SENSOR_AUTOGEN은 2026-10-03 사용자 결정(자동 생성 끄기)을 받은 리드 판정이 정했다.
@@ -194,15 +195,15 @@ swap=8GB
 ① 전 구성 기동      task up PROFILE=load SEED="--slice s2"                      ← 저장소 → migrate → seed → api · 개발은 PROFILE=dev · 중간은 mid
 ② 상태 확인         docker compose ps                                              ← 4개 모두 healthy
 ③ 스키마 · 시드     ①이 api 앞에서 돈다 · 따로 칠 때 task migrate → task seed -- --tier S   ← 시드는 빈 볼륨일 때만
-④ 웹               pnpm dev(웹 패키지 · 호스트 이름 127.0.0.1 · 3001)                 ← 호스트 이름 인자 필수
-⑤ 확인             curl 127.0.0.1:3000/api/v1/health                               ← run · switches 확인
+④ 웹               pnpm dev(웹 패키지 · 호스트 이름 127.0.0.1 · 13001)                ← 호스트 이름 인자 필수
+⑤ 확인             curl 127.0.0.1:13000/api/v1/health                              ← run · switches 확인
 ⑥ 관측(선택)        docker compose --profile observability up -d
 ⑦ 스위치 전환       .env 수정 → docker compose up -d api                           ← api만 재생성 · 저장소 유지
 ⑧ 정지             docker compose down                                             ← 볼륨 유지
 ```
 
 - **프로파일은 Compose 덮어쓰기 파일 하나로 고른다.** 파일 하나가 컨테이너 상한 · 컨테이너 안 설정 포함 파일 · MEMORY_PROFILE · WORKER_POOL_SIZE · NODE_OPTIONS를 함께 준다 — 값이 파일 셋에 흩어지면 프로파일 전환이 한 값을 빠뜨린다.
-- **④의 호스트 이름 인자가 웹 3001의 127.0.0.1 바인드를 강제하는 유일한 자리다.** 웹은 Compose 밖의 호스트 프로세스라 ports 규칙이 닿지 않는다 — 인자 없이 띄우면 개발 서버가 모든 인터페이스에 뜰 수 있고, LAN 기기가 BFF를 거쳐 127.0.0.1:3000의 api에 닿는다([../12_security/05_local_exposure.md](../12_security/05_local_exposure.md) §웹 개발 서버의 바인드). 인자는 웹 패키지의 개발 스크립트에 박아 사람이 매번 치지 않게 한다.
+- **④의 호스트 이름 인자가 웹 13001의 127.0.0.1 바인드를 강제하는 유일한 자리다.** 웹은 Compose 밖의 호스트 프로세스라 ports 규칙이 닿지 않는다 — 인자 없이 띄우면 개발 서버가 모든 인터페이스에 뜰 수 있고, LAN 기기가 BFF를 거쳐 127.0.0.1:13000의 api에 닿는다([../12_security/05_local_exposure.md](../12_security/05_local_exposure.md) §웹 개발 서버의 바인드). 인자는 웹 패키지의 개발 스크립트에 박아 사람이 매번 치지 않게 한다.
 - **⑦은 api만 재생성한다.** 저장소까지 재시작하면 Redis AOF 재생 · ClickHouse 파트 적재가 스위치 전환 측정에 섞인다. 전환 절차의 화면 쪽 안내는 [../08_screen/07_experiment_console.md](../08_screen/07_experiment_console.md)다.
 - **볼륨을 지우는 정지 명령(down -v)은 task snapshot 뒤에만 쓴다**(REQ-TEC-08). 데이터를 전부 지우므로 실험 편의로 쓰면 기준 데이터셋이 사라진다.
 - 덮어쓰기 파일 이름은 설계 계약이며 파일 이름 형식은 구현이 정한다.

@@ -4,8 +4,8 @@ import type { FastifyCorsOptions, FastifyCorsOptionsDelegate } from '@fastify/co
 import type { FastifyReply, FastifyRequest } from 'fastify';
 import { validationFailed } from './api-error';
 
-/** 허용 오리진 — http://localhost:3001 하나 · 와일드카드 금지(REQ-AUT-12) */
-export const ALLOWED_ORIGINS = ['http://localhost:3001'] as const;
+/** 허용 오리진 — http://localhost:13001 하나 · 와일드카드 금지(REQ-AUT-12 · 웹 포트 3001 → 13001 사용자 결정 2026-10-05) */
+export const ALLOWED_ORIGINS = ['http://localhost:13001'] as const;
 
 /** 허용 Host — localhost · 127.0.0.1(포트 포함) · 컨테이너 사이 호출의 서비스명 api(REQ-AUT-13 ③) */
 const ALLOWED_HOSTNAMES = new Set(['localhost', '127.0.0.1', 'api']);

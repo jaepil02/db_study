@@ -3,9 +3,9 @@
   "version": "0.0.0",
   "private": true,
   "scripts": {
-    "dev": "next dev -H 127.0.0.1 -p 3001",
+    "dev": "next dev -H 127.0.0.1 -p 13001",
     "build": "next build",
-    "start": "next start -H 127.0.0.1 -p 3001",
+    "start": "next start -H 127.0.0.1 -p 13001",
     "typecheck": "tsc --noEmit",
     "test": "vitest run && pnpm run test:tz",
     "test:tz": "TZ=Asia/Seoul vitest run test/time.test.ts && TZ=UTC vitest run test/time.test.ts && TZ=America/New_York vitest run test/time.test.ts",

@@ -3,8 +3,8 @@
 // 사건: API Redis 층 — 쓰기 응답 수신 · Dictionary 층 — mst_dict_reloads_total 증가(④ 완료) · BFF — 쓰기 응답 · A — 쓰기 응답 · B — cacheinv 수신
 // 사용: PLAYWRIGHT_CORE=… node scripts/lab/s4/ac06-capture.cjs <tagId> <새 이름>
 const { chromium } = require(process.env.PLAYWRIGHT_CORE);
-const W = 'http://localhost:3001';
-const A = 'http://127.0.0.1:3000';
+const W = 'http://localhost:13001';
+const A = 'http://127.0.0.1:13000';
 const TAG = Number(process.argv[2]);
 const NAME = process.argv[3];
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));

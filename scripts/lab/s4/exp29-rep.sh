@@ -18,7 +18,7 @@ restore_snap s3-empty-s
 baseline "$BASE" "$TMP/baseline"
 APP_ROLE=all api_up
 web_start
-curl -s http://127.0.0.1:3000/api/v1/health > "$TMP/health"
+curl -s http://127.0.0.1:13000/api/v1/health > "$TMP/health"
 sleep "$WARM"
 WS=$(date -u +%Y-%m-%dT%H:%M:%S.000Z)
 echo "── 판정 창 ${WIN}초 · AC-06은 창 30초 지점"

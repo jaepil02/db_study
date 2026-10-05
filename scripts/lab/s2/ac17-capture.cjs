@@ -32,7 +32,7 @@ async function rows(page) {
   const page = await browser.newPage({ viewport: { width: 1440, height: 1000 } });
   const errors = [];
   page.on('pageerror', (e) => errors.push(String(e)));
-  await page.goto('http://localhost:3001/realtime/1', { waitUntil: 'networkidle' });
+  await page.goto('http://localhost:13001/realtime/1', { waitUntil: 'networkidle' });
   await page.waitForTimeout(8000);
   const r0 = await rows(page);
   const c0 = await canvasInk(page);

@@ -2,6 +2,7 @@
 
 > **대상**: db_study의 기술 결정 — ADR-01~27 · 결정 색인 · 분류 검산 · 상태 · 원본 보정 5건 대응 · D-NN과의 경계 — ADR-NN 채번 정본
 > **작성일**: 2026-09-24
+> **개정일**: 2026-10-05 — 웹 · api 호스트 포트 이동(같은 머신의 다른 프로젝트가 호스트 3000 · 3001을 점유 · 사용자 결정 2026-10-05) — 웹 3001 → **13001** · api 호스트 3000 → **13000**(컨테이너 3000 · 서비스명 그대로) · CORS 허용 오리진 http://localhost:3001 → **http://localhost:13001** — 오리진 수 · 바인드 규칙 불변
 > **개정일**: 2026-09-28 — 리드 판정 — ADR-27 후속 판정 행에서 컨테이너 TZ 닫힘(UTC) — 등재 행 수 불변
 > **개정일**: 2026-09-28 — DB 시각 UTC · 화면 KST(사용자 요구 2026-09-28) — **ADR-27 신설**(DB 처리 시간대 UTC · 저장 운영 경계 UTC · 달력 의미 경계만 KST 명시 · 기존 볼륨은 재구성 전환 — 저장소) — ADR 26 → **27** · 현행 25 → **26** · 저장소 6 → **7** · 전역 계약 표 REQ-GLB-02 행 신설(걸린 REQ-GLB 16 → **17** · 행 11 → **12**) · D 없이 선 ADR 15 → **16** · 후속 판정 7 → **8** · W3 · W6 시간대 판정(ADR 아님)은 각 정본의 상태 항목으로 대체 표기
 > **개정일**: 2026-09-28 — 웨이브 1 검수 반영(B-M7 · B-M4 · B-M9) — ADR-26 파급에 **단일 소비자 강제 락 lock:biz:writer** 한 줄 · 원인 구분 **Redis 불가 = unavailable · PostgreSQL 불가 = failed** · 잔여에 한계 등재 **#26**(failed 적용 여부 미확정) — ADR 수 · 상태 불변
@@ -103,7 +104,7 @@
 - **맥락**: 리프레시 토큰을 httpOnly 쿠키로 브라우저 JS에서 숨겨야 하고, 동시에 최신값 폴링 · 시계열 조회 · WebSocket은 초당 수 회 이상 호출된다(원본 tech_stack.md §4.1 · 원본 data_flow.md §7.2).
 - **결정**: Next.js를 **호스트 프로세스**로 띄우고 Route Handler를 BFF로 쓴다 — 로그인 · 토큰 갱신 · 저빈도 업무 조회는 BFF 경유, **고빈도 실시간 데이터는 브라우저가 api에 직결**한다. 직결 경로는 CORS 허용 오리진 하나 · Bearer 액세스 토큰 · WebSocket Origin 검증으로 보호한다.
 - **버린 대안**: ① **React + Vite SPA** — 서버 측 코드가 없어 리프레시 토큰을 받을 자리가 브라우저뿐이고, httpOnly 쿠키를 액세스 토큰으로 교환할 주체가 사라진다. ② **전 요청 BFF 경유** — 고빈도 요청마다 1홉과 Next.js 서버 이벤트 루프 하나를 더 다퉈 최신값 p95가 api가 아니라 BFF에 묶인다. ③ **WebSocket BFF 중계** — 장기 연결 수만큼 BFF에 소켓이 쌓여 개발 서버 재시작이 모든 실시간 연결을 끊는다. ④ **웹 컨테이너화** — HMR이 느리고 불안정해 개발 루프가 멈춘다.
-- **파급**: 요청 종류별 BFF · 직결 배정의 정본은 [../07_api/01_conventions.md](../07_api/01_conventions.md). BFF 서버 fetch 캐시가 무효화 체인에 들어간다(ADR-12). localhost:3001과 3000은 포트가 달라 CORS가 필요하지만 same-site라 SameSite=Lax가 동작한다 — [../12_security/03_api_surface_defense.md](../12_security/03_api_surface_defense.md).
+- **파급**: 요청 종류별 BFF · 직결 배정의 정본은 [../07_api/01_conventions.md](../07_api/01_conventions.md). BFF 서버 fetch 캐시가 무효화 체인에 들어간다(ADR-12). localhost:13001과 13000은 포트가 달라 CORS가 필요하지만 same-site라 SameSite=Lax가 동작한다 — [../12_security/03_api_surface_defense.md](../12_security/03_api_surface_defense.md).
 
 ## ADR-03 — 시계열 엔진 ClickHouse
 

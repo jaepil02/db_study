@@ -28,7 +28,7 @@ restore_snap "$HIST_SNAP"
 baseline "$BASE" "$TMP/baseline"
 worker_start
 APP_ROLE=api api_up
-curl -s http://127.0.0.1:3000/api/v1/health > "$TMP/health"
+curl -s http://127.0.0.1:13000/api/v1/health > "$TMP/health"
 DUR=$(( 10 + WIN * 2 + 25 ))
 $COMPOSE --profile datagen run --rm --no-deps datagen node dist/mode-b.js --tier M --mix mixed --seed 42 --duration "$DUR" 2>/dev/null | tail -1 > "$TMP/modeb" &
 DG=$!

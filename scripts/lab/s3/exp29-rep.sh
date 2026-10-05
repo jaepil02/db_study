@@ -29,15 +29,15 @@ restore_snap "$SNAP"
 echo "── 기준선 ${BASE}초"
 baseline "$BASE" "$TMP/baseline"
 APP_ROLE=all api_up
-curl -s http://127.0.0.1:3000/api/v1/health > "$TMP/health"
+curl -s http://127.0.0.1:13000/api/v1/health > "$TMP/health"
 T0=$(date -u +%Y-%m-%dT%H:%M:%S.000Z)
 sleep "$WARM"
-curl -s http://127.0.0.1:3000/metrics > "$TMP/m0"
+curl -s http://127.0.0.1:13000/metrics > "$TMP/m0"
 WS=$(date -u +%Y-%m-%dT%H:%M:%S.000Z)
 echo "── 판정 창 ${WIN}초 시작 $WS(1초 lag 표본)"
 sample_lag "$WIN" "$TMP/lag"
 WE=$(date -u +%Y-%m-%dT%H:%M:%S.000Z)
-curl -s http://127.0.0.1:3000/metrics > "$TMP/m1"
+curl -s http://127.0.0.1:13000/metrics > "$TMP/m1"
 docker stats --no-stream --format '{{.Name}} {{.CPUPerc}} {{.MemUsage}}' db_study-api-1 db_study-postgres-1 db_study-clickhouse-1 db_study-redis-1 > "$TMP/load"
 $COMPOSE run --rm --no-deps api node dist/lab/s2-verify.js --phase running > "$TMP/running"
 echo "── 수집 정지 · 창 끝 $WE"

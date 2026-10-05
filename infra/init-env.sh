@@ -50,8 +50,8 @@ SIM_FAULT_PLAN=
 # COMMIT_HASH는 이미지 빌드 인자로만 준다 — 손으로 적지 않는다
 
 # ── 웹(호스트 Next.js)
-API_BASE_URL=http://127.0.0.1:3000
-NEXT_PUBLIC_API_BASE_URL=http://localhost:3000
+API_BASE_URL=http://127.0.0.1:13000
+NEXT_PUBLIC_API_BASE_URL=http://localhost:13000
 EOF
 echo "wrote .env.example"
 

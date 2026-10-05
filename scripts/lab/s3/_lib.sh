@@ -19,7 +19,7 @@ require_clean() {
 
 wait_api() {
   for _ in $(seq 1 90); do
-    if curl -sf -o /dev/null http://127.0.0.1:3000/api/v1/health; then return 0; fi
+    if curl -sf -o /dev/null http://127.0.0.1:13000/api/v1/health; then return 0; fi
     sleep 1
   done
   echo "api health 90초 초과" >&2; exit 1
@@ -55,7 +55,7 @@ api_up() {
 # ⑥ 수집 · 적재 정지 — 정상 종료(Collector 정지 → Ingest 드레인 · XACK)
 api_stop() { $COMPOSE stop -t 90 api >/dev/null; }
 
-metric() { curl -s http://127.0.0.1:3000/metrics | awk -v n="$1" '$1==n {print $2}'; }
+metric() { curl -s http://127.0.0.1:13000/metrics | awk -v n="$1" '$1==n {print $2}'; }
 
 # AC-19 표본 — 판정 창 동안 1초마다 그룹 lag · pending을 적는다(포그라운드 · 창 길이만큼)
 sample_lag() { # $1=초 $2=출력 파일

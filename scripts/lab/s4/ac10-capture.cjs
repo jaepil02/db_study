@@ -28,7 +28,7 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
       try { rest.push({ at: Date.now(), status: r.status(), body: await r.json() }); } catch { rest.push({ at: Date.now(), status: r.status() }); }
     }
   });
-  await p.goto('http://localhost:3001/realtime/1');
+  await p.goto('http://localhost:13001/realtime/1');
   await sleep(5000);
   const tStop = Date.now();
   execSync('docker stop -t 30 db_study-api-1');

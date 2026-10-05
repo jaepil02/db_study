@@ -22,7 +22,7 @@ export const options = {
 
 export default function () {
   const devs = Array.from({ length: DEVICES }, (_, i) => ((__VU * DEVICES + i) % NDEV) + 1);
-  const res = ws.connect('ws://api:3000/ws/realtime', { headers: { Origin: 'http://localhost:3001' } }, (s) => {
+  const res = ws.connect('ws://api:3000/ws/realtime', { headers: { Origin: 'http://localhost:13001' } }, (s) => {
     s.on('open', () => {
       opened.add(1);
       s.send(JSON.stringify({ type: 'subscribe', devices: devs }));

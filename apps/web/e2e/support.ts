@@ -2,8 +2,8 @@
 import { randomUUID } from 'node:crypto';
 import type { Page, TestInfo } from '@playwright/test';
 
-/** api 직결(테스트 러너 쪽 준비 · 정리용) — 화면 요청은 BFF(3001)를 탄다 */
-export const API = process.env.API_BASE_URL ?? 'http://127.0.0.1:3000';
+/** api 직결(테스트 러너 쪽 준비 · 정리용) — 화면 요청은 BFF(13001)를 탄다 */
+export const API = process.env.API_BASE_URL ?? 'http://127.0.0.1:13000';
 
 /** 실행마다 다른 접미 — 테스트가 만든 데이터는 E2E- 접두 + 이 접미로 남는다 */
 export const runSuffix = (): string =>

@@ -2,6 +2,7 @@
 
 > **대상**: 인증·인가(AUT · NestJS auth 모듈) 기능 목록 · 기능별 경계 · 의존 도메인 · 실패 시 보이는 것 — 기능 ID AUT-NN 채번 정본
 > **작성일**: 2026-09-24
+> **개정일**: 2026-10-05 — 웹 · api 호스트 포트 이동(같은 머신의 다른 프로젝트가 호스트 3000 · 3001을 점유 · 사용자 결정 2026-10-05) — 웹 3001 → **13001** · api 호스트 3000 → **13000**(컨테이너 3000 · 서비스명 그대로) · CORS 허용 오리진 http://localhost:3001 → **http://localhost:13001** — 오리진 수 · 바인드 규칙 불변
 > **개정일**: 2026-09-26 — W1 재검수 반영 — 도입 단락 인증 시점 S7 → **S7 ②**(인증 도입 전 S2~S6 · S7 ① 무인증) · 단계 칸 "S7" = 인증 도입(S7 ②) 해석 — 기능 수 불변
 > **개정일**: 2026-09-24 — 최종 정밀 검수 — "표면 번호는 W5 몫" → 각 API 문서가 채번(W5 완료)
 > **개정일**: 2026-09-24 — W7 검수 반영 — 미확인 1행 닫힘(계정 · 역할 부여 경로 — 시드 전용) — 기능 수 불변
@@ -26,7 +27,7 @@ AUT는 **신원을 확인하고 표면마다 역할을 대조하는 도메인**�
 | **AUT-04** | 신원 확인 | 인증이 필요한 전 REST 표면에서 Authorization 헤더의 JWT 형식 · 서명 · 만료를 검증한다. WebSocket은 핸드셰이크 뒤 **첫 메시지**로 받은 토큰을 검증한다 — 쿼리 파라미터로 받으면 토큰이 URL · 로그에 남는다. 만료와 서명 불량을 다른 코드로 가른다(만료는 갱신 1회로 복구되고 서명 불량은 복구되지 않는다) | S7 | F-03 · F-04 · F-05 · F-07 | 해당 없음 | 인증 필요 전 표면 · 07_api/11_websocket | 없음 — 무상태 검증 |
 | **AUT-05** | 역할 기반 인가 | 엔드포인트마다 NestJS Guard가 사용자의 역할 집합(user_role — 다대다)을 표면 권한과 대조한다. 권한은 합집합으로 판정한다. 사용자 권한 사본은 cache-aside(현행 300초)이며 **권한 변경 시 즉시 삭제**한다 — 삭제하지 않으면 회수한 권한이 TTL만큼 살아 있다. 권한 캐시 키는 cache:perm:{user_id}다(W3 확정) | S7 | F-03 · F-04 · F-05 · F-06 · F-07 · F-09 | 해당 없음 | 인가 대상 전 표면 | PostgreSQL role · user_role · Redis cache 계열(권한 사본) |
 | **AUT-06** | 레이트 리밋 | 사용자 · 토큰 기준 분당 요청 수를 rl:{class}:{user_id}:{unix_minute} INCR로 센다(class = 한도 등급 · W3). **IP 기준이 아니다** — 모든 요청이 127.0.0.1에서 오므로 IP 기준은 전원을 한 사용자로 센다. timeseries/query와 export에 더 엄격히 건다(원본 architecture.md §18). 한도 값은 2계층 조정값이며 소유처는 [../12_security/03_api_surface_defense.md](../12_security/03_api_surface_defense.md) | S7 | F-03 · F-04 · F-05 | 해당 없음 | 인증 필요 전 REST 표면 | Redis rl |
-| **AUT-07** | 요청 출처 방어 | CORS 허용 오리진을 http://localhost:3001 **하나**로 두고 와일드카드를 금지한다. WebSocket 핸드셰이크의 Origin 헤더를 같은 목록으로 검증한다. 보안 헤더를 부여하되 HSTS는 TLS 전제라 끈다. Host 헤더를 허용 목록(localhost · 127.0.0.1)과 대조한다 — DNS 재바인딩 방어. **CORS · WebSocket Origin 검증 · Host 대조는 S2부터 필요하다** — 웹(3001)이 api(3000)를 직결 호출하는 순간 오리진이 다르고, 세 검사 모두 토큰이 필요 없다. 보안 헤더와 BFF 인증 경로의 Origin 대조는 S7에 붙인다(정본 [../12_security/03_api_surface_defense.md](../12_security/03_api_surface_defense.md)) | S2(CORS · Origin · Host) · S7 | F-03 · F-04 · F-07 | 해당 없음 | 전 REST 표면 · 07_api/11_websocket | 없음 |
+| **AUT-07** | 요청 출처 방어 | CORS 허용 오리진을 http://localhost:13001 **하나**로 두고 와일드카드를 금지한다. WebSocket 핸드셰이크의 Origin 헤더를 같은 목록으로 검증한다. 보안 헤더를 부여하되 HSTS는 TLS 전제라 끈다. Host 헤더를 허용 목록(localhost · 127.0.0.1)과 대조한다 — DNS 재바인딩 방어. **CORS · WebSocket Origin 검증 · Host 대조는 S2부터 필요하다** — 웹(13001)이 api(13000)를 직결 호출하는 순간 오리진이 다르고, 세 검사 모두 토큰이 필요 없다. 보안 헤더와 BFF 인증 경로의 Origin 대조는 S7에 붙인다(정본 [../12_security/03_api_surface_defense.md](../12_security/03_api_surface_defense.md)) | S2(CORS · Origin · Host) · S7 | F-03 · F-04 · F-07 | 해당 없음 | 전 REST 표면 · 07_api/11_websocket | 없음 |
 
 - 검산: AUT-01 · 02 · 03 · 04 · 05 · 06 · 07 = **7**. 단계별 S7 6(AUT-01~06) + S2 시작 1(AUT-07) = **7**
 - **AUT는 스위치가 없다.** 인증 · 인가는 Redis 역할의 on/off 비교 대상이 아니라 방어선이다 — 방어선에 스위치를 달면 끈 상태가 측정 조건으로 정상화된다.
@@ -45,7 +46,7 @@ AUT는 **신원을 확인하고 표면마다 역할을 대조하는 도메인**�
 ```
 
 - **BFF가 남는 가장 중요한 이유가 ①과 ④다.** 리프레시 토큰을 브라우저 JS에 노출하지 않으려면 쿠키를 서버에서만 읽어야 하고, 그 서버가 Route Handler다.
-- **localhost:3001과 localhost:3000은 포트가 달라도 same-site다.** SameSite=Lax가 그대로 동작하고, 로컬 http라 Secure만 끄고 httpOnly는 유지한다(원본 architecture.md §11.2).
+- **localhost:13001과 localhost:13000은 포트가 달라도 same-site다.** SameSite=Lax가 그대로 동작하고, 로컬 http라 Secure만 끄고 httpOnly는 유지한다(원본 architecture.md §11.2).
 - **③은 조용한 1회 재시도로 끝나야 한다.** 만료를 서명 불량과 같은 코드로 내면 클라이언트가 재로그인으로 떨어진다.
 
 ## 기능별 경계

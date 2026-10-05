@@ -174,9 +174,9 @@ tasks:
         done
 
   test-surface:
-    desc: 표면 계약 테스트 — 떠 있는 api(127.0.0.1:3000)에 블랙박스로 붙는다(task up 뒤)
+    desc: 표면 계약 테스트 — 떠 있는 api(127.0.0.1:13000)에 블랙박스로 붙는다(task up 뒤)
     cmds:
-      - SURFACE_BASE_URL=http://127.0.0.1:3000 pnpm --filter @db-study/api exec vitest run test/surface.test.ts
+      - SURFACE_BASE_URL=http://127.0.0.1:13000 pnpm --filter @db-study/api exec vitest run test/surface.test.ts
 
   docs:lint:
     desc: 문서군 기계 검사(읽기 전용) — 인자는 task docs:lint -- --final 처럼 넘긴다

@@ -16,7 +16,7 @@ echo "── rep $REP · 복원 s3-empty-s"
 restore_snap s3-empty-s
 baseline "$BASE" "$TMP/baseline"
 APP_ROLE=worker api_up
-curl -s http://127.0.0.1:3000/api/v1/health > "$TMP/health"
+curl -s http://127.0.0.1:13000/api/v1/health > "$TMP/health"
 WS=$(date -u +%Y-%m-%dT%H:%M:%S.000Z)
 $COMPOSE --profile datagen run --rm --no-deps datagen node dist/mode-b.js --tier S --mix mixed --seed 42 --duration "$DUR" 2>/dev/null | tail -1 > "$TMP/modeb"
 T=$(date +%s); until [ $(( $(date +%s) - T )) -ge 5 ]; do sleep 1; done

@@ -10,7 +10,7 @@
 #   start    <반복>                 ~6.5분  ① 복원 · 기준선(BASE_S=300) · 기동 · 전제 대조(규칙 0 · 상태 키 0 · SW-06 on · 확인 행위자)
 #   load     <반복> [지속 초=1500]  ~3분    ④ 모드 B 기동(호출을 넘어 산다 — 지속으로 스스로 끝남) · 규칙 계획 · 기저 대조 · 규칙 POST · 예열
 #   window   <반복> [창 초=300]     ~5.5분  ⑤ 정상 상태 판정 창 — 판정 처리량 · 판정 구간 · 인계 대기 · 세 저장소 대조(창 ts 범위)
-#   ack      <반복>                 ≤7분    두 브라우저 ACK 반영 지연(web 3001 — 떠 있지 않으면 이 호출 안에서 띄우고 거둔다)
+#   ack      <반복>                 ≤7분    두 브라우저 ACK 반영 지연(web 13001 — 떠 있지 않으면 이 호출 안에서 띄우고 거둔다)
 #   fault-pg <반복> [정지 초=60]    ~3분    AC-36 ① PostgreSQL 정지 중 위반 지속(탐침 규칙) → 복구 뒤 확정 1 · 정지 중 발행 0
 #                                           (정지 중 = [정지 완료, docker start 호출] · 복구 뒤 = [docker start 호출, 끝])
 #   fault-ch <반복> [보류 초=60] [회복 초=45] ~2.5분 AC-36 ② alarm_eval 삽입 강제 실패 → 발생 · 해제 · 발행 정상 · 무효 구간 계수
@@ -30,7 +30,7 @@ PG_NAME=db_study-postgres-1
 RD_NAME=db_study-redis-1
 API_NAME=db_study-api-1
 HOLD_TABLE=alarm_eval_exp33_hold
-API=http://127.0.0.1:3000
+API=http://127.0.0.1:13000
 PW_CORE=${PW_CORE:-/private/tmp/claude-501/-Users-jaepil-project-db-study/4afbce1e-3577-4b7c-851b-7586945819ff/scratchpad/node_modules/playwright-core}
 CHROME=${CHROME:-$HOME/Library/Caches/ms-playwright/chromium_headless_shell-1243/chrome-headless-shell-mac-arm64/chrome-headless-shell}
 
@@ -111,7 +111,7 @@ _exp33_cleanup() {
 }
 trap _exp33_cleanup EXIT
 trap '_exp33_cleanup; exit 130' INT TERM
-web_stop() { local p; p=$(lsof -tiTCP:3001 -sTCP:LISTEN 2>/dev/null || true); [ -z "$p" ] || kill $p 2>/dev/null || true; }
+web_stop() { local p; p=$(lsof -tiTCP:13001 -sTCP:LISTEN 2>/dev/null || true); [ -z "$p" ] || kill $p 2>/dev/null || true; }
 sw_of() { python3 -c 'import json,sys; s=(json.load(open(sys.argv[1])).get("switches") or {}).get(sys.argv[2]); print(s.get("value") if isinstance(s, dict) else s)' "$1" "$2" 2>/dev/null || true; }
 pg_ready() { docker exec -u postgres "$PG_NAME" pg_isready -q -d plc >/dev/null 2>&1; }
 wcap() { wdump > "$1.worker"; }
@@ -293,13 +293,13 @@ ack)
   meta_set webDirty "$([ -n "$(git status --porcelain -- apps/web)" ] && echo true || echo false)"
   kv_set webBuild "$(cat apps/web/.next/BUILD_ID 2>/dev/null || echo none)"
   WEB_OURS=0
-  if [ -z "$(lsof -tiTCP:3001 -sTCP:LISTEN 2>/dev/null || true)" ]; then
+  if [ -z "$(lsof -tiTCP:13001 -sTCP:LISTEN 2>/dev/null || true)" ]; then
     [ -f apps/web/.next/BUILD_ID ] || { echo "web 빌드가 없다(apps/web/.next) — 리드가 빌드한다" >&2; exit 1; }
     WEB_LOG="$(pwd)/$SD/web.log"
     (cd apps/web && exec pnpm start > "$WEB_LOG" 2>&1) &
     WEB_OURS=1
-    for _ in $(seq 1 30); do curl -sf -o /dev/null http://localhost:3001/alarms && break; sleep 1; done
-    curl -sf -o /dev/null http://localhost:3001/alarms || { echo "web 기동 30초 초과" >&2; exit 1; }
+    for _ in $(seq 1 30); do curl -sf -o /dev/null http://localhost:13001/alarms && break; sleep 1; done
+    curl -sf -o /dev/null http://localhost:13001/alarms || { echo "web 기동 30초 초과" >&2; exit 1; }
   fi
   meta_set webStartedByRunner "$WEB_OURS"
   adump > "$SD/m0.api"

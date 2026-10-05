@@ -21,7 +21,7 @@ restore_snap "$HIST_SNAP"
 baseline "$BASE" "$TMP/baseline"
 worker_start
 APP_ROLE=api api_up
-curl -s http://127.0.0.1:3000/api/v1/health > "$TMP/health"
+curl -s http://127.0.0.1:13000/api/v1/health > "$TMP/health"
 $COMPOSE --profile datagen run --rm --no-deps datagen node dist/mode-b.js --tier M --mix mixed --seed 42 --duration 120 2>/dev/null | tail -1 > "$TMP/modeb" &
 DG=$!
 sleep 10
@@ -36,7 +36,7 @@ for i in range(n):
     f = a0 + 43_200_000 + (rep * 997 + i * 131) % 5000 * 60_000
     body = json.dumps({'tagIds': [1, 2, 201, 202], 'from': iso(f), 'to': iso(f + 86_400_000), 'aggregations': ['avg', 'max']}).encode()
     t = time.perf_counter()
-    r = urllib.request.urlopen(urllib.request.Request('http://127.0.0.1:3000/api/v1/timeseries/query', body, {'content-type': 'application/json'}))
+    r = urllib.request.urlopen(urllib.request.Request('http://127.0.0.1:13000/api/v1/timeseries/query', body, {'content-type': 'application/json'}))
     j = json.load(r)
     out.append({'ms': (time.perf_counter() - t) * 1000, 'cached': j['meta']['cached'], 'points': j['meta']['pointCount']})
 print(json.dumps(out))

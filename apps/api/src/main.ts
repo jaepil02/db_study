@@ -32,7 +32,7 @@ async function main() {
   await app.register(fastifyCors, { delegator: corsDelegator });
   app.useGlobalFilters(new ApiExceptionFilter());
   app.enableShutdownHooks();
-  // 컨테이너 안 0.0.0.0 — 호스트 publish는 127.0.0.1:3000(Compose ports · ADR-18)
+  // 컨테이너 안 0.0.0.0 — 호스트 publish는 127.0.0.1:13000 → 컨테이너 3000(Compose ports · ADR-18)
   await app.listen(API_PORT, '0.0.0.0');
   new Logger('main').log(`api 기동 — APP_ROLE ${cfg.appRole} · 커밋 ${cfg.commitHash ?? 'null'}`);
 }

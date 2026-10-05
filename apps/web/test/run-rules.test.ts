@@ -1118,10 +1118,10 @@ describe('BFF /bff/runs — 허용 경로 4 · no-store · 상태 · 본문 그�
       ctx([PERF_ID, 'stop']),
     );
     expect(seen).toEqual([
-      'POST http://127.0.0.1:3000/api/v1/runs no-store {"type":"perf"}',
-      'GET http://127.0.0.1:3000/api/v1/runs/current no-store ',
-      `GET http://127.0.0.1:3000/api/v1/runs/${PERF_ID} no-store `,
-      `POST http://127.0.0.1:3000/api/v1/runs/${PERF_ID}/stop no-store `,
+      'POST http://127.0.0.1:13000/api/v1/runs no-store {"type":"perf"}',
+      'GET http://127.0.0.1:13000/api/v1/runs/current no-store ',
+      `GET http://127.0.0.1:13000/api/v1/runs/${PERF_ID} no-store `,
+      `POST http://127.0.0.1:13000/api/v1/runs/${PERF_ID}/stop no-store `,
     ]);
   });
 

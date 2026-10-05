@@ -2,6 +2,7 @@
 
 > **대상**: api 프로세스 안 모듈 사이의 경계 — Stream 경계 원칙과 근거 4 · **업무 명령 경계(stream:biz:cmd · 워커 적용)** · 경계 예외(알람 직접 호출)의 근거 · APP_ROLE 5값과 모듈 배정 · worker_threads 격리 대상 · **스위치 = DI 포트 확정 표(포트 · 구현 이름 정본)** · 리포지터리 구조 · **라이브 실행 RunControlModule(GEN)의 역할 배치**
 > **작성일**: 2026-09-24
+> **개정일**: 2026-10-05 — 웹 · api 호스트 포트 이동(같은 머신의 다른 프로젝트가 호스트 3000 · 3001을 점유 · 사용자 결정 2026-10-05) — 웹 3001 → **13001** · api 호스트 3000 → **13000**(컨테이너 3000 · 서비스명 그대로) · CORS 허용 오리진 http://localhost:3001 → **http://localhost:13001** — 오리진 수 · 바인드 규칙 불변
 > **개정일**: 2026-09-28 — 라이브 실행 제어 반영(사용자 요구 2026-09-28 · 리드 판정) — APP_ROLE api 행에 **GEN 라이브 실행(RunControlModule — 09_datagen #2~#5 · 실행 주체)** · 판정 행 5 → **6**(GEN 라이브 실행 → api · all) · Stream 경계 간선에 라이브 흐름 실행 · 명령 스트림 경계 간선에 GEN → MST(04_domain_map 간선 21 → 22와 같게) · RunControlModule은 포트 없음(스위치 아님) 불릿 — APP_ROLE 값 · GEN 역할 수 · 스위치 · 포트 · 구현 수 불변
 > **개정일**: 2026-09-28 — 웨이브 1 검수 반영(B-H5) — SW-12 BizWritePort 사용 모듈 master · alarms · work-orders · auth → **master · alarms · work-orders(업무 쓰기 표면 — auth의 로그인 · 토큰은 대상 아님)** — 스위치 · 포트 · 구현 수 불변
 > **개정일**: 2026-09-28 — 리드 정정(d-biz-b 대조) — 명령 스트림 경계 · worker 명령 적용의 도메인에서 AUT 제외(로그인 · 토큰은 업무 쓰기 아님 · 지침 §10) — 04_domain_map 자기 간선 3과 일치 · "반영 대기" 문구 해소
@@ -158,7 +159,7 @@ CPU 바운드 작업은 piscina worker_threads 풀에서 돈다(ADR-25 · REQ-GL
 ```plain
 db_study/
 ├── apps/
-│   ├── web/                    ← Next.js · 호스트 프로세스(3001)
+│   ├── web/                    ← Next.js · 호스트 프로세스(13001)
 │   └── api/src/
 │       ├── modules/            ← NestJS 모듈 11 = 도메인 11
 │       │   ├── auth · master · work-orders · alarms · timeseries · realtime   ← 제어 평면 6

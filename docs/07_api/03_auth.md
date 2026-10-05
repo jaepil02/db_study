@@ -2,6 +2,7 @@
 
 > **대상**: AUT 도메인이 소유하는 REST 표면 — 로그인 · 토큰 갱신 · 로그아웃의 요청 · 응답 · 실패 · 경로 계약 · 계정 · 역할 관리 표면의 부재 판정
 > **작성일**: 2026-09-24
+> **개정일**: 2026-10-05 — 웹 · api 호스트 포트 이동(같은 머신의 다른 프로젝트가 호스트 3000 · 3001을 점유 · 사용자 결정 2026-10-05) — 웹 3001 → **13001** · api 호스트 3000 → **13000**(컨테이너 3000 · 서비스명 그대로) · CORS 허용 오리진 http://localhost:3001 → **http://localhost:13001** — 오리진 수 · 바인드 규칙 불변
 > **개정일**: 2026-10-03 — 리드 판정(웨이브 1 정합 · 정본 08_screen/02_traceability) — 로그아웃 #3 호출 화면 전 화면 → **화면 없음(API 전용)**(현행 셸에 사용자 메뉴 없음) · 호출 화면 해설 불릿 — 표면 · 기능 · 에러 코드 수 불변
 > **개정일**: 2026-10-03 — D-14 2화면 전환(사용자 결정 2026-10-03) — 로그인 #1 호출 화면 AUTH-LOGIN → **화면 없음(API 전용)** · 관련 문서 AUTH-LOGIN 링크에 폐지 표기 — 표면 · 기능 · 에러 코드 수 불변(api 표면은 지우지 않는다 — D-14 결정 1)
 > **개정일**: 2026-09-26 — 목적 적합성 실증 W1(EXP-40~45 채번) — 미확인 행 "카탈로그 39에 없다 · 필요해지면 EXP-40부터" → **카탈로그에 없다 · 말미 채번(다음 번호는 카탈로그 §분류와 검산)** — EXP-40이 역방향 대조로 채번돼 옛 문구가 다른 실험을 가리킨다
@@ -12,7 +13,7 @@
 
 AUT는 **표면 셋만 소유하고 나머지 전 표면에 끼어드는 도메인**이다. 신원 확인 · 역할 대조 · 레이트 리밋 · 출처 방어(AUT-04~07)는 표면이 아니라 횡단 검사이며, 그 헤더 · 응답 규약은 [01_conventions.md](./01_conventions.md) §인증 헤더와 출처 방어가 갖는다. 이 문서는 토큰을 **발급 · 교환 · 폐기**하는 세 표면만 적는다.
 
-**세 표면의 호출 주체는 브라우저가 아니라 BFF다.** 리프레시 토큰은 httpOnly 쿠키로만 브라우저에 있고(REQ-AUT-04), 그 쿠키를 읽고 쓰는 자리는 Next.js Route Handler뿐이다. 그래서 api는 리프레시 토큰을 **본문으로** 주고받고, 쿠키를 심고 지우는 일은 BFF가 한다 — api(3000)가 쿠키를 심으면 웹 오리진(3001)의 Route Handler가 아니라 api 오리진 쿠키가 되어 BFF가 읽을 수 없다.
+**세 표면의 호출 주체는 브라우저가 아니라 BFF다.** 리프레시 토큰은 httpOnly 쿠키로만 브라우저에 있고(REQ-AUT-04), 그 쿠키를 읽고 쓰는 자리는 Next.js Route Handler뿐이다. 그래서 api는 리프레시 토큰을 **본문으로** 주고받고, 쿠키를 심고 지우는 일은 BFF가 한다 — api(13000)가 쿠키를 심으면 웹 오리진(13001)의 Route Handler가 아니라 api 오리진 쿠키가 되어 BFF가 읽을 수 없다.
 
 **인증은 S7에 붙는다**(D-07). S2~S6에는 이 문서의 표면이 없고, 다른 표면은 무인증으로 동작한다.
 
@@ -20,7 +21,7 @@ AUT는 **표면 셋만 소유하고 나머지 전 표면에 끼어드는 도메�
 
 | 항목 | 규칙 | 근거 |
 |------|------|------|
-| 경로 | 브라우저 → BFF → api만 — 직결 호출은 CORS 응답 헤더가 없어 브라우저가 응답을 읽지 못한다 · **BFF 인증 Route Handler는 Origin 헤더가 http://localhost:3001이 아니면 거절한다** — SameSite는 포트를 보지 않아 localhost의 다른 웹 앱 요청에도 리프레시 쿠키가 실린다 | [01_conventions.md](./01_conventions.md) §BFF 경유와 직결 · REQ-AUT-04 · REQ-AUT-13 · [../12_security/03_api_surface_defense.md](../12_security/03_api_surface_defense.md) §BFF 인증 경로의 출처 검사 |
+| 경로 | 브라우저 → BFF → api만 — 직결 호출은 CORS 응답 헤더가 없어 브라우저가 응답을 읽지 못한다 · **BFF 인증 Route Handler는 Origin 헤더가 http://localhost:13001이 아니면 거절한다** — SameSite는 포트를 보지 않아 localhost의 다른 웹 앱 요청에도 리프레시 쿠키가 실린다 | [01_conventions.md](./01_conventions.md) §BFF 경유와 직결 · REQ-AUT-04 · REQ-AUT-13 · [../12_security/03_api_surface_defense.md](../12_security/03_api_surface_defense.md) §BFF 인증 경로의 출처 검사 |
 | 리프레시 토큰 전달 | api ↔ BFF는 본문 refreshToken · BFF ↔ 브라우저는 httpOnly 쿠키(SameSite=Lax · Secure off · httpOnly on) | 원본 architecture.md §11.2 |
 | 액세스 토큰 | JWT · 본문 accessToken으로 발급 · 브라우저 메모리에 두고 Authorization 헤더로만 보낸다 | REQ-AUT-04 |
 | 수명 | 액세스 현행 참고 15분 · 리프레시 현행 참고 14일 — 2계층 · 소유 [../12_security/01_authn_authz.md](../12_security/01_authn_authz.md) | REQ-AUT-03 · 04 |

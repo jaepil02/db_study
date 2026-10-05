@@ -2,6 +2,7 @@
 
 > **대상**: db_study 전체 구조 — 조감도 · 시스템 컨텍스트 · 경계별 프로토콜 · 컨테이너 4 · 모듈 배치 요약 · **아키텍처 불변식 표** · 범위 경계
 > **작성일**: 2026-09-24
+> **개정일**: 2026-10-05 — 웹 · api 호스트 포트 이동(같은 머신의 다른 프로젝트가 호스트 3000 · 3001을 점유 · 사용자 결정 2026-10-05) — 웹 3001 → **13001** · api 호스트 3000 → **13000**(컨테이너 3000 · 서비스명 그대로) · CORS 허용 오리진 http://localhost:3001 → **http://localhost:13001** — 오리진 수 · 바인드 규칙 불변
 > **개정일**: 2026-10-03 — ClickHouse 네이티브 호스트 포트 127.0.0.1:9000 → **127.0.0.1:19000**(컨테이너 9000 그대로 · 같은 머신의 다른 프로젝트 MinIO가 호스트 9000을 점유 · 사용자 결정) — 앱 HTTP 8123 · 메트릭 9363 불변
 > **개정일**: 2026-09-28 — 업무 쓰기 Redis 경유 개정(사용자 결정 2026-09-27 · D-04 · REQ-GLB-12 개정) — 불변식 10 "업무 쓰기는 Stream을 타지 않는다" → **업무 쓰기는 명령 스트림을 타고 응답은 커밋 뒤다** · 모듈 배치 제어 행 나가는 경계 · 하지 않는 일 · 학습 목표 ② 구조 요소 · PostgreSQL 업무 14 → **15**(조감도 · 컨테이너 표) — 불변식 수 불변
 > **개정일**: 2026-09-26 — 목적 적합성 실증 W1 — 컨테이너 표 clickhouse 담는 것 테이블 5 → **8**(목적지 5 + 업무 대조 계측물 3)
@@ -22,7 +23,7 @@ db_study는 **로컬 머신 1대**에서 도는 학습 시스템이다. Next.js 
 
 ```mermaid
 flowchart TB
-    subgraph USERS["사용자 — 브라우저 localhost:3001"]
+    subgraph USERS["사용자 — 브라우저 localhost:13001"]
         OP["OPERATOR<br/>실시간 모니터링 · 알람 확인"]
         ENG["ENGINEER<br/>이력 분석 · 알람 규칙"]
         ADM["ADMIN<br/>마스터 · 계정"]
@@ -72,9 +73,9 @@ flowchart TB
 
 | 행위자 | 위치 | 들어오는 경로 | 이 시스템에서 하는 일 | 경계 밖에 남는 것 |
 |------|------|------|------|------|
-| OPERATOR · ENGINEER · ADMIN | 같은 머신의 브라우저 | localhost:3001(웹) · 127.0.0.1:3000(직결) | 역할별 화면 사용 — 정본 [../02_features/12_permission_matrix.md](../02_features/12_permission_matrix.md) | 원격 접속 · 다중 사용자 동시 운영 |
+| OPERATOR · ENGINEER · ADMIN | 같은 머신의 브라우저 | localhost:13001(웹) · 127.0.0.1:13000(직결) | 역할별 화면 사용 — 정본 [../02_features/12_permission_matrix.md](../02_features/12_permission_matrix.md) | 원격 접속 · 다중 사용자 동시 운영 |
 | 실험 수행자 | 같은 머신의 셸 | docker compose · task · k6 · psql · clickhouse-client · redis-cli | 기동 · 스냅샷 · 부하 주입 · 직접 조회 — **역할이 아니라 머신 접근이다** | 없음 — 머신 접근 자체가 전 권한이다 |
-| k6 | 호스트 프로세스 | 127.0.0.1:3000 | 조회 · 쓰기 · WebSocket 부하 | 부하 생성기 격리(같은 CPU) — [../10_observability/07_measurement_limits.md](../10_observability/07_measurement_limits.md) |
+| k6 | 호스트 프로세스 | 127.0.0.1:13000 | 조회 · 쓰기 · WebSocket 부하 | 부하 생성기 격리(같은 CPU) — [../10_observability/07_measurement_limits.md](../10_observability/07_measurement_limits.md) |
 | PLC 장비 | 현장 | 현재 **미연결** | 해당 없음 — PlcSim이 대신 Modbus TCP 서버가 된다 | 실장비 연결은 범위 밖 |
 | 관측 스택 | 선택 프로파일 컨테이너 | /metrics 스크레이프 | 저장 · 시각화 · 알림 | 기본 기동에서 제외 — 측정 대상과 CPU를 다투지 않게 한다(ADR-20) |
 
@@ -104,7 +105,7 @@ flowchart TB
 
 | 서비스 | 역할 | 담는 것 | 호스트 publish | 쓰는 named volume |
 |------|------|------|------|------|
-| api | 애플리케이션 1 | NestJS 단일 프로세스 — 제어 평면 6 · 데이터 평면 4 · 관측 1 모듈 · PlcSim 루프백 포트 대역 | 127.0.0.1:3000 | spooldata |
+| api | 애플리케이션 1 | NestJS 단일 프로세스 — 제어 평면 6 · 데이터 평면 4 · 관측 1 모듈 · PlcSim 루프백 포트 대역 | 127.0.0.1:13000 | spooldata |
 | postgres | 저장소 — OLTP | 업무 테이블 15 · 대조군 1 | 127.0.0.1:5432 | pgdata |
 | clickhouse | 저장소 — OLAP | 테이블 8(목적지 5 + 업무 대조 계측물 3) · MV 3 · Dictionary 1 | 127.0.0.1:8123 · 19000(컨테이너 9000) · 9363 | chdata |
 | redis | 저장소 — 중간 계층 | Stream 버퍼 · 최신값 · 알람 상태 · 캐시 · 세션 · Pub/Sub | 127.0.0.1:6379 | redisdata |

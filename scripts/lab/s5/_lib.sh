@@ -112,9 +112,9 @@ stack_down() { # api 정상 종료(드레인) → worker 정상 종료
   worker_stop
 }
 
-# ── 메트릭 캡처 — api는 호스트 3000 · worker는 컨테이너 안에서(포트를 열지 않는다 · Host 대조 허용 이름 127.0.0.1)
+# ── 메트릭 캡처 — api는 호스트 13000 · worker는 컨테이너 안에서(포트를 열지 않는다 · Host 대조 허용 이름 127.0.0.1)
 wdump() { docker exec "$WK_NAME" wget -qO- http://127.0.0.1:3000/metrics 2>/dev/null || true; }
-adump() { curl -s --max-time 5 http://127.0.0.1:3000/metrics || true; }
+adump() { curl -s --max-time 5 http://127.0.0.1:13000/metrics || true; }
 lagdump() { if [ "$LAG_SRC" = worker ]; then wdump; else adump; fi; }
 snap_all() { # $1=접두 → 접두.api · 접두.worker(모드 B · C)
   adump > "$1.api"
@@ -315,7 +315,7 @@ rep_head() { # $1=스냅샷 $2=구성 a|b
   kv_set baselineEnd "$(iso_now)"
   if [ "$2" = a ]; then stack_up_a; else stack_up_b; fi
   kv_set lagSrc "$LAG_SRC"
-  curl -s http://127.0.0.1:3000/api/v1/health > "$ST/health.json"
+  curl -s http://127.0.0.1:13000/api/v1/health > "$ST/health.json"
 }
 
 # 원시 줄 조립 — scripts/lab/s5/load/_rec.py <종류> <상태> <출력 jsonl>

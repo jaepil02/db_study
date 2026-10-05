@@ -19,15 +19,15 @@ echo "── rep $REP · SW-08 $SW · 복원 s3-empty-s"
 restore_snap s3-empty-s
 baseline "$BASE" "$TMP/baseline"
 APP_ROLE=worker api_up
-curl -s http://127.0.0.1:3000/api/v1/health > "$TMP/health0"
+curl -s http://127.0.0.1:13000/api/v1/health > "$TMP/health0"
 WS=$(date -u +%Y-%m-%dT%H:%M:%S.000Z)
 $COMPOSE --profile datagen run --rm --no-deps datagen node dist/mode-b.js --tier S --mix mixed --seed 42 --duration "$DUR" 2>/dev/null | tail -1 > "$TMP/modeb"
 T=$(date +%s); until [ $(( $(date +%s) - T )) -ge 5 ]; do sleep 1; done
 until [ "$(metric consumer_lag)" = 0 ] || [ $(( $(date +%s) - T )) -ge 180 ]; do sleep 2; done
 WE=$(date -u +%Y-%m-%dT%H:%M:%S.000Z)
 RESTARTS=$(docker inspect db_study-api-1 --format '{{.RestartCount}}')
-curl -s http://127.0.0.1:3000/api/v1/health > "$TMP/health1"
-curl -s http://127.0.0.1:3000/metrics | grep -E '^(ing_insert_retries_total|rows_inserted|dlq_count)' > "$TMP/metrics" || true
+curl -s http://127.0.0.1:13000/api/v1/health > "$TMP/health1"
+curl -s http://127.0.0.1:13000/metrics | grep -E '^(ing_insert_retries_total|rows_inserted|dlq_count)' > "$TMP/metrics" || true
 api_stop
 docker logs db_study-api-1 2>&1 | grep -E '"event":"lab_fault"|PEL 회수' > "$TMP/log" || true
 chq "SYSTEM FLUSH LOGS"

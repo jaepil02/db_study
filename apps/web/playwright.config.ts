@@ -1,9 +1,9 @@
 // 유저 플로우 E2E — 화면 명세 docs/08_screen(01 공통 셸 · 업무 쓰기 응답 · 05 · 06 · 08)를 실제 화면으로 확인한다.
-// 웹은 next build 뒤 next start(127.0.0.1:3001)로 띄우고, api · 저장소는 이미 떠 있는 docker compose(127.0.0.1:3000)를 쓴다.
-// 화면은 http://localhost:3001로 연다 — api CORS · WS Origin 허용 오리진이 http://localhost:3001 하나다(lib/config.ts).
+// 웹은 next build 뒤 next start(127.0.0.1:13001)로 띄우고, api · 저장소는 이미 떠 있는 docker compose(127.0.0.1:13000)를 쓴다.
+// 화면은 http://localhost:13001로 연다 — api CORS · WS Origin 허용 오리진이 http://localhost:13001 하나다(lib/config.ts).
 import { defineConfig, devices } from '@playwright/test';
 
-const API_BASE_URL = process.env.API_BASE_URL ?? 'http://127.0.0.1:3000';
+const API_BASE_URL = process.env.API_BASE_URL ?? 'http://127.0.0.1:13000';
 
 export default defineConfig({
   testDir: './e2e',
@@ -16,7 +16,7 @@ export default defineConfig({
   expect: { timeout: 10_000 },
   reporter: [['list'], ['html', { outputFolder: './e2e/.report', open: 'never' }]],
   use: {
-    baseURL: 'http://localhost:3001',
+    baseURL: 'http://localhost:13001',
     locale: 'ko-KR',
     timezoneId: 'Asia/Seoul',
     viewport: { width: 1600, height: 900 },
@@ -28,10 +28,10 @@ export default defineConfig({
     { name: 'chromium', use: { ...devices['Desktop Chrome'], viewport: { width: 1600, height: 900 } } },
   ],
   webServer: {
-    // next를 직접 exec한다 — pnpm start를 거치면 종료 신호가 next-server에 닿지 않아 teardown이 멈추고 3001에 고아가 남는다
+    // next를 직접 exec한다 — pnpm start를 거치면 종료 신호가 next-server에 닿지 않아 teardown이 멈추고 13001에 고아가 남는다
     command:
-      'node node_modules/next/dist/bin/next build && exec node node_modules/next/dist/bin/next start -H 127.0.0.1 -p 3001',
-    url: 'http://127.0.0.1:3001/bff/health',
+      'node node_modules/next/dist/bin/next build && exec node node_modules/next/dist/bin/next start -H 127.0.0.1 -p 13001',
+    url: 'http://127.0.0.1:13001/bff/health',
     reuseExistingServer: false,
     timeout: 300_000,
     env: { API_BASE_URL },

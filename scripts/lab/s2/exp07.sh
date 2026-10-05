@@ -29,7 +29,7 @@ ROUTE='/api/v1/realtime/devices/:id/tags'
 
 wait_api() {
   for _ in $(seq 1 90); do
-    if curl -sf -o /dev/null http://127.0.0.1:3000/api/v1/health; then return 0; fi
+    if curl -sf -o /dev/null http://127.0.0.1:13000/api/v1/health; then return 0; fi
     sleep 1
   done
   echo "api health 90초 초과" >&2; exit 1
@@ -49,24 +49,24 @@ for arm in $ARMS; do
   docker stats --no-stream --format '{{.Name}} {{.CPUPerc}} {{.MemUsage}}' db_study-postgres-1 db_study-clickhouse-1 db_study-redis-1 > "$TMP/baseline-$arm"
   REDIS_LATEST_CACHE=$arm APP_ROLE=all $COMPOSE up -d --no-deps --force-recreate api >/dev/null
   wait_api
-  curl -s http://127.0.0.1:3000/api/v1/health > "$TMP/health-$arm"
+  curl -s http://127.0.0.1:13000/api/v1/health > "$TMP/health-$arm"
   sleep "$ACC"
   LAG0=0
   for _ in 1 2 3 4 5; do
-    l=$(curl -s http://127.0.0.1:3000/metrics | awk '$1=="consumer_lag" {print $2}')
+    l=$(curl -s http://127.0.0.1:13000/metrics | awk '$1=="consumer_lag" {print $2}')
     if [ "${l:-0}" -gt "$LAG0" ]; then LAG0=$l; fi
     sleep 1
   done
   k6run "${WARM}s" "warm-$arm.json"
-  curl -s http://127.0.0.1:3000/metrics > "$TMP/a-$arm"
+  curl -s http://127.0.0.1:13000/metrics > "$TMP/a-$arm"
   chq "SYSTEM FLUSH LOGS"
   T0=$(date -u +%Y-%m-%dT%H:%M:%S.000Z)
   k6run "${WIN}s" "k6-$arm.json"
   T1=$(date -u +%Y-%m-%dT%H:%M:%S.000Z)
-  curl -s http://127.0.0.1:3000/metrics > "$TMP/b-$arm"
+  curl -s http://127.0.0.1:13000/metrics > "$TMP/b-$arm"
   RECOVER=-1
   for i in $(seq 1 30); do
-    lag=$(curl -s http://127.0.0.1:3000/metrics | awk '$1=="consumer_lag" {print $2}')
+    lag=$(curl -s http://127.0.0.1:13000/metrics | awk '$1=="consumer_lag" {print $2}')
     if [ -n "$lag" ] && [ "$lag" -le "$LAG0" ]; then RECOVER=$i; break; fi
     sleep 1
   done

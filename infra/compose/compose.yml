@@ -140,7 +140,8 @@ services:
       - spooldata:/app/spool
       - ../sim-plans:/app/sim-plans:ro
     ports:
-      - "127.0.0.1:3000:3000"
+      # 호스트 13000 → 컨테이너 3000(같은 머신의 다른 프로젝트가 호스트 3000 · 3001을 써서 옮김 · 사용자 결정 2026-10-05 · 컨테이너 안 3000 · 서비스명 그대로)
+      - "127.0.0.1:13000:3000"
     depends_on:
       postgres:
         condition: service_healthy

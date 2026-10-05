@@ -62,7 +62,7 @@ step)
   restore_snap "$SNAP"
   store_resources_check
   stack_up_a
-  curl -s http://127.0.0.1:3000/api/v1/health > "$SD/health.json"
+  curl -s http://127.0.0.1:13000/api/v1/health > "$SD/health.json"
   [ -s "$ST/health.json" ] || cp "$SD/health.json" "$ST/health.json"
   meta_set launchMs "$(ms_now)"
   sample_run "$TRANS" "$SD/trans.samples" "$SD/stats"

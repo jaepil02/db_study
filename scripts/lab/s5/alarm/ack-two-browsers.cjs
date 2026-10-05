@@ -4,13 +4,13 @@
 // 방법: 한 브라우저 프로세스의 격리된 두 컨텍스트 A · B(저장소 · WebSocket 연결이 따로)가 같은 이력 탭(같은 조회 조건 — 목록 캐시 키가 같다)을 연다.
 //   A가 행의 확인 버튼을 누른다(화면 조작) → A의 확인 응답 수신 시각 = 확인 시각 · B의 같은 행에 확인자 표시가 나타난 시각 = 표시 시각.
 //   행 ↔ eventId는 각 탭이 받은 목록 응답의 items 순서(화면은 items를 그대로 그린다)로 잇는다. 두 탭의 alarm 프레임 수신 시각 · B의 목록 재조회 시각도 남긴다.
-// 사용: PW_CORE=… CHROME=… ACK_MARK=… WEB=http://localhost:3001 API=http://127.0.0.1:3000 RULES=1,2,3 TRIALS=3 TIMEOUT_S=90 LIMIT_S=420 node ack-two-browsers.cjs <출력 json>
+// 사용: PW_CORE=… CHROME=… ACK_MARK=… WEB=http://localhost:13001 API=http://127.0.0.1:13000 RULES=1,2,3 TRIALS=3 TIMEOUT_S=90 LIMIT_S=420 node ack-two-browsers.cjs <출력 json>
 // 접속 주소는 localhost(127.0.0.1은 CORS · WS Origin 거부). 브라우저 종료가 멈추는 사례 — 닫기 5초 상한 뒤 강제 종료(러너가 표지 인자로 남은 프로세스를 거둔다).
 const fs = require('node:fs');
 const { chromium } = require(process.env.PW_CORE);
 const OUT = process.argv[2];
-const WEB = process.env.WEB || 'http://localhost:3001';
-const API = process.env.API || 'http://127.0.0.1:3000';
+const WEB = process.env.WEB || 'http://localhost:13001';
+const API = process.env.API || 'http://127.0.0.1:13000';
 const RULES = new Set((process.env.RULES || '').split(',').filter(Boolean).map(Number));
 const TRIALS = Number(process.env.TRIALS || 3);
 const TIMEOUT_MS = Number(process.env.TIMEOUT_S || 90) * 1000;

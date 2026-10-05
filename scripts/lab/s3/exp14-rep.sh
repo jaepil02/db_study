@@ -20,12 +20,12 @@ for SW in off on; do
   echo "── rep $REP · $PROFILE · SW-10 $SW"
   restore_snap s3-deadband-s
   COLLECTOR_DEADBAND=$SW APP_ROLE=all api_up
-  curl -s http://127.0.0.1:3000/api/v1/health > "$TMP/health-$SW"
+  curl -s http://127.0.0.1:13000/api/v1/health > "$TMP/health-$SW"
   T=$(date +%s); until [ $(( $(date +%s) - T )) -ge "$WARM" ]; do sleep 1; done
   WS=$(date -u +%Y-%m-%dT%H:%M:%S.000Z)
   T=$(date +%s); until [ $(( $(date +%s) - T )) -ge "$WIN" ]; do sleep 1; done
   WE=$(date -u +%Y-%m-%dT%H:%M:%S.000Z)
-  curl -s http://127.0.0.1:3000/metrics | awk '$1 ~ /^(points_emitted|col_deadband_skipped_total)\{/ {split($1,a,"{"); s[a[1]]+=$2} END {for (k in s) print k, s[k]}' > "$TMP/metrics-$SW"
+  curl -s http://127.0.0.1:13000/metrics | awk '$1 ~ /^(points_emitted|col_deadband_skipped_total)\{/ {split($1,a,"{"); s[a[1]]+=$2} END {for (k in s) print k, s[k]}' > "$TMP/metrics-$SW"
   api_stop
   EMITTED=$(docker logs db_study-api-1 2>&1 | sed -n 's/.*수집 정지 — points_emitted 누계 \([0-9]*\).*/\1/p' | tail -1)
   verify --phase stopped --window-start "$WS" --window-end "$WE" > "$TMP/verify-$SW" || { cat "$TMP/verify-$SW" >&2; echo "랙이 0이 아니다" >&2; exit 1; }

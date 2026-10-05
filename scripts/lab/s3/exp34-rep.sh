@@ -23,7 +23,7 @@ echo "── rep $REP · 팔 $ARM(티어 $TIER · 안 $PLAN) · 복원 $SNAP"
 restore_snap "$SNAP"
 baseline "$BASE" "$TMP/baseline"
 APP_ROLE=worker api_up
-curl -s http://127.0.0.1:3000/api/v1/health > "$TMP/health"
+curl -s http://127.0.0.1:13000/api/v1/health > "$TMP/health"
 WS=$(date -u +%Y-%m-%dT%H:%M:%S.000Z)
 # 발행(자식 프로세스 · 아래 wait로 거둔다)과 lag 표본을 같은 시간에 돈다
 $COMPOSE --profile datagen run --rm --no-deps datagen node dist/mode-b.js --tier "$TIER" --mix mixed --seed 42 --duration "$DUR" 2>/dev/null | tail -1 > "$TMP/modeb" &

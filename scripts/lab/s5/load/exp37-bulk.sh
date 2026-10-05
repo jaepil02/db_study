@@ -27,7 +27,7 @@ start)
   echo "── $EXP rep $REP 요청당 엔트리 $E · 복원 $SNAP_M · 기준선 ${BASE_S}초"
   rep_head "$SNAP_M" b
   # 게이트 확인 — 빈 본문은 400(라우트 있음) · 404면 게이트가 꺼진 기동
-  C=$(curl -s -o /dev/null -w '%{http_code}' -X POST -H 'content-type: application/json' -d '{}' "http://127.0.0.1:3000$ROUTE")
+  C=$(curl -s -o /dev/null -w '%{http_code}' -X POST -H 'content-type: application/json' -d '{}' "http://127.0.0.1:13000$ROUTE")
   [ "$C" = 400 ] || { echo "bulk 표면 확인 실패(HTTP $C) — DATAGEN_BULK_ENABLED=true 기동인가" >&2; exit 1; }
   docker logs db_study-api-1 2>&1 | grep -m1 -i 'DATAGEN_BULK_ENABLED' > "$ST/gate-warning" || true
   ;;

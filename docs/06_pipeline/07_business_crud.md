@@ -2,6 +2,7 @@
 
 > **대상**: F-05 흐름의 기전 정본 — 읽기 · 쓰기 경로 · **업무 명령 경로(stream:biz:cmd → 워커 → PostgreSQL 트랜잭션 · 동기 응답 · 멱등 원장 biz_command_log · 202 pending · 명령 조회 · SW-12 direct)** · BFF 경유 기준 · **캐시 무효화 체인 6단(ADR-12)의 단계 번호 정본** · 도메인별 체인 적용 · 작업지시 no-store · 층별 옛 값의 창 · 체인 실패와 degrade · 인증 흐름의 BFF 경유 · 감사 트랜잭션
 > **작성일**: 2026-09-24
+> **개정일**: 2026-10-05 — 웹 · api 호스트 포트 이동(같은 머신의 다른 프로젝트가 호스트 3000 · 3001을 점유 · 사용자 결정 2026-10-05) — 웹 3001 → **13001** · api 호스트 3000 → **13000**(컨테이너 3000 · 서비스명 그대로) · CORS 허용 오리진 http://localhost:3001 → **http://localhost:13001** — 오리진 수 · 바인드 규칙 불변
 > **개정일**: 2026-09-28 — 코드 검수 반영(r-code-api H1 · M2) — 재전달 표현 XAUTOCLAIM → **PEL 재읽기(ID 0)** · 바퀴 예외 뒤에도 PEL부터 · 커밋 뒤 결과 SET · XACK 예외는 결과 키를 FAILED로 덮지 않는다 · 락 연산 호출 상한 500 ms · 갱신 결과 소유자 아님 · 불확실 구분 · 획득 이어 쓰기 — 단계 · 멱등 표 행 수 불변
 > **개정일**: 2026-09-28 — 리드 정정(구현 i-biz-core 판정 채택) — EXPIRED 원장 result {"status":"expired"} → **결과 키와 같은 모양 {status: EXPIRED, actor}**(원장 result = 결과 키 JSON — 재전달이 원장 값을 그대로 다시 SET · 05_data_stores/01 §biz_command_log 설계와 일치)
 > **개정일**: 2026-09-28 — 웨이브 1 검수 반영(f-biz — B-H4 · B-M4~M9 · B-L1 · 흐름 요약 필드) — 봉투 actor → **원장 · 결과 키에 싣는다** · 봉투 → 원장 대응 불릿 · 명령 조회 404 = actor 불일치(둘 다 NULL이면 같다) · 적용 단계 ① **대기 맵 등록 → XADD**(등록이 먼저) · ② **lock:biz:writer를 쥔 워커의 biz-writer-1 · 기동 시 자기 PEL(ID 0) 소진 뒤 >** · 그룹 생성 **XGROUP CREATE … 0 MKSTREAM** · 멱등 표 경우 5 → **6**(만료 뒤 같은 키 재요청 → 202 + expired) · PostgreSQL 불가 행 재요청 = ③부터 다시 · **failed = 적용 여부 미확정**(한계 등재 #26) · EXPIRED 원장 result = {"status":"expired"} · 원인 구분 "result=unavailable이 가른다" → **Redis 불가 = unavailable · PostgreSQL 불가 = failed** · 흐름 요약 필드에 **role**(biz-writer · api-direct) · 발행 대상에 **failed** · queueWaitMs "③ 대기" → **② XREADGROUP 수신까지** — 단계 · 시간 초과 · 실패 · 체인 실패 행 수 불변
@@ -146,7 +147,7 @@ F-05는 **사람이 쓰는 업무 데이터가 Redis 명령 스트림을 거쳐 
 | WebSocket | 브라우저 → api 직결 | 해당 없음 | 장기 연결을 BFF가 중계할 이유가 없다 | [05_realtime_read.md](./05_realtime_read.md) |
 
 - 검산: 요청 유형 = **7** · BFF 경유 4 + 직결 3
-- **직결 경로의 보호 장치는 CORS 허용 오리진 하나(http://localhost:3001) · Bearer 액세스 토큰 · WebSocket Origin 검증이다.** 포트가 다르면 오리진도 달라 로컬에서도 CORS가 필요하다(AUT-07). localhost:3001과 localhost:3000은 same-site라 SameSite=Lax 쿠키가 그대로 동작하고, 로컬 http에서는 Secure만 끄고 httpOnly는 유지한다.
+- **직결 경로의 보호 장치는 CORS 허용 오리진 하나(http://localhost:13001) · Bearer 액세스 토큰 · WebSocket Origin 검증이다.** 포트가 다르면 오리진도 달라 로컬에서도 CORS가 필요하다(AUT-07). localhost:13001과 localhost:13000은 same-site라 SameSite=Lax 쿠키가 그대로 동작하고, 로컬 http에서는 Secure만 끄고 httpOnly는 유지한다.
 - **알람 규칙을 no-store에 넣은 것은 이 문서의 판정이다.** 규칙 변경은 판정 결과를 바꾸는 쓰기라(REQ-ALM-02) 엔지니어가 저장 직후 옛 임계값을 보면 규칙을 다시 고친다 — 작업지시와 같은 read-your-writes 요구다.
 
 ## 무효화 체인 6단

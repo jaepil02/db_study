@@ -26,12 +26,12 @@ trap 'rm -rf "$TMP"' EXIT
 
 wait_api() { # health 200까지(도커 healthcheck 주기를 기다리지 않는다)
   for _ in $(seq 1 90); do
-    if curl -sf -o /dev/null http://127.0.0.1:3000/api/v1/health; then return 0; fi
+    if curl -sf -o /dev/null http://127.0.0.1:13000/api/v1/health; then return 0; fi
     sleep 1
   done
   echo "api health 90초 초과" >&2; exit 1
 }
-metric() { curl -s http://127.0.0.1:3000/metrics | awk -v n="$1" '$1==n {print $2}'; }
+metric() { curl -s http://127.0.0.1:13000/metrics | awk -v n="$1" '$1==n {print $2}'; }
 
 echo "── rep $REP · 복원 $SNAP"
 # api 컨테이너를 먼저 지운다 — restore의 start가 직전 설정(역할 · 스위치)의 api를 다시 띄우지 않게
@@ -44,14 +44,14 @@ docker stats --no-stream --format '{{.Name}} {{.CPUPerc}} {{.MemUsage}}' db_stud
 echo "── api 기동(all · 모드 A)"
 APP_ROLE=all $COMPOSE up -d --no-deps --force-recreate api >/dev/null
 wait_api
-curl -s http://127.0.0.1:3000/api/v1/health > "$TMP/health"
+curl -s http://127.0.0.1:13000/api/v1/health > "$TMP/health"
 sleep "$WARM"
-curl -s http://127.0.0.1:3000/metrics > "$TMP/m0"
+curl -s http://127.0.0.1:13000/metrics > "$TMP/m0"
 WS=$(date -u +%Y-%m-%dT%H:%M:%S.000Z)
 echo "── 판정 창 ${WIN}초 시작 $WS"
 sleep "$WIN"
 WE=$(date -u +%Y-%m-%dT%H:%M:%S.000Z)
-curl -s http://127.0.0.1:3000/metrics > "$TMP/m1"
+curl -s http://127.0.0.1:13000/metrics > "$TMP/m1"
 docker stats --no-stream --format '{{.Name}} {{.CPUPerc}} {{.MemUsage}}' db_study-api-1 db_study-postgres-1 db_study-clickhouse-1 db_study-redis-1 > "$TMP/load"
 echo "── AC-04(api 기동 중)"
 $COMPOSE run --rm --no-deps api node dist/lab/s2-verify.js --phase running > "$TMP/running"

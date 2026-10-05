@@ -4,7 +4,7 @@
 const path = require('node:path');
 const WebSocket = require(path.join(__dirname, '../../../apps/api/node_modules/ws'));
 const SEC = Number(process.argv[2] || 30);
-const ws = new WebSocket('ws://127.0.0.1:3000/ws/realtime', { headers: { origin: 'http://localhost:3001' } });
+const ws = new WebSocket('ws://127.0.0.1:13000/ws/realtime', { headers: { origin: 'http://localhost:13001' } });
 const tags = new Map();
 const lastTs = new Map();
 const tupleLens = new Set();
