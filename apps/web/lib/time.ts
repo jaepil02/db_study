@@ -39,14 +39,3 @@ export function toKstOffsetIso(epochMs: number): string {
   const shifted = new Date(epochMs + 9 * 3_600_000).toISOString();
   return `${shifted.slice(0, -1)}+09:00`;
 }
-
-/** 값의 나이 — 1.2s · 3m 4s */
-export function formatAge(ms: number): string {
-  if (ms < 0) return '0s';
-  if (ms < 10_000) return `${(ms / 1000).toFixed(1)}s`;
-  const s = Math.floor(ms / 1000);
-  if (s < 60) return `${s}s`;
-  const m = Math.floor(s / 60);
-  if (m < 60) return `${m}m ${s % 60}s`;
-  return `${Math.floor(m / 60)}h ${m % 60}m`;
-}
