@@ -1,4 +1,4 @@
-// ⑦ HMI 설비 현황판 판독 — 정본 docs/08_screen/11_hmi_screen.md §HMI-PLANT.
+// ⑦ 설비 현황판 판독 — 정본 docs/08_screen/11_hmi_screen.md §HMI-PLANT.
 // 계약 packages/shared/src/api/plant.ts(PlantOverview — 1초마다) · 설비 구성 정본 packages/shared/src/card-line.ts.
 // 숫자는 api가 준 값만 쓴다 — 개요(지금 값 · 상태 · 초당 개수)와 시계열 조회(최근 10분). 여기서 새 숫자를 만들지 않는다.
 // 하나의 예외: 설비 가동이 꺼져 초당 개수가 전부 0이면 종류 비율은 태그 주기(Σ 1000 ÷ 주기 — api nominal과 같은 식)로 "켜면 보낼 몫"을 내고 표지한다.

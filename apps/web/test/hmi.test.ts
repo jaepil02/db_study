@@ -1,4 +1,4 @@
-// ⑦ HMI 설비 현황판 — 판독(lib/hmi.ts) · 정적 렌더(components/hmi/hmi-screen.tsx). 정본 docs/08_screen/11_hmi_screen.md §HMI-PLANT.
+// ⑦ 설비 현황판 — 판독(lib/hmi.ts) · 정적 렌더(components/hmi/hmi-screen.tsx). 정본 docs/08_screen/11_hmi_screen.md §HMI-PLANT.
 // 개요 가짜는 카드 라인 정본(card-line CARD_LINES × CARD_PROCESSES)으로 짓고 계약(PlantOverview)으로 검사한다 — 계약이 바뀌면 여기서 먼저 깨진다.
 import {
   CARD_LINES,

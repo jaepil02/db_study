@@ -5,7 +5,7 @@ describe('내비 — 화면 2 · 그룹 없음(메뉴 순서 = 발표 순서 · 
   it('화면 2 · 경로와 이름 · 화면 코드는 싣지 않는다(1층 코드 금지)', () => {
     expect(NAV.map((i) => [i.href, i.label])).toEqual([
       ['/lab', '직접 비교 실험'],
-      ['/hmi', 'HMI 설비 현황판'],
+      ['/hmi', '설비 현황판'],
     ]);
     expect(NAV.every((i) => !('code' in i))).toBe(true);
     expect(new Set(NAV.map((i) => i.icon)).size).toBe(NAV.length);

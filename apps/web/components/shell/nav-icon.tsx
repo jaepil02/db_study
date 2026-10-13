@@ -10,7 +10,7 @@ const PATHS: Record<Name, string[]> = {
     'M6.453 15h11.094',
     'M8.5 2h7',
   ],
-  // HMI 설비 현황판 — 공장(Lucide factory)
+  // 설비 현황판 — 공장(Lucide factory)
   hmi: [
     'M2 20a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V8l-7 5V8l-7 5V4a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2Z',
     'M17 18h1',

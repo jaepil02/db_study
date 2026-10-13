@@ -1,7 +1,7 @@
 // 카드 생산 라인 — 시드 · 가상 PLC · HMI 개요 · 웹이 함께 쓰는 설비 구성 정본(D-16 결정 3 · 사용자 결정 2026-10-11)
 // 라인 3 × 공정 10 = 설비 30. 설비 코드는 `${라인}-${공정}`(예 L1-LAM) · 태그 코드는 `${설비 코드}-${접미}`(예 L1-LAM-TOP_TEMP).
 // 형식은 수집기 디코더가 지원하는 것만 쓴다 — 실수 FLOAT32 · 누적 UINT32 · 상태 코드 UINT16(BOOL 없음).
-// 정본 문서: docs/05_data_stores/09_migrations_seed.md §시드(카드 라인) · docs/08_screen(HMI 설비 현황판)
+// 정본 문서: docs/05_data_stores/09_migrations_seed.md §시드(카드 라인) · docs/08_screen(설비 현황판)
 
 /** 태그 종류 8 — tag_master.tag_kind CHECK와 같은 집합 */
 export const TAG_KINDS = [

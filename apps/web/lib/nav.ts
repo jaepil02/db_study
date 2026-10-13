@@ -8,7 +8,7 @@ export type NavItem = { href: string; label: string; icon: NavIcon };
 /** 화면 2 — 메뉴 순서 그대로 */
 export const NAV: readonly NavItem[] = [
   { href: '/lab', label: '직접 비교 실험', icon: 'lab' },
-  { href: '/hmi', label: 'HMI 설비 현황판', icon: 'hmi' },
+  { href: '/hmi', label: '설비 현황판', icon: 'hmi' },
 ];
 
 /** 루트(/)가 넘어가는 첫 화면 */
