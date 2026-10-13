@@ -1,11 +1,11 @@
 'use client';
 // 좌측 내비 — 정본 docs/08_screen/01_standards.md §요청 경로와 공통 셸(레이아웃)
-// 구성(위→아래): 브랜드 + 접기 토글(헤더와 같은 높이) → 섹션 4(작은 회색 머리 + 화면 행 · 전 행 같은 글자 · 행 높이 · 아이콘) → 스택 표기.
-// 메뉴 순서 = 발표 순서(lib/nav.ts NAV_SECTIONS · 정본 docs/08_screen/01_standards.md §요청 경로와 공통 셸).
-// 접힘(레일): 화면 아이콘만 · 섹션 사이는 가는 줄 · 현재 화면은 좌측 표지 · 이름은 title · 접힘은 이 브라우저에 저장.
+// 구성(위→아래): 브랜드 + 접기 토글(헤더와 같은 높이) → 화면 행(그룹 머리 없음 · 전 행 같은 글자 · 행 높이 · 아이콘) → 스택 표기.
+// 메뉴 순서 = 발표 순서(lib/nav.ts NAV · 정본 docs/08_screen/01_standards.md §요청 경로와 공통 셸).
+// 접힘(레일): 화면 아이콘만 · 현재 화면은 좌측 표지 · 이름은 title · 접힘은 이 브라우저에 저장.
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
-import { HOME_HREF, NAV_SECTIONS, type NavItem, resolveNav } from '../../lib/nav';
+import { HOME_HREF, NAV, type NavItem, resolveNav } from '../../lib/nav';
 import { cn } from '../../lib/utils';
 import { Icon } from './nav-icon';
 
@@ -82,15 +82,10 @@ export function Sidebar({
         <nav
           id="shell-nav"
           aria-label="주 메뉴"
-          className="flex h-full flex-col gap-2 overflow-y-auto px-2 py-2"
+          className="flex h-full flex-col gap-0.5 overflow-y-auto px-2 py-2"
         >
-          {NAV_SECTIONS.map((sec) => (
-            <div key={sec.title} className="flex flex-col gap-0.5">
-              <p className="px-2.5 pt-1 pb-0.5 text-foot font-semibold text-sidebar-fg-muted">{sec.title}</p>
-              {sec.items.map((it) => (
-                <ScreenRow key={it.href} item={it} active={current?.href === it.href} />
-              ))}
-            </div>
+          {NAV.map((it) => (
+            <ScreenRow key={it.href} item={it} active={current?.href === it.href} />
           ))}
         </nav>
         {/* 아래가 더 있다는 표시 — 포인터를 통과시킨다 */}
@@ -150,13 +145,8 @@ function Rail({ current, onExpand }: { current: ReturnType<typeof resolveNav>; o
       </button>
       <div aria-hidden className="my-1 h-px w-6 bg-sidebar-line" />
       <nav id="shell-nav" aria-label="주 메뉴" className="flex flex-col items-center gap-1">
-        {NAV_SECTIONS.map((sec, i) => (
-          <div key={sec.title} className="flex flex-col items-center gap-1">
-            {i > 0 ? <div aria-hidden className="my-0.5 h-px w-5 bg-sidebar-line" /> : null}
-            {sec.items.map((it) => (
-              <RailLink key={it.href} item={it} on={current?.href === it.href} />
-            ))}
-          </div>
+        {NAV.map((it) => (
+          <RailLink key={it.href} item={it} on={current?.href === it.href} />
         ))}
       </nav>
     </div>

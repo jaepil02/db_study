@@ -1,14 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { HOME_HREF, NAV, NAV_SECTIONS, resolveNav } from '../lib/nav';
+import { HOME_HREF, NAV, resolveNav } from '../lib/nav';
 
-describe('내비 — 섹션 2 · 화면 2(메뉴 순서 = 발표 순서 · docs/08_screen/01_standards.md §요청 경로와 공통 셸)', () => {
-  it('섹션 2 · 순서 고정', () => {
-    expect(NAV_SECTIONS.map((s) => [s.title, s.items.length])).toEqual([
-      ['직접 해 보기', 1],
-      ['현장 적용', 1],
-    ]);
-  });
-
+describe('내비 — 화면 2 · 그룹 없음(메뉴 순서 = 발표 순서 · docs/08_screen/01_standards.md §요청 경로와 공통 셸)', () => {
   it('화면 2 · 경로와 이름 · 화면 코드는 싣지 않는다(1층 코드 금지)', () => {
     expect(NAV.map((i) => [i.href, i.label])).toEqual([
       ['/lab', '직접 비교 실험'],

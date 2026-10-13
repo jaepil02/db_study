@@ -1,7 +1,7 @@
-// 공통 셸 — 좌측 내비(섹션 2 · 화면 2 · 메뉴 순서 = 발표 순서) 화면 이동 · 콘텐츠 머리 h1 = 화면 이름(화면 코드 없음) · 화면 모두 한 장
+// 공통 셸 — 좌측 내비(화면 2 · 그룹 머리 없음 · 메뉴 순서 = 발표 순서) 화면 이동 · 콘텐츠 머리 h1 = 화면 이름(화면 코드 없음) · 화면 모두 한 장
 // 정본 docs/08_screen/01_standards.md §요청 경로와 공통 셸 · §반응형 규칙
 import { expect, test } from '@playwright/test';
-import { NAV, NAV_SECTIONS } from '../lib/nav';
+import { NAV } from '../lib/nav';
 import { shot } from './support';
 
 test.use({ viewport: { width: 1440, height: 900 } });
@@ -11,10 +11,11 @@ test('루트는 첫 화면(직접 비교 실험)으로 넘어간다', async ({ p
   await expect(page).toHaveURL(/\/lab$/);
 });
 
-test('내비는 섹션 2 · 화면 2 — 섹션 머리 글자와 화면 순서가 발표 순서 그대로', async ({ page }) => {
+test('내비는 화면 2 — 그룹 머리 없이 화면 순서가 발표 순서 그대로', async ({ page }) => {
   await page.goto('/lab');
   const nav = page.getByRole('navigation', { name: '주 메뉴' });
-  for (const sec of NAV_SECTIONS) await expect(nav.getByText(sec.title, { exact: true })).toBeVisible();
+  await expect(nav.getByText('직접 해 보기', { exact: true })).toHaveCount(0);
+  await expect(nav.getByText('현장 적용', { exact: true })).toHaveCount(0);
   await expect(nav.getByRole('link')).toHaveText(NAV.map((i) => i.label));
 });
 

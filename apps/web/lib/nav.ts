@@ -1,24 +1,15 @@
 // 공통 셸 내비게이션 — 정본 docs/08_screen/01_standards.md §요청 경로와 공통 셸 · docs/08_screen/README.md §화면 인벤토리
-// 섹션 2 · 화면 2 — 메뉴 순서가 곧 발표 순서다(바꾸지 않는다). 화면 코드는 화면에 보이지 않으므로 여기 두지 않는다.
+// 화면 2 — 메뉴 순서가 곧 발표 순서다(바꾸지 않는다) · 메뉴 그룹(섹션)은 두지 않는다. 화면 코드는 화면에 보이지 않으므로 여기 두지 않는다.
 // 현재 화면은 경로의 가장 긴 접두로 고른다.
 
 export type NavIcon = 'lab' | 'hmi';
 export type NavItem = { href: string; label: string; icon: NavIcon };
-export type NavSection = { title: string; items: readonly NavItem[] };
 
-export const NAV_SECTIONS: readonly NavSection[] = [
-  {
-    title: '직접 해 보기',
-    items: [{ href: '/lab', label: '직접 비교 실험', icon: 'lab' }],
-  },
-  {
-    title: '현장 적용',
-    items: [{ href: '/hmi', label: 'HMI 설비 현황판', icon: 'hmi' }],
-  },
+/** 화면 2 — 메뉴 순서 그대로 */
+export const NAV: readonly NavItem[] = [
+  { href: '/lab', label: '직접 비교 실험', icon: 'lab' },
+  { href: '/hmi', label: 'HMI 설비 현황판', icon: 'hmi' },
 ];
-
-/** 화면 2 — 섹션 순서 그대로 편 목록 */
-export const NAV: readonly NavItem[] = NAV_SECTIONS.flatMap((s) => s.items);
 
 /** 루트(/)가 넘어가는 첫 화면 */
 export const HOME_HREF = '/lab';
