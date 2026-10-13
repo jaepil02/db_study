@@ -1,6 +1,6 @@
 // 공용 컨트롤 읽기 · 쓰기 — 설비 가동(/bff/plant/power) · 센서 데이터 현황(/bff/data/sensor/stats) · 지우기(/bff/data/sensor/purge)
 // 정본 docs/08_screen/10_lab_screen.md §공용 컨트롤 · 계약 packages/shared/src/api/plant.ts · data.ts.
-// ⑤ · ⑦ 머리가 같은 쿼리 키를 나눠 쓴다 — 한 화면에서 켜거나 지우면 다른 조각(현황)이 같은 값을 본다.
+// ⑤ · ⑥ · ⑦ 머리가 같은 쿼리 키를 나눠 쓴다 — 한 화면에서 켜거나 지우면 다른 조각(현황 · 흐름도 안내)이 같은 값을 본다.
 import { ApiError } from '../../lib/api';
 import {
   ErrorEnvelope,

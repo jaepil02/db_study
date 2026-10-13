@@ -73,7 +73,7 @@
 :root {
   /* 화면 크기 비율 — S = min(100vw, 177.78vh)가 1280px이면 0px · 2560px이면 1px(그 밖은 각 토큰의 clamp가 막는다) */
   --fs: calc((min(100vw, 177.78vh) - 1280px) / 1280);
-  /* 머리 높이 44 → 64 · 본문 바깥 여백 12 → 20(상한 20) · 칸 사이 8 → 20 · 칸 안 여백 10 → 24 */
+  /* 머리 높이 44 → 64 · 본문 바깥 여백 12 → 20(상한 20 — /monitoring 틀이 100dvh − 머리 − 40을 쓴다) · 칸 사이 8 → 20 · 칸 안 여백 10 → 24 */
   --header-height: clamp(44px, calc(44px + 20 * var(--fs)), 64px);
   --shell-pad: clamp(12px, calc(12px + 8 * var(--fs)), 20px);
   --gap: clamp(8px, calc(8px + 12 * var(--fs)), 20px);

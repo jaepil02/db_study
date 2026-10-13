@@ -1,4 +1,4 @@
-// 공통 셸 — 좌측 내비(화면 2 · 그룹 머리 없음 · 메뉴 순서 = 발표 순서) 화면 이동 · 콘텐츠 머리 h1 = 화면 이름(화면 코드 없음) · 화면 모두 한 장
+// 공통 셸 — 좌측 내비(화면 3 · 그룹 머리 없음 · 메뉴 순서 = 발표 순서) 화면 이동 · 콘텐츠 머리 h1 = 화면 이름(화면 코드 없음) · 화면 모두 한 장
 // 정본 docs/08_screen/01_standards.md §요청 경로와 공통 셸 · §반응형 규칙
 import { expect, test } from '@playwright/test';
 import { NAV } from '../lib/nav';
@@ -11,7 +11,7 @@ test('루트는 첫 화면(직접 비교 실험)으로 넘어간다', async ({ p
   await expect(page).toHaveURL(/\/lab$/);
 });
 
-test('내비는 화면 2 — 그룹 머리 없이 화면 순서가 발표 순서 그대로', async ({ page }) => {
+test('내비는 화면 3 — 그룹 머리 없이 화면 순서가 발표 순서 그대로', async ({ page }) => {
   await page.goto('/lab');
   const nav = page.getByRole('navigation', { name: '주 메뉴' });
   await expect(nav.getByText('직접 해 보기', { exact: true })).toHaveCount(0);
@@ -20,7 +20,7 @@ test('내비는 화면 2 — 그룹 머리 없이 화면 순서가 발표 순서
 });
 
 test('좌측 내비로 화면을 차례로 연다 — h1이 화면 이름 · 머리에 화면 코드가 없다', async ({ page }, info) => {
-  expect(NAV).toHaveLength(2);
+  expect(NAV).toHaveLength(3);
   await page.goto('/');
   const nav = page.getByRole('navigation', { name: '주 메뉴' });
   for (const item of NAV) {
@@ -40,7 +40,7 @@ test('좌측 내비로 화면을 차례로 연다 — h1이 화면 이름 · 머
   await shot(page, info, 'last-screen');
 });
 
-test('접힌 내비(레일)도 화면 2 아이콘 · 이름은 title', async ({ page }) => {
+test('접힌 내비(레일)도 화면 3 아이콘 · 이름은 title', async ({ page }) => {
   await page.goto('/lab');
   await page.getByRole('button', { name: '사이드바 접기' }).click();
   const nav = page.getByRole('navigation', { name: '주 메뉴' });

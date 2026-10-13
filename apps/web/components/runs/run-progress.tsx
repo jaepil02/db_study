@@ -1,14 +1,15 @@
 'use client';
 // 머리 아래 얇은 진행 띠 한 줄 — 정본 docs/08_screen/08_evidence_screens.md §실행 패널 — 두 화면 공통 규칙 §배치 진행 띠 행
-// 진행 중: ● 상태 · 지금 단계 쉬운 문장 · 단계 n/m · 진행 막대(직접 비교 넣기) · 경과 · 오른쪽 [■ 중단]
+// 진행 중: ● 상태 · 지금 단계 쉬운 문장 · 단계 n/m(flow 밖 종류 — flow는 진행 막대) · 진행 막대(EXP-FLOW) · 경과 · 오른쪽 [■ 중단]
 // 방금 끝남(이 화면에서 지켜보던 실행 · 종결 뒤 30초): "지난번 보내 보기" · 완료 띠(완료 — 걸린 시간 · 중단됨 · 실패 — 오류 전문은 띠 툴팁) · 무엇을 보냈나(초당 1,000개 · 30초) · 라이브 표지.
-// 30초가 지나면(또는 이미 끝난 실행을 열면) 띠는 사라진다(docs/08_screen/08_evidence_screens.md §실행 패널 §상태 칩과 종결 표시).
+// 30초가 지나면(또는 이미 끝난 실행을 열면) 띠는 사라지고 셸 머리 버튼 옆 "지난번 …" 작은 글자가 같은 말을 한다(docs/08_screen/08_evidence_screens.md §실행 패널 §상태 칩과 종결 표시 · run-control.tsx).
 // 완료 띠가 진행 띠 자리를 대신하므로 종결 뒤에는 중단 버튼을 그리지 않는다(리드 확인 2026-10-03). 띠 툴팁에 시작 · 종료 시각과 단계 key. 서랍 · 단계 목록은 없다.
-// 다른 종류가 진행 중이면 "다른 측정이 이미 돌고 있어요" 한 줄(보는 화면이 있으면 그 화면 링크 · 409 띠가 같은 말이면 생략) · 요청 사건(409 · 404 · 요청 실패) · 폴링 실패 문구도 이 띠에 둔다.
+// 다른 종류가 진행 중이면 "다른 측정이 이미 돌고 있어요 — … 화면에서 보기" 한 줄(409 띠가 같은 말이면 생략) · 요청 사건(409 · 404 · 요청 실패) · 폴링 실패 문구도 이 띠에 둔다.
 // 그릴 실행 줄도 띠 문구도 없으면 띠 자체가 없다(화면 높이를 쓰지 않는다).
 import Link from 'next/link';
 import {
   compareLive,
+  flowProgress,
   isActive,
   LAST_RUN_LABEL,
   LIVE_LABEL,
@@ -97,7 +98,13 @@ export function RunProgressView(p: RunProgressViewProps) {
       )}
     >
       {run && snapshot ? <RunLine {...p} run={run} snapshot={snapshot} stopCtl={ctl.stop} /> : null}
-      {other ? <OtherRunLine type={other.type} /> : null}
+      {other ? (
+        <p data-testid="run-other" className="text-slate-600">
+          <Link href={RUN_SCREEN[other.type].href} className="text-sky-700 underline">
+            {otherRunText(other.type)}
+          </Link>
+        </p>
+      ) : null}
       {/* 409 띠 — 다른 종류 링크 줄이 이미 같은 말을 하면 생략한다(같은 말 두 줄 금지) */}
       {local.notice && !(local.notice.conflict && other) ? (
         <p role="status" className={cn('rounded border px-2 py-0.5', BAND[local.notice.tone])}>
@@ -110,22 +117,6 @@ export function RunProgressView(p: RunProgressViewProps) {
         </p>
       ) : null}
     </div>
-  );
-}
-
-/** 다른 종류 실행 한 줄 — 보는 화면이 있으면 그 화면 링크 · 없으면(flow) 글자만 */
-function OtherRunLine({ type }: { type: RunType }) {
-  const screen = RUN_SCREEN[type];
-  return (
-    <p data-testid="run-other" className="text-slate-600">
-      {screen ? (
-        <Link href={screen.href} className="text-sky-700 underline">
-          {otherRunText(type)}
-        </Link>
-      ) : (
-        otherRunText(type)
-      )}
-    </p>
   );
 }
 
@@ -147,6 +138,8 @@ function RunLine({
   const band = runBand(run);
   const stage = stageProgress(run);
   const plain = stepPlainText(run);
+  const flow = type === 'flow' ? flowProgress(run, snapshot.receivedAt, now) : null;
+  const pct = flow ? Math.round(flow.ratio * 100) : null;
   // 직접 비교 넣기 — 발행 진행(보낸 행 ÷ 구간 행)을 같은 막대로(조회 · 무결성은 단계 n/m만)
   const live = type === 'compare' ? compareLive(run) : null;
   const comparePct =
@@ -186,7 +179,22 @@ function RunLine({
       {active && !stopping ? (
         <span data-testid="run-stage" className="text-slate-800">
           {plain}
-          {` · 단계 ${stage.n}/${stage.total}`}
+          {type === 'flow' ? '' : ` · 단계 ${stage.n}/${stage.total}`}
+        </span>
+      ) : null}
+      {flow && pct !== null && active && !stopping ? (
+        <span className="flex items-center gap-1.5">
+          <span
+            role="progressbar"
+            aria-label="보내는 중"
+            aria-valuemin={0}
+            aria-valuemax={100}
+            aria-valuenow={pct}
+            className="inline-block h-1.5 w-28 overflow-hidden rounded bg-slate-100"
+          >
+            <span className="block h-full bg-sky-500 transition-[width]" style={{ width: `${pct}%` }} />
+          </span>
+          {flow.elapsedSec}s / {flow.durationSec}s
         </span>
       ) : null}
       {comparePct !== null && active && !stopping ? (

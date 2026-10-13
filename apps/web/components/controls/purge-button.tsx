@@ -1,5 +1,5 @@
 'use client';
-// 센서 데이터 지우기 버튼(공용 컨트롤 — ⑤ /lab · ⑦ /hmi 머리) — 정본 docs/08_screen/10_lab_screen.md §공용 컨트롤 · 표면 docs/07_api/09_datagen.md #7 · #8
+// 센서 데이터 지우기 버튼(공용 컨트롤 — ⑤ /lab · ⑥ /monitoring · ⑦ /hmi 머리) — 정본 docs/08_screen/10_lab_screen.md §공용 컨트롤 · 표면 docs/07_api/09_datagen.md #7 · #8
 // 누르면 확인 창: 지울 양(/bff/data/sensor/stats — 창을 열 때마다 새로 읽음) · 남는 것 → [지우기] POST /bff/data/sensor/purge
 // → 결과(저장소별 지운 행 · 걸린 시간) 또는 409 이유별 쉬운 문구(측정 중 · 설비 가동 중 · 대기줄 적체). 설비 가동이 켜져 있으면 미리 막고 이유를 보인다.
 // 키보드 — 열면 [닫기]로 포커스(되돌릴 수 없는 일이라 덜 위험한 쪽 먼저 — WAI-ARIA APG alertdialog) · Tab은 창 안에서 돈다 · Esc로 닫고 닫으면 [데이터 지우기] 버튼으로 돌아간다.

@@ -1,5 +1,5 @@
 // 글자 바닥 — 화면 안 최소 12px · 글자 단계 12 · 13 · 14 · 16 · 20 · 28만(docs/08_screen/01_standards.md §글자와 화면 표면)
-// 대상: 차트 래퍼 · 셸 · 실행 패널 · 공통 조각 · 직접 비교 · HMI · 공용 컨트롤 · app.
+// 대상: 모니터링(components/experiments/flow — §7.1 R14) · 차트 래퍼 · 셸 · 실행 패널 · 공통 조각 · app. 흐름도 SVG 배율을 곱한 실제 크기는 test/flow-layout이 따로 본다.
 // 늘고 주는 글자 토큰(text-foot · note · body · head · title · big · hero — app/globals.css)은 clamp 바닥이 12px 이상이라 단계 밖 크기 검사에 걸리지 않는다(아래 "글자 토큰 바닥" 시험).
 // 소스 — 임의 px 글자 크기(text-[11px] 등) · 단계 밖 Tailwind 크기(text-lg · text-2xl …) · 12 미만 fontSize(SVG · 캔버스 옵션) 금지 ·
 //    1px 넘는 테두리(Tailwind 단계 border-2 · border-l-4 · 임의 값 border-[3px] · 인라인 style borderWidth · borderLeft: '4px …' · CSS border: 2px) 금지(craft floor)
@@ -9,6 +9,7 @@ import { describe, expect, it } from 'vitest';
 
 const ROOT = path.resolve(__dirname, '..');
 const TARGETS = [
+  'components/experiments/flow',
   'components/experiments/echart.tsx',
   'components/shell',
   'components/runs',
@@ -74,6 +75,8 @@ describe('글자 바닥 — 소스', () => {
     expect(SOURCES.map((s) => s.name)).toEqual(
       expect.arrayContaining([
         'components/experiments/echart.tsx',
+        'components/experiments/flow/flow-screen.tsx',
+        'components/experiments/flow/flow-diagram.tsx',
         'components/shell/sidebar.tsx',
         'components/runs/run-progress.tsx',
         'components/lab/lab-screen.tsx',

@@ -1,4 +1,4 @@
-// 라이브 실행 패널(직접 비교 실험) — 정본 docs/08_screen/08_evidence_screens.md §실행 패널 — 두 화면 공통 규칙
+// 라이브 실행 패널(EXP-FLOW · 웨이브 2의 직접 비교 실험이 같은 틀을 쓴다) — 정본 docs/08_screen/08_evidence_screens.md §실행 패널 — 두 화면 공통 규칙
 // 표면 정본 docs/07_api/09_datagen.md §라이브 실행 제어 #2~#5 · §실행 객체 — 브라우저 → BFF(/bff/runs) → api · no-store.
 // 경과 시간은 서버 elapsedMs 하나를 기준으로 두고 브라우저는 그 응답을 받은 뒤 흐른 단조 시계 길이만 더한다(startedAt을 빼지 않는다).
 // 화면 조각은 components/runs/**가 그리고, 여기는 판정 · 문구 · 요청만 둔다(순수 함수 — 단위 테스트 대상).
@@ -32,23 +32,21 @@ export const runKeys = {
   one: (runId: string) => ['runs', runId] as const,
 };
 
-/**
- * 화면 종류 → 화면 이름 · 경로(다른 실행 링크) — 1층 문구라 화면 코드가 아니라 이름을 쓴다(08_screen/08 §실행 패널 버튼 상태).
- * flow는 보는 화면이 없다(분산 처리 모니터링 삭제) — api로 시작한 flow 실행은 링크 없이 한 줄로만 알린다.
- */
-export const RUN_SCREEN: Record<RunType, { name: string; href: string } | null> = {
-  flow: null,
+/** 화면 종류 → 화면 이름 · 경로(다른 실행 링크) — 1층 문구라 화면 코드가 아니라 이름을 쓴다(08_screen/08 §실행 패널 버튼 상태) */
+export const RUN_SCREEN: Record<RunType, { name: string; href: string }> = {
+  flow: { name: '분산 처리 모니터링', href: '/monitoring' },
   compare: { name: '직접 비교 실험', href: '/lab' },
 };
 
-/** 다른 종류의 실행이 진행 중일 때의 한 줄 — 보는 화면이 있으면 "… — 직접 비교 실험 화면에서 보기" */
-export const otherRunText = (other: RunType): string => {
-  const screen = RUN_SCREEN[other];
-  return screen
-    ? `다른 측정이 이미 돌고 있어요 — ${screen.name} 화면에서 보기`
-    : '다른 측정이 이미 돌고 있어요';
-};
+/** 다른 종류의 실행이 진행 중일 때의 한 줄 — "다른 실행 진행 중(분산 처리 모니터링) — 그 화면으로" */
+export const otherRunText = (other: RunType): string =>
+  `다른 측정이 이미 돌고 있어요 — ${RUN_SCREEN[other].name} 화면에서 보기`;
 
+/** 실행 기록 없음 — 선택 칸 문구(08_screen/08 §상태 4행 빈 값 — EXP-FLOW ④) */
+export const NO_RUN_TEXT: Record<RunType, string> = {
+  flow: '아직 보내 보지 않았어요(서버가 다시 켜지면 지난 결과는 사라져요)',
+  compare: '아직 재 보지 않았어요',
+};
 export const VANISHED_TEXT = '서버가 다시 켜져서 지난 실행 기록이 없어요';
 export const POLL_FAILED_TEXT = '상태를 못 읽었어요 — 다시 읽는 중이에요';
 /** 라이브 표지 — 완료 띠 옆 글자와 툴팁 고정 문구(08_screen/08 §표시 계약 라이브 표지) */
@@ -201,7 +199,8 @@ export function runScopeText(run: Pick<RunObjectBody, 'type' | 'params'>): strin
 }
 
 // ── 지난 실행 자리(docs/08_screen/08_evidence_screens.md §실행 패널 §상태 칩과 종결 표시) ──
-// 진행 띠는 실행 중과 "이 화면에서 방금 끝난" 실행(종결 뒤 30초)에만 본문 위에 선다 — 그 뒤에는 애니메이션 없이 사라진다(서랍이 아니다).
+// 진행 띠는 실행 중과 "이 화면에서 방금 끝난" 실행(종결 뒤 30초)에만 본문 위에 선다. 그 뒤(또는 이미 끝난 실행을 열었을 때)는
+// 셸 머리 버튼 옆 작은 글자 한 줄로 접힌다 — 접힘은 애니메이션 없이 사라짐(서랍이 아니다) · 상세는 그 글자의 툴팁.
 
 /** 종결 뒤 띠를 남기는 시간 */
 export const RECENT_END_MS = 30_000;
@@ -221,6 +220,34 @@ export function justEndedRunId(
 /** 진행 띠가 이 실행 줄을 그리는가 — 진행 중이거나 방금 끝난 실행(recentEndId)일 때만 */
 export const stripShowsRun = (run: RunObjectBody | null, recentEndId: string | null): boolean =>
   run !== null && (isActive(run.status) || run.runId === recentEndId);
+
+/** 셸 머리 "지난번" 글자에 보일 실행 — 이 화면 종류의 종결 실행이고 띠가 그 실행을 그리지 않을 때만(같은 말 두 곳 금지) */
+export const headerLastRun = (run: RunObjectBody | null, recentEndId: string | null): RunObjectBody | null =>
+  run !== null && isTerminal(run.status) && run.runId !== recentEndId ? run : null;
+
+/**
+ * 셸 머리 "지난번" 한 줄 — 무엇을 보낸 결과(runScopeText) · 결말.
+ * flow 완료 "지난번 초당 1,000개 · 30초 · 완료"(보낸 시간은 이미 범위에 있다) · 중단 · 실패는 상태 낱말("· 중단됨" · "· 실패").
+ */
+export function lastRunText(run: RunObjectBody): string {
+  const scope = runScopeText(run);
+  const head = scope ? `지난번 ${scope}` : LAST_RUN_LABEL[run.type];
+  return `${head} · ${STATUS_LABEL[run.status]}`;
+}
+
+/** "지난번" 글자 툴팁 — 띠가 하던 말 전부(머리 · 종결 띠 문장과 툴팁 · 시작 · 종료 · 단계 · 라이브 표지) */
+export function lastRunTip(run: RunObjectBody): string {
+  const band = runBand(run);
+  const lines = [
+    LAST_RUN_LABEL[run.type],
+    band?.text,
+    ...(band?.tip ?? '').split('\n'),
+    ...runTip(run).split('\n'),
+    `${LIVE_LABEL} — ${LIVE_MARK}`,
+  ];
+  // 띠 툴팁의 종료 시각과 진행 띠 툴팁의 종료 시각이 겹친다 — 같은 줄은 한 번만
+  return [...new Set(lines.filter((x): x is string => !!x))].join('\n');
+}
 
 /** 진행 띠 툴팁 — 시작 · 종료 시각(KST 초) · 단계 key와 상태 · 소요 · flow publish 계수(08_screen/08 진행 띠 행) */
 export function runTip(run: RunObjectBody): string {
@@ -608,6 +635,46 @@ export const vanished = (prev: RunSnapshot | undefined, next: RunSnapshot | unde
   !!prev?.run && isActive(prev.run.status) && next !== undefined && next.run === null;
 
 const n = (v: unknown): number | null => (typeof v === 'number' && Number.isFinite(v) ? v : null);
+
+// ── flow 진행 막대 ──
+
+export interface FlowProgress {
+  /** 0~1 — publish 경과 ÷ durationSec(넘으면 1) */
+  ratio: number;
+  elapsedSec: number;
+  durationSec: number;
+  draining: boolean;
+  pointsSent: number;
+  entriesSent: number;
+  commandsSent: number;
+  backpressurePauses: number;
+}
+
+/** publish 단계의 경과(진행 중이면 틱) ÷ durationSec · 드레인 중이면 막대를 채운다 */
+export function flowProgress(run: RunObjectBody, receivedAt: number, now: number): FlowProgress | null {
+  const publish = run.steps.find((s) => s.key === 'publish');
+  const drain = run.steps.find((s) => s.key === 'drain');
+  const durationSec = typeof run.params.durationSec === 'number' ? run.params.durationSec : 0;
+  if (!publish || durationSec <= 0) return null;
+  const ms =
+    publish.elapsedMs === null
+      ? 0
+      : publish.status === 'running' && !isTerminal(run.status)
+        ? liveElapsedMs(publish.elapsedMs, receivedAt, now)
+        : publish.elapsedMs;
+  const draining = drain?.status === 'running';
+  const d = publish.detail;
+  return {
+    ratio: draining ? 1 : Math.min(1, Math.max(0, ms / (durationSec * 1000))),
+    elapsedSec: Math.min(Math.floor(ms / 1000), durationSec),
+    durationSec,
+    draining,
+    pointsSent: n(d.pointsSent) ?? 0,
+    entriesSent: n(d.entriesSent) ?? 0,
+    commandsSent: n(d.commandsSent) ?? 0,
+    backpressurePauses: n(d.backpressurePauses) ?? 0,
+  };
+}
 
 // ── compare 넣기 진행 ──
 

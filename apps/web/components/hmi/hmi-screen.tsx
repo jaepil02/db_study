@@ -7,7 +7,7 @@
 // 데이터: 개요 1초(BFF /bff/plant/overview — 지금 값은 Redis만) · 최근 10분 5초(api 직결 시계열 조회 — ClickHouse). 판독 lib/hmi.ts · 읽기 data.ts.
 // 맞춤 보기(fit:)에서 자세히는 목록 자리(가장 태그가 많은 설비의 줄 수) 높이만 갖고 남는 높이는 라인 판이 다 가진다 — 큰 화면에서 자세히 아래가 비지 않는다.
 // 낮은 화면에서는 라인 판이 본문의 45% 아래로 줄지 않고 자세히 목록이 안에서 스크롤한다. 작은 화면(맞춤 보기 밖)은 쌓인다.
-// 머리 오른쪽은 공용 컨트롤(설비 가동 스위치 · 데이터 지우기 — components/controls · ⑤와 같은 것).
+// 머리 오른쪽은 공용 컨트롤(설비 가동 스위치 · 데이터 지우기 — components/controls · ⑤ ⑥과 같은 것).
 import { TAG_KIND_LABEL } from '@db-study/shared/src/card-line';
 import { type CSSProperties, type ReactNode, useMemo, useState } from 'react';
 import {

@@ -10,6 +10,8 @@ const PATHS: Record<Name, string[]> = {
     'M6.453 15h11.094',
     'M8.5 2h7',
   ],
+  // 분산 흐름 — 한 점에서 갈라지는 갈래(Lucide split 모양)
+  flow: ['M16 3h5v5', 'M8 3H3v5', 'M12 22v-8.3a4 4 0 0 0-1.172-2.872L3 3', 'm15 9 6-6'],
   // 설비 현황판 — 공장(Lucide factory)
   hmi: [
     'M2 20a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V8l-7 5V8l-7 5V4a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2Z',
