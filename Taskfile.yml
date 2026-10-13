@@ -1,6 +1,6 @@
 # db_study 작업 정의 — 정본 docs/09_tech_stack/05_tooling_devops.md §Taskfile 작업
-# 작업 6(migrate · seed · snapshot · restore · bench · docs:lint) 중 S0 3 + S2 2(migrate · seed)를 둔다 · bench(S5)는 그 단계에서.
-# S2 보조 작업: api-build · up — 기동 순서(04_architecture/03): 저장소 healthy → migrate → seed(빈 볼륨) → api healthy.
+# 작업: migrate · seed · docs:lint + 보조 api-build · up · test-surface — 기동 순서(04_architecture/03): 저장소 healthy → migrate → seed(빈 볼륨) → api healthy.
+# 스냅샷 · 복원 · 측정 실행 작업과 대조 자원 오버레이는 D-16(2026-10-11)에서 측정 도구와 함께 삭제했다.
 version: '3'
 
 # 비밀은 .env에서 읽어 명령 환경으로만 넘긴다 — migrate가 관리자 · app_owner 비밀번호를 쓴다(12_security/02)
@@ -8,108 +8,17 @@ dotenv: ['.env']
 
 vars:
   PROJECT: db_study
-  # 네 볼륨은 한 몸이다 — 스냅샷 · 복원은 항상 함께 한다(05_data_stores/09 §스냅샷과의 관계)
-  VOLUMES: pgdata chdata redisdata spooldata
   STORES: postgres clickhouse redis
-  # 볼륨 보관 도구 — 버전 고정표에 이미 있는 태그 고정 이미지를 쓴다(busybox tar) · 소유자 번호는 --numeric-owner로 보존한다
-  TAR_IMAGE: postgres:18.6-alpine
   COMPOSE: docker compose --env-file .env -f infra/compose/compose.yml
   # 메모리 프로파일 — load(기본) · dev · mid. 덮어쓰기 파일 하나가 상한 · MEMORY_PROFILE · 워커 수를 함께 준다(09_tech_stack/04)
   PROFILE: '{{.PROFILE | default "load"}}'
-  # 대조 실험 자원 조건(S5 · EXP-01~05) — CONTROL=1이면 부하 실험 프로파일 위에 compose.control.yml을 덧씌운다(04_architecture/03)
-  COMPOSE_P: '{{.COMPOSE}} -f infra/compose/compose.{{.PROFILE}}.yml{{if .CONTROL}} -f infra/compose/compose.control.yml{{end}}'
+  COMPOSE_P: '{{.COMPOSE}} -f infra/compose/compose.{{.PROFILE}}.yml'
   HEALTH_TIMEOUT: 120
   # 이미지에 들어가는 것 전부가 커밋돼 있을 때만 커밋 해시를 빌드 인자로 준다 — 아니면 null(그 기동의 측정은 인용 불가)
   CLEAN_HASH:
     sh: 'if [ -z "$(git status --porcelain -- apps packages infra/postgres/migrations infra/clickhouse/ddl package.json pnpm-lock.yaml pnpm-workspace.yaml tsconfig.base.json .dockerignore)" ]; then git rev-parse --short HEAD; fi'
 
 tasks:
-  snapshot:
-    desc: 컨테이너 정지 → 볼륨 4개를 snapshots/NAME/ 아래 볼륨별 tar.gz로 묶는다(재기동은 사람이)
-    summary: |
-      사용: task snapshot NAME=<이름>
-      같은 이름이 있으면 거부한다. 아직 없는 볼륨(예: api 이전의 spooldata)은 manifest에 absent로 적고 건너뛴다.
-      실행 중 볼륨을 묶지 않는다 — 파트 · WAL이 중간 상태로 묶인다(04_architecture/03 §스냅샷과 복원).
-    requires:
-      vars: [NAME]
-    preconditions:
-      - sh: '[ ! -e "snapshots/{{.NAME}}" ]'
-        msg: 'snapshots/{{.NAME}} 이 이미 있다 — 같은 이름의 스냅샷은 거부한다'
-    cmds:
-      - mkdir -p "snapshots/{{.NAME}}"
-      - |
-        {
-          echo "name={{.NAME}}"
-          echo "created_utc=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
-          echo "git_commit=$(git rev-parse --short HEAD)"
-          echo "git_dirty=$(git status --porcelain --untracked-files=no | grep -q . && echo yes || echo no)"
-          for s in {{.STORES}}; do
-            c="{{.PROJECT}}-$s-1"
-            if docker inspect "$c" >/dev/null 2>&1; then
-              echo "container.$s=$(docker inspect -f '{{"{{"}}.Config.Image{{"}}"}} mem={{"{{"}}.HostConfig.Memory{{"}}"}} cpuset={{"{{"}}.HostConfig.CpusetCpus{{"}}"}}' "$c")"
-            else
-              echo "container.$s=absent"
-            fi
-          done
-        } > "snapshots/{{.NAME}}/manifest.txt"
-      - '{{.COMPOSE}} stop'
-      - |
-        for v in {{.VOLUMES}}; do
-          vol="{{.PROJECT}}_$v"
-          if docker volume inspect "$vol" >/dev/null 2>&1; then
-            docker run --rm -v "$vol":/v:ro -v "$PWD/snapshots/{{.NAME}}":/out {{.TAR_IMAGE}} \
-              tar --numeric-owner -C /v -czf "/out/$v.tar.gz" .
-            echo "volume.$v=archived $(du -h "snapshots/{{.NAME}}/$v.tar.gz" | cut -f1)" | tee -a "snapshots/{{.NAME}}/manifest.txt"
-          else
-            echo "volume.$v=absent" | tee -a "snapshots/{{.NAME}}/manifest.txt"
-          fi
-        done
-      - echo "스냅샷 완료 — 컨테이너는 정지 상태다. 재기동은 {{.COMPOSE}} start"
-
-  restore:
-    desc: api 컨테이너 제거 → 컨테이너 정지 → 볼륨 비우기 → snapshots/NAME/ 아카이브 역전개 → 저장소 재기동 · healthy 대기(api는 task up이 다시 만든다)
-    summary: |
-      사용: task restore NAME=<이름> → task up
-      아카이브에 있는 볼륨은 되돌리고, 스냅샷 때 없던 볼륨(manifest absent)은 비운다. 복원 전 현재 상태가 필요하면 snapshot을 먼저 뜬다.
-      스냅샷은 볼륨만 담고 api 설정(env)은 담지 않는다 — restore는 볼륨 · 저장소만 되돌리고 api는 지우기만 한다.
-      api를 만드는 길은 사람은 task up(저장소 → migrate → api · 지금 env), 실험 러너는 api_up(러너가 정한 env) 둘뿐이다(09_tech_stack/04 §환경변수).
-    requires:
-      vars: [NAME]
-    preconditions:
-      - sh: 'ls snapshots/{{.NAME}}/*.tar.gz >/dev/null 2>&1'
-        msg: 'snapshots/{{.NAME}} 에 볼륨 아카이브가 없다'
-    cmds:
-      # api 컨테이너를 되살리지 않는다 — 실험 러너가 남긴 컨테이너(SENSOR_AUTOGEN=on 등)를 start가 그 env 그대로 띄우면
-      # 복원한 볼륨 위에서 센서 자동 생성이 다시 돈다. 없으면 아무 일도 없다(러너의 restore_snap은 먼저 지우고 부른다)
-      - '{{.COMPOSE}} rm -sf api'
-      - '{{.COMPOSE}} stop'
-      - |
-        for f in snapshots/{{.NAME}}/*.tar.gz; do
-          v=$(basename "$f" .tar.gz)
-          vol="{{.PROJECT}}_$v"
-          if ! docker volume inspect "$vol" >/dev/null 2>&1; then
-            docker volume create --label com.docker.compose.project={{.PROJECT}} \
-              --label com.docker.compose.volume="$v" "$vol" >/dev/null
-          fi
-          docker run --rm -v "$vol":/v -v "$PWD/snapshots/{{.NAME}}":/in:ro {{.TAR_IMAGE}} \
-            sh -c "find /v -mindepth 1 -delete && tar --numeric-owner -C /v -xzpf /in/$v.tar.gz"
-          echo "restored $v"
-        done
-        # 스냅샷 때 없던 볼륨(manifest absent)은 비운다 — 네 볼륨이 한 시점이어야 한다(05_data_stores/09)
-        for v in $(sed -n 's/^volume\.\(.*\)=absent$/\1/p' snapshots/{{.NAME}}/manifest.txt); do
-          vol="{{.PROJECT}}_$v"
-          if docker volume inspect "$vol" >/dev/null 2>&1; then
-            docker run --rm -v "$vol":/v {{.TAR_IMAGE}} find /v -mindepth 1 -delete
-            echo "emptied $v (absent in snapshot)"
-          fi
-        done
-      # 저장소만 다시 뜬다 — api는 위에서 지워 컨테이너가 없다
-      - '{{.COMPOSE}} start'
-      - task: wait-healthy
-      # restore 안에서 api를 만들지 않는다 — 스냅샷이 지금 코드보다 옛 스키마일 수 있어 migrate를 먼저 도는 task up이 만든다.
-      # 러너의 기준선(api 없이 저장소 유휴)과 시드 스냅샷 준비(restore → seed → snapshot)도 api가 없어야 성립한다
-      - echo "복원 완료 — 저장소 3개만 떠 있고 api는 없다. api는 task up(저장소 → migrate → api · 지금 env)으로 띄운다"
-
   wait-healthy:
     internal: true
     cmds:
@@ -143,21 +52,21 @@ tasks:
         api node dist/db/migrate.js
 
   seed:
-    desc: '마스터 시드 — 빈 볼륨 전용 · 사용: task seed -- --slice s2 | task seed -- --tier S'
+    desc: '마스터 시드 — 빈 볼륨 전용 · 사용: task seed(카드 라인 30대 · 로컬 기본) · task seed -- --slice s2(시험용 설비 1)'
     cmds:
-      - 'COMMIT_HASH={{.CLEAN_HASH}} {{.COMPOSE_P}} run --rm --no-deps -e SEED_USER_PASSWORD api node dist/db/seed.js {{.CLI_ARGS}}'
+      - 'COMMIT_HASH={{.CLEAN_HASH}} {{.COMPOSE_P}} run --rm --no-deps api node dist/db/seed.js {{.CLI_ARGS}}'
 
   up:
-    desc: '전 구성 기동 — 저장소 → migrate → (SEED가 있으면 seed) → api healthy · 사용: task up [PROFILE=load] [CONTROL=1] [SEED="--slice s2"]'
-    # 명령줄 변수(task up CONTROL=1)는 전역 vars 평가에 들어가지 않는다(Task 3.53 실측 — 전역 COMPOSE_P에 control 파일이 빠졌다) — 작업 수준에서 다시 만든다
+    desc: '전 구성 기동 — 저장소 → migrate → (SEED가 있으면 seed) → api healthy · 사용: task up [PROFILE=load] [SEED="--card-line"](빈 볼륨 첫 기동만 · 로컬 기본 시드)'
+    # 명령줄 변수(task up PROFILE=dev)는 전역 vars 평가에 들어가지 않는다(Task 3.53 실측) — 작업 수준에서 다시 만든다
     vars:
-      COMPOSE_P: '{{.COMPOSE}} -f infra/compose/compose.{{.PROFILE}}.yml{{if .CONTROL}} -f infra/compose/compose.control.yml{{end}}'
+      COMPOSE_P: '{{.COMPOSE}} -f infra/compose/compose.{{.PROFILE}}.yml'
     cmds:
       - '{{.COMPOSE_P}} up -d postgres clickhouse redis'
       - task: wait-healthy
       - task: migrate
       - |
-        {{if .SEED}}COMMIT_HASH={{.CLEAN_HASH}} {{.COMPOSE_P}} run --rm --no-deps -e SEED_USER_PASSWORD api node dist/db/seed.js {{.SEED}}{{else}}echo "seed 생략 — SEED 없음"{{end}}
+        {{if .SEED}}COMMIT_HASH={{.CLEAN_HASH}} {{.COMPOSE_P}} run --rm --no-deps api node dist/db/seed.js {{.SEED}}{{else}}echo "seed 생략 — SEED 없음"{{end}}
       - 'COMMIT_HASH={{.CLEAN_HASH}} {{.COMPOSE_P}} up -d --no-deps api'
       - task: wait-api
 
@@ -174,9 +83,9 @@ tasks:
         done
 
   test-surface:
-    desc: 표면 계약 테스트 — 떠 있는 api(127.0.0.1:13000)에 블랙박스로 붙는다(task up 뒤)
+    desc: 표면 계약 테스트 — 떠 있는 api(127.0.0.1:13000)에 블랙박스로 붙는다(task up 뒤 · test/surface*.test.ts 전부)
     cmds:
-      - SURFACE_BASE_URL=http://127.0.0.1:13000 pnpm --filter @db-study/api exec vitest run test/surface.test.ts
+      - SURFACE_BASE_URL=http://127.0.0.1:13000 pnpm --filter @db-study/api exec vitest run test/surface
 
   docs:lint:
     desc: 문서군 기계 검사(읽기 전용) — 인자는 task docs:lint -- --final 처럼 넘긴다
