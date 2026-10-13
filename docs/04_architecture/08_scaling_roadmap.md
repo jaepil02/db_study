@@ -2,6 +2,7 @@
 
 > **대상**: 확장 4단계(역할 분리 · api 다중 인스턴스 · Redis 분리 · 큐 교체) · **실측 진입 조건(정본)** · 단계별 교체 대상과 불변 경계 · 진입 기록 계약 · 삭제한 단계와 이유 · 로드맵 밖 조건부 분리
 > **작성일**: 2026-09-24
+> **개정일**: 2026-10-11 — **D-16 로그인 · 측정 도구 삭제**(사용자 결정 2026-10-11) — 언어 분리 조건 검산의 제어 평면 열거에서 인증 삭제 · 3단계 역상관 판독 EXP-18 폐지 표기
 > **개정일**: 2026-09-24 — W6 실험 채번 반영 — Stream 점유 메모리 메트릭 · EXP 번호(정본 10_observability/01 · 06)
 > **개정일**: 2026-09-24 — W6 판정 반영 — 미확인 등재에 분산 추적(tempo) 진입 조건 행 신설
 > **원천**: 원본 architecture.md §8.4 · §13 · §17 · §19(커밋 ff66a37) · 원본 tech_stack.md §1 · §3.4 · §5.1 · §5.3 · §10.6 · §13(커밋 ff66a37) · 원본 data_flow.md §4.2 · §9 · §12.1 · §16(커밋 ff66a37) · 원본 implementation_plan.md §5 S6(커밋 ff66a37) · D-02 · ADR-04 · ADR-05 · ADR-06 · ADR-07 · ADR-19 · ADR-21 · ADR-22 · [../03_requirements/01_global_rules.md](../03_requirements/01_global_rules.md) REQ-GLB-22 · [../01_overview/02_goals_scope.md](../01_overview/02_goals_scope.md) §조건부 범위
@@ -125,7 +126,7 @@
 | 시뮬레이터 기능 부족 | PlcSim만 별도 프로세스 — Collector는 접속 주소만 바꾼다 | Modbus 경계 | 상동 |
 | 적재가 Arrow 직삽입을 요구 | Ingest만 별도 워커 — 같은 컨슈머 그룹 소비 | 컨슈머 그룹 · 페이로드 계약 | 상동 |
 
-- 검산: 조건 = **3** · 어느 경우에도 제어 평면(API · 인증 · CRUD · WebSocket)은 NestJS에 남는다(ADR-01)
+- 검산: 조건 = **3** · 어느 경우에도 제어 평면(API · CRUD · WebSocket)은 NestJS에 남는다(ADR-01)
 - **PlcSim을 별도 프로세스로 떼면 모드 A의 SIMULATED 판정 규칙(루프백 접속 대상)이 깨진다** — 접속 대상이 서비스명이 되기 때문이다. 그 시점에 [../02_features/03_collector.md](../02_features/03_collector.md) §모드 A의 SIMULATED 표지 판정을 재판정한다.
 
 ## 미확인 · 미설계 등재
@@ -136,7 +137,7 @@
 | 역할 분리 시 컨테이너별 메모리 · CPU 배분 | 미설계 | 1단계 진입 시 [03_execution_topology.md](./03_execution_topology.md) |
 | 4단계에서 백프레셔 1차 신호 · 스풀의 의미 | 미설계 — 단계 진입 시 재판정 | ADR-21 |
 | **분산 추적(tempo) 도입** | **W6 판정** — 현 범위 밖 · 진입 조건은 SQL(ingested_at − ts)과 구간 메트릭으로 구간 분해가 불가능하다는 실측 · 도입 시 추적 SDK on/off를 다른 측정 조건으로 기록한다 · 확장 단계가 아니라 관측 구성원 추가다 | [../09_tech_stack/03_data_infra.md](../09_tech_stack/03_data_infra.md) §observability 프로파일 구성원 판정 |
-| 3단계 진입 판정의 Stream 점유 메모리 산출 | **W6 판정** — redis_prefix_memory_bytes{prefix="stream"}(stream 키 직접 측정) · 역상관 판독은 EXP-18 | [../10_observability/01_metrics_catalog.md](../10_observability/01_metrics_catalog.md) · [../05_data_stores/06_redis_memory.md](../05_data_stores/06_redis_memory.md) |
+| 3단계 진입 판정의 Stream 점유 메모리 산출 | **W6 판정** — redis_prefix_memory_bytes{prefix="stream"}(stream 키 직접 측정) · 역상관 판독은 EXP-18(실행 도구 삭제로 폐지(D-16) — 지금은 판독 수단이 없다) | [../10_observability/01_metrics_catalog.md](../10_observability/01_metrics_catalog.md) · [../05_data_stores/06_redis_memory.md](../05_data_stores/06_redis_memory.md) |
 
 ## 관련 문서
 

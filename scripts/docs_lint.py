@@ -3,7 +3,7 @@
 
 사용: python3 scripts/docs_lint.py [--final] [파일 또는 폴더 ...]  (task docs:lint -- [인자] 와 같다)
   인자가 없으면 docs/ 전체(docs/measurements 제외)를 검사한다.
-  --final 이면 예정 파일로 가는 링크도 오류로 보고 파일 수 123을 검사한다.
+  --final 이면 예정 파일로 가는 링크도 오류로 보고 파일 수 109를 검사한다(D-16 삭제 18 — 123 → 105 · 신설 4 — 08_screen 09 · 10 · 11 · 04_architecture 10 → 109).
 """
 import os
 import re
@@ -16,37 +16,36 @@ PLANNED = {
     '': ['README.md', 'CLAUDE.md'],
     '01_overview': ['README.md', '01_purpose_learning_goals.md', '02_goals_scope.md', '03_personas_roles.md',
                     '04_domain_map.md', '05_priorities_roadmap.md', '06_design_decisions.md'],
-    '02_features': ['README.md', '01_auth.md', '02_master.md', '03_collector.md', '04_plc_sim.md', '05_datagen.md',
-                    '06_ingest.md', '07_timeseries.md', '08_realtime.md', '09_alarms.md', '10_work_orders.md',
-                    '11_metrics.md', '12_permission_matrix.md', '13_switch_matrix.md'],
-    '03_requirements': ['README.md', '01_global_rules.md', '02_auth.md', '03_master.md', '04_collector.md',
+    '02_features': ['README.md', '02_master.md', '03_collector.md', '04_plc_sim.md', '05_datagen.md',
+                    '06_ingest.md', '07_timeseries.md', '08_realtime.md', '11_metrics.md', '13_switch_matrix.md'],
+    '03_requirements': ['README.md', '01_global_rules.md', '03_master.md', '04_collector.md',
                         '05_plc_sim.md', '06_datagen.md', '07_ingest.md', '08_timeseries.md', '09_realtime.md',
-                        '10_alarms.md', '11_work_orders.md', '12_metrics.md', '13_nonfunctional.md',
+                        '12_metrics.md', '13_nonfunctional.md',
                         '14_acceptance_criteria.md', '15_traceability.md', '16_official_references.md'],
     '04_architecture': ['README.md', '01_system_architecture.md', '02_module_boundaries.md',
                         '03_execution_topology.md', '04_storage_split.md', '05_latency_budget.md',
                         '06_backpressure_failure.md', '07_capacity_planning.md', '08_scaling_roadmap.md',
-                        '09_decision_records.md'],
+                        '09_decision_records.md', '10_plant_adoption.md'],
     '05_data_stores': ['README.md', '01_postgresql_schema.md', '02_postgresql_constraints.md',
                        '03_clickhouse_schema.md', '04_clickhouse_rollup.md', '05_redis_keyspace.md',
                        '06_redis_memory.md', '07_cross_store_consistency.md', '08_retention_lifecycle.md',
                        '09_migrations_seed.md', '10_olap_vs_rdb_control.md', 'erd.md'],
     '06_pipeline': ['README.md', '01_flow_inventory.md', '02_collect.md', '03_ingest_batch.md', '04_routing.md',
-                    '05_realtime_read.md', '06_timeseries_read.md', '07_business_crud.md', '08_alarm.md',
+                    '05_realtime_read.md', '06_timeseries_read.md', '07_business_crud.md',
                     '09_rollup.md', '10_datagen_inject.md', '11_backpressure_failure.md', '12_data_contract.md'],
-    '07_api': ['README.md', '01_conventions.md', '02_errors.md', '03_auth.md', '04_master.md', '05_timeseries.md',
-               '06_realtime.md', '07_alarms.md', '08_work_orders.md', '09_datagen.md', '10_metrics.md',
+    '07_api': ['README.md', '01_conventions.md', '02_errors.md', '04_master.md', '05_timeseries.md',
+               '06_realtime.md', '09_datagen.md', '10_metrics.md',
                '11_websocket.md'],
-    '08_screen': ['README.md', '01_standards.md', '02_traceability.md', '03_realtime_dashboard.md',
-                  '04_trend_analysis.md', '05_alarm_console.md', '06_master_admin.md', '07_experiment_console.md', '08_evidence_screens.md'],
+    '08_screen': ['README.md', '01_standards.md', '02_traceability.md', '08_evidence_screens.md',
+                  '09_learn_screens.md', '10_lab_screen.md', '11_hmi_screen.md'],
     '09_tech_stack': ['README.md', '01_frontend.md', '02_backend.md', '03_data_infra.md',
                       '04_local_environment.md', '05_tooling_devops.md', '06_decisions_rationale.md'],
     '10_observability': ['README.md', '01_metrics_catalog.md', '02_instrumentation.md', '03_dashboards_alerts.md',
-                         '04_experiment_protocol.md', '05_load_scenarios.md', '06_experiment_catalog.md',
+                         '04_experiment_protocol.md', '06_experiment_catalog.md',
                          '07_measurement_limits.md'],
     '11_glossary': ['README.md', '01_domain_terms.md', '02_error_codes.md', '03_enums_state_machines.md',
                     '04_id_conventions.md', '05_units_and_time.md'],
-    '12_security': ['README.md', '01_authn_authz.md', '02_secrets_config.md', '03_api_surface_defense.md',
+    '12_security': ['README.md', '02_secrets_config.md', '03_api_surface_defense.md',
                     '04_threat_model.md', '05_local_exposure.md'],
 }
 PLANNED_SET = {os.path.normpath(os.path.join(ROOT, d, f)) for d, fs in PLANNED.items() for f in fs}
@@ -220,8 +219,8 @@ def main():
         errs += check(f, final)
     if final:
         allf = md_files([ROOT])
-        if len(allf) != 123:
-            errs.append(f'파일 수 {len(allf)} ≠ 123')
+        if len(allf) != 109:
+            errs.append(f'파일 수 {len(allf)} ≠ 109')
         missing = sorted(PLANNED_SET - {os.path.normpath(f) for f in allf})
         errs += [f'미작성: {os.path.relpath(m, ROOT)}' for m in missing]
     for x in errs:

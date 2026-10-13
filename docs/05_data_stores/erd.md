@@ -1,11 +1,14 @@
 # 전역 ERD (erd)
 
-> **대상**: db_study 저장소 전역의 관계도 — PostgreSQL 업무 15 + 대조군 1의 erDiagram · ClickHouse 객체 12의 관계 · 저장소를 넘는 논리 참조
+> **대상**: db_study 저장소 전역의 관계도 — PostgreSQL 업무 7 + 대조군 1 + 실행 보관 1의 erDiagram · ClickHouse 객체 8의 관계 · 저장소를 넘는 논리 참조
 > **작성일**: 2026-09-24
+> **개정일**: 2026-10-12 — **D-05 부분 개정 · ADR-32**(직접 비교 비교 사본 TimescaleDB hypertable · 열 압축 · 마이그레이션 009) — PLC_TAG_RAW_CONTROL ts 주석 daily partition key → **hypertable 1-day chunk key** · 비교 사본 불릿에 009가 표를 다시 만들어도 키 · 참조 그대로 · 엔터티 셈에서 칸 · 압축 표 제외 — 엔터티 · 관계 수 불변
+> **개정일**: 2026-10-11 — **D-16 비교 사본 규칙 · 태그 종류 · 실행 보관**(마이그레이션 006 · 007 · 008) — PostgreSQL ERD에 **DEVICE → PLC_TAG_RAW_CONTROL 관계**(FK device_id · 기본 키 3컬럼) · TAG_MASTER tag_kind · **RUN_RESULT 엔터티**(선 없음) — 관계 6 → **7** · 엔터티 8 → **9** · 저장소를 넘는 참조 CTL 선 표기(tag_id만 FK 없음)
+> **개정일**: 2026-10-11 — **D-16 알람 · 로그인 · 권한 · 감사 · 작업지시 · 측정 도구 삭제**(사용자 결정 2026-10-11 · 리드 판정 — WRK 함께 폐지) — PostgreSQL 엔터티 16 → **8**(ALARM_RULE · ALARM_EVENT · USER_ACCOUNT · ROLE · USER_ROLE · WORK_ORDER · PRODUCTION_LOG · AUDIT_LOG 삭제 · TAG_MASTER_HISTORY changed_by 삭제) · 관계(FK) 15 → **6** · ClickHouse 객체 12 → **8**(alarm_eval · 업무 대조 3 삭제) · 논리 참조 9 → **6** · alarm_event PK · USER_ACCOUNT NULL · 알람 사본 불릿 삭제 · BIZ_COMMAND_LOG actor 불릿 교정 · 연쇄 입구 불릿 신설
 > **개정일**: 2026-09-28 — 웨이브 1 검수 반영(B-H4 — actor ⓐ 채택) — BIZ_COMMAND_LOG에 **actor**(bigint · FK 없음 — 요청자) 속성 · 선 없음 불릿의 "행위자는 audit_log가 갖는다" → **actor도 선 없음 · 감사 행위자 정본은 audit_log.user_id** — 엔터티 · 관계 수 불변
 > **개정일**: 2026-09-28 — 업무 쓰기 Redis 경유 개정(사용자 결정 2026-09-27) — PostgreSQL ERD에 **BIZ_COMMAND_LOG**(선 없음 — FK를 두지 않는 설계) · 엔터티 15 → **16** · 저장소를 넘는 논리 참조에 biz:result → biz_command_log(사본 · 원천은 원장) — 8 → **9** · 관계(FK) 수 불변
 > **개정일**: 2026-09-26 — 목적 적합성 실증 W1 — ClickHouse 객체 관계 그림에 업무 대조 테이블 3(계측물 · 선 없음 — 대조군 PLC_TAG_RAW_CONTROL과 같은 처리) — 객체 9 → **12** · 저장소를 넘는 논리 참조는 불변(앱이 읽지 않는 계측물)
-> **원천**: 원본 architecture.md §6 · §7.1 · §7.2 · §7.3 · §7.4 · §8.1 · §12(커밋 ff66a37) · docs_plan.md 보정 #15(tag_master_history) · [01_postgresql_schema.md](./01_postgresql_schema.md) · [02_postgresql_constraints.md](./02_postgresql_constraints.md) · [03_clickhouse_schema.md](./03_clickhouse_schema.md) · [04_clickhouse_rollup.md](./04_clickhouse_rollup.md) · [07_cross_store_consistency.md](./07_cross_store_consistency.md) · [10_olap_vs_rdb_control.md](./10_olap_vs_rdb_control.md)
+> **원천**: ADR-32 · 마이그레이션 009 · 원본 architecture.md §6 · §7.1 · §7.2 · §7.3 · §7.4 · §8.1 · §12(커밋 ff66a37) · docs_plan.md 보정 #15(tag_master_history) · [01_postgresql_schema.md](./01_postgresql_schema.md) · [02_postgresql_constraints.md](./02_postgresql_constraints.md) · [03_clickhouse_schema.md](./03_clickhouse_schema.md) · [04_clickhouse_rollup.md](./04_clickhouse_rollup.md) · [07_cross_store_consistency.md](./07_cross_store_consistency.md) · [10_olap_vs_rdb_control.md](./10_olap_vs_rdb_control.md)
 
 이 문서는 **그림의 자리**다. 컬럼 · 타입 · 제약의 정본은 [01_postgresql_schema.md](./01_postgresql_schema.md) · [02_postgresql_constraints.md](./02_postgresql_constraints.md) · [03_clickhouse_schema.md](./03_clickhouse_schema.md) · [04_clickhouse_rollup.md](./04_clickhouse_rollup.md)가 갖고, 이 문서는 관계만 그린다. 그림과 정본이 어긋나면 정본이 이긴다.
 
@@ -29,7 +32,7 @@
 
 ## PostgreSQL ERD
 
-업무 15 테이블과 대조군 1이다. 대조군과 biz_command_log는 관계가 없다 — FK를 두지 않는 것이 설계다([10_olap_vs_rdb_control.md](./10_olap_vs_rdb_control.md) · [02_postgresql_constraints.md](./02_postgresql_constraints.md) §FK 전수).
+업무 7 테이블 · 대조군(비교 사본) 1 · 실행 보관 1이다. 비교 사본은 D-16(007)부터 설비를 참조한다 · biz_command_log와 run_result는 관계가 없다 — FK를 두지 않는 것이 설계다([10_olap_vs_rdb_control.md](./10_olap_vs_rdb_control.md) · [02_postgresql_constraints.md](./02_postgresql_constraints.md) §FK 전수).
 
 ```mermaid
 erDiagram
@@ -39,15 +42,7 @@ erDiagram
     DEVICE ||--o{ TAG_MASTER : "정의"
     TAG_MASTER ||--o{ TAG_MASTER_HISTORY : "이전 태그"
     TAG_MASTER ||--o| TAG_MASTER_HISTORY : "새 태그"
-    USER_ACCOUNT |o--o{ TAG_MASTER_HISTORY : "변경"
-    TAG_MASTER ||--o{ ALARM_RULE : "감시 대상"
-    ALARM_RULE ||--o{ ALARM_EVENT : "발생"
-    USER_ACCOUNT |o--o{ ALARM_EVENT : "확인"
-    USER_ACCOUNT ||--o{ USER_ROLE : "부여"
-    ROLE ||--o{ USER_ROLE : "매핑"
-    PRODUCTION_LINE ||--o{ WORK_ORDER : "배정"
-    WORK_ORDER ||--o{ PRODUCTION_LOG : "실적"
-    USER_ACCOUNT |o--o{ AUDIT_LOG : "행위"
+    DEVICE ||--o{ PLC_TAG_RAW_CONTROL : "비교 사본"
 
     SITE {
         integer site_id PK
@@ -96,6 +91,7 @@ erDiagram
         numeric range_min
         numeric range_max
         boolean is_active
+        text tag_kind "8 kinds or null"
     }
     TAG_MASTER_HISTORY {
         bigint history_id PK
@@ -106,78 +102,16 @@ erDiagram
         numeric new_scale
         numeric new_offset_value
         timestamptz changed_at
-        integer changed_by FK "nullable"
         text reason
     }
-    ALARM_RULE {
-        integer rule_id PK
-        integer tag_id FK
-        text condition_type "GT LT OUT_OF_RANGE RATE_OF_CHANGE"
-        numeric threshold
-        numeric threshold_low "OUT_OF_RANGE only"
-        integer debounce_ms
-        smallint severity "1 to 3"
-        boolean enabled
-    }
-    ALARM_EVENT {
-        bigint event_id PK
-        timestamptz occurred_at PK "monthly partition key"
-        integer rule_id FK
-        timestamptz cleared_at
-        float8 trigger_value
-        text state "ACTIVE CLEARED"
-        integer acked_by FK "nullable"
-        timestamptz acked_at
-    }
-    USER_ACCOUNT {
-        integer user_id PK
-        text email UK
-        text password_hash
-        boolean is_active
-    }
-    ROLE {
-        smallint role_id PK
-        text role_code UK "OPERATOR ENGINEER ADMIN"
-    }
-    USER_ROLE {
-        integer user_id PK, FK
-        smallint role_id PK, FK
-    }
-    WORK_ORDER {
-        bigint order_id PK
-        integer line_id FK
-        text order_no UK
-        text product_code
-        integer target_qty
-        timestamptz planned_start
-        timestamptz planned_end
-        text status "PLANNED IN_PROGRESS COMPLETED CANCELLED"
-    }
-    PRODUCTION_LOG {
-        bigint log_id PK
-        bigint order_id FK
-        timestamptz recorded_at
-        integer good_qty
-        integer defect_qty
-    }
-    AUDIT_LOG {
-        bigint audit_id PK
-        integer user_id FK "null = unauthenticated stage"
-        timestamptz acted_at
-        text action "INSERT UPDATE"
-        text target_table
-        text target_key
-        jsonb before_value
-        jsonb after_value
-    }
     PLC_TAG_RAW_CONTROL {
-        timestamptz ts "daily partition key"
-        float8 value
+        timestamptz ts PK "hypertable 1-day chunk key"
+        float8 value "CHECK not NaN · within 1e12"
         bigint scan_seq
         timestamptz ingested_at
-        integer device_id "no FK"
-        integer tag_id "no FK"
-        smallint quality
+        integer device_id PK, FK
+        integer tag_id PK "no FK"
+        smallint quality "CHECK 7 codes"
     }
     BIZ_COMMAND_LOG {
         bigint log_id PK
@@ -189,26 +123,36 @@ erDiagram
         timestamptz requested_at
         timestamptz applied_at
     }
+    RUN_RESULT {
+        uuid run_id PK
+        text type "compare"
+        text part "ingest query integrity"
+        jsonb params
+        text status "completed stopped failed"
+        jsonb result "null unless completed"
+        timestamptz started_at
+        timestamptz ended_at
+        text commit_hash
+        jsonb switches
+        boolean plant_on
+    }
 ```
 
 - **tag_master_history는 tag_master를 두 번 가리킨다.** 이전 태그(여럿이 될 수 있다 — 한 태그의 스케일을 여러 번 바꾸면 매번 새 태그가 이전 태그가 된다)와 새 태그(UNIQUE — 한 새 태그의 계보는 한 행)다.
-- **alarm_event의 PK에 occurred_at이 들어간다.** 파티션 테이블의 PK는 파티션 키를 포함해야 한다 — 규칙당 열린 이벤트 하나를 DB가 강제할 수 없는 이유다(한계 등재 [02_postgresql_constraints.md](./02_postgresql_constraints.md) #9).
-- **USER_ACCOUNT에서 나가는 선택적 관계 셋(|o--o{)은 NULL의 뜻이 다르다.** 확인(acked_by NULL = 미확인) · 감사(user_id NULL = 무인증 기간) · 계보(changed_by NULL = 무인증 기간)다.
-- **BIZ_COMMAND_LOG에 선이 없는 것은 누락이 아니다.** 명령이 가리키는 업무 행은 kind마다 테이블이 달라 한 FK로 표현되지 않고, **actor(요청자)도 USER_ACCOUNT에 선을 긋지 않는다**(FK 없음 — 명령 조회의 요청자 대조 기준 · 감사 행위자 정본은 같은 트랜잭션의 audit_log.user_id) — 원장은 cmd_id UNIQUE 하나로 멱등만 강제한다([01_postgresql_schema.md](./01_postgresql_schema.md) §biz_command_log 설계).
-- **PLC_TAG_RAW_CONTROL에 선이 없는 것은 누락이 아니다.** 대조군은 tag_raw와 동형인 실험 계측물이라 ClickHouse처럼 참조 검사를 하지 않는다.
+- **BIZ_COMMAND_LOG에 선이 없는 것은 누락이 아니다.** 명령이 가리키는 업무 행은 kind마다 테이블이 달라 한 FK로 표현되지 않고, **actor(요청자)는 선이 없다** — 로그인이 없어 늘 NULL이고 가리킬 계정 테이블도 없다(D-16) — 원장은 cmd_id UNIQUE 하나로 멱등만 강제한다([01_postgresql_schema.md](./01_postgresql_schema.md) §biz_command_log 설계).
+- **PLC_TAG_RAW_CONTROL은 설비만 참조하고 태그는 참조하지 않는다(D-16 · 007).** 설비 참조는 무결성 시험(등록 안 된 설비)의 근거이고, 태그에 선이 없는 것은 시험 태그 대역 · 태그 계보 때문이다 — 옛 대조군은 tag_raw와 동형인 계측물이라 선이 하나도 없었다([10_olap_vs_rdb_control.md](./10_olap_vs_rdb_control.md) §지금 모양 — 직접 비교(D-16)). 009가 표를 TimescaleDB hypertable로 다시 만들었어도 컬럼 · 키 · 설비 참조는 007 그대로다(ADR-32) — 그림이 바뀌지 않는다.
+- **RUN_RESULT에 선이 없는 것은 누락이 아니다.** 직접 비교의 종결 결과 보관이라 가리키는 업무 행이 없다 — 실행 ID는 api가 발급한 runId다([01_postgresql_schema.md](./01_postgresql_schema.md) §run_result 설계).
 
 ### 관계 검산
 
 | 관계 | FK 컬럼 | 카디널리티 | 소유 도메인 |
 |------|------|------|------|
 | 보유 · 포함 · 접속 설정 · 정의 | production_line.site_id · device.line_id · modbus_config.device_id · tag_master.device_id | 1:N · 1:N · 1:1 · 1:N | MST |
-| 이전 태그 · 새 태그 · 변경 | tag_master_history.old_tag_id · new_tag_id · changed_by | 1:N · 1:0..1 · 0..1:N | MST |
-| 감시 대상 · 발생 · 확인 | alarm_rule.tag_id · alarm_event.rule_id · alarm_event.acked_by | 1:N · 1:N · 0..1:N | ALM |
-| 부여 · 매핑 | user_role.user_id · role_id | 1:N · 1:N | AUT |
-| 배정 · 실적 · 행위 | work_order.line_id · production_log.order_id · audit_log.user_id | 1:N · 1:N · 0..1:N | WRK |
+| 이전 태그 · 새 태그 | tag_master_history.old_tag_id · new_tag_id | 1:N · 1:0..1 | MST |
+| 비교 사본 | plc_tag_raw_control.device_id | 1:N | ING(참조되는 쪽 MST) |
 
-- 검산: 관계 = 4 + 3 + 3 + 2 + 3 = **15** = FK 전수([02_postgresql_constraints.md](./02_postgresql_constraints.md))
-- 엔터티 = 업무 15 + 대조군 1 = **16** — 루트 고정 기준과 같다
+- 검산: 관계 = 4 + 2 + 1 = **7** = FK 전수([02_postgresql_constraints.md](./02_postgresql_constraints.md))
+- 엔터티 = 업무 7(MST 6 + biz_command_log) + 대조군 1 + 실행 보관 1(run_result) = **9** — 루트 고정 기준과 같다(비교 사본 hypertable의 칸 · 압축 표는 TimescaleDB 내부 표라 엔터티로 세지 않는다) · 옛 changed_by · ALM 3 · AUT 2 · WRK 3 관계와 AUT 3 · ALM 2 · WRK 3 · 감사 엔터티는 D-16 삭제
 
 ## ClickHouse 객체 관계
 
@@ -225,11 +169,7 @@ flowchart LR
     T2["plc.tag_1h<br/>월 파티션 · 730일"]
     MV3["plc.mv_tag_1d<br/>KST 자정"]
     T3["plc.tag_1d<br/>년 파티션 · 무기한"]
-    AE["plc.alarm_eval<br/>MergeTree · 일 파티션"]
     Q["조회 · dictGet"]
-    WOC["plc.work_order_control<br/>계측물 · MergeTree"]
-    WOR["plc.work_order_control_rmt<br/>계측물 · ReplacingMergeTree"]
-    PLC["plc.production_log_control<br/>계측물 · MergeTree"]
 
     PGTM -->|"SOURCE · LIFETIME · SYSTEM RELOAD"| DICT
     RAW -->|"삽입 블록"| MV1 --> T1
@@ -240,12 +180,11 @@ flowchart LR
     T1 -.-> Q
     T2 -.-> Q
     T3 -.-> Q
-    AE -.-> Q
 ```
 
-- 검산: 객체 = 테이블 8(목적지 5 tag_raw · tag_1m · tag_1h · tag_1d · alarm_eval + 계측물 3 work_order_control · work_order_control_rmt · production_log_control) + MV 3 + Dictionary 1 = **12** — 루트 고정 기준과 같다
-- **업무 대조 테이블 셋에 선이 없는 것은 누락이 아니다.** 역방향 대조(EXP-40~44) 실행기만 쓰고 읽는 계측물이라 MV 연쇄 · Dictionary · 조회 표면 어디에도 닿지 않는다 — PostgreSQL 쪽 대조군 PLC_TAG_RAW_CONTROL에 선이 없는 것과 같은 판정이다. 같은 이유로 §저장소를 넘는 논리 참조에도 없다(정본 [03_clickhouse_schema.md](./03_clickhouse_schema.md) §업무 대조 테이블).
-- **alarm_eval은 연쇄에 없다.** 판정 경로(ALM)가 따로 쓰고 롤업이 붙지 않는다 — 판정 전수는 분석 로그라 집계 계층을 두지 않는다.
+- 검산: 객체 = 테이블 4(tag_raw · tag_1m · tag_1h · tag_1d) + MV 3 + Dictionary 1 = **8** — 루트 고정 기준과 같다
+- **연쇄의 입구는 tag_raw 하나다.** 롤업 테이블에 직접 쓰면 붙어 있는 상위 MV가 그대로 발동해 위 롤업까지 채운다 — 백필이 mv_tag_1m 하나만 분리하는 이유다([04_clickhouse_rollup.md](./04_clickhouse_rollup.md) §백필 절차).
+- **옛 alarm_eval · 업무 대조 테이블 3은 D-16으로 지웠다.** 쓰던 주체(알람 판정 경로 · 역방향 실행기)가 함께 사라졌다 — 객체 12 → 8.
 - **Dictionary는 행을 잇지 않는다.** dictGet은 조회 시점에 tag_id를 해석으로 바꿀 뿐이며, 시계열 행은 이름을 갖지 않는다(ADR-16).
 
 ## 저장소를 넘는 논리 참조
@@ -256,37 +195,29 @@ flowchart LR
 flowchart LR
     subgraph PG["PostgreSQL"]
         TM["tag_master.tag_id · device_id"]
-        AR["alarm_rule.rule_id"]
-        AEV["alarm_event"]
         CTL["plc_tag_raw_control"]
         BCL["biz_command_log"]
     end
     subgraph CH["ClickHouse"]
         RAW["tag_raw · 롤업 3"]
-        AE["alarm_eval"]
         DICT["dict_tag"]
     end
     subgraph RD["Redis"]
         RTL["rt:latest:{device_id}<br/>필드 tag_id"]
-        AST["alarm:state:{rule_id}<br/>event_id"]
         TMC["cache:tagmeta:{tag_id}"]
         BRS["biz:result:{cmdId}"]
     end
 
     RAW -.->|"tag_id · device_id"| TM
-    AE -.->|"rule_id · tag_id"| AR
-    CTL -.->|"tag_id · device_id · FK 없음"| TM
-    AEV -.->|"trigger_value = 판정 행 value"| RAW
+    CTL -.->|"tag_id · FK 없음"| TM
     RTL -.->|"휘발 사본 · 진실은 argMax"| RAW
-    AST -.->|"event_id"| AEV
     TMC -.->|"사본"| TM
     BRS -.->|"사본 · 원천은 원장"| BCL
     TM -->|"적재"| DICT
 ```
 
-- **점선은 전부 FK 없는 참조다.** 시계열 · 대조군 → PostgreSQL 마스터 3(RAW · AE · CTL) + 확정 이벤트 → 원시 1(AEV) + Redis → 원천 4(RTL · AST · TMC · BRS). 실선 하나(tag_master → dict_tag)는 주기 적재다.
-- 검산: 논리 참조 = 점선 3 + 1 + 4 = 8 + 적재 실선 1 = **9**
-- **AST → AEV는 사본 관계가 아니다.** 핫 상태가 확정 이벤트의 번호를 들고 있을 뿐이며, 알람 세 쓰기가 같은 사실의 사본이 아니라는 판정은 [07_cross_store_consistency.md](./07_cross_store_consistency.md) §불일치 시 진실이 정한다.
+- **점선은 전부 FK 없는 참조다.** 시계열 · 대조군 → PostgreSQL 마스터 2(RAW · CTL) + Redis → 원천 3(RTL · TMC · BRS). 실선 하나(tag_master → dict_tag)는 주기 적재다.
+- 검산: 논리 참조 = 점선 2 + 3 = 5 + 적재 실선 1 = **6** · 옛 알람 참조 3(AE · AEV · AST)은 D-16 삭제
 - **Redis 키 전수는 이 그림에 없다.** 저장소를 넘는 참조를 가진 키만 그렸다 — 키 패턴 전수와 봉인 표의 정본은 [05_redis_keyspace.md](./05_redis_keyspace.md)다.
 
 ## 관련 문서

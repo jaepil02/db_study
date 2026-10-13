@@ -1,7 +1,10 @@
 # 데이터 인프라와 버전 고정표
 
-> **대상**: 저장소 3종(PostgreSQL · ClickHouse · Redis)의 이미지 · 확장 · 설정 파일의 모양 · ClickHouse 서버 timezone 판정 · pg_partman 미리 만들기 · TTL 머지 주기 · Compose healthcheck와 health 타임아웃의 관계 · **observability 프로파일 구성원 판정(보정 #17)** · **버전 고정표(버전 문자열의 유일한 기재처)**
+> **대상**: 저장소 3종(PostgreSQL · ClickHouse · Redis)의 이미지 · 확장 · 설정 파일의 모양 · **TimescaleDB 확장(직접 비교 비교 사본 — ADR-32)** · ClickHouse 서버 timezone 판정 · pg_partman 미리 만들기 · TTL 머지 주기 · Compose healthcheck와 health 타임아웃의 관계 · **observability 프로파일 구성원 판정(보정 #17)** · **버전 고정표(버전 문자열의 유일한 기재처)**
 > **작성일**: 2026-09-24
+> **개정일**: 2026-10-12 — 리드 판정 — 미확인 TimescaleDB 압축 함수 이름 행 닫힘(009가 convert_to_columnstore를 부른다) — 행 수 불변
+> **개정일**: 2026-10-12 — **D-05 부분 개정 · ADR-32**(직접 비교 비교 사본 TimescaleDB hypertable · 열 압축 · 마이그레이션 009) — 버전 고정표 **TimescaleDB 행 신설**(버전 고정 2.30) — 행 37 → **38**(저장소 확장 2 → **3**) · 버전 고정 26 → **27** · 원본에 없던 행 4 → **5** · 이미지 db_study-postgres:18.6-partman5.5.0 → **18.6-partman5.5.0-ts2.30.2** · §PostgreSQL 확장 **timescaledb 행 신설** — 확장 3 → **4** · 선적재 3 → **4** · TimescaleDB 설정 불릿(원격 보고 끔 · 작업 워커 · 워커 총량) · pg_partman 행 용도 → **빈 볼륨 004 재생 · 009 뒤 관리 대상 없음** · §pg_partman에 상태 항목(원문 보존) · 저장소 이미지 postgres 행 파생 이미지 · 설정 파일 트리 TimescaleDB 줄 · 미확인 등재 2행 신설(TimescaleDB 설치 경로 닫힘 · 압축 함수 옛 이름)
+> **개정일**: 2026-10-11 — **D-16 알람 · 로그인 · 측정 도구 삭제**(사용자 결정 2026-10-11) — 버전 고정표 39 → **37**행(비밀번호 해시 라이브러리 hash-wasm · k6 삭제 · 백엔드 13 → **12** · 부하 구분 삭제 · 버전 고정 28 → **26**) · pg_partman 대상 alarm_event 월 파티션 삭제 · 미리 만들기 계약 월 → **간격(대조군 일)** · 개수 하한 산술 일 세트로 · 시간 압축 생성(모드 B · C) 문구 삭제 · prometheus 필수 설정의 remote write 수신 삭제(쓰던 k6 삭제) · Soak 문구 · Task 쓰는 자리 snapshot · restore · bench → **up · api-build · test-surface** · Python 실습 스크립트 삭제
 > **개정일**: 2026-10-03 — UI/UX 다듬기(사용자 지시 2026-10-03 · 리드 판정 .omc/plans/web-ux-polish.md §2.1 · §7.1 R10) — 프론트엔드 **Pretendard(웹 글꼴) 행 신설 · 버전 고정 1.3.9**(apps/web/package.json 정확 고정 · next/font/local이 패키지 안 가변 woff2 파일을 직접 가리킨다) — 행 38 → **39**(프론트엔드 6 → **7**) · 버전 고정 27 → **28** · 원본에 없던 행 3 → **4**
 > **개정일**: 2026-09-28 — DB 시각 UTC(ADR-27 · 사용자 요구 2026-09-28) — 서버 timezone 판정 Asia/Seoul → **UTC**(§서버 timezone 판정에 상태 항목 · W6 원문 보존) · postgresql.conf 시간대 timezone · log_timezone → **UTC** · pg_partman 미리 만들기 기준 달력 Asia/Seoul → **UTC**(유지 작업 세션 시간대 = 세트 경계 시간대) · 공식 문서 확인(서버 timezone은 기동 시점에 읽는다 · pg_partman은 유지 작업 클라이언트까지 UTC 요구) — 조정값 · 안 수 불변
 > **개정일**: 2026-09-26 — S7 ① 계정 시드 착수 — 비밀번호 해시 라이브러리(Argon2id) 행 미고정 → **버전 고정** hash-wasm 4.12 — 버전 고정 26 → **27** · 미고정 2 → **1**(행 38 불변)
@@ -17,7 +20,7 @@
 > **개정일**: 2026-09-24 — 최종 정밀 검수 — §조정값 현행값 → §화면 조정값 현행값(절 이름 교정)
 > **개정일**: 2026-09-24 — W7 보안 판정 반영 — Redis 설정 바인드 · 보호 모드 행에 **requirepass 필수** 명시 · 버전 고정표에 Argon2id 해시 라이브러리 행 추가 35 → **36**(백엔드 12 → **13** · 미고정 10 → **11**)(정본 12_security/01 · 02)
 > **개정일**: 2026-09-24 — W6 실험 채번 반영 — EXP 번호 반영(정본 10_observability/01 · 06)
-> **원천**: ADR-27(사용자 요구 2026-09-28) · 원본 tech_stack.md §2 · §5 · §9 · §10.1 · §10.4 · §12(커밋 ff66a37) · 원본 architecture.md §3 · §7.5 · §13 · §14(커밋 ff66a37) · 원본 implementation_plan.md §2.1 · §9(커밋 ff66a37) · ADR-03 · ADR-05 · ADR-18 · ADR-19 · ADR-20 · docs_plan 실행 계획 보정 #17 · 웨이브 인계 W6 09_tech_stack 행(ClickHouse 서버 timezone · pg_partman 미리 만들기 · TTL 머지 주기 · healthcheck timeout) · [../05_data_stores/01_postgresql_schema.md](../05_data_stores/01_postgresql_schema.md) · [../05_data_stores/03_clickhouse_schema.md](../05_data_stores/03_clickhouse_schema.md) · [../07_api/10_metrics.md](../07_api/10_metrics.md) §저장소 확인과 타임아웃 판정 · 다듬기 판정 .omc/plans/web-ux-polish.md(사용자 지시 2026-10-03 — 웹 글꼴) · apps/web/package.json
+> **원천**: D-05 부분 개정(사용자 결정 2026-10-12) · ADR-32 · infra/postgres/Dockerfile · infra/postgres/postgresql.conf · ADR-27(사용자 요구 2026-09-28) · 원본 tech_stack.md §2 · §5 · §9 · §10.1 · §10.4 · §12(커밋 ff66a37) · 원본 architecture.md §3 · §7.5 · §13 · §14(커밋 ff66a37) · 원본 implementation_plan.md §2.1 · §9(커밋 ff66a37) · ADR-03 · ADR-05 · ADR-18 · ADR-19 · ADR-20 · docs_plan 실행 계획 보정 #17 · 웨이브 인계 W6 09_tech_stack 행(ClickHouse 서버 timezone · pg_partman 미리 만들기 · TTL 머지 주기 · healthcheck timeout) · [../05_data_stores/01_postgresql_schema.md](../05_data_stores/01_postgresql_schema.md) · [../05_data_stores/03_clickhouse_schema.md](../05_data_stores/03_clickhouse_schema.md) · [../07_api/10_metrics.md](../07_api/10_metrics.md) §저장소 확인과 타임아웃 판정 · 다듬기 판정 .omc/plans/web-ux-polish.md(사용자 지시 2026-10-03 — 웹 글꼴) · apps/web/package.json
 
 이 문서는 **정확 버전이 적히는 유일한 자리**다. 다른 문서는 스택을 Next.js · NestJS · PostgreSQL 18 · ClickHouse 26.8 · Redis 8 · Docker Compose로만 적고 이미지 태그 · 라이브러리 메이저는 §버전 고정표를 링크한다. 같은 폴더의 01 · 02 · 05도 버전을 적지 않는다 — 버전이 두 자리에 적히면 착수 시점 재확인이 한 자리만 고친다.
 
@@ -29,12 +32,12 @@
 
 | 서비스 | 이미지 계열 | 선택 이유 | 버리는 것 | 어기면 |
 |------|------|------|------|------|
-| postgres | PostgreSQL 공식 이미지 alpine 변형 | 버전 고정 · 설정 직접 제어(원본 tech_stack.md §10.1) | 호스트 직접 설치 | 호스트 패키지 갱신이 엔진 버전을 조용히 바꿔 같은 커밋의 두 측정이 다른 엔진에서 돈다 |
+| postgres | PostgreSQL 공식 이미지 alpine 변형 위 파생 이미지 — 확장 파일(pg_partman · TimescaleDB)만 더한다(infra/postgres/Dockerfile · ADR-32) | 버전 고정 · 설정 직접 제어(원본 tech_stack.md §10.1) | 호스트 직접 설치 | 호스트 패키지 갱신이 엔진 버전을 조용히 바꿔 같은 커밋의 두 측정이 다른 엔진에서 돈다 |
 | clickhouse | ClickHouse 공식 서버 이미지 · LTS 트랙 | LTS는 패치만 받아 실험 기간 중 동작 변경이 작다 | stable 트랙 월간 릴리스 | 월간 릴리스를 따라가면 MV · 중복 제거 동작이 실험 도중 바뀐다 |
 | redis | Redis 공식 이미지 alpine 변형 | Streams · Pub/Sub · Lua · volatile-lru를 한 인스턴스에서(ADR-05) | Valkey 대체(원본 비고 "대체 가능") | 대체하면 엔진이 바뀐 것이라 대체 전후 수치를 한 실험으로 묶을 수 없다 — **현행 범위에서 대체하지 않는다** |
 | api 기반 이미지 | Node LTS alpine · 멀티스테이지 빌드 | 호스트와 같은 LTS 메이저(REQ-TEC-04) | 런타임 전용 이미지의 다른 배포판 | 네이티브 의존(압축 · 해시)의 libc 차이가 호스트 테스트와 컨테이너 실행을 가른다 |
 
-- 검산: 이미지 = **4** — 저장소 3 + 로컬 빌드 1(api)
+- 검산: 이미지 = **4** — 저장소 3(postgres는 공식 이미지 위 로컬 파생 빌드) + 로컬 빌드 1(api)
 - **모든 태그를 명시하고 latest를 쓰지 않는다.** 태그 값은 §버전 고정표 한 자리에만 적는다.
 - **공식 이미지의 alpine 변형은 로케일 · 시간대 데이터가 최소 구성이다.** 서버 timezone을 이름으로 줄 때 시간대 데이터베이스가 이미지에 들어 있는지 착수 시 확인한다(공식 참조 — 03_requirements/16 W7 등재). 없으면 기동은 되지만 시간대 이름이 해석되지 않아 기동 로그에 오류가 남는다. **S0 확인(2026-09-24) — PostgreSQL alpine 이미지(TimeZone)와 ClickHouse 이미지(timezone()) 모두 Asia/Seoul을 해석한다.**
 
@@ -43,23 +46,27 @@
 | 확장 | 용도 | 로드 방식 | 생성 자리 | 없으면 |
 |------|------|------|------|------|
 | pg_stat_statements | 쿼리 통계 — OBS가 느린 쿼리 Top-N을 읽는다 | 서버 시작 시 선적재 라이브러리 | 마이그레이션 001 | 업무 CRUD p95의 원인 쿼리를 가를 수 없다 |
-| pg_partman | alarm_event 월 파티션 · 대조군 일 파티션 미리 만들기 · 보존 · 유지 작업 | 확장 + 백그라운드 워커(선적재) | migrate 관리자 단계에서 생성(partman 스키마 · 확장 생성은 superuser만 된다) · 마이그레이션 004 · 007에서 등록 | 파티션 없는 달의 INSERT가 기본 파티션으로 간다 |
+| pg_partman | 빈 볼륨에서 마이그레이션 004(옛 대조군 일 파티션 등록) 재생 — **009 뒤로 관리 대상 없음**(ADR-32 · 옛 용도 대조군 일 파티션 미리 만들기 · 보존 · 유지 작업) | 확장 + 백그라운드 워커(선적재) | migrate 관리자 단계에서 생성(partman 스키마 · 확장 생성은 superuser만 된다) · 마이그레이션 004에서 등록 · 009에서 등록 해제 | 빈 볼륨에서 004의 파티션 등록이 실패해 순번 재생이 004에서 멈춘다 |
 | auto_explain | 느린 쿼리 계획 로깅 | 서버 시작 시 선적재 라이브러리 | 설정 파일 | 대조군 쿼리가 느려진 순간의 계획이 남지 않는다 |
+| **timescaledb** | 직접 비교 비교 사본의 hypertable(칸 1일) · 열 압축 · 보존 정책(ADR-32 · D-05 부분 개정) | 확장 + 서버 시작 시 선적재 라이브러리(보존 정책을 도는 작업 워커 포함) | migrate 관리자 단계 — pg_partman 다음에 확장 생성(멱등) · 마이그레이션 009에서 hypertable · 압축 설정 · 보존 정책 | 009의 hypertable 만들기가 실패해 순번 재생이 009에서 멈춘다 · 선적재가 빠지면 확장 생성부터 거절된다 |
 
-- 검산: 확장 = **3**(원본 tech_stack.md §5.1) · 선적재 라이브러리 = pg_stat_statements · auto_explain · pg_partman 백그라운드 워커 = **3**
+- 검산: 확장 = 원본 3(tech_stack.md §5.1) + ADR-32 1(timescaledb) = **4** · 선적재 라이브러리 = pg_stat_statements · auto_explain · pg_partman 백그라운드 워커 · timescaledb = **4**
 - 확장 생성 순서의 정본은 [../05_data_stores/09_migrations_seed.md](../05_data_stores/09_migrations_seed.md) §저장소 간 적용 순서 ①이다.
+- **TimescaleDB 설정 셋은 설정 파일에 명시한다**(infra/postgres/postgresql.conf · 2계층 조정값 · 소유 이 문서). 원격 보고 timescaledb.telemetry_level = off — 빌드 기본값도 꺼 두었고, 켜면 서버가 사용 정보와 버전 확인 요청을 외부로 보낸다(로컬 전용 D-02 위반). 작업 워커 timescaledb.max_background_workers = 4 — 보존 정책 작업이 여기서 돈다. 워커 총량 max_worker_processes = 16 = 기본 3 + TimescaleDB 작업 4 + 병렬 쿼리 8 + pg_partman 1 — 공식 문서는 총량이 작업 워커와 병렬 워커의 합 이상이기를 요구한다([../03_requirements/16_official_references.md](../03_requirements/16_official_references.md)). 총량이 모자라면 보존 정책 작업이 워커를 못 얻어 밀리고 병렬 쿼리가 계획보다 적은 워커로 돌아, 조회 대결의 PostgreSQL 시간이 설정 밖 이유로 흔들린다.
+- **B형 — 관리 대상이 없는 pg_partman을 이미지 · 선적재에서 빼지 않는다.** 결론 — 009 뒤로 돌볼 표가 없어도 확장 · 워커 · 004는 그대로 둔다(ADR-32 파급). 반대 시나리오 — 빼면 빈 볼륨이 001부터 다시 재생할 때 004의 파티션 등록이 실패해 migrate가 004에서 멈추고, 009까지 가지 못한다. 파생 지침 — 적용된 순번 004의 내용은 바꾸지 않는다(ADR-30 말미 채번 규칙 · [../05_data_stores/09_migrations_seed.md](../05_data_stores/09_migrations_seed.md)) — 004가 남는 동안 pg_partman도 남는다.
 
 설정 파일은 infra/postgres/ 아래 하나이며 모양은 아래와 같다. 값은 소유처의 현행 참고를 옮긴 것이고 여기서 바꾸지 않는다.
 
 ```plain
 infra/postgres/postgresql.conf
-├── 선적재           shared_preload_libraries = pg_stat_statements · auto_explain · pg_partman 백그라운드 워커
+├── 선적재           shared_preload_libraries = pg_stat_statements · auto_explain · pg_partman 백그라운드 워커 · timescaledb
 ├── 메모리           shared_buffers · effective_cache_size · work_mem · maintenance_work_mem   ← 05_data_stores/01 소유 · 프로파일별
 ├── 접속             max_connections                                                       ← 05_data_stores/02 소유
 ├── WAL · 체크포인트  wal_compression · checkpoint_timeout                                  ← 05_data_stores/01 소유
 ├── 플래너           random_page_cost                                                      ← 05_data_stores/01 소유
-├── 시간대           timezone · log_timezone = UTC(ADR-27)                                  ← 05_data_stores/01 소유 · 월 · 일 파티션 경계
-└── pg_partman 워커  대상 DB · 유지 작업 주기                                                ← 이 문서 §pg_partman
+├── 시간대           timezone · log_timezone = UTC(ADR-27)                                  ← 05_data_stores/01 소유 · DB 처리 시간대 · 004 재생의 일 파티션 경계
+├── TimescaleDB      원격 보고 끔 · 작업 워커 수 · 워커 총량 max_worker_processes            ← 이 문서 §PostgreSQL 확장(ADR-32)
+└── pg_partman 워커  대상 DB · 유지 작업 주기(009 뒤 관리 대상 없음)                          ← 이 문서 §pg_partman
 ```
 
 - **프로파일별 값은 파일을 프로파일마다 두지 않고 포함 파일 하나로 가른다.** 본 파일은 공통 값만 갖고, 메모리 계열 4값은 프로파일 포함 파일에서 덮어쓴다 — 본 파일에 메모리 값이 섞이면 프로파일을 바꿔도 한 값이 남아 조건 칸과 실제 설정이 어긋난다.
@@ -67,17 +74,19 @@ infra/postgres/postgresql.conf
 
 ## pg_partman 미리 만들기와 유지 작업
 
-인계 "pg_partman 미리 만들기 개수"를 닫는다. **판정 — 미리 만들기는 도구 기본값(4개월로 알려져 있으나 원본 미기재 — 착수 시 공식 참조로 확인)을 쓰고, 유지 작업은 pg_partman 백그라운드 워커가 1시간 주기로 돌린다.** 두 값 모두 2계층 조정값이며 소유는 이 문서다. 파티션 결정 전체의 정본은 [../05_data_stores/02_postgresql_constraints.md](../05_data_stores/02_postgresql_constraints.md) §alarm_event 월 파티션이다.
+- **상태**: **관리 대상 없음(ADR-32 · 2026-10-12).** 마이그레이션 009가 비교 사본을 pg_partman 관리에서 빼고(설정 행 · 템플릿 표 삭제) TimescaleDB hypertable로 다시 만들었다 — 칸은 넣을 때 스스로 생겨 미리 만들기가 필요 없고, 보존은 TimescaleDB 보존 정책이 맡는다([../05_data_stores/08_retention_lifecycle.md](../05_data_stores/08_retention_lifecycle.md)). pg_partman은 빈 볼륨에서 004를 재생하는 동안만 일하고 워커는 돌볼 표 없이 돈다. 아래 원문은 004 재생과 옛 대조군(기록 035~053을 낸 모양)의 근거라 보존한다.
+
+원문 — 인계 "pg_partman 미리 만들기 개수"를 닫는다. **판정 — 미리 만들기는 도구 기본값(4개월로 알려져 있으나 원본 미기재 — 착수 시 공식 참조로 확인)을 쓰고, 유지 작업은 pg_partman 백그라운드 워커가 1시간 주기로 돌린다.** 두 값 모두 2계층 조정값이며 소유는 이 문서다. 파티션 결정의 정본은 [../05_data_stores/10_olap_vs_rdb_control.md](../05_data_stores/10_olap_vs_rdb_control.md) §plc_tag_raw_control — 동형 설계(대조군 일 파티션)다 — 옛 alarm_event 월 파티션은 D-16 삭제.
 
 | 조정값 | 조회 계약 | 기준 시점 | 금지된 대체 동작 | 부재 시 | 현행 참고 |
 |------|------|------|------|------|------|
-| 미리 만들기 개수 | 현재 월 이후 N개월의 파티션이 항상 있다 | 유지 작업 실행 시각(UTC 달력 — 워커 세션 시간대가 세트 경계 시간대와 같아야 한다 · ADR-27) | 월초에 사람이 손으로 파티션 생성 | 기본 파티션에 적재되고 그 달 파티션 생성이 충돌한다 | 도구 기본값 4(5.5.0 part_config.premake 확인 · 2026-09-25) |
+| 미리 만들기 개수 | 현재 시점 이후 N 간격(대조군은 일)의 파티션이 항상 있다 | 유지 작업 실행 시각(UTC 달력 — 워커 세션 시간대가 세트 경계 시간대와 같아야 한다 · ADR-27) | 사람이 손으로 파티션 생성 | 기본 파티션에 적재되고 그 간격 파티션 생성이 충돌한다 | 도구 기본값 4(5.5.0 part_config.premake 확인 · 2026-09-25) |
 | 유지 작업 주기 | 백그라운드 워커가 주기마다 미리 만들기 · 분리 대상 판정을 돈다 | 워커 기동 시각부터 | 애플리케이션 타이머 · 호스트 cron | 미리 만든 개수가 소진될 때까지 알 수 없다 | 3600초(postgresql.conf pg_partman_bgw.interval에 명시 — 도구 기본값에 기대지 않는다 · 대상 DB plc · 실행 역할 app_owner) |
 
 - 검산: 조정값 = **2**
-- **개수 하한의 산술** — 미리 만든 달 수 × 1개월이 유지 작업 주기보다 길기만 하면 미래 파티션이 비지 않는다. 4개월 대 1시간이라 여유가 크고, 개수를 늘려도 빈 파티션 메타만 는다. **값을 줄이는 방향만 위험하다** — 0이면 매월 1일 00:00 UTC(= 09:00 KST) 직후 워커가 돌기 전까지의 알람이 기본 파티션으로 간다.
+- **개수 하한의 산술** — 미리 만든 간격 수 × 간격 폭이 유지 작업 주기보다 길기만 하면 미래 파티션이 비지 않는다. 대조군 일 세트는 4일 대 1시간이라 여유가 크고, 개수를 늘려도 빈 파티션 메타만 는다. **값을 줄이는 방향만 위험하다** — 0이면 매일 00:00 UTC(= 09:00 KST) 직후 워커가 돌기 전까지의 대조군 행이 기본 파티션으로 간다.
 - **워커의 세션 시간대가 세트 경계와 다르면 미리 만들기가 틈을 낸다(실측 · pg_partman 5.5.0).** KST 경계 세트를 UTC 세션으로 유지하면 일 세트는 하루 틈이, 월 세트는 30일로 밀린 경계가 생겼다 — 공식 문서도 유지 작업을 부르는 클라이언트까지 UTC로 둘 것을 요구한다. 그래서 설정 파일 timezone과 DB 기본값(관리자 단계)을 **둘 다** UTC로 둔다 · 워커가 어느 쪽을 받는지는 미확인이다([../05_data_stores/09_migrations_seed.md](../05_data_stores/09_migrations_seed.md) §DB 시간대 전환).
-- **시간 압축 생성(모드 B · C)이 과거 ts를 만들면 미리 만들기와 무관하게 기본 파티션으로 간다.** 미리 만들기는 미래 방향만 채운다. 이 경우의 판정 — 기본 파티션이 비어 있지 않으면 이상 신호(05_data_stores/02)다.
+- **과거 ts 행이 들어오면 미리 만들기와 무관하게 기본 파티션으로 간다.** 미리 만들기는 미래 방향만 채운다. 이 경우의 판정 — 기본 파티션이 비어 있지 않으면 이상 신호(05_data_stores/02)다.
 
 ## ClickHouse 설정 파일과 서버 timezone
 
@@ -164,7 +173,7 @@ docs_plan 실행 계획 보정 #17을 닫는다. 원본 넷이 서로 다른 구
 
 | 후보 | 원본 근거 | 판정 | 판정 근거 — 구체적 실패 | 호스트 포트 |
 |------|------|------|------|------|
-| prometheus | tech §9 · §10.1 · §10.4 · §12 · arch §3 · §14 | **구성원** | 없으면 /metrics를 시계열로 쌓을 곳이 없어 Soak 2~6시간의 추이(메모리 누수 · 파트 누적)를 직접 덤프 파일로만 읽는다 | 127.0.0.1:9090 |
+| prometheus | tech §9 · §10.1 · §10.4 · §12 · arch §3 · §14 | **구성원** | 없으면 /metrics를 시계열로 쌓을 곳이 없어 장시간 운전의 추이(메모리 누수 · 파트 누적)를 직접 덤프 파일로만 읽는다 | 127.0.0.1:9090 |
 | grafana | tech §9 · §10.1 · §10.4 · §12 · arch §3 · §14 | **구성원** | 없으면 대시보드 6종(10_observability/03)이 표현될 자리가 없다 | 127.0.0.1:3002 |
 | alertmanager | arch §14 그림 1곳 | **채택하지 않음** | 알림 라우팅만 하는 구성요소인데 로컬 전용이라 보낼 수신처가 없다 — 외부 통보 채널을 두는 순간 로컬 전용(D-02)을 어긴다. 알림 규칙은 Prometheus 규칙 파일이 평가하고 발화 상태는 Prometheus · Grafana 화면에서 본다 | 없음 |
 | tempo | tech §2 · §9(Phase 4 선택) | **현 범위 밖 · 조건부** | E2E 지연은 두 시각 컬럼의 차(ingested_at − ts)를 SQL로 재고 구간은 메트릭으로 가른다. 추적을 넣으면 api 프로세스에 추적 SDK의 계측 비용이 섞여 **측정 대상이 측정 도구를 품는다** | 없음 |
@@ -179,10 +188,11 @@ docs_plan 실행 계획 보정 #17을 닫는다. 원본 넷이 서로 다른 구
 
 | 구성원 | 설정 파일 자리 | 필수 설정 | 없으면 |
 |------|------|------|------|
-| prometheus | infra/observability/prometheus.yml · 규칙 파일 | 스크레이프 대상 api:3000/metrics 하나 · 주기 15초 · 알림 규칙 파일 · **remote write 수신 기능 켬** | k6의 remote write(원본 architecture.md §14)가 거절되어 부하 도구 지표가 대시보드에 없다 |
+| prometheus | infra/observability/prometheus.yml · 규칙 파일 | 스크레이프 대상 api:3000/metrics 하나 · 주기 15초 · 알림 규칙 파일 | 스크레이프 창구가 없어 /metrics를 시계열로 쌓지 못한다 |
 | grafana | infra/observability/ 대시보드 JSON · 데이터 소스 프로비저닝 | 데이터 소스 prometheus 하나 · 대시보드 파일 프로비저닝 | 대시보드를 손으로 만들어 커밋 해시와 대시보드 정의가 묶이지 않는다 |
 
 - 검산: 구성원 = **2**
+- **remote write 수신 기능은 필수가 아니다(D-16).** 그것을 쓰던 k6(부하 도구 지표 — 원본 architecture.md §14)가 측정 도구와 함께 지워졌다 — 기동 인자(--web.enable-remote-write-receiver)는 infra/compose/compose.yml에 남아 있으나 보낼 발신자가 없다.
 - **스크레이프 주기 15초는 MetricsModule 수집 주기와 같다**(원본 tech_stack.md §9). 더 짧게 긁으면 같은 값을 두 번 읽을 뿐이고 관측 부하만 는다 — 이 값이 콘솔 폴링 주기 하한의 근거다([01_frontend.md](./01_frontend.md) §화면 조정값 현행값).
 - 두 구성원은 cpuset 13에 둔다 — 배치 정본 [../04_architecture/03_execution_topology.md](../04_architecture/03_execution_topology.md) §cpuset 배치.
 
@@ -198,7 +208,8 @@ docs_plan 실행 계획 보정 #17을 닫는다. 원본 넷이 서로 다른 구
 | 저장소 | PostgreSQL | 18 alpine | 부 버전 태그 | postgres 서비스 | **태그 고정** 18.6-alpine(18 계열 최신 — 릴리스 노트 · 레지스트리 대조 2026-09-24) |
 | 저장소 | ClickHouse | 25.8 LTS 이상 | LTS 패치 태그 | clickhouse 서비스 | **태그 고정** 26.8.10.6(LTS 트랙 전환 — 사용자 결정 2026-09-24 · 25.x 보안 지원 종료 · 26.8 계열 최신 패치 — 레지스트리 대조) |
 | 저장소 | Redis | 8 alpine | 부 버전 태그 | redis 서비스 | **태그 고정** 8.10.2-alpine(8 계열 최신 — 릴리스 · 레지스트리 대조 2026-09-24) |
-| 저장소 확장 | pg_partman | 원본 미기재 | 부 버전까지 | alarm_event 월 파티션 · 대조군 일 파티션 | **버전 고정** 5.5(5.5.0 — infra/postgres/Dockerfile이 공식 18.6-alpine 위에 소스 빌드 · 이미지 db_study-postgres:18.6-partman5.5.0 · 2026-09-25) |
+| 저장소 확장 | pg_partman | 원본 미기재 | 부 버전까지 | 빈 볼륨 004 재생(009 뒤 관리 대상 없음 — ADR-32) | **버전 고정** 5.5(5.5.0 — infra/postgres/Dockerfile이 공식 18.6-alpine 위에 소스 빌드 · 2026-09-25) · 이미지 db_study-postgres:18.6-partman5.5.0-ts2.30.2(2026-10-12 TimescaleDB를 더해 이름을 바꿨다 — 옛 이름 18.6-partman5.5.0) |
+| 저장소 확장 | **TimescaleDB** | 원본 미기재(원본 §13 채택하지 않음 — 주 시계열 엔진 판정 · 비교 사본 채택은 ADR-32) | 부 버전까지 | 직접 비교 비교 사본 hypertable · 열 압축 · 보존 정책 | **버전 고정** 2.30(2.30.2 — infra/postgres/Dockerfile이 GitHub 태그 tarball(sha256 고정)을 같은 파생 이미지에 소스 빌드 · Timescale License 기본 빌드(압축 포함 — Apache 전용 빌드에는 압축이 없다) · 빌드 기본값부터 원격 보고 끔 · 2026-10-12) |
 | 저장소 확장 | pg_stat_statements · auto_explain | PostgreSQL 동봉 | 엔진 버전을 따른다 | 쿼리 통계 · 계획 로깅 | 재확인 대기 |
 | 백엔드 | NestJS | 11.x | 부 버전까지 | api 전체 | **버전 고정** 11.2(reflect-metadata 0.2 · rxjs 7.8는 NestJS를 따른다) — 12.x는 원본 기준 11.x 밖이라 쓰지 않는다 |
 | 백엔드 | Fastify 어댑터 | NestJS와 같은 메이저 | NestJS를 따른다 | HTTP 서버 | **버전 고정** 11.2(@nestjs/platform-fastify · websockets · platform-ws — fastify 5.11 · @fastify/cors 11.3 · ws 8.21) |
@@ -212,7 +223,6 @@ docs_plan 실행 계획 보정 #17을 닫는다. 원본 넷이 서로 다른 구
 | 백엔드 | piscina | 5.x | 부 버전까지 | worker_threads 풀(ADR-25) | **버전 고정** 5.3 |
 | 백엔드 | prom-client | 15.x | 부 버전까지 | /metrics | **버전 고정** 15.1 |
 | 백엔드 | 보안 헤더 플러그인(helmet 계열) | 원본 미기재 | 부 버전까지 | 보안 헤더 | 미고정 |
-| 백엔드 | 비밀번호 해시 라이브러리(Argon2id) | 원본 미기재 — 알고리즘은 12_security/01 판정 | 부 버전까지 | 로그인 · seed(REQ-AUT-01) | **버전 고정** hash-wasm 4.12(순수 WASM — alpine 네이티브 빌드 없음 · api 이미지 Node 22에는 node:crypto argon2(24.7+)가 없다 · 비용 파라미터는 12_security/01 · 2026-09-26) |
 | 프론트엔드 | Next.js | 15.x | 부 버전까지 | 웹 · BFF | **버전 고정** 15.5(React 19.3) — 16.x는 원본 기준 15.x 밖 |
 | 프론트엔드 | uPlot | 1.6 | 부 버전까지 | 실시간 · 트렌드 차트 | **버전 고정** 1.6 |
 | 프론트엔드 | Apache ECharts | 5.5 | 부 버전까지 | 분석 · 비교 차트 | 재확인 대기 |
@@ -225,16 +235,15 @@ docs_plan 실행 계획 보정 #17을 닫는다. 원본 넷이 서로 다른 구
 | 도구 | Biome · Vitest | 원본 미기재 | 부 버전까지 | 품질 게이트 ① · ③ | **버전 고정** Biome 2.5 · Vitest 5.0 |
 | 도구 | Supertest · Testcontainers | 원본 미기재 | 부 버전까지 | 표면 계약 · 통합 테스트 | **버전 고정** Supertest 7.3(표면 계약은 기동한 스택에 블랙박스로 붙는다 · task test-surface) — Testcontainers는 저장소 경계 통합 테스트가 생기는 단계(S3 XACK · 중복 제거)에서 고정 |
 | 도구 | node-pg-migrate | 원본 미기재(원본 후보) | 부 버전까지 | PostgreSQL 마이그레이션 | **버전 고정** 9.0 — ESM 전용이라 api(CommonJS)가 동적 import로 부른다 |
-| 도구 | Task(Taskfile 실행기) | 원본 미기재 | 부 버전까지 | migrate · seed · snapshot · restore · bench · docs:lint | **버전 고정** 3.53(호스트 설치 3.53.1 · 2026-09-24) |
-| 도구 | **Python** | 원본 미기재 | 부 버전까지 | docs:lint(scripts/docs_lint.py) · 단계 실습 스크립트 | **버전 고정** 3.14(호스트 3.14.6 · 2026-09-24 사용자 지정) |
+| 도구 | Task(Taskfile 실행기) | 원본 미기재 | 부 버전까지 | migrate · seed · up · api-build · test-surface · docs:lint | **버전 고정** 3.53(호스트 설치 3.53.1 · 2026-09-24) |
+| 도구 | **Python** | 원본 미기재 | 부 버전까지 | docs:lint(scripts/docs_lint.py) | **버전 고정** 3.14(호스트 3.14.6 · 2026-09-24 사용자 지정) |
 | 도구 | Docker Compose | v2 | 부 버전까지 | 실행 구성 | 재확인 대기 |
-| 부하 | k6 | v1.x | 부 버전까지 | 부하 시나리오 | **버전 고정** 1.8(이미지 grafana/k6:1.8.1) — 2.x는 원본 기준 v1.x 밖 |
 | 관측 | Prometheus | 3.x | 부 버전 태그 | observability 프로파일 | 재확인 대기 |
 | 관측 | Grafana | 12.x | 부 버전 태그 | observability 프로파일 | 재확인 대기 |
 
-- 검산: 행 = 런타임 3 + 저장소 3 + 저장소 확장 2 + 백엔드 13 + 프론트엔드 7 + 공유 1 + 도구 7 + 부하 1 + 관측 2 = **39** · 상태 태그 고정 4 + 버전 고정 28 + 재확인 대기 5 + 미고정 1 + 해당 없음 1 = **39**
+- 검산: 행 = 런타임 3 + 저장소 3 + 저장소 확장 3 + 백엔드 12 + 프론트엔드 7 + 공유 1 + 도구 7 + 관측 2 = **38** · 상태 태그 고정 4 + 버전 고정 27 + 재확인 대기 5 + 미고정 1 + 해당 없음 1 = **38** · 옛 비밀번호 해시 라이브러리(hash-wasm) · k6 행은 D-16 삭제(로그인 · 측정 도구)
 - **원본 고정표에서 뺀 행 1** — Prisma(원본 "pg + Prisma")는 마이그레이션 도구 판정에서 채택하지 않았다([05_tooling_devops.md](./05_tooling_devops.md) §마이그레이션 도구 판정 · [06_decisions_rationale.md](./06_decisions_rationale.md)). 원본의 pg 행은 남았다.
-- **원본에 없던 행 4** — pg-copy-streams(대조군 COPY가 스트림 복사를 요구) · 보안 헤더 플러그인(원본 tech_stack.md §10.4가 이름만 적음) · Python(S0의 docs:lint · 실습 스크립트 — 사용자 지정 3.14) · Pretendard(UI/UX 다듬기의 웹 글꼴 — 사용자 지시 2026-10-03). 보안 헤더 플러그인만 미고정이다.
+- **원본에 없던 행 5** — pg-copy-streams(대조군 COPY가 스트림 복사를 요구) · 보안 헤더 플러그인(원본 tech_stack.md §10.4가 이름만 적음) · Python(S0의 docs:lint — 사용자 지정 3.14 · 옛 실습 스크립트 scripts/lab은 D-16 삭제) · Pretendard(UI/UX 다듬기의 웹 글꼴 — 사용자 지시 2026-10-03) · TimescaleDB(직접 비교 비교 사본 — 사용자 결정 2026-10-12 · 원본은 §13에서 채택하지 않았다). 보안 헤더 플러그인만 미고정이다.
 - **고정 단위가 "부 버전까지"인 이유** — 메이저만 고정하면 부 버전 갱신이 설치 시점마다 달라 같은 커밋의 두 설치가 다른 코드를 받는다. 잠금 파일이 패치까지 고정하고, 이 표는 잠금 파일을 갱신할 때 넘지 않을 경계를 준다.
 - **Node 22.15 이상의 근거는 zstd 요청 압축이다**(원본 tech_stack.md §3.3 · §12). @clickhouse/client 1.23은 zstd 요청 압축을 지원한다 — S2 적재 경로가 zstd로 보낸다(§미확인 · 미설계 등재 닫힘).
 
@@ -267,6 +276,8 @@ docs_plan 실행 계획 보정 #17을 닫는다. 원본 넷이 서로 다른 구
 | TTL 파티션 삭제 지연 | 3계층 미확인 — 확정 전 임의 값 고정 금지 | EXP-29 · [../10_observability/06_experiment_catalog.md](../10_observability/06_experiment_catalog.md) |
 | pg_partman 미리 만들기 · 워커 주기의 기본값 | **닫힘(S3 착수 확인 2026-09-25)** — 5.5.0 part_config.premake 기본 4 · 워커 주기는 설정 파일에 3600초로 명시해 기본값에 기대지 않는다 | 이 문서 §pg_partman 미리 만들기와 유지 작업 |
 | pg_partman 설치 경로 | **닫힘(S3 · 2026-09-25)** — 공식 이미지에 없어(S0 확인) 파생 이미지를 도입했다 · infra/postgres/Dockerfile 다단 빌드(빌드 단계만 컴파일 도구 · 실행 단계는 공식 이미지 위에 확장 파일만 더한다) · 5.5.0 고정 · Compose postgres 서비스가 이 이미지를 빌드한다 | 이 문서 §버전 고정표 · [../04_architecture/03_execution_topology.md](../04_architecture/03_execution_topology.md) |
+| TimescaleDB 설치 경로 | **닫힘(2026-10-12 · ADR-32)** — 공식 postgres 이미지에 없어 pg_partman과 같은 파생 이미지에 소스 빌드한다 · 압축은 Timescale License 기능이라 기본 빌드(Apache 전용 빌드 아님) · 공식 TimescaleDB 이미지로 바꾸지 않는다(그 이미지의 PostgreSQL 부 버전이 고정표와 따로 움직이고 pg_partman이 없다 — ADR-32 버린 대안 ①) | 이 문서 §버전 고정표 · [../04_architecture/09_decision_records.md](../04_architecture/09_decision_records.md) ADR-32 |
+| TimescaleDB 압축 함수 이름 | **닫힘(리드 2026-10-12)** — compress_chunk는 공식 문서상 2.18.0부터 deprecated이고 convert_to_columnstore가 대체한다. 009의 control_compress_range는 **convert_to_columnstore(프로시저 — 함수 안 CALL · if_not_columnstore)**를 부른다(같은 날 커밋 전 009 수정 · 라이브 볼륨에 함수만 다시 적용 · 함수 안 CALL 실측 확인) — 옛 이름에 묶이지 않는다 | 이 문서 §버전 고정표 · [../05_data_stores/09_migrations_seed.md](../05_data_stores/09_migrations_seed.md) · [../03_requirements/16_official_references.md](../03_requirements/16_official_references.md) |
 | tempo 진입 | 조건부 — SQL · 메트릭 구간 분해 불가가 실측될 때 | [../04_architecture/08_scaling_roadmap.md](../04_architecture/08_scaling_roadmap.md) 진입 조건 추가 제안 |
 
 ## 관련 문서
@@ -278,6 +289,6 @@ docs_plan 실행 계획 보정 #17을 닫는다. 원본 넷이 서로 다른 구
 - [../05_data_stores/08_retention_lifecycle.md](../05_data_stores/08_retention_lifecycle.md) — 보존 · TTL 검증 시점
 - [../07_api/10_metrics.md](../07_api/10_metrics.md) — health 저장소 타임아웃
 - [../04_architecture/03_execution_topology.md](../04_architecture/03_execution_topology.md) — 기동 순서 · cpuset
-- [../04_architecture/09_decision_records.md](../04_architecture/09_decision_records.md) — ADR-03 · ADR-05 · ADR-18 · ADR-20
+- [../04_architecture/09_decision_records.md](../04_architecture/09_decision_records.md) — ADR-03 · ADR-05 · ADR-18 · ADR-20 · ADR-32(비교 사본 TimescaleDB)
 - [../10_observability/03_dashboards_alerts.md](../10_observability/03_dashboards_alerts.md) — 대시보드 · 알림 규칙
 - [../03_requirements/16_official_references.md](../03_requirements/16_official_references.md) — 릴리스 노트 · 공식 문서 URL

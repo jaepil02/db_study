@@ -2,14 +2,15 @@
 
 > **대상**: 로컬 전용 구성의 노출 경계 — 호스트 포트 전수와 바인드 · 저장소 포트를 여는 이유와 안전장치 · 웹 개발 서버의 바인드 · PlcSim 루프백 · WSL2 mirrored 네트워킹의 함의 · 127.0.0.1 바인드가 막는 것과 못 막는 것 · 노출 검증 절차
 > **작성일**: 2026-09-24
+> **개정일**: 2026-10-11 — **D-16 로그인 · 권한 · 감사 · 측정 도구 삭제**(사용자 결정 2026-10-11) — 전 표면 무인증 — 호스트 포트 표 인증 열 웹 앱 로그인(S7) → **없음** · api 토큰(S7) · 공개 2 → **없음(출처 방어만)** · api 사용자에서 k6 삭제 · 인증 없음 2 → **4**(웹 · api · 9363 · 9090) · 안전장치 DB 역할 권한의 막는 것 감사 행 → **계보 · 원장 행** · 웹 → DB 금지 이유 인가 검사 우회 → **입력 검증 · 바인딩 우회** · A형 로그인 화면 → 웹 화면 · 막는 것과 못 막는 것 — 같은 머신 프로세스 행 api 토큰(S7) → **막는 것 없음** · 브라우저 행 SameSite 삭제 · DNS 재바인딩 행 REQ-AUT-13 → **REQ-GLB-26** · 01_authn_authz 링크 삭제 — 항목 수 불변
 > **개정일**: 2026-10-05 — 웹 · api 호스트 포트 이동(같은 머신의 다른 프로젝트가 호스트 3000 · 3001을 점유 · 사용자 결정 2026-10-05) — 웹 3001 → **13001** · api 호스트 3000 → **13000**(컨테이너 3000 · 서비스명 그대로) · CORS 허용 오리진 http://localhost:3001 → **http://localhost:13001** — 오리진 수 · 바인드 규칙 불변
 > **개정일**: 2026-10-03 — ClickHouse 네이티브 호스트 포트 127.0.0.1:9000 → **127.0.0.1:19000**(컨테이너 9000 그대로 · 같은 머신의 다른 프로젝트 MinIO가 호스트 9000을 점유 · 사용자 결정) — 앱 HTTP 8123 · 메트릭 9363 불변
 > **개정일**: 2026-09-24 — 측정 머신 전환 · S0 구현 반영 — 현행 측정 머신 redis 호스트 포트 6380 반영
-> **원천**: 원본 architecture.md §2 · §3(커밋 ff66a37) · 원본 tech_stack.md §10.4(커밋 ff66a37) · 원본 implementation_plan.md §2.5(커밋 ff66a37) · D-02 · ADR-18 · REQ-GLB-18 · 19 · REQ-TEC-01 · 02 · [../04_architecture/03_execution_topology.md](../04_architecture/03_execution_topology.md) §네트워크와 호스트 포트 · [../09_tech_stack/04_local_environment.md](../09_tech_stack/04_local_environment.md) §WSL2 mirrored 네트워킹 · [../09_tech_stack/03_data_infra.md](../09_tech_stack/03_data_infra.md) · [../README.md](../README.md) 고정 기준 호스트 포트
+> **원천**: 원본 architecture.md §2 · §3(커밋 ff66a37) · 원본 tech_stack.md §10.4(커밋 ff66a37) · 원본 implementation_plan.md §2.5(커밋 ff66a37) · D-02 · D-16(사용자 결정 2026-10-11) · ADR-18 · REQ-GLB-18 · 19 · 26 · REQ-TEC-01 · 02 · [../04_architecture/03_execution_topology.md](../04_architecture/03_execution_topology.md) §네트워크와 호스트 포트 · [../09_tech_stack/04_local_environment.md](../09_tech_stack/04_local_environment.md) §WSL2 mirrored 네트워킹 · [../09_tech_stack/03_data_infra.md](../09_tech_stack/03_data_infra.md) · [../README.md](../README.md) 고정 기준 호스트 포트
 
 db_study는 배포하지 않는다(D-02). **노출 경계는 하나다 — 호스트 포트를 127.0.0.1에만 바인드한다**(ADR-18 · REQ-TEC-02 · REQ-GLB-19). 이 문서는 그 경계가 어디까지 막고 어디서 끝나는지를 적는다. 바인드 규칙 자체의 정본은 [../04_architecture/03_execution_topology.md](../04_architecture/03_execution_topology.md)이고 포트 값의 정본은 [../README.md](../README.md) 고정 기준이다.
 
-**127.0.0.1 바인드는 LAN을 막고 같은 머신은 막지 않는다.** 같은 머신의 브라우저 · 프로세스 · 파일에 대한 방어는 [01_authn_authz.md](./01_authn_authz.md) · [02_secrets_config.md](./02_secrets_config.md) · [03_api_surface_defense.md](./03_api_surface_defense.md)가 맡는다. 이 경계 하나를 근거로 안쪽 방어를 생략하지 않는다 — 외부에서 도달할 수 없다는 사실은 인가 검사나 입력 검증을 생략할 이유가 되지 않는다(전역 불변식 로컬 전용).
+**127.0.0.1 바인드는 LAN을 막고 같은 머신은 막지 않는다.** 같은 머신의 브라우저 · 프로세스 · 파일에 대한 방어는 [02_secrets_config.md](./02_secrets_config.md) · [03_api_surface_defense.md](./03_api_surface_defense.md)가 맡는다 — api 표면에는 신원 검사가 없다(D-16 · [04_threat_model.md](./04_threat_model.md) §무인증 표면). 이 경계 하나를 근거로 안쪽 방어를 생략하지 않는다 — 외부에서 도달할 수 없다는 사실은 출처 검사나 입력 검증을 생략할 이유가 되지 않는다(전역 불변식 로컬 전용).
 
 ## 호스트 포트 전수
 
@@ -17,8 +18,8 @@ db_study는 배포하지 않는다(D-02). **노출 경계는 하나다 — 호�
 
 | 서비스 | 호스트 주소 | 사용자 | 인증 | 여는 이유 | 바인드 강제 자리 |
 |------|------|------|------|------|------|
-| 웹(Next.js 개발 서버) | 127.0.0.1:13001 | 브라우저 | 앱 로그인(S7) | 화면 | **개발 서버 기동 인자** — Compose 밖(§웹 개발 서버의 바인드) |
-| api | 127.0.0.1:13000(컨테이너 3000) | 브라우저 직결 · BFF · k6 · Prometheus | 토큰(S7) · 공개 2 | REST · WebSocket · /metrics | Compose ports |
+| 웹(Next.js 개발 서버) | 127.0.0.1:13001 | 브라우저 | 없음(D-16) | 화면 | **개발 서버 기동 인자** — Compose 밖(§웹 개발 서버의 바인드) |
+| api | 127.0.0.1:13000(컨테이너 3000) | 브라우저 직결 · BFF · Prometheus | 없음 — 출처 방어만(D-16) | REST · WebSocket · /metrics | Compose ports |
 | postgres | 127.0.0.1:5432 | 앱 · 사람(psql · DBeaver) | 비밀번호 · DB 역할 | 학습용 직접 조회 | Compose ports |
 | clickhouse HTTP | 127.0.0.1:8123 | 앱 · 사람 | 비밀번호 | 앱의 유일한 ClickHouse 포트 | Compose ports |
 | clickhouse 네이티브 | 127.0.0.1:19000(컨테이너 9000) | 사람(clickhouse-client · clickhouse-benchmark) | 비밀번호 | CLI · 벤치마크 | Compose ports |
@@ -27,9 +28,9 @@ db_study는 배포하지 않는다(D-02). **노출 경계는 하나다 — 호�
 | prometheus(프로파일) | 127.0.0.1:9090 | 사람 · Grafana | 없음 | 메트릭 저장 · 조회 | Compose ports |
 | grafana(프로파일) | 127.0.0.1:3002 | 사람 | 관리자 비밀번호 | 대시보드 | Compose ports |
 
-- 검산: 호스트 포트 = 웹 1 + api 1 + postgres 1 + clickhouse 3 + redis 1 + 프로파일 2 = **9** — 고정 기준 호스트 포트와 같다 · 인증 없음 2(9363 · 9090)
+- 검산: 호스트 포트 = 웹 1 + api 1 + postgres 1 + clickhouse 3 + redis 1 + 프로파일 2 = **9** — 고정 기준 호스트 포트와 같다 · 인증 없음 4(웹 · api — D-16 · 9363 · 9090)
 - **PlcSim 5020~5119는 이 표에 없다** — publish하지 않는다(§PlcSim 루프백).
-- **인증 없는 두 포트는 읽기 전용 메트릭이다.** 9363은 ClickHouse 내부 지표, 9090은 스크레이프한 시계열이다 — 업무 데이터 · 비밀이 없다는 점에서 /metrics 공개 판정([04_threat_model.md](./04_threat_model.md) §공개 표면)과 같은 근거를 쓴다.
+- **인증 없는 네 포트 중 둘(9363 · 9090)은 읽기 전용 메트릭이다.** 9363은 ClickHouse 내부 지표, 9090은 스크레이프한 시계열이다 — 업무 데이터 · 비밀이 없다는 점에서 /metrics 공개 판정([04_threat_model.md](./04_threat_model.md) §공개 표면)과 같은 근거를 쓴다. 나머지 둘(웹 · api)은 로그인 삭제의 결과다 — 잔여는 [04_threat_model.md](./04_threat_model.md) §무인증 표면이 받는다.
 - 비밀번호 판정의 정본은 [02_secrets_config.md](./02_secrets_config.md) §비밀 목록이다.
 
 ## 저장소 포트를 여는 이유와 안전장치
@@ -40,13 +41,13 @@ db_study는 배포하지 않는다(D-02). **노출 경계는 하나다 — 호�
 |------|------|------|------|
 | 127.0.0.1 바인드 | LAN의 다른 기기 | ADR-18 · REQ-TEC-02 | 0.0.0.0 바인드는 같은 네트워크의 기기에 DB를 그대로 여는 것과 같다 |
 | 저장소 비밀번호 | 같은 머신의 다른 OS 사용자 · .env를 모르는 프로세스 | [02_secrets_config.md](./02_secrets_config.md) 판정 | 루프백에 닿는 모든 프로세스가 저장소 전권을 가진다 |
-| DB 역할 권한 | 앱 계정의 DDL · 감사 행 수정 · 물리 삭제 | [../05_data_stores/02_postgresql_constraints.md](../05_data_stores/02_postgresql_constraints.md) | 앱 자격 증명 하나가 스키마 전체다 |
+| DB 역할 권한 | 앱 계정의 DDL · 계보 · 원장 행 수정 · 물리 삭제 | [../05_data_stores/02_postgresql_constraints.md](../05_data_stores/02_postgresql_constraints.md) | 앱 자격 증명 하나가 스키마 전체다 |
 | 앱 포트와 사람 포트의 분리 | 커넥션 해석의 혼동 | 원본 architecture.md §3 ClickHouse 포트 용도 · [../04_architecture/03_execution_topology.md](../04_architecture/03_execution_topology.md) | 사람의 CLI 접속이 앱 커넥션 수에 섞여 측정 해석이 틀린다 |
 | 호스트 쪽 포트만 변경 | 충돌 해소 중의 구성 파손 | 원본 architecture.md §3 · 원본 tech_stack.md §10.4 | 컨테이너 내부 포트를 바꾸면 Dictionary 소스 · api 접속 설정이 전부 어긋난다 |
 
 - 검산: 안전장치 = **5**
 - **B형 — 저장소 포트가 호스트에 열려 있는 것은 설정 누락이 아니다.** 결론 — 학습 도구를 붙이기 위해 연 것이다. 반대 시나리오 — 포트를 닫고 컨테이너 안 CLI만 쓰면 DBeaver를 붙일 수 없고 확인마다 컨테이너 진입이 되어 관찰 비용이 커진다(ADR-18 버린 대안 ③). 파생 지침 — 열린 포트의 방어는 바인드 주소와 비밀번호 둘로 하고, 하나에 전부를 걸지 않는다.
-- **웹은 저장소에 직접 붙지 않는다**(원본 architecture.md §2 경계 표). 웹이 DB에 붙는 경로가 생기면 인가 검사를 우회하는 두 번째 방어 지점이 생긴다 — 저장소 포트가 열려 있다는 사실이 웹의 직접 접속을 허용하는 근거가 되지 않는다.
+- **웹은 저장소에 직접 붙지 않는다**(원본 architecture.md §2 경계 표). 웹이 DB에 붙는 경로가 생기면 api의 입력 검증 · 파라미터 바인딩을 우회하는 두 번째 방어 지점이 생긴다 — 저장소 포트가 열려 있다는 사실이 웹의 직접 접속을 허용하는 근거가 되지 않는다.
 - **Docker의 publish는 호스트 방화벽 규칙보다 앞선다.** 0.0.0.0으로 publish하면 호스트 방화벽 설정과 무관하게 포트가 열릴 수 있다 — 방화벽을 안전장치로 세지 않고 publish 주소만 센다(공식 참조 재확인 대기 · [../03_requirements/16_official_references.md](../03_requirements/16_official_references.md)).
 
 ## 웹 개발 서버의 바인드
@@ -62,7 +63,7 @@ db_study는 배포하지 않는다(D-02). **노출 경계는 하나다 — 호�
 | 판정 | 웹 개발 서버 기동 명령에 호스트 이름 127.0.0.1을 명시한다 — W7 반영 [../09_tech_stack/04_local_environment.md](../09_tech_stack/04_local_environment.md) §기동 · 정지 명령 ④ · 인자는 웹 패키지 개발 스크립트에 박는다 |
 
 - 검산: 관점 = **5**
-- **A형 — "모든 포트가 127.0.0.1인데 LAN에서 로그인 화면이 열린다"는 바인드 규칙 위반이 아니라 규칙이 닿지 않는 자리다.** 통념은 고정 기준 표가 바인드를 강제한다는 것이다. 부정 — 표는 계약이고, 강제는 Compose ports가 하는데 웹은 Compose 밖이다. 진짜 축은 **강제 주체**다. 대체 경로 — 기동 명령이 호스트 이름을 싣고 §노출 검증 절차가 13001의 수신 주소를 확인한다.
+- **A형 — "모든 포트가 127.0.0.1인데 LAN에서 웹 화면이 열린다"는 바인드 규칙 위반이 아니라 규칙이 닿지 않는 자리다.** 통념은 고정 기준 표가 바인드를 강제한다는 것이다. 부정 — 표는 계약이고, 강제는 Compose ports가 하는데 웹은 Compose 밖이다. 진짜 축은 **강제 주체**다. 대체 경로 — 기동 명령이 호스트 이름을 싣고 §노출 검증 절차가 13001의 수신 주소를 확인한다.
 - 브라우저의 접속 주소는 여전히 http://localhost:13001이다 — CORS 허용 오리진은 접속 URL의 문자열로 판정되므로 바인드 주소를 127.0.0.1로 적어도 오리진은 바뀌지 않는다.
 
 ## PlcSim 루프백
@@ -102,9 +103,9 @@ REQ-GLB-19의 강제 주체는 Compose 포트 표기이고 잔여는 이 문서�
 |------|------|------|------|
 | LAN 기기의 저장소 · api 접속 | Compose ports의 127.0.0.1 접두 | 막는다 — 수신 주소가 루프백뿐이다 | 해당 없음 — 닫힘 |
 | LAN 기기의 웹 접속 | 개발 서버 기동 인자 | 인자가 있으면 막는다 · 인자가 빠지면 못 막는다 — Compose 밖이다 | §웹 개발 서버의 바인드 |
-| 같은 머신 프로세스의 포트 접속 | 없음 — 바인드는 같은 머신을 구분하지 않는다 | 못 막는다 — 저장소는 비밀번호, api는 토큰(S7)이 막는다 | [02_secrets_config.md](./02_secrets_config.md) · [03_api_surface_defense.md](./03_api_surface_defense.md) |
-| 같은 머신 브라우저 페이지의 요청 | 없음 — 바인드는 요청 출처를 모른다 | 못 막는다 — CORS · SameSite · Origin 검증이 막는다 | [03_api_surface_defense.md](./03_api_surface_defense.md) |
-| DNS 재바인딩 페이지 | 없음 — 바인드는 Host를 모른다 | 못 막는다 — 브라우저가 127.0.0.1로 요청을 보낸다 · api는 Host 대조(REQ-AUT-13)가 막고 9090 · 9363은 남는다 | [04_threat_model.md](./04_threat_model.md) §통제가 생긴 위협 |
+| 같은 머신 프로세스의 포트 접속 | 없음 — 바인드는 같은 머신을 구분하지 않는다 | 못 막는다 — 저장소는 비밀번호가 막고 api는 막는 것이 없다(무인증 · D-16) | [02_secrets_config.md](./02_secrets_config.md) · [04_threat_model.md](./04_threat_model.md) §무인증 표면 |
+| 같은 머신 브라우저 페이지의 요청 | 없음 — 바인드는 요청 출처를 모른다 | 못 막는다 — CORS · Host 대조 · Origin 검증이 막는다 | [03_api_surface_defense.md](./03_api_surface_defense.md) |
+| DNS 재바인딩 페이지 | 없음 — 바인드는 Host를 모른다 | 못 막는다 — 브라우저가 127.0.0.1로 요청을 보낸다 · api는 Host 대조(REQ-GLB-26)가 막고 9090 · 9363은 남는다 | [04_threat_model.md](./04_threat_model.md) §통제가 생긴 위협 |
 | 컨테이너 사이 접속 | 없음 — 기본 브리지 하나 · 서비스명 DNS | 해당 없음 — 바인드는 호스트 publish만 다룬다 · 컨테이너끼리는 비밀번호가 가른다 | [../04_architecture/03_execution_topology.md](../04_architecture/03_execution_topology.md) |
 
 - 검산: 항목 = **6** · 바인드가 막는 것 1 · 조건부 1 · 못 막는 것 4

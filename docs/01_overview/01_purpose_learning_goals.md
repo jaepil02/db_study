@@ -2,6 +2,10 @@
 
 > **대상**: 학습자 · 실험 수행자 · 신규 합류자 — db_study가 무엇을 배우려고 만드는 시스템인지, 그 배움을 무엇으로 판정하는지
 > **작성일**: 2026-09-24
+> **개정일**: 2026-10-12 — **D-05 부분 개정 · ADR-32**(직접 비교 비교 사본 TimescaleDB hypertable · 열 압축 · 마이그레이션 009) — §대조 설계 요약 대조 테이블 UTC 일 파티션 → **TimescaleDB hypertable(UTC 하루 칸 · 열 압축)** · 기록 034 · 041~053은 **일반 PostgreSQL** 조건 · 표 뒤 불릿 신설(직접 비교의 PostgreSQL은 PostgreSQL + TimescaleDB · 학습 화면의 기록과 다른 PostgreSQL) · §두 축을 화면으로 ⑤ 행 축 ① 재현 → **①(PostgreSQL + TimescaleDB)** · B형 불릿에 엔진 차 — 축 · 산출물 · 화면 수 불변
+> **개정일**: 2026-10-11 — §대조 설계 요약 — 대조 테이블 동형 BRIN → **같은 컬럼 · 기본 키 · 외래 키 · 검사 제약 3(D-16 정상형 · 기록은 옛 모양에서 잼)** · 동시 적재 on → **on 또는 gated 게이트 열림** · 기본값 off → **gated**(정본 05_data_stores/10 · 검수 r6 M2)
+> **개정일**: 2026-10-11 — **D-16 웹 7화면 · 발표 · 도입**(사용자 결정 2026-10-11) — **§두 축을 화면으로 신설**(7화면이 두 축의 무엇을 보이는가 · 기록 판독 화면과 라이브 화면의 구분 · 회사 도입이 축 ②를 그대로 쓰는 자리) · 측정 장치 표 중복 저장 행에 SW-09 gated(직접 비교 실험 중에만) — 축 · 산출물 수 불변
+> **개정일**: 2026-10-11 — **D-16 알람 · 작업지시 · 감사 · 측정 도구 삭제**(사용자 결정 2026-10-11) — 목표 ② 질문 · 비교의 모양 같은 스트림 · 세 저장소 → **같은 Redis를 지나는 두 스트림** · 산출물 열 분기 대조표 → ③ 명령 경로 확인 · **§3계층 분기 → §분기 — 두 갈래**(② 폐지 표기 · 번호 재배치 없음 · ③ 회원 · 작업지시 · 감사 → 마스터 · 업무 명령 원장) · **§②가 학습의 핵심이다 → §두 스트림의 대비가 분기의 핵심이다**(알람 세 쓰기 서술 삭제 · 스트림 2 대비 표) · 목표 ② 산출물 5 → **4**(분기 대조표 폐지 · AC-35) · ③ 절 EXP-46 측정 전 폐지 · 목표 ① 행 수 채우기 모드 D 불릿 · 판정 모양 ① 백필 → 옛 격자 채우기 · 산출물 실험 EXP-01~05 · 35 · 40~45 폐지 불릿 · 10_olap 링크 §역방향 대조 — 업무 워크로드 → §역방향 대조표 — EXP-40~45 · §해석 알람 접점 불릿 삭제 · 흔한 오해 알람 A형 행 삭제 · 실험 없는 스위치의 기록된 예외 · 미확인 등재 확정 자리 EXP-01~05 · 07 · 18 · 35 · 40~45 폐지 표기 · 08_screen/07_experiment_console → 08_evidence_screens · 06_pipeline/08_alarm → 07_business_crud — 학습 목표 축 2 · 스위치 12 불변 · D-16 정리(d4) — 지운 절을 가리키던 § 참조 교정(§역방향 대조 — 업무 워크로드 → §폐지된 실험 설계(D-16))
 > **개정일**: 2026-09-27 — D-04 부분 개정 반영(사용자 결정 — 업무 쓰기도 Redis를 거친다 · 동기 응답) — 3계층 표 ③행 원천 API 직접 → **명령 스트림 stream:biz:cmd → 워커** · §경로를 고르지 않는 것도 분기의 결과다 → **§③은 Redis를 거쳐도 목적지를 바꾸지 않는다** · 산출물 ③ 비경유 확인 → **③ 명령 경로 확인** · 흔한 오해 A형 행 교체 · 스위치 요약에 **SW-12 BIZ_WRITE_PATH** 행 — 스위치 11 → **12** · 역할 스위치 세는 문장에서 수치를 뺀다
 > **개정일**: 2026-09-27 — W6 검수 반영 — §해석 Q5 웜 10^5 미정 · 웜 한정 표기와 콜드 구간 병기 · 읽은 양 행을 Q5로 한정(Q4는 열 단위 읽기로 설명되지 않음) · BRIN 3.6%는 10^9 힙 기준(hit + read) · PostgreSQL synchronous_commit off 병기(on 보조 팔도 결론 유지 · 044) · 한계에 client 기준 구간 · serverTimeAsymmetry · 버퍼 블록 ≈ 읽은 태그 행 수
 > **개정일**: 2026-09-27 — W6 결과 반영 — 목표 ① §해석 — 측정이 답한 것 신설(질문 8 · 결론 · 알람 분기 접점 · 한계 — 기록 034 · 042~047 · 052~054 · 인용은 기록 상태 규칙) · 역전 지점 미확인 불릿을 구조 구간 가리킴으로 · 미확인 등재 역전 지점 부분 닫힘 · 압축률 닫힘 · 역방향 행 닫힘(가시성 크기만 유지) · 삽입 처리량 비 유지(인용 근거 명시)
@@ -10,7 +14,7 @@
 > **개정일**: 2026-09-24 — 최종 정밀 검수 — 생산 카운터 · 대조군 COPY 기전 미설계 → W4 판정(06_pipeline/04) 반영 · 미확인 등재 5행에 EXP 번호 연결(EXP-01~05 · 35 · 07 · 18)
 > **개정일**: 2026-09-24 — W7 검수 반영 — 스위치 세는 법 역할 9 + 수집 1 → **역할 10 + 수집 1**(D-13) · 축출 연쇄의 상관 대상 스트림 길이 → **Stream 점유 메모리**(10_observability/03 판정) · 미확인 1행 닫힘(생산 카운터 기전)
 > **개정일**: 2026-09-24 — SW-11 LATEST_VALUE_WRITER 신설 반영(D-13 · 사용자 확정) — 스위치 10 → **11**
-> **원천**: 원본 tech_stack.md §1 · §5.1 · §5.2 · §5.3(커밋 ff66a37) · 원본 implementation_plan.md §1 · §3 · §4 · §5(커밋 ff66a37) · 원본 data_flow.md §8.2(커밋 ff66a37) · 저장소 루트 docs_plan.md(Context · 학습 목표를 문서 구조로 구현하는 방법 · 실행 계획 보정 #2) · [06_design_decisions.md](./06_design_decisions.md) D-01 · D-04 · D-05 · D-06 · [../README.md](../README.md) 고정 기준
+> **원천**: 원본 tech_stack.md §1 · §5.1 · §5.2 · §5.3(커밋 ff66a37) · 원본 implementation_plan.md §1 · §3 · §4 · §5(커밋 ff66a37) · 원본 data_flow.md §8.2(커밋 ff66a37) · 저장소 루트 docs_plan.md(Context · 학습 목표를 문서 구조로 구현하는 방법 · 실행 계획 보정 #2) · [06_design_decisions.md](./06_design_decisions.md) D-01 · D-04 · D-05(부분 개정 — 사용자 결정 2026-10-12) · D-06 · D-16 · [../04_architecture/09_decision_records.md](../04_architecture/09_decision_records.md) ADR-32 · [../README.md](../README.md) 고정 기준
 
 db_study는 PLC 대용량 시계열과 업무 데이터를 Redis 중간 계층에서 갈라 ClickHouse와 PostgreSQL에 나눠 싣는 **로컬 전용 학습 시스템**이다. 이 문서는 학습 목표 2축의 정본이다 — 축마다 무엇을 묻고, 무엇을 산출하고, 어떤 경로로 재고, 무엇을 보면 배웠다고 판정하는지를 고정한다.
 
@@ -26,7 +30,7 @@ db_study는 PLC 대용량 시계열과 업무 데이터를 Redis 중간 계층�
 |------|------|------|------|
 | 캐시 도입 시점 | 느려지면 나중에 끼운다 | **처음부터 켜고 끌 수 있게** 경계를 먼저 만든다 | 나중에 끼우면 전후 비교에 "코드가 달라져서"가 붙어 Redis 기여분을 분리할 수 없다(원본 implementation_plan.md §3.1) |
 | 안전장치 우회 | 금지한다 | 실험 전용 스위치로 **일부러 우회**한다(SW-01 off) | 원칙이 왜 원칙인지를 유실 수치로 증명해야 배움이 된다. 기본 on · 부팅 경고로 정상 경로와 가른다 |
-| 중복 저장 | 비용이면 없앤다 | 대조군 plc_tag_raw_control을 **일부러 둔다**(SW-09) | 비교 상대가 없으면 "ClickHouse가 빠르다"는 확인이 아니라 믿음이다 |
+| 중복 저장 | 비용이면 없앤다 | 대조군 plc_tag_raw_control을 **일부러 둔다**(SW-09 — D-16 뒤 기본 gated · 직접 비교 실험 중에만 같은 배치를 싣는다) | 비교 상대가 없으면 "ClickHouse가 빠르다"는 확인이 아니라 믿음이다 |
 | 기능 완성도 | 최우선 | 후순위 — 업무 CRUD는 학습 가치가 없으면 최소분만 | 원본 implementation_plan.md §5 S7이 CRUD의 Redis 학습 가치를 "없음"으로 판정했다. 단 ③계층 시연 최소분은 남긴다(D-11) |
 | 성능 목표치 | 달성해야 할 값 | **기준선을 먼저 재고** 목표는 그 뒤에 읽는다 | 원본 목표치는 4 vCPU급 호스트 가정이다(원본 architecture.md §16). 이 머신의 첫 실행이 기준선이다 |
 | 병목 | 없앨 대상 | **재현할 대상** | 병목을 재현하지 못하면 확장 로드맵의 진입 조건을 판정할 근거가 없다 |
@@ -38,7 +42,7 @@ db_study는 PLC 대용량 시계열과 업무 데이터를 Redis 중간 계층�
 | 축 | 핵심 질문 | 비교의 모양 | 산출물 | 정책·설계 정본 | 실행 손잡이 |
 |------|------|------|------|------|------|
 | ① 컬럼형 vs RDB | 시계열을 왜 PostgreSQL이 아니라 ClickHouse에 싣는가 — **몇 행부터** 그런가 | 같은 배치를 두 저장소에 싣고 같은 쿼리를 돌린다(저장소를 바꾸고 데이터를 고정) | **쿼리별 역전 지점** · 비교 축별 수치표 | [../05_data_stores/10_olap_vs_rdb_control.md](../05_data_stores/10_olap_vs_rdb_control.md) | SW-09 · 보조 SW-10 |
-| ② 성격별 분기 | 같은 스트림에서 나온 데이터가 왜 서로 다른 저장소로 가는가 — **무엇이 그 갈림을 결정하는가** | 같은 원천의 데이터가 성격에 따라 세 저장소로 갈리는 것을 한 자리에서 대조한다(데이터를 바꾸고 저장소를 관찰) | **분기 대조표** · **축출 연쇄 그래프** · 역할별 on/off 차이 | [../04_architecture/04_storage_split.md](../04_architecture/04_storage_split.md) · [../06_pipeline/04_routing.md](../06_pipeline/04_routing.md) | SW-01~SW-08 · SW-10 |
+| ② 성격별 분기 | 같은 Redis를 지나는 데이터가 왜 서로 다른 저장소로 가는가 — **무엇이 그 갈림을 결정하는가** | 같은 Redis를 지나는 두 스트림(수집 원시값 · 업무 명령)이 성격에 따라 다른 저장소 · 다른 적용 방식으로 갈리는 것을 대조한다(데이터를 바꾸고 저장소를 관찰) | **③ 명령 경로 확인** · **축출 연쇄 그래프** · 역할별 on/off 차이 | [../04_architecture/04_storage_split.md](../04_architecture/04_storage_split.md) · [../06_pipeline/04_routing.md](../06_pipeline/04_routing.md) | SW-01~SW-08 · SW-10 |
 
 - **두 축의 비교 방향이 반대다.** ①은 데이터를 고정하고 저장소를 바꾸며, ②는 저장소를 고정하고 데이터의 성격을 바꾼다. 한 축의 실험 조건에 다른 축의 변수가 섞이면(예: 대조군 적재를 켠 채 캐시 히트율을 잼) 두 축 모두 해석이 불가능해진다 — 실험 조건의 분리는 [../10_observability/04_experiment_protocol.md](../10_observability/04_experiment_protocol.md)가 강제한다.
 - 검산: 학습 목표 축 = ① + ② = **2**
@@ -62,11 +66,13 @@ db_study는 PLC 대용량 시계열과 업무 데이터를 Redis 중간 계층�
 
 | 구성 | 내용 | 이 구성이 없으면 |
 |------|------|------|
-| 대조 테이블 | PostgreSQL에 tag_raw와 **동형**인 plc_tag_raw_control(BRIN 인덱스 · 일자 파티션) | 스키마가 다르면 비교가 저장 엔진이 아니라 스키마 설계의 차이를 잰다 |
-| 동시 적재 | SW-09 on에서 Ingest가 **같은 배치**를 양쪽에 삽입한다 | 따로 적재하면 행 집합이 달라져 쿼리 결과 자체를 대조할 수 없다 |
+| 대조 테이블 | PostgreSQL에 tag_raw와 **같은 컬럼**인 plc_tag_raw_control(**TimescaleDB hypertable — UTC 하루 칸 · 열 압축**(D-05 부분 개정 · ADR-32) · 기본 키 · 외래 키 device · 검사 제약 3 — D-16 정상형. 기록 034 · 041~053은 옛 동형 BRIN 모양에서 쟀다(PostgreSQL 쪽은 **일반 PostgreSQL**) — 정본 §지금 모양) | 컬럼이 다르면 비교가 저장 엔진이 아니라 스키마 설계의 차이를 잰다 |
+| 동시 적재 | SW-09 on 또는 gated의 게이트가 열린 배치에서 Ingest가 **같은 배치**를 양쪽에 삽입한다 | 따로 적재하면 행 집합이 달라져 쿼리 결과 자체를 대조할 수 없다 |
 | 동일 쿼리 | 단일 태그 1시간 · 단일 태그 7일 · 설비 전체 1일 · 분 단위 롤업 재계산 · 전체 스캔 count — 검산: 1 + 1 + 1 + 1 + 1 = **5** | 쿼리 모양마다 역전 지점이 다르다. 한 쿼리만 재면 "어느 쿼리에서"가 빠진 결론이 된다 |
 | 비교 축 | 저장 용량 · 압축률 · 삽입 처리량 · 쿼리 시간(행 수별) · VACUUM/WAL 증폭 · 인덱스 크기 — 검산: 1 + 1 + 1 + 1 + 1 + 1 = **6** | 쿼리 시간만 재면 PostgreSQL이 이기는 구간의 대가(디스크 · WAL)가 보이지 않는다 |
-| 기본값 | SW-09 **off** | on이 기본이면 모든 삽입 처리량 측정에 대조군 적재 비용이 섞인다 |
+| 기본값 | SW-09 **gated**(D-16 — 직접 비교 실행 중에만 싣는다 · 옛 기본 off) | on이 기본이면 모든 삽입 처리량 측정에 대조군 적재 비용이 섞인다 — gated는 실행 밖의 설비 가동 데이터를 싣지 않는다 |
+
+- **직접 비교의 PostgreSQL은 일반 PostgreSQL이 아니다.** 비교 사본이 TimescaleDB(PostgreSQL 확장 — 시간 칸 나누기 · 칸 단위 열 압축)라 직접 비교가 묻는 것은 "PostgreSQL에 시계열 확장을 붙여도 ClickHouse와 어디서 갈리는가"다(사용자 결정 2026-10-12). 행 기반 PostgreSQL의 답은 옛 동형 대조군 기록 035~053이 갖고 기록 판독 화면이 그 기록을 그대로 보인다 — 두 PostgreSQL의 값을 한 표에 섞지 않는다(결정 [06_design_decisions.md](./06_design_decisions.md) D-05 상태 줄 · [../04_architecture/09_decision_records.md](../04_architecture/09_decision_records.md) ADR-32).
 
 ### 목표는 "이기는 쪽"이 아니라 "꺾이는 지점"이다
 
@@ -75,7 +81,7 @@ db_study는 PLC 대용량 시계열과 업무 데이터를 Redis 중간 계층�
 역전 지점을 찾는 판정의 모양은 아래와 같다.
 
 ```plain
-① 용량 단계를 정한다        행 수를 단계적으로 늘린다(용량 티어와 백필로 채운다)
+① 용량 단계를 정한다        행 수를 단계적으로 늘린다(옛 격자 채우기 — D-16 삭제)
 ② 단계마다 5종 쿼리를 잰다   양 저장소 · 3회 중앙값 · 4요소 병기
 ③ 쿼리별로 곡선을 겹친다     x = 행 수 · y = 쿼리 시간(저장소별 한 줄)
 ④ 교차점을 읽는다            교차가 있으면 역전 지점 · 없으면 "관측 범위 안에서 역전 없음"
@@ -84,7 +90,7 @@ db_study는 PLC 대용량 시계열과 업무 데이터를 Redis 중간 계층�
 
 - **"역전 없음"도 산출물이다.** 관측 범위 안에서 한쪽이 끝까지 이기면 그 범위와 함께 기록한다. 결과를 역전이 나올 때까지 조정하면 측정이 아니라 연출이다.
 - **쿼리마다 역전 지점이 다르다.** 전체 스캔 count는 이른 단계에서, 단일 태그 1시간은 늦은 단계에서(또는 끝내 안) 역전할 수 있다 — 하나의 숫자로 요약하지 않는다.
-- **행 수를 채우는 수단은 주입 모드다.** 대용량 단계는 모드 D(ClickHouse 직접) 백필로 채우되 대조군 쪽도 같은 행 집합이어야 한다. 채우는 절차는 [../06_pipeline/10_datagen_inject.md](../06_pipeline/10_datagen_inject.md)가 소유한다.
+- **행 수를 채우던 수단(모드 D 백필 · GEN-10 격자 채우기)은 D-16으로 지웠다.** 대용량 단계는 두 저장소에 같은 행 집합을 채워야 했고 그 도구가 사라져 이 판정은 다시 돌 수 없다 — 남은 기록(048~053)이 유일한 근거이고, 옛 설계는 [../05_data_stores/10_olap_vs_rdb_control.md](../05_data_stores/10_olap_vs_rdb_control.md) §폐지된 실험 설계(D-16)가 가리킨다.
 - 역전 지점 수치는 설계 때 **3계층 미확인**이었다 — 이 문서가 값을 예측하지 않는다. 측정 뒤 구조 판정 구간은 §해석 — 측정이 답한 것이 갖고, 구간 안의 정밀 행 수는 미확인으로 남는다(§미확인 등재).
 
 ### 산출물과 성공 판정
@@ -94,9 +100,11 @@ db_study는 PLC 대용량 시계열과 업무 데이터를 Redis 중간 계층�
 | 쿼리별 역전 지점표 | 5종 쿼리 각각에 역전 지점 또는 "관측 범위 안에서 역전 없음"이 4요소와 함께 기록된다 | 한 쿼리만 재고 일반화 · 4요소 없는 수치 |
 | 비교 축별 수치표 | 6축 전부가 같은 용량 단계에서 양 저장소 값을 갖는다 | 쿼리 시간만 있고 저장 비용 축이 빈 표 |
 | 신호 프로파일별 압축 대조 | RANDOM_WALK와 혼합 프로파일을 각각 재고 보수적인 쪽을 용량 판단에 쓴다(원본 data_flow.md §11.2) | 압축이 잘 되는 프로파일만 재고 결론 |
-| 역방향 대조표 | 업무 워크로드(상태 전이 갱신 · PK 점조회 · 원자성 · 무결성 제약 · 단건 고빈도 삽입)를 PostgreSQL 업무 테이블과 ClickHouse 업무 대조 테이블에서 재어, 변형마다 분포 지표 3회 중앙값과 구조 지표(부분 반영 · 경합 위반 · 수용 건수) 3회 전부가 업무 규모 3단계와 4요소로 기록된다([../05_data_stores/10_olap_vs_rdb_control.md](../05_data_stores/10_olap_vs_rdb_control.md) §역방향 대조 — 업무 워크로드) | 시계열 방향만 재고 "업무는 PostgreSQL"을 문장으로 유지 · ClickHouse에 없는 보장을 앱 로직으로 흉내 낸 값 |
+| 역방향 대조표 | 업무 워크로드(상태 전이 갱신 · PK 점조회 · 원자성 · 무결성 제약 · 단건 고빈도 삽입)를 PostgreSQL 업무 테이블과 ClickHouse 업무 대조 테이블에서 재어, 변형마다 분포 지표 3회 중앙값과 구조 지표(부분 반영 · 경합 위반 · 수용 건수) 3회 전부가 업무 규모 3단계와 4요소로 기록된다([../05_data_stores/10_olap_vs_rdb_control.md](../05_data_stores/10_olap_vs_rdb_control.md) §역방향 대조표 — EXP-40~45) | 시계열 방향만 재고 "업무는 PostgreSQL"을 문장으로 유지 · ClickHouse에 없는 보장을 앱 로직으로 흉내 낸 값 |
 | 스트리밍 동시 적재 계단표 | Redis를 거친 모드 B 계단마다 같은 배치를 받는 두 싱크의 시간 분위수 · 랙 · WAL과 PostgreSQL COPY가 플러시 주기를 넘는 pps(또는 관측 범위 안 넘지 않음)가 기록된다(EXP-45) | 단독 적재 수치만으로 스트리밍 경로의 삽입 비교를 대신함 |
-| 해석 문단 | 관측을 저장 구조의 원리로 **양방향** 설명한다 — 시계열 방향의 역전은 열 단위 읽기 · 희소 인덱스 · 코덱 · 파트 머지로, 업무 방향의 결과는 힙 · B-tree · MVCC · WAL · 행 잠금 대 불변 파트 · 머지 · patch 파트로 풀고, 원리 대응표([../05_data_stores/10_olap_vs_rdb_control.md](../05_data_stores/10_olap_vs_rdb_control.md) §역방향 대조 — 업무 워크로드 · 원리 대응 · §원리 대응 — 관측에서 원인 구조로)의 행마다 관측 하나를 짝짓는다 | "ClickHouse가 빠르다" · "PostgreSQL이 업무에 맞다"로 끝나는 해석 · 한 방향만 설명한 해석 |
+| 해석 문단 | 관측을 저장 구조의 원리로 **양방향** 설명한다 — 시계열 방향의 역전은 열 단위 읽기 · 희소 인덱스 · 코덱 · 파트 머지로, 업무 방향의 결과는 힙 · B-tree · MVCC · WAL · 행 잠금 대 불변 파트 · 머지 · patch 파트로 풀고, 원리 대응표([../05_data_stores/10_olap_vs_rdb_control.md](../05_data_stores/10_olap_vs_rdb_control.md) §원리 대응 — 관측에서 원인 구조로)의 행마다 관측 하나를 짝짓는다 | "ClickHouse가 빠르다" · "PostgreSQL이 업무에 맞다"로 끝나는 해석 · 한 방향만 설명한 해석 |
+
+- **산출물의 실험(EXP-01~05 · 35 · 40~45)은 D-16으로 폐지됐다** — 격자 채우기(모드 D · GEN-10) · 대조 자원 오버레이 · 역방향 실행기 · 모드 B 계단 러너를 지워 다시 잴 수 없다. 판정은 남은 기록(034 · 042~053)으로 닫혔고 §해석이 그 기록을 인용한다 — 옛 실행 설계의 자리는 [../05_data_stores/10_olap_vs_rdb_control.md](../05_data_stores/10_olap_vs_rdb_control.md) §폐지된 실험 설계(D-16)다.
 
 ### 해석 — 측정이 답한 것
 
@@ -115,47 +123,51 @@ db_study는 PLC 대용량 시계열과 업무 데이터를 Redis 중간 계층�
 
 - 검산: 질문 = **8** — 시계열 방향 4(역전 · 저장 · 읽은 양 · 적재) + 업무 방향 4(원자성 · 무결성 · 키 단위 읽기 쓰기 · 갱신)
 - **결론 — "PostgreSQL은 업무 · ClickHouse는 PLC 대량"은 두 방향의 서로 다른 원리가 떠받친다.** PLC 시계열은 행 수가 곧 비용인 데이터다 — 열 단위 읽기 · 정렬 · 코덱이 읽는 바이트(10^9 Q5 공통 논리의 19.51% 대 힙 100.0% · 052)와 저장 바이트(행당 4.40~5.37 B 대 76.58~85.20 B · 048~052)를 줄이고, 행 수가 늘수록 읽는 행의 차가 커져 전 설비 집계(Q4) · 콜드 전 행 스캔(Q5)은 10^5행 아래에서(Q5 웜은 10^5 미정 · 10^5.5부터 ClickHouse), 가장 늦은 태그 7일 조회도 웜 10^8 근처 · 콜드 (10^7, 10^7.25]에서 역전한다(053). 업무 데이터는 행 수가 작고(업무 규모 10^4~10^6) 보장이 곧 요구인 데이터다 — 트랜잭션 · 행 잠금 · 제약이 불변식을 쓰기 시점에 지키고(042 · 043), B-tree와 힙이 키 하나 · 행 하나의 단위로 읽고 쓴다(046 · 044). 한쪽 원리로 다른 쪽을 설명하지 않는다 — 적재 속도는 두 방향 모두 목적지를 가르지 않았다(045).
-- **Redis 분기에서 같은 원리가 한 흐름 안에 갈린다(목표 ②와의 접점).** 같은 스트림의 알람이 판정 전수 12,000행(ClickHouse alarm_eval · 불변 기록) · 확정 13~18행(PostgreSQL alarm_event · 상태 갱신) · 상태 키 40(Redis Hash · 핫 상태)으로 세 저장소에 나뉘어 각자의 목적대로 존재했다(정상 창 300초 · 3회 · 기록 054 · valid · 05b237a · 부하 실험 · M · 스위치 기본값) — 불변 대량은 컬럼형, 상태 전이는 트랜잭션 저장소라는 위 표의 결론이 알람 한 종류 안에서 반복된다.
-- **한계** — 격자 기록(048~053)은 전부 편차 폐기라 역전은 구간(폭 10^0.25~10^0.75)과 우열 방향으로만 서고 쿼리 시간의 크기는 미확인이다 · 동률 점의 서버 µs 판정은 PostgreSQL 서버 시간이 계획 시간을 빼는 비대칭(serverTimeAsymmetry)으로 PostgreSQL 쪽에 기울고, client 부호만으로 판정하면 콜드 구간이 Q1 (10^6, 10^7] · Q2 (10^6, 10^7.25] · Q3 (10^5, 10^5.5]가 된다(웜은 같다 · 053) · 모든 ClickHouse 값은 trace 로그 부하를 포함한다 · 자원은 두 저장소 각 3 vCPU · 3.5 GiB(대조 자원 조건)이고 쿼리 매개는 설비 1 · 태그 1 한 쌍이다([../10_observability/07_measurement_limits.md](../10_observability/07_measurement_limits.md)).
+- **한계** — 격자 기록(048~053)은 전부 편차 폐기라 역전은 구간(폭 10^0.25~10^0.75)과 우열 방향으로만 서고 쿼리 시간의 크기는 미확인이다 · 동률 점의 서버 µs 판정은 PostgreSQL 서버 시간이 계획 시간을 빼는 비대칭(serverTimeAsymmetry)으로 PostgreSQL 쪽에 기울고, client 부호만으로 판정하면 콜드 구간이 Q1 (10^6, 10^7] · Q2 (10^6, 10^7.25] · Q3 (10^5, 10^5.5]가 된다(웜은 같다 · 053) · 모든 ClickHouse 값은 trace 로그 부하를 포함한다 · 자원은 두 저장소 각 3 vCPU · 3.5 GiB(대조 자원 조건 — 오버레이는 D-16 삭제)이고 쿼리 매개는 설비 1 · 태그 1 한 쌍이다([../10_observability/07_measurement_limits.md](../10_observability/07_measurement_limits.md)).
 
 ## 목표 ② — Redis 중간 계층에서 성격별 분기를 경험한다
 
-### 3계층 분기
+### 분기 — 두 갈래
 
-분기의 정책 정본은 [../04_architecture/04_storage_split.md](../04_architecture/04_storage_split.md), 어느 모듈이 어떻게 가르는지의 기전 정본은 [../06_pipeline/04_routing.md](../06_pipeline/04_routing.md)다. 결정은 D-04다.
+분기의 정책 정본은 [../04_architecture/04_storage_split.md](../04_architecture/04_storage_split.md), 어느 모듈이 어떻게 가르는지의 기전 정본은 [../06_pipeline/04_routing.md](../06_pipeline/04_routing.md)다. 결정은 D-04다. **②계층(알람 판정 · 생산 카운터)은 D-16(사용자 결정 2026-10-11)으로 폐지돼 갈래는 둘이다** — 번호를 다시 매기지 않고 ① · ③으로 부른다.
 
 | 계층 | 데이터 | 원천 | 목적지 | 성격(갈림의 근거) | 이 계층이 가르치는 것 |
 |------|------|------|------|------|------|
 | ① | 태그 원시값 | stream:plc:raw | **ClickHouse 전용** | 추가 전용 · 갱신 없음 · 시간 범위 집계 · 고빈도 | 컬럼형이 맞는 데이터의 모양(목표 ①과 만나는 자리) |
-| ② | 알람 판정 · 생산 카운터 | ①과 **같은 스트림** | **갈라진다** — 확정 이벤트 PostgreSQL · 판정 전수 ClickHouse · 핫 상태 Redis Hash | 같은 원천인데 **상태 갱신이 필요한 것과 불변 기록이 서로 다른 저장소를 요구**한다 | 성격 판정이 저장소를 고른다는 것 자체 |
-| ③ | 회원 · 작업지시 · 감사 | API → **stream:biz:cmd**(명령 스트림) → 워커 — D-04 개정 | **PostgreSQL 전용**(Redis는 캐시 · 명령 경유만) | 트랜잭션 · 강한 정합성 · read-your-writes · 순서 | Redis를 거쳐도 **경유와 목적지는 다르다**는 것 — 동기 계약(커밋 뒤 응답 · 멱등 · 순서)을 명령 경로 위에서 지키는 법 |
+| ② | **폐지(D-16)** — 옛 알람 판정 · 생산 카운터 | 해당 없음 | 해당 없음 | 해당 없음 | 해당 없음 — 옛 세 쓰기(확정 이벤트 · 판정 전수 · 핫 상태)는 알람과 함께 지웠다 |
+| ③ | 마스터(사이트 · 라인 · 설비 · 접속 설정 · 태그) · 업무 명령 원장 | API → **stream:biz:cmd**(명령 스트림) → 워커 — D-04 개정 | **PostgreSQL 전용**(Redis는 캐시 · 명령 경유만) | 트랜잭션 · 강한 정합성 · read-your-writes · 순서 | Redis를 거쳐도 **경유와 목적지는 다르다**는 것 — 동기 계약(커밋 뒤 응답 · 멱등 · 순서)을 명령 경로 위에서 지키는 법 |
 
-- 검산: 분기 계층 = ① + ② + ③ = **3**
+- 검산: 현행 분기 = ① + ③ = **2** · ② 폐지(D-16 — 번호 재배치 없음)
 
-### ②가 학습의 핵심이다
+### 두 스트림의 대비가 분기의 핵심이다
 
-①과 ③은 목적지가 하나라 "이 데이터는 저기로 간다"는 사실만 보여 준다. **②만이 한 스트림에서 나온 같은 데이터가 성격에 따라 서로 다른 저장소로 갈리는 순간을 한 자리에서 보여 준다.** 알람 판정 한 건이 Redis alarm:state(다음 판정에 필요한 핫 상태) · ClickHouse alarm_eval(갱신하지 않는 판정 전수) · PostgreSQL alarm_event(확인 · 해제로 갱신되는 확정 이벤트)로 동시에 흩어진다.
+옛 ②는 한 스트림의 판정 한 건이 성격에 따라 세 저장소로 흩어지는 장면이었다 — 알람과 함께 D-16으로 지웠다. 지금 분기가 보여 주는 대비는 **같은 Redis를 지나는 두 스트림**이다(D-01 · D-04 · [../04_architecture/04_storage_split.md](../04_architecture/04_storage_split.md) §분기 계층).
 
-- **이것은 dual-write가 아니라 목적이 다른 세 쓰기다.** 같은 값을 두 곳에 복제해 맞추는 것이 아니라, 세 저장소가 각각 다른 질문(다음 판정은 무엇인가 · 임계값은 적절했는가 · 누가 언제 확인했는가)에 답한다(원본 data_flow.md §8.2).
-- **부분 실패의 진실은 PostgreSQL alarm_event다.** alarm_eval 삽입이 끝내 실패해도 알람 발생 · 해제 · 통지는 정상 동작하고 튜닝용 분석 데이터만 빈다.
-- **나중에 "CDC로 두 DB를 맞추자"는 제안이 나오면 이 구분이 반론의 근거다.** CDC는 같은 사실의 사본을 맞추는 도구이고, 여기의 세 쓰기는 애초에 같은 사실이 아니다.
-- ②의 생산 카운터는 원본에 기전이 없었고 W4가 판정했다 — 카운터 표본은 ① 경로(tag_raw) 그대로 가고, 파생 사실(목표 수량 도달 등)은 목적지 테이블이 없어 판정기를 두지 않는다. production_log는 사람의 실적 입력 전용이다([../06_pipeline/04_routing.md](../06_pipeline/04_routing.md) §생산 카운터 기전 판정).
+| 스트림 | 계층 | 소비 방식 | 멱등 수단 | 목적지 |
+|------|------|------|------|------|
+| stream:plc:raw | ① | 배치 · 비동기 at-least-once | 결정적 배치 토큰 | ClickHouse |
+| stream:biz:cmd | ③ | 소비자 1 직렬 · 커밋 뒤 동기 응답 | 명령 원장(biz_command_log) | PostgreSQL |
+
+- 검산: 스트림 = **2**
+- **같은 Redis를 지나도 목적지 · 적용 방식은 성격이 고른다.** ①은 갱신 없는 대량 사실이라 묶어서 싣고, ③은 사람이 요청한 변경이라 한 건씩 커밋을 기다린다 — 경유를 같게 해도 두 성격의 차이가 사라지지 않는다는 것이 이 축의 배움이다.
+- 옛 ②의 생산 카운터는 W4 판정대로 ① 경로 그대로 간다 — 카운터 표본은 tag_raw의 한 태그이고 파생 판정기는 두지 않는다([../04_architecture/04_storage_split.md](../04_architecture/04_storage_split.md) §생산 카운터 판정). 사람의 실적 입력(production_log)은 작업지시와 함께 D-16 삭제다.
 
 ### ③은 Redis를 거쳐도 목적지를 바꾸지 않는다
 
 **통념**: "업무 쓰기를 Redis Stream에 올리면 비동기 at-least-once가 되어 read-your-writes와 트랜잭션 보장을 잃는다." **부정**: ③의 업무 쓰기는 명령 스트림 stream:biz:cmd를 거쳐 워커가 PostgreSQL 트랜잭션 하나로 반영하지만, api는 **커밋 · 캐시 무효화가 끝난 뒤의 결과를 받고서야** 응답한다(D-04 개정 · 사용자 결정 2026-09-27). **진짜 축**: 보장을 가르는 것은 "Stream을 타는가"가 아니라 **응답이 커밋을 기다리는가 · 재적용을 무엇이 막는가 · 순서를 누가 지키는가**다 — 응답은 결과 회신을 기다리고, 재전달 · 재요청은 같은 트랜잭션의 명령 ID 기록(biz_command_log)이 막고, 순서는 소비자 1개 직렬 처리가 지킨다. **대체 경로**: 경유는 Redis지만 목적지는 여전히 PostgreSQL 하나이고 Redis는 업무 데이터의 진실을 갖지 않는다 — 기전 정본은 [../06_pipeline/07_business_crud.md](../06_pipeline/07_business_crud.md), API가 보이는 의미는 [../07_api/01_conventions.md](../07_api/01_conventions.md) §업무 쓰기 경로다.
 
-그래서 ③은 학습 목표 ②에 **①②와 다른 모양으로 참여하는 계층**이다. ①②의 Stream은 원천에서 흘러오는 사실을 비동기로 나르고, ③의 명령 스트림은 사람이 요청한 변경을 **동기 응답이 붙은 채** 나른다 — 같은 Redis Stream 위에서 전달 보장과 응답 계약이 성격에 따라 갈린다. 대가는 Redis 불가 시 업무 쓰기 503과 홉 증가이며 옛 직접 커밋 경로(SW-12 direct)와의 차이를 EXP-46이 잰다. 이 계층이 있어야 "Redis를 거치면 정합성을 잃는다"는 통념의 반례가 서므로 업무 데이터 축을 후순위로 두되 생략하지 않는다(D-11).
+그래서 ③은 학습 목표 ②에 **①과 다른 모양으로 참여하는 계층**이다. ①의 Stream은 원천에서 흘러오는 사실을 비동기로 나르고, ③의 명령 스트림은 사람이 요청한 변경을 **동기 응답이 붙은 채** 나른다 — 같은 Redis Stream 위에서 전달 보장과 응답 계약이 성격에 따라 갈린다. 대가는 Redis 불가 시 업무 쓰기 503과 홉 증가이며 옛 직접 커밋 경로(SW-12 direct)와의 차이를 재려던 EXP-46은 측정 전에 D-16으로 폐지됐다. 이 계층이 있어야 "Redis를 거치면 정합성을 잃는다"는 통념의 반례가 서므로 업무 데이터 축을 후순위로 두되 생략하지 않는다(D-11).
 
 ### 산출물과 성공 판정
 
 | 산출물 | 성공 판정 | 실패로 보는 것 |
 |------|------|------|
-| 분기 대조표 | ② 계층에서 같은 구간의 판정 전수 행 수(alarm_eval) · 확정 이벤트 수(alarm_event) · 핫 상태 키(alarm:state)가 각자의 목적대로 존재함을 대조한다 | 세 저장소의 건수가 같기를 기대하는 대조 — 같으면 오히려 설계가 틀린 것이다 |
 | ③ 명령 경로 확인 | 업무 CRUD 부하 중 stream:plc:raw 유입량이 CRUD와 무관하게 움직이고, 업무 쓰기는 stream:biz:cmd에만 엔트리를 만들며, 쓰기 응답 직후 재조회가 새 값을 본다 | 업무 쓰기가 수집 스트림에 섞인다 · 같은 명령 ID가 두 번 적용된다 · 응답 직후 재조회가 옛 값 |
 | 축출 연쇄 그래프 | 캐시 히트율과 Stream 점유 메모리의 역상관을 한 화면에 그려 기록한다(원본 implementation_plan.md §5 S6 — 원본 "스트림 길이"의 상관 대상 판정은 [../10_observability/03_dashboards_alerts.md](../10_observability/03_dashboards_alerts.md)) | 히트율 하락을 캐시 결함으로 기록 |
 | 역할별 on/off 차이 | 스위치마다 off · on 수치가 4요소와 함께 남는다 | 한쪽만 잰 수치 · 스위치 상태가 빠진 수치 |
 | 원칙의 증명 | SW-01 off + ClickHouse 중단에서 폴링 주기 붕괴와 유실이 수치로 남는다 | off 실험을 생략하고 원칙을 문장으로만 유지 |
+
+- 옛 분기 대조표(②계층 알람 대조 · AC-35)는 알람과 함께 D-16 폐지다. **실행 도구(k6 · 티어 시드 · 스냅샷 · 모드 B 계단)에 기대던 실험도 D-16으로 폐지됐다** — 산출물마다 현행 실험이 남았는지는 [../10_observability/06_experiment_catalog.md](../10_observability/06_experiment_catalog.md) 상태 열과 [../03_requirements/14_acceptance_criteria.md](../03_requirements/14_acceptance_criteria.md) §학습 목표 산출물 → AC 대응 검산이 갖는다.
 
 ## 두 축을 관통하는 역할 스위치
 
@@ -178,7 +190,7 @@ db_study는 PLC 대용량 시계열과 업무 데이터를 Redis 중간 계층�
 
 - 검산: 백프레셔 1 + 캐시 4 + 팬아웃 2 + 멱등 1 + 대조군 1 + 수집 1 + 최신값 결합 1 + 업무 쓰기 경유 1 = **12**
 - **SW-10이 두 축에 동시에 걸리는 것이 스위치로 남긴 이유다.** 데드밴드는 ClickHouse에 쌓이는 행 수와 코덱 효율(목표 ①)과 Stream 유입량(목표 ②)을 함께 바꾸므로, 스위치에서 빼면 그 상태가 기록되지 않는 측정이 된다(D-08).
-- **스위치는 런타임 if가 아니라 DI로 주입되는 구현체다.** 조회 경로에 분기를 흩뿌리면 분기 자체가 측정 대상 코드에 섞인다 — 제약의 정본은 [../04_architecture/02_module_boundaries.md](../04_architecture/02_module_boundaries.md)다. 그래서 전환은 재기동 절차이고 화면은 상태를 표시할 뿐이다([../08_screen/07_experiment_console.md](../08_screen/07_experiment_console.md)).
+- **스위치는 런타임 if가 아니라 DI로 주입되는 구현체다.** 조회 경로에 분기를 흩뿌리면 분기 자체가 측정 대상 코드에 섞인다 — 제약의 정본은 [../04_architecture/02_module_boundaries.md](../04_architecture/02_module_boundaries.md)다. 그래서 전환은 재기동 절차이고 화면은 상태를 각주 툴팁으로 표시할 뿐이다([../08_screen/08_evidence_screens.md](../08_screen/08_evidence_screens.md)).
 - **계측 없는 스위치는 장식이다.** 스위치 상태는 /api/v1/health와 /metrics 레이블로 노출되고 모든 측정 기록에 병기된다.
 
 ## 측정 경로 — 설계 문서 → 스위치 → 실험 → 기록
@@ -195,15 +207,33 @@ db_study는 PLC 대용량 시계열과 업무 데이터를 Redis 중간 계층�
 ```
 
 - **기록은 정본이 아니다.** docs/measurements는 실측 기록을 쌓는 예외 폴더이고, 확정된 값은 해당 정본 문서가 인용해 올린다(D-09). 기록 폴더의 수치를 다른 문서가 직접 인용하면 정본이 둘이 된다.
-- **스위치 없는 실험 · 실험 없는 스위치를 두지 않는다.** 스위치를 더하면 실험 카탈로그와 실험 콘솔을 같은 변경 단위에서 고친다.
+- **스위치 없는 실험 · 실험 없는 스위치를 두지 않는다.** 스위치를 더하면 실험 카탈로그와 화면 각주 툴팁을 같은 변경 단위에서 고친다. D-16으로 측정 도구가 지워져 실험을 잃은 스위치는 실험 자리를 "없음(D-16 — 측정 도구 삭제)"으로 적은 기록된 예외다([../02_features/13_switch_matrix.md](../02_features/13_switch_matrix.md)).
 - **설계와 실행을 가른다.** 설계 문서는 비교의 모양을 고정하고 수치를 예측하지 않는다. 수치는 실험 카탈로그의 결과 자리에만 앉는다.
 
 축별 경로의 구체 문서는 아래다.
 
 | 축 | 정책 | 기전 | 저장 모양 | 스위치 | 실험 | 기록 규칙 |
 |------|------|------|------|------|------|------|
-| ① | [../05_data_stores/10_olap_vs_rdb_control.md](../05_data_stores/10_olap_vs_rdb_control.md) | [../06_pipeline/04_routing.md](../06_pipeline/04_routing.md)(대조군 동시 적재) | [../05_data_stores/03_clickhouse_schema.md](../05_data_stores/03_clickhouse_schema.md) · [../05_data_stores/01_postgresql_schema.md](../05_data_stores/01_postgresql_schema.md) | SW-09 · SW-10 | [../10_observability/06_experiment_catalog.md](../10_observability/06_experiment_catalog.md) 대조군 실험(카탈로그 README가 예약한 대역) | [../10_observability/04_experiment_protocol.md](../10_observability/04_experiment_protocol.md) |
-| ② | [../04_architecture/04_storage_split.md](../04_architecture/04_storage_split.md) | [../06_pipeline/04_routing.md](../06_pipeline/04_routing.md) · [../06_pipeline/08_alarm.md](../06_pipeline/08_alarm.md) | [../05_data_stores/05_redis_keyspace.md](../05_data_stores/05_redis_keyspace.md) · [../05_data_stores/06_redis_memory.md](../05_data_stores/06_redis_memory.md) | SW-01~SW-08 · SW-10 | [../10_observability/06_experiment_catalog.md](../10_observability/06_experiment_catalog.md) 스위치별 · 장애 재현 실험 | 상동 |
+| ① | [../05_data_stores/10_olap_vs_rdb_control.md](../05_data_stores/10_olap_vs_rdb_control.md) | [../06_pipeline/04_routing.md](../06_pipeline/04_routing.md)(대조군 동시 적재) | [../05_data_stores/03_clickhouse_schema.md](../05_data_stores/03_clickhouse_schema.md) · [../05_data_stores/01_postgresql_schema.md](../05_data_stores/01_postgresql_schema.md) | SW-09 · SW-10 | [../10_observability/06_experiment_catalog.md](../10_observability/06_experiment_catalog.md) 대조군 실험(EXP-01~05 · 40~45 — D-16 폐지 · 결과는 기록이 갖는다) | [../10_observability/04_experiment_protocol.md](../10_observability/04_experiment_protocol.md) |
+| ② | [../04_architecture/04_storage_split.md](../04_architecture/04_storage_split.md) | [../06_pipeline/04_routing.md](../06_pipeline/04_routing.md) · [../06_pipeline/07_business_crud.md](../06_pipeline/07_business_crud.md) | [../05_data_stores/05_redis_keyspace.md](../05_data_stores/05_redis_keyspace.md) · [../05_data_stores/06_redis_memory.md](../05_data_stores/06_redis_memory.md) | SW-01~SW-08 · SW-10 | [../10_observability/06_experiment_catalog.md](../10_observability/06_experiment_catalog.md) 스위치별 · 장애 재현 실험 | 상동 |
+
+## 두 축을 화면으로
+
+D-16(사용자 결정 2026-10-11)은 두 축을 **사내 발표의 7화면**으로 보이고 축 ②를 **회사 카드 생산 라인 도입**으로 잇는다. 화면은 축을 새로 정의하지 않는다 — 축의 산출물(기록)과 지금 시스템의 동작을 쉬운 말로 보일 뿐이고, 화면 명세의 정본은 [../08_screen/README.md](../08_screen/README.md)다.
+
+| 화면(메뉴 순서) | 보이는 것 | 축 | 숫자의 원천 |
+|------|------|------|------|
+| ① 세 DB 한눈에 | 세 저장소의 역할 · 처리 방식 그림 | ① · ② 원리 | 없음 — 정적 |
+| ② PG vs CH 장단점 | 일의 성격에 따라 이기는 쪽이 바뀐다(한 건 찾기 · 되돌리기 대 전체 훑기 · 저장 공간) | ① 양방향 | 측정 기록(역방향 대조 EXP-41~44 · 격자 기록 048~053) |
+| ③ 시계열: PG에 vs CH에 | 10만 → 10억 행 곡선 · 넣기 · 디스크 · 사람이 할 일 | ① | 측정 기록(격자 · 동시 적재 계단 045) |
+| ④ PG 하나로 vs 나눠서 | Redis + PostgreSQL 대 Redis + PG(업무) + CH(센서) 점수판 | ① · ② | 측정 기록 + 계산값(1년치 디스크 — 표지) |
+| ⑤ 직접 비교 실험 | 같은 데이터를 Redis로 두 DB(ClickHouse · PostgreSQL + TimescaleDB)에 — 넣기 · 조회 대결 · 무결성 | ①(PostgreSQL + TimescaleDB — D-05 부분 개정) | **라이브 시연값** — 기록 정본 아님 |
+| ⑥ 분산 처리 모니터링 | 두 스트림이 Redis에서 갈라지는 흐름 · 조회 사본 | ② | 라이브 관찰(flow 프레임 · 메트릭) |
+| ⑦ HMI 설비 현황판 | 카드 라인 30대 상태 · 데이터 종류 — 지금 값 Redis · 추이 ClickHouse · 설비 정보 PostgreSQL | ② 운영 | 라이브(개요 1초 · 최근 10분) |
+
+- 검산: 화면 = **7** · 기록 판독 3(② · ③ · ④) · 정적 1(①) · 라이브 3(⑤ · ⑥ · ⑦)
+- **B형 — ⑤의 결과가 ②③의 기록과 달라도 어느 한쪽이 틀린 것이 아니다.** 결론 — ②③은 같은 머신 · 같은 규모 · 3회 측정 규칙을 지킨 기록이고, ⑤는 지금 시스템을 노트북 한 대에서 다시 돌린 시연값이다(규모 · 동시 부하 · 스키마(비교 사본은 기본 키 · 외래 키 · 검사 제약을 단다) · **엔진(비교 사본은 TimescaleDB hypertable · 열 압축 — ②③의 기록은 일반 PostgreSQL)**이 다르다). 반대 시나리오 — ⑤ 값을 기록처럼 인용하면 실행마다 결론이 바뀌는 숫자가 정본 문장에 박힌다. 파생 지침 — 정본 문장은 기록만 인용하고 ⑤는 "PostgreSQL에 시계열 확장을 붙인 지금 시스템에서는 어떤가"를 보이는 데만 쓴다(학습 목표의 성공 판정은 위 두 축의 산출물 표가 갖는다).
+- **도입은 축 ②를 그대로 쓴다.** 회사 라인에서 바뀌는 것은 데이터 출처(가상 PLC → 실제 PLC)뿐이고 Redis에서 센서 · 업무가 갈라지는 경로는 같다 — 설계 정본 [../04_architecture/10_plant_adoption.md](../04_architecture/10_plant_adoption.md).
 
 ## 흔한 오해
 
@@ -212,7 +242,6 @@ db_study는 PLC 대용량 시계열과 업무 데이터를 Redis 중간 계층�
 | 형 | 통념 또는 결론 | 부정 또는 반대 시나리오 | 진짜 축 또는 결과 | 대체 경로 또는 지침 |
 |------|------|------|------|------|
 | A | ClickHouse가 PostgreSQL보다 항상 빠르다 | 작은 행 수 · 인덱스 점조회에서는 PostgreSQL이 이길 수 있다 | 쿼리 모양 × 행 수에 따른 **역전** | 쿼리별 역전 지점을 잰다. 승패를 한 문장으로 요약하지 않는다 |
-| A | 알람을 세 저장소에 쓰는 것은 dual-write 버그다 | 세 쓰기는 같은 사실의 사본이 아니다 | 목적이 다른 세 쓰기 — 핫 상태 · 판정 전수 · 확정 이벤트 | 부분 실패는 alarm_event를 진실로 삼는다([../06_pipeline/08_alarm.md](../06_pipeline/08_alarm.md)) |
 | A | 업무 쓰기가 Stream을 타면 read-your-writes가 깨진다 | 응답이 커밋을 기다리면 깨지지 않는다 | 보장을 가르는 것은 경유가 아니라 응답 시점 · 멱등 기록 · 순서다(D-04 개정) | 결과 회신 뒤 응답 · 명령 ID 멱등 · 소비자 1개 직렬 — 5초를 넘으면 202 pending과 명령 조회 |
 | A | 같은 프로세스 안인데 Stream을 거치는 것은 낭비다 | 루프백 1홉은 비용이 아니라 대가다 | 백프레셔 흡수 · at-least-once · 이벤트 루프 격리 · 역할 분리 대비 | SW-01 off 실험이 네 근거를 수치로 증명한다 |
 | A | 스위치 수가 Redis 역할 수와 같아야 한다 | 수집 스위치 SW-10은 Redis 역할이 아니다 | 스위치는 측정 기록에 남아야 할 **조건**의 목록이다 | Redis 역할과 수집으로 나눠 센다 — 수는 정본 [../02_features/13_switch_matrix.md](../02_features/13_switch_matrix.md) §검산 |
@@ -227,12 +256,12 @@ db_study는 PLC 대용량 시계열과 업무 데이터를 Redis 중간 계층�
 
 | 항목 | 원본 예상치 | 상태 | 확정 자리 |
 |------|------|------|------|
-| 쿼리별 역전 지점(행 수) | 없음 — 원본은 "1억 행 이상에서 급격히 증가"라는 일반론만 적었다 | **부분 닫힘(W6)** — 구조 판정 구간(§해석 — 측정이 답한 것 · 기록 053 · discarded 구조 판정) · 구간 안 정밀 행 수 · 쿼리 시간 크기는 미확인 — 확정 전 임의 값 고정 금지 | [../10_observability/06_experiment_catalog.md](../10_observability/06_experiment_catalog.md) EXP-01~05(대조군) |
-| 삽입 처리량 비 | PostgreSQL 1만~5만 · ClickHouse 100만+ rows/s | 미확인 — 확정 전 임의 값 고정 금지 · 단독 적재 rows/s는 격자 기록(048~053 · discarded)이라 인용 불가 · 같은 배치의 싱크 시간은 기록 045(valid)가 닫았다(§해석) | 상동 — 비 쿼리 축은 격자 단계 기록 하나에 싣고 EXP-01~05가 공유한다 |
-| 압축률(프로파일별) | 혼합 8~15배 · RANDOM_WALK 2~4배(원본 data_flow.md §11.2) | **닫힘(W6)** — 혼합 9.16 · RANDOM_WALK 5.70(기록 034 · valid · 5492c73 · 부하 실험 · M · SW-09 off · SW-10 off) · 저장소 간 ClickHouse 7.63~9.316 대 PostgreSQL 0.511~0.5354(기록 048~052 · discarded 결정적 값) | EXP-35(프로파일별 압축) · EXP-01~05(저장소 간) · [../05_data_stores/03_clickhouse_schema.md](../05_data_stores/03_clickhouse_schema.md) |
-| 최신값 조회 on/off 차이 | off 30~150 ms → on 0.3~1 ms(원본 implementation_plan.md §4.1) | 미확인 — 확정 전 임의 값 고정 금지 | EXP-07(SW-02) |
-| 축출 연쇄가 시작되는 메모리 조건 | maxmemory 하향 실험 전용 시나리오(원본 architecture.md §8.4) | 미확인 — 확정 전 임의 값 고정 금지 | EXP-18(축출 연쇄) · [../05_data_stores/06_redis_memory.md](../05_data_stores/06_redis_memory.md) |
-| 업무 워크로드를 ClickHouse에 넣었을 때의 비용 · 보장(갱신 · 가시성 · 원자성 · 제약 · 단건 삽입) · 스트리밍 적재의 두 싱크 차 | 원본은 "UPDATE가 비동기 mutation"이라는 정성 서술만 적었다 — 26.8 경량 UPDATE는 즉시 보인다(공식 문서상 **Beta** — 정본 [../05_data_stores/10_olap_vs_rdb_control.md](../05_data_stores/10_olap_vs_rdb_control.md) §역방향 대조 — 업무 워크로드) | **닫힘(W6) — 가시성 · 갱신 지연 크기만 미확인 유지** — 원자성 042 · 제약 043 · 단건 삽입 044 · 스트리밍 적재 045 · 점조회 046(valid) · 갱신 단위 047(discarded 구조 사실) — 가시성은 040 · 047 편차 폐기로 인용 불가 | EXP-40~45 · [../05_data_stores/10_olap_vs_rdb_control.md](../05_data_stores/10_olap_vs_rdb_control.md) §결과 |
+| 쿼리별 역전 지점(행 수) | 없음 — 원본은 "1억 행 이상에서 급격히 증가"라는 일반론만 적었다 | **부분 닫힘(W6)** — 구조 판정 구간(§해석 — 측정이 답한 것 · 기록 053 · discarded 구조 판정) · 구간 안 정밀 행 수 · 쿼리 시간 크기는 미확인 — 확정 전 임의 값 고정 금지 | [../10_observability/06_experiment_catalog.md](../10_observability/06_experiment_catalog.md) EXP-01~05(대조군 — D-16 폐지 · 구간 안 정밀 값은 다시 잴 수 없다) |
+| 삽입 처리량 비 | PostgreSQL 1만~5만 · ClickHouse 100만+ rows/s | 미확인 — 확정 전 임의 값 고정 금지 · 단독 적재 rows/s는 격자 기록(048~053 · discarded)이라 인용 불가 · 같은 배치의 싱크 시간은 기록 045(valid)가 닫았다(§해석) | 상동 — 비 쿼리 축은 격자 단계 기록이 갖는다(EXP-01~05 — D-16 폐지) |
+| 압축률(프로파일별) | 혼합 8~15배 · RANDOM_WALK 2~4배(원본 data_flow.md §11.2) | **닫힘(W6)** — 혼합 9.16 · RANDOM_WALK 5.70(기록 034 · valid · 5492c73 · 부하 실험 · M · SW-09 off · SW-10 off) · 저장소 간 ClickHouse 7.63~9.316 대 PostgreSQL 0.511~0.5354(기록 048~052 · discarded 결정적 값) | EXP-35(프로파일별 압축) · EXP-01~05(저장소 간) — 둘 다 D-16 폐지 · 값은 기록이 갖는다 · [../05_data_stores/03_clickhouse_schema.md](../05_data_stores/03_clickhouse_schema.md) |
+| 최신값 조회 on/off 차이 | off 30~150 ms → on 0.3~1 ms(원본 implementation_plan.md §4.1) | 미확인 — 확정 전 임의 값 고정 금지 · 확정 수단 없음(EXP-07 D-16 폐지) | 없음(D-16 — 측정 도구 삭제 · 옛 EXP-07) |
+| 축출 연쇄가 시작되는 메모리 조건 | maxmemory 하향 실험 전용 시나리오(원본 architecture.md §8.4) | 미확인 — 확정 전 임의 값 고정 금지 · 확정 수단 없음(EXP-18 D-16 폐지) | 없음(D-16 — 측정 도구 삭제 · 옛 EXP-18) · [../05_data_stores/06_redis_memory.md](../05_data_stores/06_redis_memory.md) |
+| 업무 워크로드를 ClickHouse에 넣었을 때의 비용 · 보장(갱신 · 가시성 · 원자성 · 제약 · 단건 삽입) · 스트리밍 적재의 두 싱크 차 | 원본은 "UPDATE가 비동기 mutation"이라는 정성 서술만 적었다 — 26.8 경량 UPDATE는 즉시 보인다(공식 문서상 **Beta** — 옛 설계 원문 커밋 28c0cc9 · [../05_data_stores/10_olap_vs_rdb_control.md](../05_data_stores/10_olap_vs_rdb_control.md) §폐지된 실험 설계(D-16)) | **닫힘(W6) — 가시성 · 갱신 지연 크기만 미확인 유지** — 원자성 042 · 제약 043 · 단건 삽입 044 · 스트리밍 적재 045 · 점조회 046(valid) · 갱신 단위 047(discarded 구조 사실) — 가시성은 040 · 047 편차 폐기로 인용 불가 | EXP-40~45(D-16 폐지) · [../05_data_stores/10_olap_vs_rdb_control.md](../05_data_stores/10_olap_vs_rdb_control.md) §결과 |
 | 생산 카운터의 분기 기전 | 원본에 없음 | 닫힘 — 카운터 표본은 ① 경로 그대로 · 파생 판정기는 목적지 없이 두지 않는다(도입 조건 4) — [../06_pipeline/04_routing.md](../06_pipeline/04_routing.md) | [../06_pipeline/04_routing.md](../06_pipeline/04_routing.md) |
 
 ## 관련 문서
@@ -245,3 +274,5 @@ db_study는 PLC 대용량 시계열과 업무 데이터를 Redis 중간 계층�
 - [../05_data_stores/10_olap_vs_rdb_control.md](../05_data_stores/10_olap_vs_rdb_control.md) — 대조군 설계 정본
 - [../10_observability/06_experiment_catalog.md](../10_observability/06_experiment_catalog.md) — 실험 채번 정본
 - [../11_glossary/01_domain_terms.md](../11_glossary/01_domain_terms.md) — 컨슈머 랙 · PEL · 데드밴드 용어
+- [../08_screen/README.md](../08_screen/README.md) — 두 축을 보이는 웹 7화면
+- [../04_architecture/10_plant_adoption.md](../04_architecture/10_plant_adoption.md) — 축 ②를 회사 라인에 붙이는 도입 설계

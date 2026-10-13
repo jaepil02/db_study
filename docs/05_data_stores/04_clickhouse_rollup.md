@@ -2,6 +2,8 @@
 
 > **대상**: 롤업 테이블 tag_1m · tag_1h · tag_1d와 MV 3(mv_tag_1m · mv_tag_1h · mv_tag_1d)의 DDL · -State/-Merge 조합자 · bad_cnt 조건식 · 일 경계 시간대 판정 · MV 제약 · 백필 절차 · 정합 검증 · 롤업 객체 도메인 귀속 판정
 > **작성일**: 2026-09-24
+> **개정일**: 2026-10-11 — **D-16 직접 비교 · 센서 데이터 지우기**(사용자 결정 2026-10-11) — 백필 절차 뒤에 **직접 비교 구간 비우기의 롤업 처리**(분 · 시간 버킷 동기 삭제 · 일 롤업은 KST 날 통째 · 지우기 TRUNCATE) 불릿 — 절차 수 불변
+> **개정일**: 2026-10-11 — **D-16 알람 · 측정 도구 삭제**(사용자 결정 2026-10-11) — 일 경계 현행 표 6 → **5**(alarm_eval 일 파티션 삭제) · §백필 절차 → 수동 절차 계약(옛 모드 D 도구 삭제) · 도메인 귀속 후보 3 → **2**(GEN 행 삭제) · D-16 정리(d4) — 지운 절을 가리키던 § 참조 교정(§역전 지점 탐색 설계 → §폐지된 실험 설계(D-16) · 용량 단계 백필 문장) · D-16 정리(d4 전역 sweep) — 시간대 경계 표 alarm_eval 일 파티션 행 삭제 — 대상 6 → **5**
 > **개정일**: 2026-09-28 — DB 시각 UTC(ADR-27 · 사용자 요구 2026-09-28) — bucket DateTime('Asia/Seoul') → **DateTime('UTC')** · last_v 상태 인자 → **DateTime64(3, 'UTC')** · mv_tag_1d의 toStartOfDay(bucket, 'Asia/Seoul') 유지 — 인자가 가독성용 → **필수**(bucket이 UTC라 인자가 없으면 UTC 자정으로 자른다) · §일 경계 시간대 판정에 상태 항목(대체됨 → ADR-27 · tag_1d 버킷 KST만 생존 · 원문 보존 · 현행 표 신설) — 대상 수 불변
 > **개정일**: 2026-09-25 — S3 통합 확인 반영 — 백필 ④ 설정에 deduplicate_insert_select 'disable' 병기(26.8에서 insert_deduplicate를 대체 · 앞 설정만 주면 무시)
 > **개정일**: 2026-09-24 — ClickHouse 26.8 LTS 전환(사용자 결정 · 25.x 보안 지원 종료) — 롤업 윈도우 근거에 26.8(기록 004) · 백필 ④의 insert_deduplicate 0 근거를 버전 종속으로 교정(25.8 버림 · 26.8 버리지 않음)
@@ -187,12 +189,11 @@ GROUP BY bucket, device_id, tag_id;
 | tag_1m 월 파티션 | toYYYYMM(bucket) | UTC 월 | 저장 운영 |
 | tag_1h 월 파티션 | toYYYYMM(bucket) | UTC 월 | 저장 운영 |
 | tag_1d 년 파티션 | toYear(bucket) | UTC 년 — KST 1월 1일 버킷(전날 15:00Z)은 전년 파티션에 든다 · TTL이 없어 결과 불변 | 저장 운영 |
-| alarm_eval 일 파티션 | toYYYYMMDD(ts) | UTC 날짜 — tag_raw와 같다 | 저장 운영 |
 | tag_1m · tag_1h 버킷 | toStartOfMinute · toStartOfHour | 무관 | 해당 없음 |
 
-- 검산(현행): 대상 = **6** · 달력 의미 1 + 저장 운영 4 + 무관 1 · 경계 정본 [../11_glossary/05_units_and_time.md](../11_glossary/05_units_and_time.md) §버킷 경계 · 파티션 경계와 시간대
+- 검산(현행): 대상 = **5** · 달력 의미 1 + 저장 운영 3 + 무관 1 · 옛 alarm_eval 일 파티션 행은 D-16 삭제 · 경계 정본 [../11_glossary/05_units_and_time.md](../11_glossary/05_units_and_time.md) §버킷 경계 · 파티션 경계와 시간대
 
-W3 원문 — 웨이브 인계 "일 경계 시간대 · tag_1m · alarm_eval 파티션 시간대"를 닫는다. **판정: 달력 경계(일 · 월 · 년)는 전부 Asia/Seoul이다.** 저장값(epoch)은 바뀌지 않고 "어느 순간에서 버킷 · 파티션이 갈리는가"만 정한다.
+W3 원문(보존 — alarm_eval 행은 D-16으로 대상이 사라졌다) — 웨이브 인계 "일 경계 시간대 · tag_1m · alarm_eval 파티션 시간대"를 닫는다. **판정: 달력 경계(일 · 월 · 년)는 전부 Asia/Seoul이다.** 저장값(epoch)은 바뀌지 않고 "어느 순간에서 버킷 · 파티션이 갈리는가"만 정한다.
 
 | 대상 | 함수 | 원본 기준 시간대 | 판정 | 판정이 없을 때의 실패 |
 |------|------|------|------|------|
@@ -200,10 +201,9 @@ W3 원문 — 웨이브 인계 "일 경계 시간대 · tag_1m · alarm_eval 파
 | tag_1m 월 파티션 | toYYYYMM(bucket) | 서버 시간대 | KST 월 | 서버가 UTC면 월 파티션이 KST 1일 09:00에 넘어가 TTL 경계가 화면의 달과 어긋난다 |
 | tag_1h 월 파티션 | toYYYYMM(bucket) | 정의 없음 | KST 월 | 상동 |
 | tag_1d 년 파티션 | toYear(bucket) | 정의 없음 | KST 년 | 1월 1일 00:00~09:00 KST 행이 전년 파티션에 들어간다 |
-| alarm_eval 일 파티션 | toYYYYMMDD(ts) | 서버 시간대 | KST 날짜 | 원시와 판정 전수가 서로 다른 날짜로 잘려 같은 날 비교가 어긋난다 |
 | tag_1m · tag_1h 버킷 | toStartOfMinute · toStartOfHour | 무관 | 무관 — Asia/Seoul은 +09:00 정수 시간 | 없음 |
 
-- 검산: 대상 = **6** · 시간대에 따라 경계가 움직이는 것 5 + 무관 1
+- 검산: 대상 = **5** · 시간대에 따라 경계가 움직이는 것 4 + 무관 1 · 옛 alarm_eval 일 파티션 행은 D-16 삭제
 - **강제 수단은 서버 설정이 아니라 컬럼 타입이다.** bucket을 DateTime('Asia/Seoul')로 선언하면 달력 함수가 서버 timezone과 무관하게 KST로 자른다 — 서버 timezone(미확인 · W6)에 스키마가 의존하지 않는다([03_clickhouse_schema.md](./03_clickhouse_schema.md) §시각 컬럼 시간대 표기).
 - **1d 캐시 키 스냅도 같은 자정을 써야 한다.** 시계열 조회 캐시가 1d 요청을 UTC 자정으로 내림하면 같은 조회가 두 키로 갈린다 — 스냅 규칙의 정본은 [../11_glossary/05_units_and_time.md](../11_glossary/05_units_and_time.md) · [../06_pipeline/06_timeseries_read.md](../06_pipeline/06_timeseries_read.md)다.
 
@@ -227,7 +227,7 @@ W3 원문 — 웨이브 인계 "일 경계 시간대 · tag_1m · alarm_eval 파
 
 ## 백필 절차
 
-모드 D(GEN-08)가 과거 구간을 채울 때의 순서다. MV를 붙인 채 백필하면 원시 삽입과 MV 집계가 동시에 일어나 삽입이 느려지고, 중간 실패 시 롤업이 부분만 채워져 정합 판단이 불가능해진다(원본 data_flow.md §10.3).
+과거 구간을 채울 때의 순서다 — 옛 실행 도구 모드 D(GEN-08)는 D-16으로 지웠고, 이 절은 사람이 다시 채울 때 따르는 수동 절차 계약으로 남는다. MV를 붙인 채 백필하면 원시 삽입과 MV 집계가 동시에 일어나 삽입이 느려지고, 중간 실패 시 롤업이 부분만 채워져 정합 판단이 불가능해진다(원본 data_flow.md §10.3).
 
 ```plain
 ① 주입 정지 확인        다른 주입 모드 · 수집이 멈췄는가     분리 중 들어온 행은 롤업되지 않는다
@@ -241,9 +241,10 @@ W3 원문 — 웨이브 인계 "일 경계 시간대 · tag_1m · alarm_eval 파
 - **④는 insert_deduplicate 0 · deduplicate_insert_select 'disable'로 넣는다(S0 실측 · 기록 001 · S3 통합 확인).** 26.8은 deduplicate_insert_select(기본 enable_when_possible)가 insert_deduplicate를 대체해 앞 설정만 주면 무시된다 — 26.8의 INSERT SELECT는 기본값에서도 같은 내용을 버리지 않았지만(S3 확인) 동작이 버전 · 설정 기본값마다 달라 둘 다 명시한다. 롤업 3테이블의 윈도우(ADR-14 보강)는 토큰 없는 삽입을 내용 해시로 가르는데 롤업에는 매번 다른 컬럼(원시의 ingested_at 같은)이 없다 — 25.8에서는 같은 구간을 비운 뒤 다시 채우는 두 번째 삽입이 오류 없이 0행이 됐다(기록 001). 26.8은 버리지 않았지만(기록 004) 동작이 버전마다 달라 절차로 고정한다.
 
 - **분리하는 MV는 mv_tag_1m 하나다.** 원본 절차는 분리 대상을 mv_tag_1m으로만 적었고 이유는 적지 않았다 — ④가 tag_1m에 넣는 삽입이 상위 두 MV를 발동하므로 상위를 분리하면 상위 롤업을 따로 두 번 더 채워야 한다.
-- **③의 ts는 원시 보존 창 안이어야 한다(A형).** 통념은 "백필은 먼 과거를 채운다"이다. 그러나 tag_raw TTL은 ts 기준 7일이라 창 밖 ts의 파트는 다음 TTL 머지에서 통째로 떨어지고, 롤업만 남는다. 진짜 축은 ts 기준 보존이다. 대체 경로 — 용량 단계를 채우는 백필은 창 안에서 태그 · 설비 수로 행 수를 늘린다([10_olap_vs_rdb_control.md](./10_olap_vs_rdb_control.md) §역전 지점 탐색 설계).
+- **③의 ts는 원시 보존 창 안이어야 한다(A형).** 통념은 "백필은 먼 과거를 채운다"이다. 그러나 tag_raw TTL은 ts 기준 7일이라 창 밖 ts의 파트는 다음 TTL 머지에서 통째로 떨어지고, 롤업만 남는다. 진짜 축은 ts 기준 보존이다. 대체 경로 — 행 수를 늘려야 하면 창 안에서 태그 · 설비 수로 늘린다(옛 용량 단계 채우기는 D-16 삭제 — [10_olap_vs_rdb_control.md](./10_olap_vs_rdb_control.md) §폐지된 실험 설계(D-16)).
 - **①이 빠지면 조용한 공백이 남는다.** ② ~ ⑤ 사이에 적재된 행은 원시에는 있고 롤업에는 없다. 주입 모드는 한 번에 하나(REQ-GEN-05)라는 규칙이 이 절차의 전제다.
 - 날짜 단위로 쪼개는 이유는 한 INSERT가 여러 파티션에 걸칠 때의 서버 한도다([03_clickhouse_schema.md](./03_clickhouse_schema.md)). 실행 주체와 명령의 정본은 [../06_pipeline/10_datagen_inject.md](../06_pipeline/10_datagen_inject.md)다.
+- **직접 비교 넣기는 이 절차를 쓰지 않는다(D-16).** 넣기는 과거 구간 행을 Stream으로 보내 정상 적재 경로(MV 붙인 채)로 싣는다 — 롤업이 원시와 같은 배치로 채워져 분리 · 재계산이 필요 없다. 대신 넣기 전 구간 비우기가 롤업을 함께 지운다 — 분 · 시간 롤업은 구간에 걸친 버킷을 동기 삭제하고, **일 롤업은 날 단위 합이라 구간이 걸친 KST 날 버킷을 통째로 지운다**(같은 날의 다른 데이터의 일 롤업도 사라지고 원본은 남는다 — 원시에서 이 절차 ④로 재계산할 수 있다). 센서 데이터 지우기는 롤업 3을 TRUNCATE한다.
 
 ## 도메인 귀속 판정
 
@@ -253,9 +254,8 @@ W3 원문 — 웨이브 인계 "일 경계 시간대 · tag_1m · alarm_eval 파
 |------|------|:------:|------|
 | ING | tag_raw 삽입이 연쇄를 발동한다(ING-12) · MV 실패 감지와 재계산이 적재 경로에 있다 | **소유 — 확정** | 롤업의 쓰기는 모두 적재의 부산물이다. 원시 확정 · 롤업 공백 판정 · 재계산이 한 모듈에 있어야 정합 대조(원시 count 대 롤업 countMerge)의 주인이 하나다 |
 | TSQ | 해상도를 골라 읽는다 | 소유 아님 | 읽기만 한다 — 읽는 쪽이 DDL을 소유하면 조회 요구가 적재 경로의 스키마를 바꾼다 |
-| GEN | 모드 D 백필이 쓴다 | 소유 아님 | 실험 도구의 쓰기다 — 절차만 실행하고 정의는 소유하지 않는다(GEN-08) |
 
-- 검산: 후보 = **3** · 소유 1(ING)
+- 검산: 후보 = **2** · 소유 1(ING) · 옛 GEN 행(모드 D 백필)은 D-16 삭제
 - **도메인 공백은 바뀌지 않는다.** ING는 이미 tag_raw · 대조군을 소유하므로 소유 테이블 없음 도메인은 COL · SIM · GEN · TSQ · RLT · OBS 여섯 그대로다 — 폴더 README와 도메인 지도(01_overview/04)의 귀속 표기도 "ING 확정"으로 맞췄다.
 
 ## 정합 검증
@@ -287,5 +287,5 @@ W3 원문 — 웨이브 인계 "일 경계 시간대 · tag_1m · alarm_eval 파
 - [08_retention_lifecycle.md](./08_retention_lifecycle.md) — 계층별 보존 정본
 - [10_olap_vs_rdb_control.md](./10_olap_vs_rdb_control.md) — 분 단위 롤업 재계산 쿼리(대조군)
 - [../06_pipeline/09_rollup.md](../06_pipeline/09_rollup.md) — F-08 롤업 기전
-- [../06_pipeline/10_datagen_inject.md](../06_pipeline/10_datagen_inject.md) — 모드 D 백필 실행
+- [../06_pipeline/10_datagen_inject.md](../06_pipeline/10_datagen_inject.md) — 데이터 주입(옛 모드 D 백필은 D-16 폐지)
 - [../11_glossary/05_units_and_time.md](../11_glossary/05_units_and_time.md) — 버킷 경계 · 부동소수 비교

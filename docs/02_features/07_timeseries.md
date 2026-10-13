@@ -2,6 +2,7 @@
 
 > **대상**: 시계열 조회(TSQ · NestJS timeseries 모듈) 기능 목록 · 기능별 경계 · 스위치 교체 · 의존 도메인 · 실패 시 보이는 것 — 기능 ID TSQ-NN 채번 정본
 > **작성일**: 2026-09-24
+> **개정일**: 2026-10-11 — **D-16 알람 · 로그인 · 권한 삭제**(사용자 결정 2026-10-11) — 조회 단계 ① 권한 · 레이트 리밋 → **출처 검사(AUT-07)** · TSQ-06 알람 분석 화면 표현 → 극값 보존 조회 · 의존 도메인 AUT 행(인가 → 출처 검사) · ALM 행 삭제 · 실패 표 레이트 리밋 행 삭제 — 기능 수 불변 · (리드 판정 — 도메인 11 → 8) AUT-07 인용 → 횡단 출처 방어 **REQ-GLB-25 · 26**(옛 AUT 도메인 폐지) · D-16 정리(d4 전역 sweep) — TSQ-09 레이트 리밋 문장 → 범위 상한 · 미확인 등재 내보내기 레이트 리밋 행 닫힘 사유 교정 · D-16 정리(d4 전역 sweep) — 폐지 실험을 확정 수단으로 가리키던 자리 교정(EXP-31)
 > **개정일**: 2026-09-24 — 최종 정밀 검수 — p95 롤업 대조 미확인 행에 확정 수단 EXP-31 연결 · "표면 번호는 W5 몫" → 각 API 문서가 채번(W5 완료)
 > **개정일**: 2026-09-24 — W7 검수 반영 — TSQ-03 · TSQ-05 키 표기 cache:q:{hash} · lock:rebuild:{hash} → **cache:q:{sha1} · lock:rebuild:q:{sha1}**(정본 05_data_stores/05) — 기능 수 불변
 > **개정일**: 2026-09-24 — W7 보안 판정 반영 — 내보내기 범위 상한 · 등급 닫힘(정본 12_security/03)
@@ -23,10 +24,10 @@ TSQ는 **ClickHouse에 쌓인 시계열을 화면 폭에 맞게 줄여 돌려주
 | **TSQ-03** | 캐시 키 정규화 | 시간 범위를 버킷 경계로 스냅하고 태그 배열을 정렬하고 기본값 파라미터를 뺀 정규화 문자열을 SHA-1로 해싱해 cache:q:{sha1}를 만든다. **스냅이 핵심이다** — 초 단위 now()를 그대로 쓰면 매 요청이 다른 키가 되어 히트율이 0에 수렴한다 | S4 | F-04 | SW-04 | 표면 없음 — TSQ-04의 내부 단계 | Redis cache:q |
 | **TSQ-04** | 조회 결과 캐시 | cache-aside로 gzip 압축 결과를 둔다. TTL은 구간 성격으로 가른다 — 완전 과거 구간(길게) · 현재 버킷 포함(짧게) · 최근 수 분(캐시하지 않고 최신값 API · WebSocket으로 유도). TTL에 무작위 지터를 더해 동시 만료를 흩는다. TTL · 지터 값은 2계층 조정값이며 정본은 [../05_data_stores/05_redis_keyspace.md](../05_data_stores/05_redis_keyspace.md). **Redis 실패 시 짧은 타임아웃 뒤 ClickHouse로 우회한다**(degrade) | S2 · S4 | F-04 | SW-03 | 표면 없음 — TSQ-01의 내부 단계 | Redis cache:q |
 | **TSQ-05** | 스탬피드 방지 | 캐시 미스에서 lock:rebuild:q:{sha1}를 SET NX PX로 잡은 한 요청만 ClickHouse를 부르고, 나머지는 짧게 대기한 뒤 캐시를 다시 읽는다(현행 참고 — 50 ms × 최대 3회). 해제는 **소유자 검증 Lua**로 한다 — 단순 DEL은 자기 락이 만료된 뒤 남의 락을 지운다 | S4 | F-04 | SW-05 | 표면 없음 — TSQ-01의 내부 단계 | Redis lock:rebuild |
-| **TSQ-06** | 다운샘플 | 1차는 롤업 테이블이 이미 줄이고, 여전히 많으면 API가 LTTB로 2차 축소한다(piscina 워커 — 이벤트 루프 격리). 알람 분석 화면에는 극값을 보존하는 min · max 쌍을 쓴다. 단순 n번째 추출은 스파이크를 잃어 쓰지 않는다 | S4 | F-04 | 해당 없음 | 07_api/05_timeseries | 없음 — 계산 |
+| **TSQ-06** | 다운샘플 | 1차는 롤업 테이블이 이미 줄이고, 여전히 많으면 API가 LTTB로 2차 축소한다(piscina 워커 — 이벤트 루프 격리). 극값을 보존해야 하는 조회에는 min · max 쌍을 쓴다. 단순 n번째 추출은 스파이크를 잃어 쓰지 않는다 | S4 | F-04 | 해당 없음 | 07_api/05_timeseries | 없음 — 계산 |
 | **TSQ-07** | 태그 메타 부착 | 결과에 dictGet(plc.dict_tag)으로 태그명 · 단위를 붙인다. ClickHouse에는 tag_id만 있고 메타는 조회 시점에 붙인다 — 태그명이 바뀌어도 과거 데이터를 고치지 않는다 | S3 · S4 | F-04 | 해당 없음 | 07_api/05_timeseries | ClickHouse dict_tag(읽기) |
 | **TSQ-08** | 진행 구간 분할 | "최근 N분"처럼 끝이 현재인 조회를 **확정된 과거 구간(긴 TTL 캐시)과 진행 중 마지막 버킷(최신값 또는 짧은 TTL)**으로 쪼개고 클라이언트가 합친다. 끝이 현재인 조회를 통째로 캐시하면 매번 미스가 나거나 오래된 값이 보인다(원본 architecture.md §10.2) | S4 | F-04 · F-03 | 해당 없음 | 07_api/05_timeseries | Redis cache:q · rt:latest(읽기) |
-| **TSQ-09** | 원시 내보내기 | 원시가 꼭 필요한 조회를 스트리밍 다운로드로 보낸다(CSV · Parquet). ClickHouse가 FORMAT으로 직렬화한 응답을 그대로 중계해 애플리케이션 직렬화가 없다. 긴 범위 원시 조회를 조회 표면이 아니라 이 경로로 유도하는 것이 해상도 자동 선택의 짝이다. 레이트 리밋을 더 엄격히 건다 | S4 | F-04 | 해당 없음 | 07_api/05_timeseries | ClickHouse tag_raw(읽기) |
+| **TSQ-09** | 원시 내보내기 | 원시가 꼭 필요한 조회를 스트리밍 다운로드로 보낸다(CSV · Parquet). ClickHouse가 FORMAT으로 직렬화한 응답을 그대로 중계해 애플리케이션 직렬화가 없다. 긴 범위 원시 조회를 조회 표면이 아니라 이 경로로 유도하는 것이 해상도 자동 선택의 짝이다. 요청 하나의 범위는 내보내기 범위 상한이 묶는다(옛 레이트 리밋 등급은 D-16 삭제) | S4 | F-04 | 해당 없음 | 07_api/05_timeseries | ClickHouse tag_raw(읽기) |
 
 - 검산: TSQ-01~09 = **9**. 단계별(첫 도입 기준) S2 2(TSQ-01 · 04) + S3 1(TSQ-07) + S4 6(TSQ-02 · 03 · 05 · 06 · 08 · 09) = **9**
 - 표면 있음 6(TSQ-01 · 02 · 06 · 07 · 08 · 09) + 표면 없음(내부 단계) 3(TSQ-03 · 04 · 05) = **9**. 표면 있음의 셋(02 · 06 · 07)은 TSQ-01 한 표면의 동작이며 표면 수는 W5가 센다.
@@ -36,7 +37,7 @@ TSQ는 **ClickHouse에 쌓인 시계열을 화면 폭에 맞게 줄여 돌려주
 TSQ-01 한 요청이 지나는 단계다. 기전 정본은 [../06_pipeline/06_timeseries_read.md](../06_pipeline/06_timeseries_read.md)다.
 
 ```plain
-① 권한 · 레이트 리밋        AUT-04 · 05 · 06(S7 이후)
+① 출처 검사                REQ-GLB-25 · 26        Host 대조 · CORS(직결 표면)
 ② 해상도 선택              TSQ-02                 범위 → raw · 1m · 1h · 1d
 ③ 키 정규화                TSQ-03 (SW-04)         스냅 · 정렬 · 기본값 제거 · SHA-1
 ④ 캐시 조회                TSQ-04 (SW-03)         히트면 ⑧로
@@ -78,8 +79,7 @@ TSQ-01 한 요청이 지나는 단계다. 기전 정본은 [../06_pipeline/06_ti
 | ING | ING → TSQ | 저장소 경유 | tag_raw · 롤업 테이블 |
 | MST | MST → TSQ | 저장소 경유 | dict_tag |
 | RLT | TSQ → RLT | 저장소 경유 | 진행 구간 분할(TSQ-08)의 마지막 버킷이 rt:latest를 읽는다 |
-| AUT | AUT → TSQ | 인가 | S7 이후 Guard · 레이트 리밋 |
-| ALM | TSQ → ALM | 표면 공유 | 알람 분석 화면의 min · max 쌍(ALM-09) |
+| 횡단 방어선 | 방어선 → TSQ | 출처 검사 | Host 대조 · 직결 표면 CORS(REQ-GLB-25 · 26 — 도메인 기능 아님) |
 
 ## 실패 시 보이는 것
 
@@ -93,7 +93,6 @@ TSQ-01 한 요청이 지나는 단계다. 기전 정본은 [../06_pipeline/06_ti
 | Redis 캐시 실패 | 코드 없음 — **200이고 느려질 뿐이다**(degrade) | 캐시 히트율 · API 지연 | TSQ-04 |
 | 락 획득 실패 | 코드 없음 — 대기 후 재조회 | 락 대기 메트릭 | TSQ-05 |
 | ClickHouse 접속 불가 | **timeseries.clickhouse_unavailable/503** — 캐시 미스만 거절 · 캐시 히트는 200 · 대조군이나 최신값으로 우회하지 않는다 | [../03_requirements/08_timeseries.md](../03_requirements/08_timeseries.md) REQ-TSQ-16 | TSQ-01 · 09 |
-| 분당 한도 초과(S7 이후) | 다음 창까지 대기 | common.rate_limited/429 | TSQ-01 · 09 |
 | PostgreSQL 중단 | **영향 없음** — Dictionary가 마지막 적재 값을 유지한다 | 없음 | TSQ-07 |
 
 - **A형 — "원시로 요청했는데 1m이 왔다"는 버그가 아니다.** 통념은 요청한 해상도가 그대로 온다는 것이지만, 서버는 범위와 최대 포인트 수로 해상도를 강제한다. 진짜 축은 ClickHouse 보호이며, 원시가 꼭 필요하면 대체 경로는 TSQ-09 내보내기다. 실제 해상도는 meta.interval이 말한다.
@@ -112,8 +111,8 @@ TSQ-01 한 요청이 지나는 단계다. 기전 정본은 [../06_pipeline/06_ti
 |------|------|------|------|
 | ClickHouse 불가 시 조회 응답 | ClickHouse 중단 시 적재가 XACK를 보류한다는 것뿐이다 | **W2 판정 완료** — clickhouse_unavailable/503 | [../03_requirements/08_timeseries.md](../03_requirements/08_timeseries.md) |
 | 해상도별 응답 시간 · 히트율 | 원본 예상치(원본 data_flow.md §6.1 · 원본 architecture.md §16) | 미확인 — 확정 전 임의 값 고정 금지 | [../03_requirements/13_nonfunctional.md](../03_requirements/13_nonfunctional.md) · [../10_observability/06_experiment_catalog.md](../10_observability/06_experiment_catalog.md) |
-| p95 집계의 롤업 대조 | TDigest는 근사다 — 부동소수 허용 오차로 대조하지 않는다(W1) | 미확인 — 확정 수단은 원시 내 순위 오차 측정(EXP-31) · AC-05는 p95를 판정에서 제외하고 기록 | [../03_requirements/14_acceptance_criteria.md](../03_requirements/14_acceptance_criteria.md) §미확인 등재 |
-| 내보내기의 레이트 리밋 한도 · 범위 상한 | "엄격히"만 있다(원본 architecture.md §18) | **W7 닫힘** — 범위 상한 현행 참고 1일 · class export · 한도 값 2계층 미정(관계식 고정) | [../12_security/03_api_surface_defense.md](../12_security/03_api_surface_defense.md) |
+| p95 집계의 롤업 대조 | TDigest는 근사다 — 부동소수 허용 오차로 대조하지 않는다(W1) | 미확인 · 확정 수단 없음(원시 내 순위 오차 측정 EXP-31 · AC-05 D-16 폐지) | [../03_requirements/14_acceptance_criteria.md](../03_requirements/14_acceptance_criteria.md) §미확인 등재 |
+| 내보내기의 레이트 리밋 한도 · 범위 상한 | "엄격히"만 있다(원본 architecture.md §18) | **닫힘** — 범위 상한 현행 참고 1일(W7) · 레이트 리밋 한도는 D-16 삭제로 대상 없음 | [../12_security/03_api_surface_defense.md](../12_security/03_api_surface_defense.md) |
 
 ## 관련 문서
 

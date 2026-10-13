@@ -2,6 +2,8 @@
 
 > **대상**: db_study 문서군과 구현이 쓰는 모든 식별자의 형식 · 채번 규칙 · 결번 · 예약 대역 · 원본 흐름 표기 대응 — ID 규약 정본
 > **작성일**: 2026-09-24
+> **개정일**: 2026-10-11 — D-16 설비 가동(ADR-29) — Redis 영역 접두에 **ctl**(실행 중 제어 상태 · 봉인 계열 — ctl:plant:power) — 규칙 수 불변
+> **개정일**: 2026-10-11 — **D-16 알람 · 로그인 · 권한 · 감사 · 작업지시 · 측정 도구 삭제**(사용자 결정 2026-10-11 · 리드 판정 — WRK 함께 폐지 · 도메인 11 → 8 · 대상 문서 파일 삭제) — **§폐지 도메인 결번 신설**(삭제된 채번 정본의 폐지 행 9 · 결번 ID 88 · 파일 번호 결번 18) · 도메인 접두 11 → **8**(AUT · ALM · WRK 행 삭제 — 네임스페이스 있음 8 → **5**) · 예약 대역 02_features · 03_requirements 설명에 결번 파일 번호 · F-06 대응 행 결번 · 기전 정본 파일 9 → **8** · 예시 값 교체(EXP-PERF → EXP-FLOW · datagen.stream_full → run_in_progress · alarm_event → biz_command_log · rl 키 → rt · cache 키 · ch:alarm → ch:flow · 리프레시 토큰 → 명령 결과) · 영역 접두 9 → **6** · D-16 정리(d4 전역 sweep) — 폐지 실험을 확정 수단으로 가리키던 자리 교정(EXP-01~05 예약 대역 폐지 표기)
 > **개정일**: 2026-10-03 — D-14 2화면 전환(사용자 결정 2026-10-03) — 화면 코드 예시 DSH-REALTIME(폐지 결번) → **EXP-PERF** — ID 체계 수 불변
 > **개정일**: 2026-09-25 — S3 구현 반영 — 컨슈머 이름 {모듈}-{pid}-{n} → **{모듈}-{n}**(S2 판정 · S3 다중 컨슈머 ingest-1..N)
 > **개정일**: 2026-09-24 — S0 반영 — 린트 경로 .omc/docs_lint.py → **scripts/docs_lint.py**
@@ -19,16 +21,16 @@
 | 종류 | 형식 | 예 | 채번 정본 | 자릿수 |
 |------|------|-----|----------|--------|
 | 기능 ID | {도메인 접두}-NN | ING-03 | [../02_features](../02_features/README.md) 도메인 파일 | 2자리 0 채움 |
-| 요구사항 | REQ-{접두}-NN — 도메인 접두 11 + 횡단 GLB · NFR · TEC | REQ-GLB-01 | [../03_requirements](../03_requirements/README.md) 각 파일 | 2자리 |
+| 요구사항 | REQ-{접두}-NN — 도메인 접두 8 + 횡단 GLB · NFR · TEC | REQ-GLB-01 | [../03_requirements](../03_requirements/README.md) 각 파일 | 2자리 |
 | 인수 기준 | AC-NN | AC-01 | [../03_requirements/14_acceptance_criteria.md](../03_requirements/14_acceptance_criteria.md) | 2자리 |
 | 기술 결정 | ADR-NN | ADR-01 | [../04_architecture/09_decision_records.md](../04_architecture/09_decision_records.md) | 2자리 |
 | 제품·학습 결정 | D-NN | D-01 | [../01_overview/06_design_decisions.md](../01_overview/06_design_decisions.md) | 2자리 |
 | **데이터 흐름** | **F-NN** | F-01 | [../06_pipeline/01_flow_inventory.md](../06_pipeline/01_flow_inventory.md) | 2자리 |
 | **역할 스위치** | **SW-NN** | SW-01 | [../02_features/13_switch_matrix.md](../02_features/13_switch_matrix.md) | 2자리 |
 | **실험** | **EXP-NN** | EXP-01 | [../10_observability/06_experiment_catalog.md](../10_observability/06_experiment_catalog.md) | 2자리 |
-| 화면 코드 | {표면}-{의미} — 대문자 · 하이픈 | EXP-PERF | [../08_screen/README.md](../08_screen/README.md) | 해당 없음 |
+| 화면 코드 | {표면}-{의미} — 대문자 · 하이픈 | EXP-FLOW | [../08_screen/README.md](../08_screen/README.md) | 해당 없음 |
 | API 표면 | {문서} #N — 문서 지역 번호 | 05_timeseries #3 | 각 [../07_api](../07_api/README.md) 도메인 파일 | 자릿수 없음 |
-| 에러 코드 | {domain}.{snake_case}/{HTTP} | datagen.stream_full/503 | [02_error_codes.md](./02_error_codes.md) | 해당 없음 |
+| 에러 코드 | {domain}.{snake_case}/{HTTP} | datagen.run_in_progress/409 | [02_error_codes.md](./02_error_codes.md) | 해당 없음 |
 | 테이블 · 컬럼 | snake_case | tag_raw · tag_master.tag_id | [../05_data_stores](../05_data_stores/README.md) | 해당 없음 |
 | Redis 키 | 영역:용도:식별자 | rt:latest:{device_id} | [../05_data_stores/05_redis_keyspace.md](../05_data_stores/05_redis_keyspace.md) | 해당 없음 |
 | 메트릭 | snake_case — 이름 규약의 정본은 메트릭 카탈로그 | consumer_lag | [../10_observability/01_metrics_catalog.md](../10_observability/01_metrics_catalog.md) | 해당 없음 |
@@ -55,10 +57,10 @@
 
 | 대상 | 예약 | 이유 |
 |------|------|------|
-| 02_features 파일 번호 | **14 이상 사용 금지** | 01~11 도메인 · 12 권한 매트릭스 · 13 스위치 매트릭스로 닫혀 있다. 기능 추가는 도메인 파일 안의 기능 ID로 한다 — 파일을 늘리면 [../03_requirements](../03_requirements/README.md)의 +1 오프셋 대응이 깨진다 |
-| 03_requirements 파일 번호 | **17 이상 사용 금지** | 01 전역 · 02~12 도메인 · 13 비기능 · 14 AC · 15 추적성 · 16 공식 참조로 닫혀 있다 |
+| 02_features 파일 번호 | **14 이상 사용 금지** | 현행 02~08 · 11 도메인 · 13 스위치 매트릭스로 닫혀 있다 · 01 · 09 · 10 · 12는 D-16으로 삭제한 결번(§폐지 도메인 결번). 기능 추가는 도메인 파일 안의 기능 ID로 한다 — 파일을 늘리면 [../03_requirements](../03_requirements/README.md)의 +1 오프셋 대응이 깨진다 |
+| 03_requirements 파일 번호 | **17 이상 사용 금지** | 01 전역 · 03~09 · 12 도메인 · 13 비기능 · 14 AC · 15 추적성 · 16 공식 참조로 닫혀 있다 · 02 · 10 · 11은 D-16으로 삭제한 결번 |
 | 05_data_stores 파일 번호 07~10 | **횡단 문서 예약 대역** | 07 교차 저장소 정합성 · 08 보존 수명주기 · 09 마이그레이션 시드 · 10 대조군. 타 폴더의 인바운드 링크가 이 번호에 고정되므로 재배치하지 않는다 |
-| EXP-01~EXP-05 | **PostgreSQL 대조군 실험 예약** | 대조군 동일 쿼리 5종(단일 태그 1시간 · 단일 태그 7일 · 설비 전체 1일 · 분 단위 롤업 재계산 · 전체 스캔 count)의 자리다. 정본 [../05_data_stores/10_olap_vs_rdb_control.md](../05_data_stores/10_olap_vs_rdb_control.md)(설계) · [../10_observability/06_experiment_catalog.md](../10_observability/06_experiment_catalog.md)(실행) |
+| EXP-01~EXP-05 | **PostgreSQL 대조군 실험 예약** | 대조군 동일 쿼리 5종(단일 태그 1시간 · 단일 태그 7일 · 설비 전체 1일 · 분 단위 롤업 재계산 · 전체 스캔 count)의 자리다 — D-16으로 다섯 실험 모두 폐지 · 번호는 결번 보존(재사용 금지). 정본 [../05_data_stores/10_olap_vs_rdb_control.md](../05_data_stores/10_olap_vs_rdb_control.md)(설계) · [../10_observability/06_experiment_catalog.md](../10_observability/06_experiment_catalog.md)(실행) |
 | 품질 코드 6~8 | **결번** | 값 목록과 결번 사유의 정본은 [03_enums_state_machines.md](./03_enums_state_machines.md) |
 
 - **예약 대역은 [../README.md](../README.md)와 [../CLAUDE.md](../CLAUDE.md)의 구조 절이 함께 인용한다.** 대역을 바꾸면 세 문서를 같은 변경 단위에서 고친다.
@@ -75,13 +77,13 @@
 | F3 | **F-03** | 최신값 조회 | 원본 data_flow.md §5 | [../06_pipeline/05_realtime_read.md](../06_pipeline/05_realtime_read.md) |
 | F4 | **F-04** | 시계열 이력 조회 | 원본 data_flow.md §6 | [../06_pipeline/06_timeseries_read.md](../06_pipeline/06_timeseries_read.md) |
 | F5 | **F-05** | 업무 데이터 CRUD | 원본 data_flow.md §7 | [../06_pipeline/07_business_crud.md](../06_pipeline/07_business_crud.md) |
-| F6 | **F-06** | 알람 판정 | 원본 data_flow.md §8 | [../06_pipeline/08_alarm.md](../06_pipeline/08_alarm.md) |
+| F6 | **F-06** | 알람 판정 — 결번(D-16) | 원본 data_flow.md §8 | 해당 없음 — 기전 문서 삭제(D-16) |
 | F7 | **F-07** | 실시간 푸시 | 원본 data_flow.md §9 | [../06_pipeline/05_realtime_read.md](../06_pipeline/05_realtime_read.md) |
 | F8 | **F-08** | 롤업 집계 | 원본 data_flow.md §10 | [../06_pipeline/09_rollup.md](../06_pipeline/09_rollup.md) |
 | F9 | **F-09** | 테스트 데이터 주입 | 원본 data_flow.md §11 | [../06_pipeline/10_datagen_inject.md](../06_pipeline/10_datagen_inject.md) |
 | F10 | **F-10** | 백프레셔와 장애 | 원본 data_flow.md §12 | [../06_pipeline/11_backpressure_failure.md](../06_pipeline/11_backpressure_failure.md) |
 
-검산: 원본 표기 10 = 문서군 ID 10(F-01~F-10) · 기전 정본 파일 9(F-03 · F-07이 05_realtime_read 하나를 공유) = **10 대응 · 9 파일**
+검산: 원본 표기 10 = 문서군 ID 10(F-01~F-10 · F-06 결번 포함) · 기전 정본 파일 8(F-03 · F-07이 05_realtime_read 하나를 공유 · F-06은 결번이라 파일 없음) = **10 대응 · 8 파일**
 
 - **원본 절 번호와 흐름 번호는 2만큼 어긋난다**(F-01 = §3). 원본 §1 흐름 목록 · §2 전체도가 앞에 있기 때문이며, 원천 줄을 쓸 때 흐름 번호로 절을 추정하지 않는다.
 - **F-03과 F-07은 한 파일에 산다.** 둘 다 "Redis의 휘발 사본을 읽는다"는 같은 기전이라 묶었다. 파일이 하나라고 흐름 ID를 합치지 않는다 — 지연 목표와 병목 지표가 다르다(원본 data_flow.md §1 · §16).
@@ -92,34 +94,51 @@
 
 | 접두 | NestJS 모듈 | 에러 네임스페이스 | API 문서 | 비고 |
 |------|------------|-----------------|---------|------|
-| AUT | auth | auth | [../07_api/03_auth.md](../07_api/03_auth.md) | 해당 없음 |
 | MST | master | master | [../07_api/04_master.md](../07_api/04_master.md) | 해당 없음 |
 | COL | collector | **없음** | **없음** | 내부 모듈 |
 | SIM | plc-sim | **없음** | **없음** | 내부 모듈 · 테이블 없음 |
-| GEN | datagen | datagen | [../07_api/09_datagen.md](../07_api/09_datagen.md) | 부하 주입 표면 /api/v1/ingest/bulk 소유 · 테이블 없음 |
+| GEN | datagen | datagen | [../07_api/09_datagen.md](../07_api/09_datagen.md) | 라이브 실행 표면 /api/v1/runs 소유 · 테이블 없음 |
 | ING | ingest | **없음** | **없음** | 내부 모듈 — URL에 ingest가 있어도 표면 소유자가 아니다 |
 | TSQ | timeseries | timeseries | [../07_api/05_timeseries.md](../07_api/05_timeseries.md) | 해당 없음 |
 | RLT | realtime | realtime | [../07_api/06_realtime.md](../07_api/06_realtime.md) | WebSocket은 [../07_api/11_websocket.md](../07_api/11_websocket.md) |
-| ALM | alarms | alarms | [../07_api/07_alarms.md](../07_api/07_alarms.md) | 해당 없음 |
-| WRK | work-orders | work_orders | [../07_api/08_work_orders.md](../07_api/08_work_orders.md) | 모듈명 하이픈 → 네임스페이스 밑줄 |
 | OBS | metrics | metrics | [../07_api/10_metrics.md](../07_api/10_metrics.md) | /api/v1/health · /metrics 소유 |
 
-검산: 도메인 11 = 네임스페이스 있음 8(AUT · MST · GEN · TSQ · RLT · ALM · WRK · OBS) + 없음 3(COL · SIM · ING) = **11**
+검산: 도메인 8 = 네임스페이스 있음 5(MST · GEN · TSQ · RLT · OBS) + 없음 3(COL · SIM · ING) = **8** · 옛 AUT · ALM · WRK 행은 §폐지 도메인 결번
 
-- **네임스페이스는 URL 경로가 아니라 표면 소유 도메인을 따른다.** /api/v1/ingest/bulk의 에러가 datagen 네임스페이스인 이유다. 판정 근거는 [02_error_codes.md](./02_error_codes.md)의 네임스페이스 배정 규칙이 갖는다.
+- **네임스페이스는 URL 경로가 아니라 표면 소유 도메인을 따른다.** 옛 /api/v1/ingest/bulk(D-16 폐지)의 에러가 ingest가 아니라 datagen 네임스페이스였던 이유다. 판정 근거는 [02_error_codes.md](./02_error_codes.md)의 네임스페이스 배정 규칙이 갖는다.
 - 네임스페이스 없는 도메인이 있다는 것은 누락이 아니라 설계 진술이다. 도메인 전수와 평면 분류의 정본은 [../01_overview/04_domain_map.md](../01_overview/04_domain_map.md)다.
+
+## 폐지 도메인 결번
+
+D-16(사용자 결정 2026-10-11 · 리드 판정 — WRK 함께 폐지 · 도메인 11 → 8 · 대상 문서 파일 삭제)으로 **채번 정본 문서가 지워진 ID**의 폐지 행이다. 결번 영구 보존 규칙(§채번 · 재배치 · 결번 규칙)이 요구하는 폐지 행의 자리를 이 절이 이어받는다 — 정본 문서가 남아 있는 결번(GEN-04 · 06~11 · ING-09 · RLT-08 · REQ-GLB-13 · 23 · F-06 · 에러 코드 · 화면 코드 등)은 그 정본 표가 폐지 행을 갖는다. 폐지 전 원문은 커밋 28c0cc9에 있다.
+
+| 종류 | 결번 범위 | 옛 대상 | 옛 정본(삭제) | 대체 |
+|------|------|------|------|------|
+| 기능 ID | AUT-01~07 | 로그인 · 토큰 갱신 · 로그아웃 · 신원 확인 · 역할 기반 인가 · 레이트 리밋 · 요청 출처 방어 | 02_features/01_auth | AUT-07의 출처 방어는 기능 ID 없는 횡단 방어선(REQ-GLB-25 · 26) · 나머지 없음 |
+| 기능 ID | ALM-01~09 | 알람 규칙 관리 · 규칙 캐시 · 디바운스 판정 · 이벤트 확정 · 판정 전수 기록 · 발생 · 해제 발행 · 알람 이벤트 조회 · 알람 확인 · 판정 이력 분석 | 02_features/09_alarms | 없음 |
+| 기능 ID | WRK-01~05 | 작업지시 관리 · 작업지시 상태 관리 · 생산 실적 기록 · 감사 로그 기록 · 감사 로그 조회 | 02_features/10_work_orders | 없음 |
+| 요구사항 | REQ-AUT-01~17 | 로그인 · 토큰 · 신원 확인 · 인가 · 레이트 리밋 · 출처 방어 · 장애 거동 · 계정 시드 | 03_requirements/02_auth | REQ-AUT-12 · 13 → REQ-GLB-25 · 26 · 나머지 없음 |
+| 요구사항 | REQ-ALM-01~20 | 규칙 관리 · 판정 · 세 쓰기 · 조회 · 확인 · 분석 · 장애 | 03_requirements/10_alarms | 없음 |
+| 요구사항 | REQ-WRK-01~12 | 작업지시 · 실적 · 감사 쓰기와 조회 · 인가 · 시연 최소분 | 03_requirements/11_work_orders | 없음 |
+| API 표면 | 03_auth #1~#3 | login · refresh · logout | 07_api/03_auth | 없음 |
+| API 표면 | 07_alarms #1~#6 | 이벤트 목록 · 확인 · 규칙 조회 · 등록 · 수정 · 판정 이력 | 07_api/07_alarms | 없음 |
+| API 표면 | 08_work_orders #1~#9 | 작업지시 목록 · 등록 · 수정 · 단건 · 상태 전이 · 실적 조회 · 기록 · 감사 로그 · 태그 재발급 이력 | 07_api/08_work_orders | 없음 |
+
+- 검산: 행 = 기능 3 + 요구사항 3 + API 표면 3 = **9** · 결번 ID = 기능 7 + 9 + 5 = 21 · 요구사항 17 + 20 + 12 = 49 · API 표면 3 + 6 + 9 = 18 · 21 + 49 + 18 = **88**
+- **파일 번호도 결번이다.** 02_features 01 · 09 · 10 · 12 · 03_requirements 02 · 10 · 11 · 06_pipeline 08 · 07_api 03 · 07 · 08 · 08_screen 03~07 · 10_observability 05 · 12_security 01 = 18파일은 다시 쓰지 않는다 — 옛 링크 · 커밋이 그 번호를 폐지 전 내용으로 인용한다. 린트의 예정 파일 목록(scripts/docs_lint.py)에서도 뺐다.
+- 폐지 도메인의 에러 네임스페이스(auth · alarms · work_orders) 코드는 [02_error_codes.md](./02_error_codes.md) §폐지 코드가, 폐지 화면 코드는 [../08_screen/README.md](../08_screen/README.md) §화면 인벤토리가 폐지 행을 갖는다 — 정본이 남아 있어 이 절에 다시 적지 않는다.
 
 ## 저장소 식별자
 
 | 대상 | 규칙 | 예 | 근거 · 실패 |
 |------|------|-----|-----------|
-| PostgreSQL 테이블 | snake_case 단수형 | site · device · tag_master · alarm_event | 원본 architecture.md §6 ERD가 단수형이다. 복수형을 섞으면 ORM 매핑과 SQL이 테이블마다 다른 규칙을 탄다 |
+| PostgreSQL 테이블 | snake_case 단수형 | site · device · tag_master · biz_command_log | 원본 architecture.md §6 ERD가 단수형이다. 복수형을 섞으면 ORM 매핑과 SQL이 테이블마다 다른 규칙을 탄다 |
 | PostgreSQL 컬럼 | snake_case · 기본키는 {대상}_id · 시각은 _at 또는 planned_ 접두 | tag_id · occurred_at · planned_start | 예약어와 겹치는 이름은 접미로 피한다 — offset이 아니라 offset_value |
 | ClickHouse 데이터베이스 | plc 단일 | plc.tag_raw | 객체는 항상 데이터베이스로 한정해 쓴다. 한정하지 않으면 default 데이터베이스에 같은 이름 테이블이 생겨도 오류 없이 다른 곳에 삽입된다 |
 | ClickHouse 롤업 테이블 | tag_{해상도} | tag_1m · tag_1h · tag_1d | 해상도 값 1m · 1h · 1d가 조회 요청 interval 값과 같다 — 해상도 선택 로직이 문자열 하나로 테이블을 고른다 |
 | ClickHouse MV | mv_{타깃 테이블} | mv_tag_1m | 타깃 이름을 그대로 담아 DETACH 대상을 이름만으로 찾는다(백필 절차) |
 | ClickHouse Dictionary | dict_{원천} | dict_tag | 해당 없음 |
-| 대조군 테이블 | {원형}_control 계열 | plc_tag_raw_control | 대조군임이 이름에서 드러나야 업무 테이블 집계(14)에 섞이지 않는다 |
+| 대조군 테이블 | {원형}_control 계열 | plc_tag_raw_control | 대조군임이 이름에서 드러나야 업무 테이블 집계에 섞이지 않는다 |
 
 - 테이블 전수 · 컬럼 명세의 정본은 [../05_data_stores/01_postgresql_schema.md](../05_data_stores/01_postgresql_schema.md) · [../05_data_stores/03_clickhouse_schema.md](../05_data_stores/03_clickhouse_schema.md)다. 제약 · 인덱스 이름 규칙은 [../05_data_stores/02_postgresql_constraints.md](../05_data_stores/02_postgresql_constraints.md)가 정한다.
 
@@ -128,10 +147,10 @@
 | 대상 | 규칙 | 예 | 근거 · 실패 |
 |------|------|-----|-----------|
 | 키 | 영역:용도:식별자 — 콜론 계층, 앞이 넓은 범주 | rt:latest:12 · cache:q:{sha1} | 원본 architecture.md §8.3 |
-| 영역 접두 | stream · rt · alarm · cache · lock · rl · sess · auth · ch 중 하나 | 해당 없음 | **접두 하나가 곧 TTL 정책의 경계다.** 봉인 계열 · 캐시 계열 · 채널 구분과 검산의 정본은 [../05_data_stores/05_redis_keyspace.md](../05_data_stores/05_redis_keyspace.md) |
-| 접두 충돌 금지 | 새 용도가 기존 접두의 TTL 정책과 다르면 기존 접두를 빌리지 않는다 | 리프레시 토큰은 rt:가 아니라 auth:refresh: | 원본에서 실제로 rt:{refresh_token_id}가 최신값 계열 rt:와 겹쳐 개명됐다. 빌려 쓰면 TTL 금지 접두 아래에 TTL 키가 생겨 린트 · 래퍼가 어느 쪽 규칙도 적용하지 못한다 |
-| 식별자 자리 | 숫자 ID는 그대로 · 해시는 소문자 16진 · 시각은 epoch 정수 | rl:{class}:{user_id}:{unix_minute} | 시각을 문자열 날짜로 넣으면 시간대에 따라 같은 분이 다른 키가 된다 |
-| Pub/Sub 채널 | ch: 접두 | ch:rt:{device_id} · ch:alarm · ch:cacheinv | 키가 아니므로 TTL 대상이 아니다 |
+| 영역 접두 | stream · rt · ctl · cache · lock · biz · ch 중 하나(ctl은 D-16 신설 — 실행 중 제어 상태 · 옛 alarm · rl · sess · auth는 D-16 폐지) | 해당 없음 | **접두 하나가 곧 TTL 정책의 경계다.** 봉인 계열 · 캐시 계열 · 채널 구분과 검산의 정본은 [../05_data_stores/05_redis_keyspace.md](../05_data_stores/05_redis_keyspace.md) |
+| 접두 충돌 금지 | 새 용도가 기존 접두의 TTL 정책과 다르면 기존 접두를 빌리지 않는다 | 명령 결과는 rt:가 아니라 biz:result: | 원본에서 실제로 rt:{refresh_token_id}가 최신값 계열 rt:와 겹쳐 개명됐다(옛 auth:refresh — D-16 폐지). 빌려 쓰면 TTL 금지 접두 아래에 TTL 키가 생겨 린트 · 래퍼가 어느 쪽 규칙도 적용하지 못한다 |
+| 식별자 자리 | 숫자 ID는 그대로 · 해시는 소문자 16진 · 시각은 epoch 정수 | rt:latest:{device_id} · cache:q:{sha1} | 시각을 문자열 날짜로 넣으면 시간대에 따라 같은 분이 다른 키가 된다 |
+| Pub/Sub 채널 | ch: 접두 | ch:rt:{device_id} · ch:cacheinv · ch:flow | 키가 아니므로 TTL 대상이 아니다 |
 | 컨슈머 그룹 | grp:{소비 모듈} | grp:ingest | **키가 아니라 Stream 안의 이름이다** — 영역 접두 집계에 들지 않는다 |
 | 컨슈머 | {모듈}-{n}(n = 1..N 고정) | ingest-1 | **pid를 넣지 않는다(S2 판정)** — pid가 바뀌면 이전 이름의 PEL을 그 이름으로는 다시 읽지 못해 회수 idle(60초)만큼 늦게 돌아온다. 고정 이름이면 재기동한 컨슈머가 자기 PEL을 ID 0부터 먼저 읽는다 · XAUTOCLAIM은 멈춘 이름의 PEL을 넘겨받는 두 번째 수단이다 |
 | 금지 명령 | KEYS 금지 · SCAN + COUNT만 | 해당 없음 | 단일 인스턴스에서 KEYS는 Stream 소비까지 멈춘다 |

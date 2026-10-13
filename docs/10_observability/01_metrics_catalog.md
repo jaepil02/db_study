@@ -1,7 +1,10 @@
 # 메트릭 카탈로그
 
-> **대상**: /metrics로 노출하는 메트릭 전수 — 이름 규약 · 닫힌 레이블 집합 · **스위치 상태 레이블 이름** · **컨슈머 랙 산출식 판정(가장 중요한 단일 지표)** · 계열별 전수(앱 기본 · HTTP·WS · 수집 · 적재 · 알람 · 실시간 · 조회 · 업무 · 인증 · Redis · PostgreSQL · ClickHouse · E2E · 관측 자체) · 파생 지표 식 · 선행 문서 인계 메트릭 대응 · 수집 주기 · E2E 창 · 메모리 표본 수 조회 계약 · Pub/Sub 출력 버퍼 관련 메트릭
+> **대상**: /metrics로 노출하는 메트릭 전수 — 이름 규약 · 닫힌 레이블 집합 · **스위치 상태 레이블 이름** · **컨슈머 랙 산출식 판정(가장 중요한 단일 지표)** · 계열별 전수(앱 기본 · HTTP·WS · 수집 · 적재 · 실시간 · 조회 · 업무 · Redis · PostgreSQL · ClickHouse · E2E · 관측 자체) · 파생 지표 식 · 선행 문서 인계 메트릭 대응 · 수집 주기 · E2E 창 · 메모리 표본 수 조회 계약 · Pub/Sub 출력 버퍼 관련 메트릭
 > **작성일**: 2026-09-24
+> **개정일**: 2026-10-12 — **D-05 부분 개정 · ADR-32**(직접 비교 비교 사본 TimescaleDB hypertable · 열 압축 · 마이그레이션 009) — pg_table_* · pg_relation_size_bytes의 plc_tag_raw_control 수집 방식 n_live_tup · 파티션 트리 합산 → **approximate_row_count · hypertable_detailed_size(압축 포함) · 데드 튜플 · autovacuum은 칸 표 합(압축 표 제외)**(as-built apps/api/src/modules/metrics/store-stats.service.ts) — 메트릭 이름 · 레이블 · 표 행 수 불변
+> **개정일**: 2026-10-11 — **D-16 직접 비교 · 설비 가동 · SW-09 gated 반영**(사용자 결정 2026-10-11 · ADR-28 · ADR-29 · 코드 as-built) — 닫힌 레이블 route API 표면 29 → **35** · error_code 10 → **12** · device 상한에 카드 라인 30 · **publisher collector · gen_b → compare**(as-built 발행 경로 1 — 옛 gen_b는 모드 B와 함께 D-16 삭제 · collector는 이 게이지를 쓰지 않는다) · prefix Redis 접두 5 → **6**(ctl) · switch value에 gated · backpressure_stage 행 뜻 · gen_runs_total type flow → **flow · compare** · ing_control_copy 행에 gated 게이트 열림 · durable_wrapper prefix stream · rt · ctl — 메트릭 이름 · 표 행 수 불변(새 이름 없음 · 설계 거절 메트릭 http_designed_rejections_total은 src에 없음 확인)
+> **개정일**: 2026-10-11 — **D-16 알람 · 로그인 · 권한 · 옛 perf 직접 재 보기 · 측정 도구 삭제**(사용자 결정 2026-10-11) — **§알람 — ALM 삭제**(11행 · 이름 13) · AUT 3행 삭제(레이트 리밋 통과 · 거절 · 토큰 검증) · 로그인 실패 불릿 삭제 · 표 행 135 → **121** · 이름 147 → **131** · 레이블 표 12 → **11**행(알람 phase 행 삭제 · API 표면 48 → **29** · 에러 코드 23 → **10** · 채널 alarm · 종료 코드 8 → **7** · device 상한 티어 → 시드 · mode 6 → **2** · publisher gen_c 삭제 · Redis 접두 9 → **5** · PostgreSQL 테이블 16 → **8** · ClickHouse 목적지 5 → **4**) · 계열 접두 alm · aut 삭제 · gen_runs_total type perf 삭제 · http_designed_rejections_total 현행 코드 없음 · 히트율 혼입 rl · auth → lock · biz · 인계 대응 16 → **14** · 메모리 표본 alarm · EXP-39 폐지 표기 · ing_routed_rows_total layer alarm 삭제 · D-16 정리(d4 전역 sweep) — http_designed_rejections_total 삭제(코드 · 기록 규칙에서 D-16 정리로 지움) — HTTP 행 3 → **2** · 앱 계열 14 → **13** · 표 행 121 → **120** · 이름 131 → **130** · 파생 지표 API 오류율 식 차감항 삭제 · 인계 대응 REQ-NFR-11 행 이름 교체 · rlt_publish_failures_total 관련 문서 08_alarm 삭제 · D-16 정리(d4 전역 sweep) — 폐지 실험을 확정 수단으로 가리키던 자리 교정(EXP-38 · 39 · 46)
 > **개정일**: 2026-10-03 — 사용자 선택 2026-10-03 — 조회 경로 보이기 · D-15(설계 정본 .omc/plans/web-junior-redesign.md §9) — **mst_cache_requests_total{result} · rlt_latest_requests_total{result} 신설**(마스터 목록 사본 조회 결과 hit · miss · error · 설비 최신값 조회 요청 결과 hit · restored · bypass · error — 둘 다 닫힌 레이블 0 초기화 · EXP-FLOW 조회 줄 · 흐름 시연 조회 섞기) · 실시간 · 조회 · 업무 · 인증 행 26 → **28**(RLT 9 → **10** · MST 2 → **3**) · 표 행 133 → **135** · 이름 145 → **147** · 인계 대응 라이브 실행 행에 흐름 실행 조회 · 조회 캐시 히트율 식 불변(tsq만 — 마스터 사본은 따로 읽는다)
 > **개정일**: 2026-10-03 — D-14 2화면 전환(사용자 결정 2026-10-03) — 메트릭 이름을 부르는 자리 EXP-CONSOLE BFF 해석 → **EXP-FLOW BFF 해석** — 메트릭 수 불변
 > **개정일**: 2026-09-28 — 라이브 실행 제어 반영(사용자 요구 2026-09-28 · 리드 판정 — EXP-PERF · EXP-FLOW 시작 · 중단) — **gen_runs_total{type, status} · gen_run_active{type} 신설** · 수집 행 20 → **22**(GEN 5 → **7**) · 표 행 131 → **133** · 이름 143 → **145** · mode 레이블 값에 **run**(라이브 흐름 실행 — 이름 추가 아님) · 닫힌 레이블 route API 표면 44 → **48** · error_code 22 → **23** · mode 값 집합을 주입 모드 4 + standalone + run = **6**으로 정정(S1 standalone 누락 포함) · 인계 대응 원천 행 15 → **16**
@@ -17,7 +20,7 @@
 > **개정일**: 2026-09-25 — S2 판정 반영(EXP-29 기록 010) — col_modbus_rtt_seconds 타임아웃 관측값 20초(유한) · 버킷으로 읽기 · 무손실 차의 모드 A 분모 → **points_emitted**(Collector 발행 포인트 · Stream 디코딩 합 교차 확인)
 > **개정일**: 2026-09-24 — S1 구현 반영 — gen_worker_utilization 산출 방식 명시(작업 실행 시간 ÷ (경과 × 워커 수)) · gen_points_generated_total의 mode에 단독 실행 경로 standalone
 > **개정일**: 2026-09-24 — W7 보안 판정 반영 — aut_ratelimit_rejected_total class 값 **4 확정**(general · bulk_read · export · bulk_ingest) · 로그인 실패 계수는 신설하지 않고 http_requests_total로 대체 — 메트릭 수 불변(정본 12_security/03)
-> **원천**: 원본 architecture.md §14 · §16(커밋 ff66a37) · 원본 tech_stack.md §9(커밋 ff66a37) · 원본 data_flow.md §15 · §16(커밋 ff66a37) · 원본 implementation_plan.md §4.1 · §5 S2(커밋 ff66a37) · docs_plan.md 웨이브 인계 W6 10/01 행 · D-10 · ADR-20 · ADR-21 · ADR-22 · REQ-OBS-01~12 · [../02_features/11_metrics.md](../02_features/11_metrics.md) OBS-01~06 · [../04_architecture/06_backpressure_failure.md](../04_architecture/06_backpressure_failure.md) §판정량 · [../07_api/10_metrics.md](../07_api/10_metrics.md) #2
+> **원천**: ADR-32(비교 사본 hypertable의 크기 · 행 수 읽기) · 원본 architecture.md §14 · §16(커밋 ff66a37) · 원본 tech_stack.md §9(커밋 ff66a37) · 원본 data_flow.md §15 · §16(커밋 ff66a37) · 원본 implementation_plan.md §4.1 · §5 S2(커밋 ff66a37) · docs_plan.md 웨이브 인계 W6 10/01 행 · D-10 · ADR-20 · ADR-21 · ADR-22 · REQ-OBS-01~12 · [../02_features/11_metrics.md](../02_features/11_metrics.md) OBS-01~06 · [../04_architecture/06_backpressure_failure.md](../04_architecture/06_backpressure_failure.md) §판정량 · [../07_api/10_metrics.md](../07_api/10_metrics.md) #2
 
 이 문서는 **메트릭 이름의 정본**이다. 선행 문서들이 "이름은 W6"으로 넘긴 계수 · 히스토그램 · 게이지 전부를 여기서 명명하고, 어느 요구가 그 지표를 요구했는지를 원천 열에 남긴다. 계측 지점과 수집 방식은 [02_instrumentation.md](./02_instrumentation.md), 대시보드와 알림은 [03_dashboards_alerts.md](./03_dashboards_alerts.md), 실험의 판정 지표 선택은 [06_experiment_catalog.md](./06_experiment_catalog.md)가 갖는다.
 
@@ -31,7 +34,7 @@
 |------|------|------|
 | 표기 | snake_case · 프로젝트 접두 없음 — 창구가 /metrics 하나라 충돌할 이름공간이 없다(ADR-20) | 접두를 붙이면 원본 · 선행 문서의 이름과 grep이 끊긴다 |
 | 원본 이름 보존 | 원본이 이름을 준 13종(points_emitted · poll_duration · consumer_lag · rows_inserted · insert_duration · batch_size · dlq_count · spool_active · spool_bytes · spool_drain_rate · deadband_boost_active · stream_trimmed_unacked · e2e_latency)은 **그대로 쓴다** — 접두 · 단위 접미 규칙의 예외 | 원본 · REQ-COL-15 · REQ-ING-18 · 측정 기록이 옛 이름으로 남아 두 이름이 한 지표를 가리킨다 |
-| 계열 접두 | 새 이름은 도메인 소문자(col · sim · gen · ing · alm · rlt · tsq · mst · aut · obs) · 업무 쓰기 명령 경로(biz — MST · ALM · WRK 쓰기에 걸친 횡단 경로 · D-04 개정) · 저장소(redis · pg · ch) · 표면(http · ws) 접두 · 워커 풀(worker_pool — ADR-25) · 앱 기본은 prom-client 기본 이름 | 어느 모듈이 내는 지표인지 이름에서 읽을 수 없다 |
+| 계열 접두 | 새 이름은 도메인 소문자(col · sim · gen · ing · rlt · tsq · mst · obs — 옛 alm · aut는 D-16 삭제) · 업무 쓰기 명령 경로(biz — MST 쓰기의 명령 경로 · D-04 개정) · 저장소(redis · pg · ch) · 표면(http · ws) 접두 · 워커 풀(worker_pool — ADR-25) · 앱 기본은 prom-client 기본 이름 | 어느 모듈이 내는 지표인지 이름에서 읽을 수 없다 |
 | 단위 접미 | 시간 _seconds · 크기 _bytes · 누적 계수 _total · 비율은 접미 없이 0~1 | 밀리초와 초가 섞여 대시보드 축이 1,000배 어긋난다 |
 | 종류 | counter(누적) · gauge(순간) · histogram(분포) 셋 — summary를 쓰지 않는다 | summary는 인스턴스 간 합산이 안 되어 역할 분리(ADR-22) 뒤 분위수를 합칠 수 없다 |
 | 분위수 | 히스토그램 버킷에서 계산한다 · 버킷 경계는 원본 목표 · 원본 예상치 값을 경계로 포함한다 | 경계 사이 보간 오차가 목표 대비 판정을 뒤집는다 |
@@ -45,21 +48,20 @@
 
 | 레이블 | 값 집합 | 상한의 근거 | 쓰는 계열 |
 |------|------|------|------|
-| route · method · code | API 표면 48 · HTTP 메서드 · HTTP 상태 | [../07_api](../07_api/README.md) 표면 요약 | http |
-| error_code | 에러 코드 23 | [../11_glossary/02_error_codes.md](../11_glossary/02_error_codes.md) | http |
-| channel · close_code | rt · alarm · cacheinv · flow(흐름 이벤트 ch:flow — ws_frames_sent_total · rlt_publish_failures_total) · bizreply(업무 결과 알림 ch:bizreply — rlt_publish_failures_total만 · 연결로 나가지 않는다) · WebSocket 종료 코드 8 | [../07_api/11_websocket.md](../07_api/11_websocket.md) · [../06_pipeline/07_business_crud.md](../06_pipeline/07_business_crud.md) | ws · rlt |
-| device | 설비 ID — **티어 구성으로 상한**(최대 L 100) | [../04_architecture/07_capacity_planning.md](../04_architecture/07_capacity_planning.md) | col |
-| quality · profile · mode | 품질 코드 7 · 신호 프로파일 8 · mode = 주입 모드 4(A~D) + 단독 실행 standalone + 라이브 흐름 실행 run = 6 | [../11_glossary/03_enums_state_machines.md](../11_glossary/03_enums_state_machines.md) | col · gen |
-| publisher · stage | collector · gen_b · gen_c · 백프레셔 단계 값 0 정상 · 1 주의 · 2 경고 · 3 위험 · 4 복구 | 발행 경로 3 · 단계 5 | backpressure_stage |
-| phase · from · to · severity | A1~A6 · total · 알람 상태 5 · 심각도 3 | [../04_architecture/05_latency_budget.md](../04_architecture/05_latency_budget.md) · 상태 머신 | alm |
-| prefix · stream | Redis 키 접두 9(stream · rt · alarm · cache · lock · rl · sess · auth · biz) · raw · dlq · biz(stream:biz:cmd) | [../05_data_stores/05_redis_keyspace.md](../05_data_stores/05_redis_keyspace.md) | redis · mst · 래퍼 |
-| store · table | postgres · clickhouse · redis · PostgreSQL 테이블 16(biz_command_log 포함 · D-04 개정) · ClickHouse 목적지 테이블 5 — 업무 대조 계측물 3은 레이블 집합에 넣지 않는다(역방향 대조 실험 스냅샷에서만 행이 있고 그 파트 · 머지 비용은 실행기가 system 테이블에서 직접 읽는다 · 수집기 닫힌 집합 CH_TABLES와 같다) | 루트 README 고정 기준 | obs · pg · ch |
-| **switch · env · value · impl · warning** | 스위치 12 · 환경변수 12 · 값(on · off · 정수 ms · ingest · collector · stream · direct) · 포트 구현 24 · stream_boundary_bypassed | [../02_features/13_switch_matrix.md](../02_features/13_switch_matrix.md) | obs_switch_info · obs_switch_warning |
+| route · method · code | API 표면 35 · HTTP 메서드 · HTTP 상태 | [../07_api](../07_api/README.md) 표면 요약 | http |
+| error_code | 에러 코드 12 | [../11_glossary/02_error_codes.md](../11_glossary/02_error_codes.md) | http |
+| channel · close_code | rt · cacheinv · flow(흐름 이벤트 ch:flow — ws_frames_sent_total · rlt_publish_failures_total) · bizreply(업무 결과 알림 ch:bizreply — rlt_publish_failures_total만 · 연결로 나가지 않는다) · WebSocket 종료 코드 7 | [../07_api/11_websocket.md](../07_api/11_websocket.md) · [../06_pipeline/07_business_crud.md](../06_pipeline/07_business_crud.md) | ws · rlt |
+| device | 설비 ID — **시드 구성으로 상한**(로컬 기본 카드 라인 30 · PlcSim 포트 대역 100 — 옛 티어 L 100과 같다) | [../04_architecture/07_capacity_planning.md](../04_architecture/07_capacity_planning.md) | col |
+| quality · profile · mode | 품질 코드 7 · 신호 프로파일 8 · mode = 주입 모드 A + 라이브 흐름 실행 run = 2(옛 B · C · D · standalone은 D-16 삭제) | [../11_glossary/03_enums_state_machines.md](../11_glossary/03_enums_state_machines.md) | col · gen |
+| publisher · stage | **compare**(직접 비교 넣기 · 무결성 발행 — D-16) · 백프레셔 단계 값 0 정상 · 1 주의 · 2 경고 · 3 위험 · 4 복구 | as-built 발행 경로 1(옛 gen_b · gen_c는 모드 B · C와 함께 D-16 삭제 · collector는 이 게이지를 쓰지 않는다 — Collector 단계는 스풀 계열이 드러낸다) · 단계 5 | backpressure_stage |
+| prefix · stream | Redis 키 접두 6(stream · rt · ctl · cache · lock · biz — 채널 ch 제외 · 봉인 래퍼 durable_wrapper_failures_total은 stream · rt · ctl) · raw · dlq · biz(stream:biz:cmd) | [../05_data_stores/05_redis_keyspace.md](../05_data_stores/05_redis_keyspace.md) | redis · mst · 래퍼 |
+| store · table | postgres · clickhouse · redis · PostgreSQL 테이블 8(biz_command_log 포함) · ClickHouse 테이블 4(tag_raw · tag_1m · tag_1h · tag_1d — 수집기 닫힌 집합 CH_TABLES와 같다) | 루트 README 고정 기준 | obs · pg · ch |
+| **switch · env · value · impl · warning** | 스위치 12 · 환경변수 12 · 값(on · off · gated · 정수 ms · ingest · collector · stream · direct) · 포트 구현 24 · stream_boundary_bypassed | [../02_features/13_switch_matrix.md](../02_features/13_switch_matrix.md) | obs_switch_info · obs_switch_warning |
 | commit_hash · memory_profile · capacity_tier | 기동 1값씩 | 프로세스 수명 동안 불변 | obs_run_info |
 | 나머지(result · reason · layer · writer · freshness · op · kind · class · rank · queryid · quantile · type · status) | 계열 표의 레이블 칸이 값을 적는다 | 각 계열 표 | 각 계열 |
 
-- 검산: 행 = **12**
-- **device 레이블은 판정이다.** REQ-OBS-06의 원래 열거(도메인 · 저장소 · 스위치 · 상태 코드 · 단계)에 설비가 없었지만, Collector의 타임아웃 · 생략분은 설비 단위로 세어야 SIM 주입 계획(설비 포트 범위)과 대조된다([../06_pipeline/02_collect.md](../06_pipeline/02_collect.md)). 설비 수는 티어 구성이 닫으므로 태그 수에 비례하지 않는다 — REQ-OBS-06 열거에 설비가 추가됐다(W6 반영).
+- 검산: 행 = **11** · 옛 phase · from · to · severity(알람) 행은 D-16 삭제
+- **device 레이블은 판정이다.** REQ-OBS-06의 원래 열거(도메인 · 저장소 · 스위치 · 상태 코드 · 단계)에 설비가 없었지만, Collector의 타임아웃 · 생략분은 설비 단위로 세어야 SIM 주입 계획(설비 포트 범위)과 대조된다([../06_pipeline/02_collect.md](../06_pipeline/02_collect.md)). 설비 수는 시드 구성이 닫으므로 태그 수에 비례하지 않는다 — REQ-OBS-06 열거에 설비가 추가됐다(W6 반영).
 - **스위치 상태 레이블 이름 판정 — switch · env · value · impl.** 스위치 상태를 모든 시계열의 레이블로 붙이지 않고 **정보 메트릭 obs_switch_info**(값 1) 하나에 싣는다. 모든 시계열에 스위치 수만큼 레이블을 붙이면 시계열 수는 그대로여도 스크레이프 본문이 스위치 수에 비례해 커지고, 기동마다 레이블 값이 바뀌어 같은 지표가 다른 시계열로 끊긴다. 대시보드 · 콘솔은 obs_switch_info를 조인해 읽는다.
 
 ## 컨슈머 랙 판정
@@ -94,12 +96,11 @@
 | **worker_pool_task_duration_seconds** | histogram | 초 | pool | 워커 작업 시간(대기 제외) — 대기와 실행을 가른다 | ADR-25 |
 | http_request_duration_seconds | histogram | 초 | route · method · code | API 지연 | OBS-01 · 조회 경로 예산 |
 | http_requests_total | counter | 건 | route · method · code | 요청 수 · 상태 코드 분포 | OBS-01 |
-| **http_designed_rejections_total** | counter | 건 | route · error_code | 설계된 거절(datagen.stream_full · common.rate_limited) | REQ-NFR-11 |
 | ws_connections | gauge | 연결 | 없음 | WebSocket 동시 연결 | REQ-NFR-12 |
 | ws_frames_sent_total | counter | 프레임 | channel | 송신 프레임 — 연결당 초당 프레임의 분자 | AC-41 · SW-07 |
 | ws_closes_total | counter | 건 | close_code | 종료 코드별 절단(느린 구독자 4413 포함) | [../07_api/11_websocket.md](../07_api/11_websocket.md) |
 
-- 검산: 행 = **14** — 앱 기본 6 + 워커 풀 2 + HTTP 3 + WebSocket 3
+- 검산: 행 = **13** — 앱 기본 6 + 워커 풀 2 + HTTP 2 + WebSocket 3 · 옛 http_designed_rejections_total은 던지는 코드가 없어 D-16 정리에서 코드 · 기록 규칙과 함께 지웠다
 - **워커 풀 두 지표가 이벤트 루프 지연을 가른다.** 대기열이 길고 작업 시간이 그대로면 워커 수가 모자란 것이고(WORKER_POOL_SIZE · 소유 [../04_architecture/03_execution_topology.md](../04_architecture/03_execution_topology.md)), 작업 시간이 늘면 입력 크기가 커진 것이다 — 둘 다 없이 이벤트 루프 지연만 보면 격리가 동작하는지 알 수 없다. pool 값은 격리 대상 목록(정본 [../04_architecture/02_module_boundaries.md](../04_architecture/02_module_boundaries.md) §worker_threads 격리 대상)의 닫힌 집합이다.
 - prom-client 기본 메트릭의 정확한 목록은 라이브러리 버전 종속이다 — 버전 정본 [../09_tech_stack/02_backend.md](../09_tech_stack/02_backend.md).
 
@@ -119,16 +120,16 @@
 | col_spool_truncated_frames_total | counter | 프레임 | 없음 | 쓰다 끊긴 스풀 프레임 — 버리고 센다 | [../06_pipeline/12_data_contract.md](../06_pipeline/12_data_contract.md) |
 | col_ready | gauge | 0 · 1 | 없음 | 기동 로드(설비 · 활성 태그) 완료 — 0이면 기동 미준비 | [../06_pipeline/02_collect.md](../06_pipeline/02_collect.md) |
 | col_latest_write_failures_total | counter | 건 | 없음 | SW-11 collector의 rt:latest 쓰기 실패 | [../06_pipeline/11_backpressure_failure.md](../06_pipeline/11_backpressure_failure.md) |
-| **backpressure_stage** | gauge | 단계 값 | publisher | 발행 경로별 백프레셔 단계 — 모드 B 단계가 Collector와 같은 판정인지 대조 | ADR-21 · 23 · [../06_pipeline/10_datagen_inject.md](../06_pipeline/10_datagen_inject.md) |
+| **backpressure_stage** | gauge | 단계 값 | publisher | 발행자가 판정한 백프레셔 단계 — 지금은 직접 비교 발행(publisher compare)만 쓴다 · 넣기 · 무결성 동안 움직이고 종결 때 0(D-16) | ADR-21 · 23 · [../06_pipeline/10_datagen_inject.md](../06_pipeline/10_datagen_inject.md) |
 | sim_listen_failed_ports | gauge | 포트 | 없음 | 기동 실패한 SIM 포트 수 | REQ-SIM-03 |
 | sim_fault_injection_active | gauge | 0 · 1 | kind(delay · exception) | 지금 적용 중인 주입 계획 | REQ-SIM-10 |
-| gen_points_generated_total | counter | 포인트 | mode · profile | 생성 카운트 — 무손실 판정의 분모 · mode는 주입 모드 A~D와 단독 실행 경로 standalone(S1) · 라이브 흐름 실행 run(api 안 생성기 · [../06_pipeline/10_datagen_inject.md](../06_pipeline/10_datagen_inject.md) §흐름 시연 실행) · profile은 신호 프로파일 이름 | AC-01 · REQ-NFR-01 |
+| gen_points_generated_total | counter | 포인트 | mode · profile | 생성 카운트 — 무손실 판정의 분모 · mode는 주입 모드 A와 라이브 흐름 실행 run(옛 B~D · standalone은 D-16 삭제 · run은 api 안 생성기 · [../06_pipeline/10_datagen_inject.md](../06_pipeline/10_datagen_inject.md) §흐름 시연 실행) · profile은 신호 프로파일 이름 | AC-01 · REQ-NFR-01 |
 | gen_points_dropout_total | counter | 포인트 | mode | DROPOUT이 생략한 행 | AC-01 |
 | gen_publish_halted_entries_total · gen_publish_halted_points_total | counter | 엔트리 · 포인트 | mode | 위험 단계로 발행하지 않은 양 | REQ-GEN-07 |
 | gen_worker_utilization | gauge | 0~1 | mode | 생성기 워커 스레드 이벤트 루프 사용률 — 생성기 CPU · 워커는 작업 사이에 쉬므로 작업 실행 시간 ÷ (경과 × 워커 수)로 잰다 | REQ-GEN-13 |
 | gen_register_update_seconds | histogram | 초 | 없음 | 신호 생성 → 레지스터 반영(구간 #1 · 모드 A) | 지연 예산 #1 |
-| **gen_runs_total** | counter | 건 | type · status | 라이브 실행 종결 수 — type perf · flow · status 종결 3(completed · stopped · failed) · api 재기동이 끊은 실행은 세지 않는다(기록 없음) | GEN-11 · 12 · REQ-GEN-16~19 · [../06_pipeline/10_datagen_inject.md](../06_pipeline/10_datagen_inject.md) §라이브 실행 — perf · flow |
-| **gen_run_active** | gauge | 0 · 1 | type | 진행 중(running · stopping) 라이브 실행 — 두 type의 합은 1을 넘지 않는다(동시 1) · 부하 · 대조 실험 착수 전 0 확인 | 상동 · [../06_pipeline/10_datagen_inject.md](../06_pipeline/10_datagen_inject.md) §한 번에 한 계층 |
+| **gen_runs_total** | counter | 건 | type · status | 라이브 실행 종결 수 — type flow · compare(옛 perf는 D-16 삭제) · status 종결 3(completed · stopped · failed) · api 재기동이 끊은 실행은 세지 않는다(기록 없음) | GEN-12 · REQ-GEN-16~19 · [../06_pipeline/10_datagen_inject.md](../06_pipeline/10_datagen_inject.md) §라이브 실행 — flow |
+| **gen_run_active** | gauge | 0 · 1 | type | 진행 중(running · stopping) 라이브 실행 — 실행은 동시 1이라 1을 넘지 않는다 · 실험 착수 전 0 확인 | 상동 · [../06_pipeline/10_datagen_inject.md](../06_pipeline/10_datagen_inject.md) §한 번에 한 계층 |
 
 - 검산: 행 = **22**(COL 13 + SIM 2 + GEN 7) — 이름 수는 §검산 한 자리에서 센다
 - **라이브 실행은 run 값을 새 레이블로 만들지 않는다.** mode를 싣는 gen 계열(generated · dropout · publish_halted · worker_utilization)은 흐름 실행에서 mode run으로 센다 — 무손실 차 식(§파생 지표)이 run에도 그대로 선다. 흐름 실행의 백프레셔 단계는 backpressure_stage의 publisher 값을 늘리지 않고 실행 객체의 정지 수(backpressurePauses)로만 드러난다 — 실행은 시연이라 발행자별 단계 대조(모드 B 대 Collector)의 대상이 아니다.
@@ -153,9 +154,9 @@
 | ing_consumer_paused_seconds_total | counter | 초 | 없음 | flusher 보유 상한으로 컨슈머가 읽기를 멈춘 시간 | [../06_pipeline/03_ingest_batch.md](../06_pipeline/03_ingest_batch.md) |
 | ing_dedup_ignored_batches_total | counter | 배치 | 없음 | 중복 제거로 쓰인 행 수 0인 성공 — **S3 미구현**(삽입 응답 요약에 판별 수단이 없다 · 06_pipeline/03 §미확인 · 미설계 등재) · 등록하지 않는다 | 상동 |
 | ing_xautoclaim_claimed_total | counter | 엔트리 | 없음 | 주기 회수로 인수한 PEL | EXP-28 |
-| ing_routed_rows_total | counter | 행 | layer(raw · alarm) | 분기 계층별 쓰기 결과 — ① 원시 적재 · ② 판정기 인계 | REQ-ING-14 · 분기 대조 |
+| ing_routed_rows_total | counter | 행 | layer(raw) | 분기 계층별 쓰기 결과 — ① 원시 적재(옛 ② 판정기 인계 값 alarm은 D-16 삭제) | REQ-ING-14 · 분기 대조 |
 | ing_negative_dt_total | counter | 행 | 없음 | 음수 dt 행 — 거절하지 않고 센다 | [../06_pipeline/12_data_contract.md](../06_pipeline/12_data_contract.md) |
-| ing_control_copy_rows_total · ing_control_copy_failures_total | counter | 행 · 배치 | 없음 | 대조군 COPY 행 · 실패 배치(SW-09) | REQ-ING-15 |
+| ing_control_copy_rows_total · ing_control_copy_failures_total | counter | 행 · 배치 | 없음 | 비교 사본 COPY 행 · 실패 배치(SW-09 on · gated의 게이트 열림 — 직접 비교 넣기의 PostgreSQL 실패 수가 이 차분이다) | REQ-ING-15 · 19 |
 | ing_control_copy_seconds | histogram | 초 | 없음 | 대조군 COPY 트랜잭션 시간 — 비교 축 3 | [../05_data_stores/10_olap_vs_rdb_control.md](../05_data_stores/10_olap_vs_rdb_control.md) |
 | ing_mv_errors_total | counter | 건 | result(error · retry_ok) | MV 삽입 실패와 재시도 성공 | [../06_pipeline/09_rollup.md](../06_pipeline/09_rollup.md) |
 | ing_rollup_suspect_batches_total | counter | 배치 | 없음 | 롤업 의심 구간 기록 수 | 상동 |
@@ -163,26 +164,7 @@
 - 검산: 행 = **20**
 - **구간을 식별하는 값(ts 범위 · 토큰)은 메트릭에 싣지 않는다.** 대조군 실패 · 롤업 의심 · 판정 무효 구간은 계수만 메트릭이고 구간 자체는 구조화 로그 이벤트다 — 레이블에 ts를 넣으면 닫힌 집합이 깨진다. 기록 자리의 판정은 [02_instrumentation.md](./02_instrumentation.md) §구간 기록.
 
-## 알람 — ALM
-
-| 이름 | 종류 | 단위 | 레이블 | 뜻 | 원천 |
-|------|------|------|------|------|------|
-| alm_evaluations_total | counter | 판정 | result(normal · violation) | 판정 수 — 분기 대조 ②의 첫 값 | AC-35 |
-| alm_eval_duration_seconds | histogram | 초 | phase(A1~A6 · total) | 판정 구간과 하위 구간 | 지연 예산 판정 구간 |
-| alm_handoff_wait_seconds | histogram | 초 | 없음 | flusher가 인계 슬롯을 기다린 시간 | [../06_pipeline/08_alarm.md](../06_pipeline/08_alarm.md) |
-| alm_transitions_total | counter | 건 | from · to | 디바운스 상태 전이 수 | 원본 tech_stack.md §9 · AC-09 |
-| alm_events_opened_total · alm_events_closed_total | counter | 건 | 없음 | alarm_event 확정 열기 · 닫기 | AC-35 |
-| alm_active_alarms | gauge | 건 | severity | 열린 알람 수 — 규칙 ID 대신 심각도로 가른다 | 원본 tech_stack.md §9 |
-| alm_eval_rows_inserted_total | counter | 행 | 없음 | alarm_eval에 쓰인 판정 행 | AC-35 |
-| alm_eval_gap_batches_total · alm_eval_gap_rows_total | counter | 배치 · 행 | 없음 | 재시도 소진으로 판정 전수가 빈 무효 구간 | [../06_pipeline/08_alarm.md](../06_pipeline/08_alarm.md) |
-| alm_state_write_failures_total | counter | 건 | 없음 | 커밋 뒤 alarm:state 쓰기 실패 | 상동 |
-| alm_pg_write_failures_total | counter | 건 | op(open · close) | 확정 INSERT · UPDATE 실패 | AC-36 |
-| alm_acks_total | counter | 건 | result(accepted · rejected) | 확인(ACK) 요청 결과 — ACK 신호 부재 계측의 분모 | [../07_api/07_alarms.md](../07_api/07_alarms.md) |
-
-- 검산: 행 = **11**
-- 원본의 "규칙별 활성 알람 수"는 rule_id 레이블이 되어 닫힌 집합을 깬다 — 심각도(3)로 바꿨다. 규칙별 값은 alarm_event 조회로 본다.
-
-## 실시간 · 조회 · 업무 · 인증 — RLT · TSQ · MST · AUT · BIZ
+## 실시간 · 조회 · 업무 — RLT · TSQ · MST · BIZ
 
 | 이름 | 종류 | 단위 | 레이블 | 뜻 | 원천 |
 |------|------|------|------|------|------|
@@ -193,7 +175,7 @@
 | rlt_latest_updates_total | counter | 건 | writer(ingest · collector) | rt:latest 갱신 — 갱신 공백 판정 | SW-11 · AC-34 |
 | rlt_tag_unresolved_total | counter | 건 | 없음 | 단일 태그 해석 실패(503) | [../06_pipeline/05_realtime_read.md](../06_pipeline/05_realtime_read.md) |
 | rlt_fanout_delivery_seconds | histogram | 초 | channel(pubsub · direct) | 발행 → 게이트웨이 도착(스로틀 창 대기 · 소켓 송신 제외 · 한 프로세스 안에서만 잰다) — **첫 칸 100 µs가 direct 경로를 가르지 못해 판정은 합 ÷ 수(평균)로 한다(기록 025)** | SW-06 · AC-40 |
-| rlt_publish_failures_total | counter | 건 | channel | ch:* 발행 실패(계수 · 삼킴) — FanoutPublisher · 흐름 요약(flow) · 업무 결과 알림(bizreply)이 한 계열을 쓴다 · **흐름 요약 발행 실패를 따로 세지 않는다(판정)** — 실패 규칙(계수하고 삼킨다)과 대응이 같고 channel 값이 원인을 가른다 | [../06_pipeline/07_business_crud.md](../06_pipeline/07_business_crud.md) · 08_alarm · [../07_api/11_websocket.md](../07_api/11_websocket.md) §흐름 이벤트 |
+| rlt_publish_failures_total | counter | 건 | channel | ch:* 발행 실패(계수 · 삼킴) — FanoutPublisher · 흐름 요약(flow) · 업무 결과 알림(bizreply)이 한 계열을 쓴다 · **흐름 요약 발행 실패를 따로 세지 않는다(판정)** — 실패 규칙(계수하고 삼킨다)과 대응이 같고 channel 값이 원인을 가른다 | [../06_pipeline/07_business_crud.md](../06_pipeline/07_business_crud.md) · [../07_api/11_websocket.md](../07_api/11_websocket.md) §흐름 이벤트 |
 | rlt_throttle_merged_total | counter | 갱신 | 없음 | 스로틀 창이 병합해 버린 갱신 | SW-07 |
 | rlt_subscriber_disconnects_total | counter | 건 | 없음 | api 구독 연결이 출력 버퍼 한도로 끊김(4503) | 한도 값 [../09_tech_stack/03_data_infra.md](../09_tech_stack/03_data_infra.md) |
 | tsq_cache_requests_total | counter | 건 | result(hit · miss · error) | cache:q 조회 결과 — 히트율은 이 계열만 쓴다 | REQ-NFR-10 · AC-23 |
@@ -206,17 +188,13 @@
 | mst_dict_reloads_total | counter | 건 | result(ok · failed) | 체인 ④ Dictionary 재적재 — AC-06 사건 | REQ-MST-10 · AC-06 |
 | cache_wrapper_failures_total | counter | 건 | prefix · op | CacheKeyClient가 삼킨 실패(degrade) | REQ-GLB-09 |
 | durable_wrapper_failures_total | counter | 건 | prefix | DurableKeyClient가 던진 실패 | 상동 |
-| aut_ratelimit_bypassed_total | counter | 건 | 없음 | Redis 불가 중 세지 않고 통과한 요청 | REQ-AUT-14 |
-| aut_ratelimit_rejected_total | counter | 건 | class(general · bulk_read · export · bulk_ingest) | 한도 초과 거절 — 등급 이름 정본 [../12_security/03_api_surface_defense.md](../12_security/03_api_surface_defense.md) · 실험 구간 증가가 0이 아니면 그 측정 기록은 무효(관계 R2 · R4) | REQ-AUT-14 |
-| aut_token_verify_seconds | histogram | 초 | 없음 | 액세스 토큰 검증 시간(S7) — 모드 C 인증 비용 | REQ-GEN-15 · EXP-37 |
-| **biz_commands_total** | counter | 건 | kind · result(applied · rejected · expired · failed · timeout · unavailable) | 업무 명령의 결말 — **계수 주체가 둘이다.** 워커가 명령 종결마다 applied(커밋) · rejected(도메인 오류) · expired(유효 창 초과) · failed(PostgreSQL 불가 결과 · 원장 행 없음)를 세고(멱등 재적용도 종결 1건), api가 timeout(대기 상한에서 202를 낼 때) · unavailable(XADD 실패 — Redis 불가 503)을 센다. **한 명령이 api 쪽 1(timeout) + 워커 쪽 1로 두 번 셀 수 있다** — 합계를 요청 수로 읽지 않는다. common.postgres_unavailable 재사용이라 503의 원인은 이 레이블이 가른다 — Redis 불가 = unavailable · PostgreSQL 불가 = failed | REQ-GLB-12 · [../07_api/01_conventions.md](../07_api/01_conventions.md) §업무 쓰기 경로 · EXP-46 |
-| biz_command_seconds | histogram | 초 | result(applied · rejected · expired · failed · timeout) | api 대기 — XADD부터 결과 수신(또는 대기 상한)까지 · 상한 초과 비율의 원천 · unavailable은 XADD 전 실패라 대기가 없어 싣지 않는다 | [../06_pipeline/07_business_crud.md](../06_pipeline/07_business_crud.md) · EXP-46 |
+| **biz_commands_total** | counter | 건 | kind · result(applied · rejected · expired · failed · timeout · unavailable) | 업무 명령의 결말 — **계수 주체가 둘이다.** 워커가 명령 종결마다 applied(커밋) · rejected(도메인 오류) · expired(유효 창 초과) · failed(PostgreSQL 불가 결과 · 원장 행 없음)를 세고(멱등 재적용도 종결 1건), api가 timeout(대기 상한에서 202를 낼 때) · unavailable(XADD 실패 — Redis 불가 503)을 센다. **한 명령이 api 쪽 1(timeout) + 워커 쪽 1로 두 번 셀 수 있다** — 합계를 요청 수로 읽지 않는다. common.postgres_unavailable 재사용이라 503의 원인은 이 레이블이 가른다 — Redis 불가 = unavailable · PostgreSQL 불가 = failed | REQ-GLB-12 · [../07_api/01_conventions.md](../07_api/01_conventions.md) §업무 쓰기 경로 · 옛 EXP-46(D-16 폐지) |
+| biz_command_seconds | histogram | 초 | result(applied · rejected · expired · failed · timeout) | api 대기 — XADD부터 결과 수신(또는 대기 상한)까지 · 상한 초과 비율의 원천 · unavailable은 XADD 전 실패라 대기가 없어 싣지 않는다 | [../06_pipeline/07_business_crud.md](../06_pipeline/07_business_crud.md) · 옛 EXP-46(D-16 폐지) |
 | biz_apply_seconds | histogram | 초 | kind | 워커 적용 — BEGIN부터 COMMIT(또는 롤백)까지 · 직렬 소비자의 처리량 상한을 이 분포와 도착률로 읽는다 | 상동 |
 | biz_stream_lag | gauge | 엔트리 | 없음 | stream:biz:cmd의 grp:biz-writer 미확인 적체 — 그룹 lag + pending(§컨슈머 랙 판정과 같은 산출 기준 · XLEN 아님) · 워커 정지 · 적체의 신호 | 상동 · SW-12 |
-| biz_duplicates_total | counter | 건 | kind | 원장(biz_command_log)에 이미 있는 cmdId를 만나 적용 없이 저장된 결과를 다시 낸 수 — 재전달 · 같은 키 재요청 | REQ-GLB-12 · AC-37 · EXP-46 |
+| biz_duplicates_total | counter | 건 | kind | 원장(biz_command_log)에 이미 있는 cmdId를 만나 적용 없이 저장된 결과를 다시 낸 수 — 재전달 · 같은 키 재요청 | REQ-GLB-12 · AC-37 · 옛 EXP-46(D-16 폐지) |
 
-- 검산: 행 = **28** — RLT 10 + TSQ 5 + MST 3 + 래퍼 2 + AUT 3 + BIZ 5
-- **로그인 실패 계수는 따로 두지 않는다(W7 판정).** http_requests_total{route="/api/v1/auth/login", method="POST", code="401"}가 곧 로그인 실패 수다 — 로그인 표면의 401은 auth.invalid_credentials 하나뿐이다([../07_api/03_auth.md](../07_api/03_auth.md) #1). 대입 흔적은 이 계수의 급증으로 본다(로그인 시도 제한을 두지 않은 판정의 관측 자리 — [../12_security/03_api_surface_defense.md](../12_security/03_api_surface_defense.md) §로그인 시도 제한 판정).
+- 검산: 행 = **25** — RLT 10 + TSQ 5 + MST 3 + 래퍼 2 + BIZ 5 · 옛 AUT 3(레이트 리밋 통과 · 거절 · 토큰 검증)은 D-16 삭제
 
 ## 저장소 — Redis · PostgreSQL · ClickHouse
 
@@ -227,7 +205,7 @@ OBS가 수집 주기마다 모아 마지막 값을 낸다(REQ-OBS-03). 수집 �
 | redis_used_memory_bytes · redis_maxmemory_bytes | gauge | 바이트 | 없음 | 사용 메모리 · 상한 | OBS-02 |
 | redis_mem_fragmentation_ratio | gauge | 비 | 없음 | 단편화 — 컨테이너 상한 여유 | [../05_data_stores/06_redis_memory.md](../05_data_stores/06_redis_memory.md) |
 | redis_evicted_keys_total | counter | 키 | 없음 | 축출 수 | AC-32 |
-| redis_keyspace_hits_total · redis_keyspace_misses_total | counter | 건 | 없음 | 인스턴스 전체 적중 — **히트율 판정에 쓰지 않는다**(rl · auth 조회가 섞인다) | REQ-NFR-10 |
+| redis_keyspace_hits_total · redis_keyspace_misses_total | counter | 건 | 없음 | 인스턴스 전체 적중 — **히트율 판정에 쓰지 않는다**(lock · biz 조회가 섞인다) | REQ-NFR-10 |
 | redis_ops_per_sec | gauge | 명령/초 | 없음 | 명령 처리율 — 병목 #5 | [../06_pipeline/01_flow_inventory.md](../06_pipeline/01_flow_inventory.md) |
 | redis_client_output_buffer_bytes | gauge | 바이트 | 없음 | 일반 · Pub/Sub 클라이언트 출력 버퍼 합 — 한도 접근 감시 | 한도 값 [../09_tech_stack/03_data_infra.md](../09_tech_stack/03_data_infra.md) |
 | redis_stream_length | gauge | 엔트리 | stream | XLEN — **메모리 양 · 트리밍 감시 전용 · 적체 판정 금지** | ADR-21 |
@@ -240,9 +218,9 @@ OBS가 수집 주기마다 모아 마지막 값을 낸다(REQ-OBS-03). 수집 �
 | pg_buffer_hit_ratio | gauge | 0~1 | 없음 | 버퍼 적중률 | 상동 |
 | pg_lock_waits | gauge | 건 | 없음 | 대기 중인 락 | 상동 |
 | pg_statement_top_mean_seconds | gauge | 초 | rank · queryid | 평균 시간 상위 10 문형 — 문형 텍스트는 싣지 않는다 | 상동 · REQ-OBS-10 |
-| pg_table_dead_tuples · pg_autovacuum_total | gauge · counter | 튜플 · 건 | table | 데드 튜플 · autovacuum 실행 | 비교 축 5 |
-| pg_table_live_tuples | gauge | 행 | table | 테이블 전체 살아 있는 행 수(pg_stat_user_tables.n_live_tup — 통계 추정치 · ANALYZE 시점에 따라 늦다) — 행당 바이트의 분모 | [../08_screen/08_evidence_screens.md](../08_screen/08_evidence_screens.md) 행당 바이트 · 비교 축 1 |
-| pg_relation_size_bytes | gauge | 바이트 | table · kind(heap · index) | 테이블 · 인덱스 크기 | 비교 축 1 · 6 |
+| pg_table_dead_tuples · pg_autovacuum_total | gauge · counter | 튜플 · 건 | table | 데드 튜플 · autovacuum 실행 — 비교 사본 hypertable(plc_tag_raw_control)은 칸 표 합(압축 표 제외 · ADR-32) | 비교 축 5 |
+| pg_table_live_tuples | gauge | 행 | table | 테이블 전체 살아 있는 행 수(pg_stat_user_tables.n_live_tup — 통계 추정치 · ANALYZE 시점에 따라 늦다) — 행당 바이트의 분모 · 비교 사본 hypertable은 approximate_row_count(압축 칸 포함 추정 — 압축 함수가 압축 뒤 통계를 다시 모은다 · ADR-32) | [../08_screen/08_evidence_screens.md](../08_screen/08_evidence_screens.md) 행당 바이트 · 비교 축 1 |
+| pg_relation_size_bytes | gauge | 바이트 | table · kind(heap · index) | 테이블 · 인덱스 크기 — 선언 분할 표는 파티션 트리 최상위 부모로 합산 · 비교 사본 hypertable은 hypertable_detailed_size(heap = table + toast · index — 압축 데이터 포함 · ADR-32) | 비교 축 1 · 6 |
 | pg_wal_bytes_total | counter | 바이트 | 없음 | WAL 누적 바이트 | 비교 축 5 |
 | ch_inserted_rows_total | counter | 행 | 없음 | 서버가 받은 삽입 행 | OBS-02 |
 | ch_active_parts | gauge | 파트 | table | 활성 파트 수 | REQ-NFR-13 |
@@ -269,7 +247,7 @@ OBS가 수집 주기마다 모아 마지막 값을 낸다(REQ-OBS-03). 수집 �
 | obs_run_info | gauge | 1 | commit_hash · memory_profile · capacity_tier | 측정 기록 4요소 중 스위치 밖 셋 | REQ-OBS-11 · health run |
 | obs_run_memory_limit_bytes | gauge | 바이트 | 없음 | cgroup에서 읽은 api 컨테이너 실제 메모리 상한 | 상동 |
 | obs_collect_errors_total | counter | 건 | store | 저장소 통계 수집 실패 — 그 계열만 빈다 | REQ-OBS-03 |
-| obs_collect_duration_seconds | histogram | 초 | store | 수집 한 번의 시간 — 관측 부하 | EXP-38 |
+| obs_collect_duration_seconds | histogram | 초 | store | 수집 한 번의 시간 — 관측 부하 | 옛 EXP-38(D-16 폐지) |
 | obs_collect_last_success_timestamp_seconds | gauge | epoch 초 | store | 마지막 성공 수집 시각 — 표시값의 나이 | REQ-OBS-03 |
 | obs_metrics_response_bytes | gauge | 바이트 | 없음 | 직전 /metrics 응답 크기 — 카디널리티 감시 | REQ-OBS-06 |
 
@@ -278,9 +256,9 @@ OBS가 수집 주기마다 모아 마지막 값을 낸다(REQ-OBS-03). 수집 �
 
 ### 검산
 
-- 표 행 = 14 + 22 + 20 + 11 + 28 + 30 + 10 = **135**
-- 한 행에 이름 둘을 둔 행 = 수집 3(col_polls · spool · gen_publish_halted) + 적재 2(ing_group · ing_control_copy) + 알람 2(alm_events · alm_eval_gap) + 저장소 5(redis 메모리 · redis keyspace · pg 데드 튜플 · ch 파트 크기 · ch 디스크) = **12**
-- **이름 수 = 135 + 12 = 147** — 계열별 앱 · 워커 풀 · HTTP · WS 14 · 수집 25 · 적재 22 · 알람 13 · 실시간 · 조회 · 업무 · 인증 28 · 저장소 35 · E2E · 관측 10 = 14 + 25 + 22 + 13 + 28 + 35 + 10 = **147**
+- 표 행 = 13 + 22 + 20 + 25 + 30 + 10 = **120**
+- 한 행에 이름 둘을 둔 행 = 수집 3(col_polls · spool · gen_publish_halted) + 적재 2(ing_group · ing_control_copy) + 저장소 5(redis 메모리 · redis keyspace · pg 데드 튜플 · ch 파트 크기 · ch 디스크) = **10**
+- **이름 수 = 120 + 10 = 130** — 계열별 앱 · 워커 풀 · HTTP · WS 13 · 수집 25 · 적재 22 · 실시간 · 조회 · 업무 25 · 저장소 35 · E2E · 관측 10 = 13 + 25 + 22 + 25 + 35 + 10 = **130** · 옛 알람 13 · 인증 3 · 설계 거절 1은 D-16 삭제(147 → 130)
 - 원본 보존 13종은 전부 위 표에 있다 — points_emitted · poll_duration · deadband_boost_active · spool_active · spool_bytes · spool_drain_rate(수집) · consumer_lag · rows_inserted · insert_duration · batch_size · dlq_count(적재) · stream_trimmed_unacked(저장소) · e2e_latency(E2E) = **13**
 
 ## 파생 지표
@@ -289,8 +267,8 @@ PromQL 기록 규칙으로 계산하는 값이다. 관측 프로파일이 없을
 
 | 지표 | 식(창 w의 증가분 기준) | 쓰는 곳 | 식을 다르게 쓰면 |
 |------|------|------|------|
-| API 오류율 | (5xx 증가 − 설계 거절 중 503 증가) ÷ (요청 증가 − 설계 거절 증가) | REQ-NFR-11 | 백프레셔가 잘 동작할수록 오류율이 나빠져 안전장치가 실패로 기록된다 |
-| 조회 캐시 히트율 | hit 증가 ÷ (hit + miss 증가) — tsq_cache_requests_total만 | REQ-NFR-10 · AC-23 · 확장 3단계 | keyspace 전체로 재면 rl · auth 조회가 섞인다 |
+| API 오류율 | 5xx 증가 ÷ 요청 증가 — 설계된 거절 코드가 없어 차감항이 없다(D-16) | REQ-NFR-11 | 설계된 거절이 다시 생긴 뒤에도 빼지 않으면 백프레셔가 잘 동작할수록 오류율이 나빠져 안전장치가 실패로 기록된다 |
+| 조회 캐시 히트율 | hit 증가 ÷ (hit + miss 증가) — tsq_cache_requests_total만 | REQ-NFR-10 · AC-23 · 확장 3단계 | keyspace 전체로 재면 lock · biz 조회가 섞인다 |
 | 타임아웃율 | col_poll_timeouts_total 증가 ÷ col_polls_total 증가 | REQ-COL-15 | 폴링 수 대신 시간으로 나누면 설비 수가 바뀔 때 비교할 수 없다 |
 | STALE 비율 | stale 증가 ÷ 전체 증가(rlt_latest_points_served_total) | AC-34 | 키 수로 나누면 태그 수가 다른 설비가 같은 무게를 갖는다 |
 | 연결당 초당 프레임 | ws_frames_sent_total 증가율 ÷ ws_connections | AC-41 | 전체 프레임만 보면 연결 수 증가와 스로틀 효과를 가를 수 없다 |
@@ -300,7 +278,7 @@ PromQL 기록 규칙으로 계산하는 값이다. 관측 프로파일이 없을
 - 검산: 파생 지표 = **7**
 - **최신값 · 마스터 목록 사본의 히트는 조회 캐시 히트율에 더하지 않는다.** rlt_latest_requests_total은 사본이 아니라 원본 최신값의 읽기이고 mst_cache_requests_total은 TTL · 무효화 규칙이 다른 사본(업무 쓰기마다 지워진다)이라 tsq 계열과 합치면 업무 명령 빈도가 시계열 캐시의 효율처럼 읽힌다 — 두 계열을 나란히 읽는다(EXP-FLOW 조회 줄은 건수만 합친다 — [../08_screen/08_evidence_screens.md](../08_screen/08_evidence_screens.md)).
 - 무손실 차의 tag_raw count는 메트릭이 아니라 SQL이다 — 적재를 멈추고 랙 0 뒤에 같은 구간으로 센다(AC-01).
-- **모드 A의 분모는 생성 카운트가 아니라 Collector 발행 포인트다(S2 판정).** 모드 A의 생성기는 레지스터를 갱신할 뿐 행을 만들지 않는다 — 행이 되는 것은 Collector가 폴링한 표본이라 gen_points_generated_total은 폴링 주기와 갱신 주기의 비만큼 행 수와 어긋난다. 모드 A 무손실 차 = points_emitted − tag_raw count이며, 수집 정지 뒤 Stream 엔트리 전부를 디코딩한 포인트 합으로 교차 확인한다(기록 010). 모드 B · C는 위 식 그대로다.
+- **모드 A의 분모는 생성 카운트가 아니라 Collector 발행 포인트다(S2 판정).** 모드 A의 생성기는 레지스터를 갱신할 뿐 행을 만들지 않는다 — 행이 되는 것은 Collector가 폴링한 표본이라 gen_points_generated_total은 폴링 주기와 갱신 주기의 비만큼 행 수와 어긋난다. 모드 A 무손실 차 = points_emitted − tag_raw count이며, 수집 정지 뒤 Stream 엔트리 전부를 디코딩한 포인트 합으로 교차 확인한다(기록 010). 모드 B(흐름 시연 run)는 위 식 그대로다.
 
 ## 인계 메트릭 대응 검산
 
@@ -308,25 +286,23 @@ PromQL 기록 규칙으로 계산하는 값이다. 관측 프로파일이 없을
 
 | 원천(요구 · 문서) | 넘긴 지표 | 이름 |
 |------|------|------|
-| docs_plan W6 10/01 · REQ-AUT-14 | 레이트 리밋 통과 | aut_ratelimit_bypassed_total |
 | REQ-MST-10 · 06_pipeline/07 | 캐시 삭제 · 재적재 · 발행 실패 | mst_cache_delete_failures_total · mst_dict_reloads_total · rlt_publish_failures_total |
 | REQ-COL-15 · 06_pipeline/02 | 품질 코드별 · Modbus 왕복 · 타임아웃 · 생략분 · 기동 미준비 | col_points_by_quality_total · col_modbus_rtt_seconds · col_poll_timeouts_total · col_deadband_skipped_total · col_ready |
 | REQ-SIM-03 · 10 | 기동 실패 포트 · 적용 중 주입 | sim_listen_failed_ports · sim_fault_injection_active |
 | REQ-GEN-07 · 13 · 06_pipeline/10 | 모드 B 발행 중단 · 모드 B 단계 게이지 · 생성기 CPU | gen_publish_halted_entries_total · gen_publish_halted_points_total · backpressure_stage · gen_worker_utilization |
 | REQ-ING-14 · 15 · 18 · 06_pipeline/03 · 04 | 계층별 쓰기 · 대조군 실패 · Stream 체류 · fan-in 대기 · 컨슈머 정지 · 쓰인 행 수 0 | ing_routed_rows_total · ing_control_copy_failures_total · ing_stream_residence_seconds · ing_fanin_wait_seconds · ing_consumer_paused_seconds_total · ing_dedup_ignored_batches_total |
-| REQ-NFR-11 | 설계 거절 제외 오류율 | http_designed_rejections_total + §파생 지표 API 오류율 |
+| REQ-NFR-11 | 오류율 | §파생 지표 API 오류율(옛 http_designed_rejections_total은 D-16 삭제) |
 | 04_architecture/06 · ADR-24 | 단계 게이지 · 데드밴드 생략분 · 컨슈머 랙 산출식 | backpressure_stage · col_deadband_skipped_total · consumer_lag |
-| 04_architecture/05 | Stream 대기 · 판정 · 히스토그램 이름 | ing_stream_residence_seconds · ing_decode_seconds · ing_fanin_wait_seconds · alm_eval_duration_seconds |
+| 04_architecture/05 | Stream 대기 · 히스토그램 이름 | ing_stream_residence_seconds · ing_decode_seconds · ing_fanin_wait_seconds |
 | 06_pipeline/05 · 06 | 최신값 대기 소진 · 복원 · 스탬피드 소진 · 캐시 실패 | rlt_latest_lock_wait_exhausted_total · rlt_latest_restores_total · tsq_rebuild_lock_wait_exhausted_total · cache_wrapper_failures_total |
-| 06_pipeline/08 · 07_api/07 | 인계 대기 · 판정 무효 구간 · 전이 수 · ACK 부재 | alm_handoff_wait_seconds · alm_eval_gap_batches_total · alm_eval_gap_rows_total · alm_transitions_total · alm_acks_total |
 | 06_pipeline/09 | 롤업 의심 구간 · MV 오류 | ing_rollup_suspect_batches_total · ing_mv_errors_total |
 | 06_pipeline/12 | 음수 dt · 잘린 스풀 프레임 | ing_negative_dt_total · col_spool_truncated_frames_total |
 | 07_api/05 | 내보내기 중단 | tsq_export_aborted_total |
 | 02_features/13 · 07_api/10 · 03_requirements/12 | 스위치 상태 레이블 이름 | obs_switch_info(switch · env · value · impl) |
-| REQ-GEN-16~19 · 06_pipeline/10 §라이브 실행 — perf · flow | 라이브 실행 종결 수 · 진행 중 실행 · 흐름 실행 발행 · 흐름 실행 조회(설비 최신값 · 마스터 목록 사본) | gen_runs_total · gen_run_active · gen_points_generated_total{mode="run"} · rlt_latest_requests_total · mst_cache_requests_total |
+| REQ-GEN-16~19 · 06_pipeline/10 §라이브 실행 — flow | 라이브 실행 종결 수 · 진행 중 실행 · 흐름 실행 발행 · 흐름 실행 조회(설비 최신값 · 마스터 목록 사본) | gen_runs_total · gen_run_active · gen_points_generated_total{mode="run"} · rlt_latest_requests_total · mst_cache_requests_total |
 
-- 검산: 원천 행 = **16** · 넘긴 지표 전부 이름 있음 · 미명명 **0**
-- 병목 확인 지표(06_pipeline/01 §흐름별 병목 후보의 원본 표기)는 poll_duration · ch_active_parts · redis_ops_per_sec · ch_query_duration_p95_seconds · tsq_cache_requests_total · pg_connections · alm_eval_duration_seconds · nodejs_eventloop_lag_p95_seconds · gen_worker_utilization · ing_fanin_wait_seconds · alm_handoff_wait_seconds로 읽는다. 디스크 대기 · 호스트 CPU는 메트릭이 아니라 호스트 도구다([02_instrumentation.md](./02_instrumentation.md)).
+- 검산: 원천 행 = **14** · 넘긴 지표 전부 이름 있음 · 미명명 **0** · 옛 레이트 리밋 · 알람 인계 2행은 D-16 삭제
+- 병목 확인 지표(06_pipeline/01 §흐름별 병목 후보의 원본 표기)는 poll_duration · ch_active_parts · redis_ops_per_sec · ch_query_duration_p95_seconds · tsq_cache_requests_total · pg_connections · nodejs_eventloop_lag_p95_seconds · gen_worker_utilization · ing_fanin_wait_seconds로 읽는다. 디스크 대기 · 호스트 CPU는 메트릭이 아니라 호스트 도구다([02_instrumentation.md](./02_instrumentation.md)).
 
 ## 조정값 — 조회 계약
 
@@ -336,11 +312,11 @@ REQ-OBS 조회 계약 표가 이 문서로 넘긴 값이다.
 |------|------|------|------|------|------|
 | 저장소 메트릭 수집 주기 | MetricsModule 수집 타이머 | 기동 시 | 스크레이프마다 조회 | 기동 거부 | 15초(원본) |
 | E2E 게이지 창 | 주기 쿼리의 ts 조건 | 쿼리 시 | 창 없는 전 기간 · ingested_at으로 자른 창 | 기동 거부 | 최근 5분(원본) · 쿼리 주기 = 수집 주기 |
-| 메모리 표본 수 | 접두별 표본 추정 | 수집 주기 | 전수 순회(KEYS · 전 키 SCAN) | 기동 거부 | 캐시 계열 무작위 표본 200 · 봉인 rt · alarm 순환 표본 10 · 봉인 stream 키 2는 직접 측정 |
+| 메모리 표본 수 | 접두별 표본 추정 | 수집 주기 | 전수 순회(KEYS · 전 키 SCAN) | 기동 거부 | 캐시 계열 무작위 표본 200 · 봉인 rt 순환 표본 10 · 봉인 stream 키 2는 직접 측정 |
 
 - 검산: 조정값 = **3**
 - **Pub/Sub 출력 버퍼 한도는 이 표에 없다.** 값의 소유는 [../09_tech_stack/03_data_infra.md](../09_tech_stack/03_data_infra.md)(S4 확정)이고 이 문서는 한도 접근을 보는 메트릭(redis_client_output_buffer_bytes · rlt_subscriber_disconnects_total)만 갖는다. 한도를 넘으면 Redis가 그 api 인스턴스의 구독 연결을 끊어 인스턴스 전체 푸시가 멈춘다(종료 코드 4503).
-- **메모리 표본 수의 근거** — 수집 한 번에 무작위 키 추출 + MEMORY USAGE가 키당 두 명령이라 200표본은 주기당 400명령, 15초 주기면 초당 약 27명령이다. M 티어 수집 경로의 초당 XADD 50 · 조회 부하에 비해 작고, 전부 O(1)에 가까운 명령이라 단일 스레드 점유가 짧다. 추정 오차는 3계층 미확인이며 EXP-39가 부하 없는 전수와 대조해 표본 수를 조정한다.
+- **메모리 표본 수의 근거** — 수집 한 번에 무작위 키 추출 + MEMORY USAGE가 키당 두 명령이라 200표본은 주기당 400명령, 15초 주기면 초당 약 27명령이다. M 티어 수집 경로의 초당 XADD 50 · 조회 부하에 비해 작고, 전부 O(1)에 가까운 명령이라 단일 스레드 점유가 짧다. 추정 오차는 3계층 미확인이다 — 부하 없는 전수와 대조해 표본 수를 조정하던 EXP-39는 실행 도구 삭제로 폐지(D-16)됐다.
 
 ## 이름 변경 규칙
 
@@ -359,8 +335,8 @@ REQ-OBS 조회 계약 표가 이 문서로 넘긴 값이다.
 | 항목 | 상태 | 확정 자리 |
 |------|------|------|
 | 히스토그램 버킷 경계 전수 | 규칙만(원본 목표 · 예상치 포함) — 경계 목록은 코드 착수 | 이 문서 · 코드 착수 |
-| 메모리 표본 추정 오차 | 3계층 미확인 | EXP-39 |
-| /metrics 응답 크기 · 스크레이프 지연 | 3계층 미확인 | EXP-38 · [07_measurement_limits.md](./07_measurement_limits.md) |
+| 메모리 표본 추정 오차 | 3계층 미확인 · 확정 수단 없음 | 옛 EXP-39(D-16 폐지) |
+| /metrics 응답 크기 · 스크레이프 지연 | 3계층 미확인 · 확정 수단 없음 | 옛 EXP-38(D-16 폐지) · [07_measurement_limits.md](./07_measurement_limits.md) |
 | 역할 분리 뒤 이름 충돌 | ADR-22 — 역할마다 /metrics · 저장소 통계는 api 역할만 | 확장 1단계 진입 시 |
 
 ## 관련 문서

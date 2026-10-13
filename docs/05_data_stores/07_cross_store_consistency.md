@@ -2,14 +2,16 @@
 
 > **대상**: PostgreSQL · ClickHouse · Redis 사이의 정합 원칙 — 두 DB를 트랜잭션으로 묶지 않는 원칙(ADR-16) · 교차 저장소 참조 전수 · Dictionary · tag_id 불변과 태그 생애 · 논리 삭제 · 스케일 변경 · 즉시 반영 · 비활성 태그 이름 판정 · 불일치 시 진실
 > **작성일**: 2026-09-24
+> **개정일**: 2026-10-11 — **D-16 비교 사본 설비 참조 · 실행 보관**(마이그레이션 007 · 008) — 교차 참조 #9 비교 사본은 device_id를 FK로 막는다(tag_id만 FK 없음) · 불일치 시 진실에 **실행 결과 행**(run_result — 정본 PostgreSQL · 다른 자리 api 메모리 실행 객체) — 사실 4 → **5**
+> **개정일**: 2026-10-11 — **D-16 알람 · 감사 · 측정 도구 삭제**(사용자 결정 2026-10-11) — 교차 참조 9 → **7**(#4 · #5 알람 결번) · 불일치 시 진실 7 → **4**행(알람 3행 삭제) · 태그 생애 표 감사 열(audit_log) 삭제 · 옛 이름 읽는 자리 audit_log → **명령 원장(biz_command_log)** · 즉시 반영 Redis 층 cache:alarmrules 삭제 · 추이 화면 링크(08_screen/04 삭제) · 알람 규칙 미확인 행 · 알람 불릿 삭제
 > **개정일**: 2026-09-28 — DB 시각 UTC(ADR-27) — 시간 정렬 행 달력 경계 Asia/Seoul 단일 → **DB 처리 · 파티션 경계 UTC 단일 · 달력 의미 경계만 KST 명시** — 문제 수 불변
 > **개정일**: 2026-09-24 — W7 검수 반영 — 미확인 2행 닫힘(비활성 태그 규칙 · 적재 행 조합 검증)
 > **개정일**: 2026-09-24 — W6 실험 채번 반영 — EXP 번호 반영(정본 10_observability/01 · 06)
 > **원천**: ADR-27(사용자 요구 2026-09-28) · 원본 architecture.md §5 · §7.4 · §12 · §17(커밋 ff66a37) · 원본 data_flow.md §5 · §7 · §7.1 · §8.2 · §12.2(커밋 ff66a37) · 원본 implementation_plan.md §7.2 · §7.4(커밋 ff66a37) · 웨이브 인계 W3 05_data_stores/07 · 01 행(dict_tag WHERE is_active) · ADR-10 · ADR-12 · ADR-16 · [../README.md](../README.md) 전역 불변식 불변 사실 기록 · 저장소 책임 단일화
 
-**두 DB를 트랜잭션으로 묶지 않는다.** 대신 시계열을 **불변 사실 기록**으로 두고, 해석에 필요한 메타는 마스터에서 조회 시점에 붙인다(원본 architecture.md §12 · ADR-16). 이 원칙이 성립하려면 시계열 행이 가리키는 키(tag_id · device_id · rule_id)가 영원히 같은 것을 가리켜야 한다 — 이 문서는 그 키의 생애와, 키를 해석으로 바꾸는 Dictionary의 계약을 고정한다.
+**두 DB를 트랜잭션으로 묶지 않는다.** 대신 시계열을 **불변 사실 기록**으로 두고, 해석에 필요한 메타는 마스터에서 조회 시점에 붙인다(원본 architecture.md §12 · ADR-16). 이 원칙이 성립하려면 시계열 행이 가리키는 키(tag_id · device_id)가 영원히 같은 것을 가리켜야 한다 — 이 문서는 그 키의 생애와, 키를 해석으로 바꾸는 Dictionary의 계약을 고정한다.
 
-**정합성은 "같게 맞춘다"가 아니라 "어느 쪽이 진실인지 정해 둔다"로 선다.** 같은 사실이 두 저장소에 있는 경우는 태그 최신값 하나뿐이고(Redis 휘발 사본 · ClickHouse가 진실), 알람의 세 쓰기는 같은 사실이 아니다(전역 불변식 목적이 다른 세 쓰기). §불일치 시 진실이 사실별 정본 저장소를 적는다.
+**정합성은 "같게 맞춘다"가 아니라 "어느 쪽이 진실인지 정해 둔다"로 선다.** 같은 사실이 두 저장소에 있는 경우는 태그 최신값 하나뿐이고(Redis 휘발 사본 · ClickHouse가 진실), 대조군은 같은 행을 담아도 실험 계측물이다(D-05). §불일치 시 진실이 사실별 정본 저장소를 적는다.
 
 어느 계층도 강제하지 않는 교차 저장소 참조의 잔여는 [02_postgresql_constraints.md](./02_postgresql_constraints.md) 한계 등재 #6 · #10이 받는다. 캐시 무효화 체인의 기전 정본은 [../06_pipeline/07_business_crud.md](../06_pipeline/07_business_crud.md)다.
 
@@ -38,14 +40,14 @@
 | 1 | ClickHouse tag_raw.tag_id | PostgreSQL tag_master.tag_id | 마스터에 없는 tag_id 적재 · 물리 삭제 | 발행자가 마스터에서 온 태그만 싣는다 · 물리 삭제 권한 없음 | dictGet 결과 빈 문자열 |
 | 2 | tag_raw.device_id | tag_master.device_id(그 태그의 설비) | 태그의 device_id와 다른 값 적재 · 태그 설비 이동 | 가드 트리거가 설비 이동을 막는다 · 적재 쪽은 강제 없음 | dictGet(device_id) 대 행 device_id 불일치 조회 |
 | 3 | tag_1m · tag_1h · tag_1d의 tag_id · device_id | 상동 | #1 · #2와 같다 — 롤업은 원시를 물려받는다 | 상동 | 상동 |
-| 4 | alarm_eval.rule_id · tag_id | alarm_rule.rule_id · tag_id | 규칙 물리 삭제 | 규칙 물리 삭제 표면 없음(REQ-ALM-01) | 규칙 조인 실패 |
-| 5 | alarm_event.trigger_value | 판정 행의 tag_raw.value | 판정이 tag_raw에 없는 값으로 이벤트를 연다 | 판정은 삽입이 확정된 배치에만 돈다(REQ-ALM-06) | 발생 시각 ts의 tag_raw 행 대조 |
+| 4 | **결번(D-16)** — 옛 alarm_eval.rule_id · tag_id | 해당 없음 — 대상 삭제 | 해당 없음 | 해당 없음 | 해당 없음 |
+| 5 | **결번(D-16)** — 옛 alarm_event.trigger_value | 해당 없음 — 대상 삭제 | 해당 없음 | 해당 없음 | 해당 없음 |
 | 6 | rt:latest:{device_id} 필드 tag_id | tag_master · tag_raw의 최신 행 | 덮어쓰기 순서 역전 | 없음 — 한계 등재 #2 | rt:latest 대 argMax 대조 |
 | 7 | cache:tagmeta:{tag_id} | tag_master 행 | 쓰기 뒤 DEL 실패 | TTL | 캐시 삭제 실패 계수 |
 | 8 | dict_tag | tag_master 전체 | 재적재 실패 | LIFETIME 자동 재적재 | ClickHouse 오류 메트릭 |
-| 9 | plc_tag_raw_control의 tag_id · device_id | tag_master | 대조군은 FK를 갖지 않는다 | 같은 배치를 싣는다(ING-11) | 대조군 · tag_raw 행 집합 대조 |
+| 9 | plc_tag_raw_control의 tag_id · device_id | tag_master · device | tag_id는 FK가 없다(시험 태그 대역 · 태그 계보) — device_id는 D-16부터 FK가 막는다(007 · 같은 저장소 안) | 같은 배치를 싣는다(ING-11) · 설비 FK | 대조군 · tag_raw 행 집합 대조 · 넣기 결과 rows |
 
-- 검산: 교차 참조 = **9** · 방향별 ClickHouse → PostgreSQL 4(#1~#4) + PostgreSQL → ClickHouse 1(#5) + Redis → 원천 3(#6~#8 · dict_tag는 ClickHouse 객체이나 사본 성격으로 셈) + 대조군 1(#9)
+- 검산: 현행 교차 참조 = ClickHouse → PostgreSQL 3(#1~#3) + Redis → 원천 3(#6~#8 · dict_tag는 ClickHouse 객체이나 사본 성격으로 셈) + 대조군 1(#9) = **7** · 결번 #4 · #5(알람 판정 · 이벤트 — D-16 · 재사용 금지)
 - **#2가 가장 조용히 끊어진다.** 적재 경로는 Stream 엔트리의 d(device_id)를 그대로 싣고 태그의 설비를 다시 확인하지 않는다. 생성기가 태그 구성을 잘못 쥐면 (device_id, tag_id) 조합이 마스터와 어긋난 행이 오류 없이 쌓인다 — 정렬 키 접두 조회가 그 행을 놓친다.
 
 ## Dictionary 계약
@@ -64,7 +66,7 @@ ADR-16의 실행 자리다. DDL의 정본은 [03_clickhouse_schema.md](./03_clic
 | 키 타입 | UInt64 · 조회는 dictGet('plc.dict_tag', …, toUInt64(tag_id)) | 단순 키 Dictionary의 키 타입 |
 
 - 검산: 계약 항목 = **8**
-- **Dictionary는 한 개다(루트 고정 기준).** 설비명 · 규칙 메타가 필요해지면 dict_tag에 속성을 더하는 것이 먼저다 — Dictionary를 늘리면 ClickHouse 객체 수 고정 기준이 바뀌고 소스 조회 부하가 PostgreSQL 커넥션 상한(ADR-19)에 더해진다.
+- **Dictionary는 한 개다(루트 고정 기준).** 설비명 같은 메타가 필요해지면 dict_tag에 속성을 더하는 것이 먼저다 — Dictionary를 늘리면 ClickHouse 객체 수 고정 기준이 바뀌고 소스 조회 부하가 PostgreSQL 커넥션 상한(ADR-19)에 더해진다.
 
 ## 비활성 태그 이름 판정
 
@@ -79,25 +81,24 @@ ADR-16의 실행 자리다. DDL의 정본은 [03_clickhouse_schema.md](./03_clic
 
 - 검산: 안 = **4** · 채택 1(②)
 - **판정의 대가 — Dictionary 행 수가 단조 증가한다.** 비활성 태그도 남고 스케일 변경은 태그를 새로 만든다. M 티어 태그 1만 개 수준에서는 HASHED 메모리가 문제되지 않지만, 레이아웃 전환 기준(수만 행)의 판단에 비활성 태그가 들어간다는 사실을 [03_clickhouse_schema.md](./03_clickhouse_schema.md) 미확인에 남긴다.
-- **잔여 — 과거 행에는 현재 이름이 붙는다.** 태그명을 바꾸면 변경 전 구간에도 새 이름이 보인다. 이것은 결함이 아니라 원칙("해석은 조회 시점")의 결과이며, 옛 이름이 필요하면 audit_log before를 읽는다 — 한계 등재 [02_postgresql_constraints.md](./02_postgresql_constraints.md) #6.
+- **잔여 — 과거 행에는 현재 이름이 붙는다.** 태그명을 바꾸면 변경 전 구간에도 새 이름이 보인다. 이것은 결함이 아니라 원칙("해석은 조회 시점")의 결과이며, 옛 이름이 필요하면 명령 원장(biz_command_log result)을 읽는다 — 한계 등재 [02_postgresql_constraints.md](./02_postgresql_constraints.md) #6.
 - REQ-MST-08(비활성 태그 식별자 조회는 200 · is_active false)과 같은 방향이다 — "비활성 태그는 존재한다"를 API와 Dictionary가 함께 지킨다.
 
 ## 태그의 생애
 
 tag_id 하나가 겪는 사건과 각 저장소에서 일어나는 일이다. tag_id는 발급된 뒤 **갱신 · 재사용 · 삭제가 없다.**
 
-| 사건 | PostgreSQL | ClickHouse 행 | dict_tag | Redis | 감사 |
-|------|------|------|------|------|------|
-| 발급 | tag_master INSERT(IDENTITY) | 이후 적재부터 이 tag_id | 다음 RELOAD부터 | 첫 조회에 cache:tagmeta 채움 | audit_log INSERT |
-| 일반 메타 변경(이름 · 단위 · 범위 · 주기) | tag_master UPDATE | 변화 없음 — 과거 행 불변 | RELOAD로 새 해석 | cache:tagmeta DEL | audit_log UPDATE(before · after) |
-| 논리 삭제 | is_active false | 변화 없음 · 새 행이 오지 않는다(Collector 폴링 대상에서 빠진다) | 남는다 · is_active 0 | DEL | audit_log UPDATE |
-| 스케일 변경 | 새 tag_id 발급 · 이전 비활성 · tag_master_history 1행 | 이전 tag_id 행은 이전 식의 값으로 남는다 | 두 태그 모두 남는다 | 두 키 DEL | audit_log 행(두 태그) |
-| 설비 이동 | **없는 동작** — 새 태그 발급으로 한다 | 해당 없음 | 해당 없음 | 해당 없음 | 해당 없음 |
-| 보존 경과 | 변화 없음 — 마스터는 무기한 | TTL이 파티션을 지운다 | 남는다 | 해당 없음 | 해당 없음 |
+| 사건 | PostgreSQL | ClickHouse 행 | dict_tag | Redis |
+|------|------|------|------|------|
+| 발급 | tag_master INSERT(IDENTITY) | 이후 적재부터 이 tag_id | 다음 RELOAD부터 | 첫 조회에 cache:tagmeta 채움 |
+| 일반 메타 변경(이름 · 단위 · 범위 · 주기) | tag_master UPDATE | 변화 없음 — 과거 행 불변 | RELOAD로 새 해석 | cache:tagmeta DEL |
+| 논리 삭제 | is_active false | 변화 없음 · 새 행이 오지 않는다(Collector 폴링 대상에서 빠진다) | 남는다 · is_active 0 | DEL |
+| 스케일 변경 | 새 tag_id 발급 · 이전 비활성 · tag_master_history 1행 | 이전 tag_id 행은 이전 식의 값으로 남는다 | 두 태그 모두 남는다 | 두 키 DEL |
+| 설비 이동 | **없는 동작** — 새 태그 발급으로 한다 | 해당 없음 | 해당 없음 | 해당 없음 |
+| 보존 경과 | 변화 없음 — 마스터는 무기한 | TTL이 파티션을 지운다 | 남는다 | 해당 없음 |
 
 - 검산: 사건 = **6**
-- **스케일 변경 뒤 추이 화면은 두 tag_id를 잇는다.** 한 태그의 긴 추이는 tag_master_history의 old_tag_id 경로를 따라 여러 tag_id 구간을 이어 그린다 — 이어 그릴지, 변환식이 다른 구간을 구분 표시할지는 화면 판단이다([../08_screen/04_trend_analysis.md](../08_screen/04_trend_analysis.md)).
-- 비활성 태그를 가리키는 알람 규칙의 처리는 판정 경로의 몫이다([../06_pipeline/08_alarm.md](../06_pipeline/08_alarm.md) W4). 저장소는 FK를 유지할 뿐이다.
+- **스케일 변경 뒤 추이 화면은 두 tag_id를 잇는다.** 한 태그의 긴 추이는 tag_master_history의 old_tag_id 경로를 따라 여러 tag_id 구간을 이어 그린다 — 이어 그릴지, 변환식이 다른 구간을 구분 표시할지는 화면 판단이며 옛 추이 화면(08_screen/04)은 D-14로 폐지되고 D-16으로 파일이 삭제돼 표시는 미설계다(§미확인 · 미설계 등재).
 
 ## 즉시 반영 — 층별 옛 값의 창
 
@@ -105,7 +106,7 @@ tag_id 하나가 겪는 사건과 각 저장소에서 일어나는 일이다. ta
 
 | 층 | 사본 | 반영 수단 | 수단이 실패하면 남는 옛 값의 창(현행 참고) | 창의 소유처 |
 |------|------|------|------|------|
-| Redis | cache:tagmeta · devlist · alarmrules | 커밋 뒤 DEL | TTL(600초 · 300초) | [05_redis_keyspace.md](./05_redis_keyspace.md) |
+| Redis | cache:tagmeta · devlist | 커밋 뒤 DEL | TTL(600초) | [05_redis_keyspace.md](./05_redis_keyspace.md) |
 | 다른 api 인스턴스 | 프로세스 메모리 캐시 | ch:cacheinv 발행 | 현재 인스턴스 1개라 창 없음 | 확장 로드맵 2단계 |
 | ClickHouse | dict_tag | SYSTEM RELOAD | LIFETIME 최대 600초 | [03_clickhouse_schema.md](./03_clickhouse_schema.md) |
 | BFF | Next.js 서버 fetch 캐시 | 태그 무효화 | revalidate 창(30초) | [../06_pipeline/07_business_crud.md](../06_pipeline/07_business_crud.md) |
@@ -124,12 +125,10 @@ tag_id 하나가 겪는 사건과 각 저장소에서 일어나는 일이다. ta
 | 태그 메타 | PostgreSQL tag_master | cache:tagmeta · dict_tag | 사본 — 삭제 · 재적재로 수렴 | 사본을 버리고 원천에서 다시 읽는다 |
 | 태그 원시값 | ClickHouse tag_raw | 대조군 plc_tag_raw_control | **실험 계측물** — 중복 저장이 아니다(D-05) | 대조군 구간을 무효로 표시한다(REQ-ING-15) |
 | 태그 최신값 | **ClickHouse**(argMax) | Redis rt:latest | 휘발 사본 — **유일한 중복 저장 예외** | 기동 시 argMax 1회로 재구성 · 불일치면 ClickHouse가 진실 |
-| 확정 알람 이벤트 | PostgreSQL alarm_event | ch:alarm 발행 · 화면 | 통지 | alarm:state를 되돌려 다음 주기 재시도(REQ-ALM-10) |
-| 알람 판정 진행 | Redis alarm:state | 없음 | 핫 상태 — 다른 사실 | 해당 없음 — 세 쓰기는 같은 사실이 아니다 |
-| 판정 전수 | ClickHouse alarm_eval | 없음 | 분석 로그 — 다른 사실 | 결손은 dlq_count로 계측 · 알람 기능과 무관 |
 | 롤업 | 원시 tag_raw(보존 기간 안) | tag_1m · tag_1h · tag_1d | 파생 — 원시에서 재계산 가능 | 원시 기준으로 재계산 · 원시가 지워진 구간은 롤업이 유일 |
+| 직접 비교 결과 | PostgreSQL run_result(종결 1행) | api 메모리의 실행 객체(진행 1 + 마지막 1) | 순간값 — 재기동이면 사라진다 | 화면의 "마지막 결과"는 run_result를 읽는다(09_datagen #6) · 진행 중 단계 · 경과는 실행 객체가 정본 |
 
-- 검산: 사실 = **7**
+- 검산: 사실 = **5** · 옛 알람 3행(확정 이벤트 · 판정 진행 · 판정 전수)은 D-16 폐지
 - **최신값의 진실이 Redis가 아닌 이유(A형).** 통념은 "최신값은 Redis에 있으니 Redis가 정본"이다. 그러나 Redis 사본은 ClickHouse 삽입 성공 뒤에 갱신되고(현행 · ADR-10), 역순 확인으로 옛 값이 남을 수 있으며, Redis를 초기화하면 사라진다. 진짜 축은 "어디서 재구성할 수 있는가"다 — 대체 경로는 argMax(value, ts) 대조다. ADR-10의 S6 실측으로 갱신 주체가 Collector로 옮겨 가도 진실은 ClickHouse 그대로다.
 - **롤업 행은 원시 보존이 끝나면 정본이 된다.** 원시가 7일 뒤 지워지면 그 구간의 롤업은 재계산할 원천이 없는 유일한 기록이다 — 롤업 테이블의 삭제 · 재생성은 원시 보존 창 안에서만 안전하다([08_retention_lifecycle.md](./08_retention_lifecycle.md)).
 
@@ -138,8 +137,7 @@ tag_id 하나가 겪는 사건과 각 저장소에서 일어나는 일이다. ta
 | 항목 | 상태 | 확정 자리 |
 |------|------|------|
 | dict_tag 레이아웃 전환 기준 | 비활성 포함 적재로 행 수 단조 증가 — 전환 시점 미확인 | [03_clickhouse_schema.md](./03_clickhouse_schema.md) · 태그 규모 실측 |
-| 스케일 변경 전후 구간의 추이 표시 | 저장은 계보 행으로 닫힘 · 표시는 미설계 | [../08_screen/04_trend_analysis.md](../08_screen/04_trend_analysis.md)(W5) |
-| 비활성 태그를 가리키는 알람 규칙 | 닫힘 — 활성 규칙 = enabled ∧ 태그 is_active · 규칙 행 · 열린 이벤트 · alarm:state는 남긴다 — [../06_pipeline/08_alarm.md](../06_pipeline/08_alarm.md) | [../06_pipeline/08_alarm.md](../06_pipeline/08_alarm.md)(W4) |
+| 스케일 변경 전후 구간의 추이 표시 | 저장은 계보 행으로 닫힘 · 표시는 미설계(옛 추이 화면 폐지 — D-14 · 파일 삭제 D-16) | 해당 없음 — 이 화면을 들이는 결정이 생기면 그 화면 문서 |
 | 적재 행의 (device_id, tag_id) 조합 검증 | 닫힘 — 발행자 책임 + 사후 대조 쿼리 · 적재 경로는 행마다 검증하지 않는다 — [../06_pipeline/03_ingest_batch.md](../06_pipeline/03_ingest_batch.md) | [../06_pipeline/03_ingest_batch.md](../06_pipeline/03_ingest_batch.md)(W4) |
 | 층별 반영 시간 | 3계층 미확인 — 원본 예상치 Dictionary 최대 10분(RELOAD 생략 시) · BFF 최대 30초 | [../06_pipeline/07_business_crud.md](../06_pipeline/07_business_crud.md) · EXP-29(AC-06 기록) |
 

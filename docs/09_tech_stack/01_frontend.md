@@ -2,6 +2,7 @@
 
 > **대상**: 웹(Next.js App Router · 호스트 프로세스)의 구성 선택 — BFF 역할과 경로 분담 · 차트(uPlot 주력 · ECharts 보조) · TanStack Query 설정값(staleTime · gcTime) · Zustand 실시간 스토어 · 네이티브 WebSocket 래퍼 · Tailwind CSS · shadcn/ui · **웹 글꼴(Pretendard Variable 자체 호스팅)** · 폼 · zod 공유 · **화면 조정값 현행값(링 버퍼 창 · 트렌드 창 · 콘솔 폴링 주기 · BFF revalidate)**
 > **작성일**: 2026-09-24
+> **개정일**: 2026-10-11 — **D-16 알람 · 로그인 · 작업지시 · 감사 · 옛 perf 직접 재 보기 삭제**(사용자 결정 2026-10-11) — 프레임워크 행의 리프레시 토큰 근거 → 같은 오리진 · BFF 캐시 층 · 요청 경로 표 로그인 · Redis 캐시 업무 조회 행 삭제(5 → **3**) · BFF 파일 읽기 행 EXP-PERF → 측정 기록 판독 · 직결 보호 Bearer 토큰 → Host 대조 · staleTime 표 9 → **6**행(알람 규칙 · 알람 이벤트 · 작업지시 · 감사 삭제 · 명령 조회 · 라이브 실행 묶음) · gcTime 성능 보기 → 기록 판독 · 08_screen/03 · 07 링크(D-16 삭제) 평문 · 미확인 리프레시 쿠키 행 삭제
 > **개정일**: 2026-10-03 — UI/UX 다듬기(사용자 지시 2026-10-03 · 리드 판정 .omc/plans/web-ux-polish.md §2.1 · §7.1 R10) — 구성 선택에 **글꼴 행 신설**(Pretendard Variable 자체 호스팅 · next/font/local · 가변 woff2 한 벌 · 굵기 축 45~930 · display swap · 외부 CDN 없음 — 버전은 03_data_infra §버전 고정표) · 영역 8 → **9** · 스타일과 화면 규격에 **글자 · 표면 규격 행 신설**(글자 단계 12 · 13 · 14 · 16 · 20 · 28 중 13 · 28 두 칸만 테마에 더함 · 전역 스타일의 어절 줄바꿈 · 선택 · 포커스 — 규격 정본 08_screen/01 §글자와 화면 표면) · 항목 4 → **5** · BFF 파일 읽기 행의 화면 값 이름을 D-15 · 다듬기 뒤 요소로(배수 지도 값 → **그림 1 · 그림 2 · 왜? 두 줄 · 업무 네 줄 값**) — 경로 수 불변
 > **개정일**: 2026-10-03 — D-14 2화면 전환(사용자 결정 2026-10-03) — BFF 파일 읽기 행의 화면 EXP-COMPARE 비교 값(폐지) → **EXP-PERF 기록 곡선 · 배수 지도 값** — 요청 경로 수 불변
 > **개정일**: 2026-09-28 — 증거 화면 반영 — gcTime 표에 성능 보기(measurements · perf) 60초 행 · 계열 2 → **3**
@@ -9,7 +10,7 @@
 > **개정일**: 2026-09-24 — 최종 정밀 검수 — 미확인 등재에 12_security/01이 넘긴 쿠키 이름 · 인증 경로 행 수용
 > **개정일**: 2026-09-24 — W7 검수 반영 — uPlot 번들 크기 **원본 예상치 약 45 KB** 추가(W7 이관 누락) · 미확인 표 웨이브 표지 (W7) 제거
 > **개정일**: 2026-09-24 — W6 실험 채번 반영 — EXP 번호 반영(정본 10_observability/01 · 06)
-> **원천**: 원본 tech_stack.md §2 · §4 · §4.1 · §4.2 · §4.3 · §10.1 · §10.4(커밋 ff66a37) · 원본 data_flow.md §7.2(커밋 ff66a37) · ADR-02 · ADR-07 · ADR-12 · 웨이브 인계 W6 10_observability/04 행(staleTime · gcTime · 링 버퍼 창 · 트렌드 창 · 콘솔 폴링 주기 현행값) · [../08_screen/01_standards.md](../08_screen/01_standards.md) §갱신 주기와 캐시 층 정렬(관계식) · [../08_screen/03_realtime_dashboard.md](../08_screen/03_realtime_dashboard.md) · [../08_screen/07_experiment_console.md](../08_screen/07_experiment_console.md) · [../06_pipeline/07_business_crud.md](../06_pipeline/07_business_crud.md) · 다듬기 판정 .omc/plans/web-ux-polish.md(사용자 지시 2026-10-03 · §2.1 · §7.1 R10) · [../08_screen/01_standards.md](../08_screen/01_standards.md) §글자와 화면 표면 · as-built apps/web/app/layout.tsx · globals.css
+> **원천**: 원본 tech_stack.md §2 · §4 · §4.1 · §4.2 · §4.3 · §10.1 · §10.4(커밋 ff66a37) · 원본 data_flow.md §7.2(커밋 ff66a37) · ADR-02 · ADR-07 · ADR-12 · 웨이브 인계 W6 10_observability/04 행(staleTime · gcTime · 링 버퍼 창 · 트렌드 창 · 콘솔 폴링 주기 현행값) · [../08_screen/01_standards.md](../08_screen/01_standards.md) §갱신 주기와 캐시 층 정렬(관계식) · 옛 08_screen/03 · 07(D-14 폐지 · D-16 파일 삭제) · [../06_pipeline/07_business_crud.md](../06_pipeline/07_business_crud.md) · 다듬기 판정 .omc/plans/web-ux-polish.md(사용자 지시 2026-10-03 · §2.1 · §7.1 R10) · [../08_screen/01_standards.md](../08_screen/01_standards.md) §글자와 화면 표면 · as-built apps/web/app/layout.tsx · globals.css
 
 웹은 **컨테이너가 아니라 호스트 프로세스**로 도는 Next.js다(루트 README 고정 기준 실행 구성). 선택의 결정은 ADR-02이고, 이 문서는 그 결정 아래의 **라이브러리 구성과 설정값**을 갖는다. 라이브러리 버전은 적지 않는다 — 정본은 [03_data_infra.md](./03_data_infra.md) §버전 고정표다.
 
@@ -21,7 +22,7 @@
 
 | 영역 | 선택 | 선택 근거 | 버린 것 — 실패 | 근거 상세 |
 |------|------|------|------|------|
-| 프레임워크 | Next.js App Router | Route Handler가 BFF — 리프레시 토큰을 서버에서만 다룬다 | React + Vite SPA — 서버 측 코드가 없어 httpOnly 쿠키의 리프레시를 브라우저 JS가 다루게 된다 | [06_decisions_rationale.md](./06_decisions_rationale.md) §프론트엔드 |
+| 프레임워크 | Next.js App Router | Route Handler가 BFF — 저빈도 요청을 같은 오리진에서 받고 서버 fetch 캐시를 무효화 체인에 넣는다 | React + Vite SPA — 서버 측 코드가 없어 BFF 캐시 층과 같은 오리진 프록시가 사라진다(옛 쿠키 근거는 로그인과 함께 D-16 삭제) | [06_decisions_rationale.md](./06_decisions_rationale.md) §프론트엔드 |
 | 차트 주력 | uPlot | 초경량 Canvas(번들 크기 원본 예상치 약 45 KB · 원본 tech_stack.md §4.2) · 시계열 특화 · 10만 점을 부드럽게 | Recharts — SVG DOM 노드가 1만 점부터 폭증 | 상동 |
 | 차트 보조 | Apache ECharts | dataZoom · 브러시 · 분포 차트(비교 화면) | Chart.js — 10만 점에서 버벅임 · 범용 차트 둘을 두면 렌더러가 셋 | 상동 |
 | 서버 상태 | TanStack Query | staleTime · gcTime으로 브라우저 층을 Redis TTL과 정렬해 2단 캐시 실험을 한다 | 직접 fetch + 상태 — 브라우저 층의 수명이 코드마다 달라 층별 기여를 가를 수 없다 | 상동 |
@@ -40,15 +41,13 @@ ADR-02의 결정을 라이브러리 경계로 옮긴 표다. 경로별 전수의
 
 | 경로 | 무엇이 지나는가 | 서버 측 캐시 | 이유 | 이 경로를 바꾸면 |
 |------|------|------|------|------|
-| 브라우저 → BFF → api | 로그인 · 토큰 갱신 · 로그아웃 | 없음 | 리프레시 토큰(httpOnly 쿠키)을 브라우저 JS가 보지 않는다 | 리프레시 토큰이 JS에 노출된다 — BFF를 두는 가장 큰 이유가 사라진다 |
 | 브라우저 → BFF → api | 저빈도 업무 조회(사이트 · 라인 · 설비 · 태그 목록) | 서버 fetch 캐시 revalidate · 태그 무효화(ADR-12 ⑤) | 요청 오리진을 하나로 모으고 저빈도 응답을 짧게 흡수 | 무효화 체인 ⑤단이 걸릴 자리가 없다 |
-| 브라우저 → BFF → api | 업무 조회 중 Redis 캐시가 있는 것(알람 규칙 · 이벤트 · 작업지시) | **no-store** | 서버 층이 Redis 하나여야 staleTime 관계식이 성립한다 | BFF 캐시와 Redis가 겹쳐 옛 값의 창이 두 층의 합이 된다 |
-| 브라우저 → BFF(파일 읽기) | EXP-PERF 그림 1 · 그림 2 · 왜? 두 줄 · 업무 네 줄 값 — docs/measurements 읽기 | 없음 | api 표면이 없다(07_api/10 판정) | 해당 없음 — 기록 파일이 원천이다 |
+| 브라우저 → BFF(파일 읽기) | 측정 기록 판독 — docs/measurements 읽기(옛 EXP-PERF 화면은 D-16 폐지 · 판독기는 남는다) | 없음 | api 표면이 없다(07_api/10 판정) | 해당 없음 — 기록 파일이 원천이다 |
 | 브라우저 → api 직결 | 최신값 · 시계열 조회 · WebSocket | 없음 | 고빈도 요청에 중계 1홉을 더할 이유가 없다 | 초당 수 회 요청마다 Node 개발 서버 1홉이 더해져 측정 대상 밖 지연이 섞인다 |
 
-- 검산: 경로 = **5** — BFF 경유 4 · 직결 1
-- **직결 경로의 보호는 CORS 허용 오리진 하나 · Bearer 액세스 토큰 · WebSocket Origin 검증이다**(ADR-02). 두 주소의 환경변수 이름 정본은 [04_local_environment.md](./04_local_environment.md) §환경변수다.
-- **BFF는 api 메트릭 텍스트를 해석한다.** 화면용 요약 JSON 표면을 두지 않는 판정(07_api/10)에 따라 /metrics 텍스트를 BFF Route Handler가 읽어 요약한다 — 해석 결과의 모양은 [../08_screen/07_experiment_console.md](../08_screen/07_experiment_console.md)의 판정이고, 텍스트 파서 라이브러리 선택은 §미확인 · 미설계 등재에 둔다.
+- 검산: 경로 = **3** — BFF 경유 2 · 직결 1 · 옛 로그인 · Redis 캐시 업무 조회 행은 D-16 삭제
+- **직결 경로의 보호는 CORS 허용 오리진 하나 · Host 대조 · WebSocket Origin 검증이다**(ADR-02 · REQ-GLB-25 · 26). 두 주소의 환경변수 이름 정본은 [04_local_environment.md](./04_local_environment.md) §환경변수다.
+- **BFF는 api 메트릭 텍스트를 해석한다.** 화면용 요약 JSON 표면을 두지 않는 판정(07_api/10)에 따라 /metrics 텍스트를 BFF Route Handler가 읽어 요약한다 — 해석 결과의 모양은 화면 명세([../08_screen/08_evidence_screens.md](../08_screen/08_evidence_screens.md) — EXP-FLOW)의 판정이고, 텍스트 파서 라이브러리 선택은 §미확인 · 미설계 등재에 둔다.
 
 ## TanStack Query 설정값
 
@@ -61,12 +60,9 @@ ADR-02의 결정을 라이브러리 경계로 옮긴 표다. 경로별 전수의
 | 시계열 — 현재 버킷 포함 | Redis cache:q · 30초 ±20% | 30 × 0.8 | **24초** | 수동 · 따라가기 |
 | 시계열 — 최근 구간 | 없음 — 캐시하지 않는다 | 0 | **0** | 최신값 · WS로 유도 |
 | 사이트 · 라인 · 설비 · 태그 목록 | BFF 서버 fetch 캐시 · revalidate 30초 | revalidate 창 | **30초** | 체인 ⑥ 신호 · 자기 쓰기 성공 |
-| 알람 규칙 | Redis cache:alarmrules · 300초 ±20% | 300 × 0.8 | **240초** | 체인 ⑥ 신호 · 자기 쓰기 성공 |
-| 알람 이벤트 | Redis cache:alarmevents · 30초 · 지터 없음 | TTL | **30초** | ch:alarm 푸시 · 자기 ACK 성공 |
-| 작업지시 · 실적 | Redis cache:workorders · 60초 · 지터 없음 | TTL | **60초** | 자기 쓰기 성공 · 수동 |
-| 감사 로그 · health · metrics | 없음 | 0 | **0** | 수동 · 화면별 폴링 |
+| health · metrics · 명령 조회 · 라이브 실행 | 없음(명령 조회는 BFF no-store · 라이브 실행은 api 메모리) | 0 | **0** | 진입 · 화면별 폴링 · 202 뒤 백오프 폴링 |
 
-- 검산: 표 행 9 — 관계식 표의 쿼리 12(08_screen/01)를 staleTime 값이 같은 것끼리 묶었다(최신값 2 → 1 · 감사 · health · metrics 3 → 1) · 12 − 1 − 2 = **9**
+- 검산: 표 행 6 — 관계식 표의 쿼리 10(08_screen/01)을 staleTime 값이 같은 것끼리 묶었다(최신값 2 → 1 · health · metrics · 명령 조회 · 라이브 실행 4 → 1) · 10 − 1 − 3 = **6** · 옛 알람 규칙 · 알람 이벤트 · 작업지시 · 감사 로그 행은 D-16 삭제
 - **값은 관계식의 산출이지 선택이 아니다.** 서버 층 TTL이 바뀌면 여기를 손으로 고치지 않고 파생식을 다시 계산한다. 서버 TTL과 staleTime이 따로 바뀌면 2단 캐시 실험에서 브라우저 층과 서버 층의 기여를 가를 수 없다(08_screen/01).
 - **staleTime 0은 "매번 요청"이 아니다.** 0은 화면이 다시 마운트되거나 창에 포커스가 돌아올 때 재조회 대상이 된다는 뜻이고, 주기 재조회는 따로 켜야 돈다 — 최신값은 주기 재조회를 켜지 않는다(08_screen/01). 기본 재조회 트리거(창 포커스 · 재연결)의 동작은 공식 참조 — [../03_requirements/16_official_references.md](../03_requirements/16_official_references.md)(W7)로 착수 시 재확인한다.
 
@@ -75,7 +71,7 @@ ADR-02의 결정을 라이브러리 경계로 옮긴 표다. 경로별 전수의
 | 쿼리 계열 | **gcTime 현행값** | 근거 | 길게 두면 |
 |------|------|------|------|
 | 시계열(세 계열 전부) | **60초** | 응답이 수백 KB이고 사용자별이다 — 탭 전환으로 1분 안에 돌아오는 경우만 재사용한다 | 범위 조회 횟수에 비례해 탭 메모리가 는다 — 1시간 분석 세션이면 조회 수백 건분이 남는다 |
-| 성능 보기(measurements · perf) | **60초** | 기록 판독 응답이 수백 KB다(정밀화 180점 + 단계 30점 × 5 — 08_screen/08 §EXP-PERF) — 시계열과 같은 이유 | 상동 |
+| 기록 판독(measurements) | **60초** | 기록 판독 응답이 수백 KB다(옛 EXP-PERF 판독 기준 정밀화 180점 + 단계 30점 × 5 — 화면은 D-16 폐지 · 판독기는 남는다) — 시계열과 같은 이유 | 상동 |
 | 그 밖의 쿼리 | 라이브러리 기본값 | 응답이 작다 · 재진입 시 즉시 그리는 이득이 메모리보다 크다 | 해당 없음 |
 
 - 검산: 계열 = **3** · 흐름 보기 메트릭 · 라이브 실행 조회는 응답이 작아 기본값
@@ -101,10 +97,10 @@ ADR-02의 결정을 라이브러리 경계로 옮긴 표다. 경로별 전수의
 
 | 조정값 | 계약 · 소유(08_screen) | 파생 · 근거 | **현행값** | 고정 단계 |
 |------|------|------|------|------|
-| 트렌드 창 길이 | 실시간 트렌드가 그리는 과거 폭 — [../08_screen/03_realtime_dashboard.md](../08_screen/03_realtime_dashboard.md) | 초 단위 추세를 사람이 읽는 폭 · 롤업 분 버킷 여러 개가 보이는 폭 | **5분** | S2 |
+| 트렌드 창 길이 | 실시간 트렌드가 그리는 과거 폭 — 옛 08_screen/03(D-14 폐지 · D-16 파일 삭제) | 초 단위 추세를 사람이 읽는 폭 · 롤업 분 버킷 여러 개가 보이는 폭 | **5분** | S2 |
 | 링 버퍼 창(태그당 슬롯 수) | 고정 길이 버퍼 — [../08_screen/01_standards.md](../08_screen/01_standards.md) | 트렌드 창 ÷ SW-07 스로틀 창(현행 참고 100 ms) = 300초 ÷ 0.1초 | **3,000** | S2 |
 | 트렌드 최대 태그 수 | 한 차트에 겹치는 태그 수 — 08_screen/03 | 원본 S2 범위 태그 8(원본 implementation_plan.md §5 S2) | **8** | S2 |
-| 콘솔 폴링 주기(health · metrics) | "Prometheus 스크레이프 주기보다 짧지 않게" — [../08_screen/07_experiment_console.md](../08_screen/07_experiment_console.md) | 스크레이프 · MetricsModule 수집 주기 15초([03_data_infra.md](./03_data_infra.md) §구성원 설정) | **15초** | S2 |
+| 콘솔 폴링 주기(health · metrics) | "Prometheus 스크레이프 주기보다 짧지 않게" — 옛 08_screen/07(D-14 폐지 · D-16 파일 삭제) | 스크레이프 · MetricsModule 수집 주기 15초([03_data_infra.md](./03_data_infra.md) §구성원 설정) | **15초** | S2 |
 | BFF revalidate 창 | 저빈도 목록 흡수 — [../06_pipeline/07_business_crud.md](../06_pipeline/07_business_crud.md) | 원본 값(원본 tech_stack.md §4.1) | **30초** | 원본 값 |
 
 - 검산: 조정값 = **5**
@@ -146,13 +142,11 @@ ADR-02의 결정을 라이브러리 경계로 옮긴 표다. 경로별 전수의
 | 트렌드 창 · 링 버퍼 · 최대 태그 · 콘솔 폴링 현행값 | **닫힘(S2 고정 · 2026-09-25)** — 5분 · 3,000 · 8 · 15초 그대로 S2 웹(fe64472 · apps/web/lib/config.ts)에 들어갔고 S2 합격(AC-17 3회 성립 · 기록 014 · d32b09a · 부하 실험 · S 부분 구성 · 스위치 기본값 — 최신값 표 8행 전부 10초 안 갱신 · 트렌드 캔버스 새 점 · WS 연결 · 페이지 오류 0)에서 바꿀 사유가 나오지 않았다 | 이 문서 · 계약은 08_screen/01 · 03 · 07 |
 | BFF의 Prometheus 텍스트 파서 선택 | 미설계 — 라이브러리 또는 직접 구현 | 코드 착수 시 · 이 문서와 [03_data_infra.md](./03_data_infra.md) §버전 고정표 |
 | TanStack Query 기본 재조회 트리거 · gcTime 기본값 | 공식 참조 재확인 대기 | [../03_requirements/16_official_references.md](../03_requirements/16_official_references.md) |
-| 리프레시 쿠키 이름 · BFF 인증 Route Handler 경로 | 미설계 — Path를 인증 경로로 좁힌다는 계약만 있다 | 코드 착수 시 · [../12_security/01_authn_authz.md](../12_security/01_authn_authz.md) |
 | 화면 반영 지연 · 신호 도달 지연 | 3계층 미확인 — 확정 전 임의 값 고정 금지 | EXP-29(AC-06) · [../10_observability/06_experiment_catalog.md](../10_observability/06_experiment_catalog.md) |
 
 ## 관련 문서
 
 - [../08_screen/01_standards.md](../08_screen/01_standards.md) — staleTime 관계식 · 차트 표준 · 무효화 신호
-- [../08_screen/07_experiment_console.md](../08_screen/07_experiment_console.md) — 콘솔 폴링 계약 · BFF 메트릭 해석
 - [../07_api/11_websocket.md](../07_api/11_websocket.md) — WebSocket 메시지 · 재연결 값
 - [../04_architecture/09_decision_records.md](../04_architecture/09_decision_records.md) — ADR-02 · ADR-12
 - [03_data_infra.md](./03_data_infra.md) — 버전 고정표

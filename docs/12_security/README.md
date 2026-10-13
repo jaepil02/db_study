@@ -1,29 +1,30 @@
 # 12_security — 보안
 
-> **대상**: db_study를 위협 관점에서 다시 읽는 리뷰 — 인증·인가 · 시크릿과 설정 · API 표면 방어 · 위협 모델 · 로컬 노출
+> **대상**: db_study를 위협 관점에서 다시 읽는 리뷰 — 시크릿과 설정 · API 표면 방어 · 위협 모델 · 로컬 노출
 > **작성일**: 2026-09-23
+> **개정일**: 2026-10-11 — **D-16 새 표면 · 상태를 바꾸는 POST 계약 반영**(리드 보안 판정 지침서 §5-4) — 고정 기준 인증 · 인가 행 표면 앞 검사에 **상태를 바꾸는 POST(JSON 본문 · BFF Origin)** · 위협 모델 18 → **21**행(닫힘 8 → **9** · 부분 10 → **12**) · 잔여 14 → **16** · 03 목차 설명에 상태를 바꾸는 POST · 센서 데이터 · 설비 가동 표면
+> **개정일**: 2026-10-11 — **D-16 알람 · 로그인 · 권한 · 감사 · 측정 도구 삭제**(사용자 결정 2026-10-11 · 리드 판정 — 대상 문서 파일 삭제) — **01_authn_authz 삭제(결번)** — 본문 5 → **4** · 대상 줄 인증·인가 삭제 · 채번 위임 문장 인증 기능 · 인증 계약 → 기능 · 요구사항 · 애플리케이션 계층 방어 열거 인가 · 레이트 리밋 → **Host 대조**(전 표면 무인증) · 목차 02 부하 주입 표면 · 03 레이트 리밋 · 보안 헤더 삭제 · 고정 기준 토큰 · 비밀번호 해시 행 삭제 · **인증 · 인가 행 신설(없음)** · 비밀 9 → **7** · 레이트 리밋 class 4 · 관계식 R1~R5 → **없음** · 위협 × 통제 29 → **18**행(닫힘 14 → **8** · 부분 15 → **10**) · 잔여 등재 21 → **14** · 03_requirements/02_auth 링크 → 01_global_rules
 > **개정일**: 2026-10-05 — 웹 · api 호스트 포트 이동(같은 머신의 다른 프로젝트가 호스트 3000 · 3001을 점유 · 사용자 결정 2026-10-05) — 웹 3001 → **13001** · api 호스트 3000 → **13000**(컨테이너 3000 · 서비스명 그대로) · CORS 허용 오리진 http://localhost:3001 → **http://localhost:13001** — 오리진 수 · 바인드 규칙 불변
 > **개정일**: 2026-09-28 — 라이브 실행 검수 반영(리드 재판정 2026-09-28) — 잔여 등재 20 → **21**(시연 전용 행) · R5 폴링 항 = 실행 패널 탭 수 × 60 — 위협 × 통제 29 · 관계식 수 불변
 > **개정일**: 2026-09-28 — 라이브 실행 제어 반영(사용자 요구 2026-09-28 · 리드 판정) — 관계식 R1~R4 → **R1~R5**(실행 패널 폴링) · 위협 × 통제 26 → **29**행(부분 12 → **15**) · 잔여 등재 17 → **20**
 > **개정일**: 2026-09-24 — W7 보안 판정 반영 — 위협 × 통제 22 → **26**행 · 잔여 등재 15 → **17**(통제 없는 위협 5건 반영)
 > **개정일**: 2026-09-24 — W7 완성판 — 레이트 리밋 class 4 · 관계식 R1~R4 · 비밀 목록 9 · Argon2id · 위협 × 통제 22행 · 잔여 등재 15
-> **원천**: [../README.md](../README.md)(전역 불변식 — 로컬 전용) · 원본 architecture.md §2 · §11.2 · §18 · 원본 tech_stack.md §10.4 · 원본 implementation_plan.md §2.5(커밋 ff66a37)
+> **원천**: [../README.md](../README.md)(전역 불변식 — 로컬 전용) · D-16(사용자 결정 2026-10-11) · 원본 architecture.md §2 · §11.2 · §18 · 원본 tech_stack.md §10.4 · 원본 implementation_plan.md §2.5(커밋 ff66a37)
 
-"위협 관점에서 다시 읽으면"에 답하는 **리뷰 폴더**다. **아무것도 채번하지 않는다** — 인증 기능은 02_features가, 인증 계약은 03_requirements가, 에러 코드는 11_glossary가 채번하고, 이 폴더는 그것들을 위협 모델로 다시 읽어 잔여 위험을 등재한다.
+"위협 관점에서 다시 읽으면"에 답하는 **리뷰 폴더**다. **아무것도 채번하지 않는다** — 기능은 02_features가, 요구사항은 03_requirements가, 에러 코드는 11_glossary가 채번하고, 이 폴더는 그것들을 위협 모델로 다시 읽어 잔여 위험을 등재한다.
 
-**로컬 전용이라는 사실이 방어를 생략할 이유가 되지 않는다.** 네트워크 경계 방어는 범위 밖이지만 애플리케이션 계층 방어(인가 · 입력 검증 · CORS · 레이트 리밋 · Origin 검증)는 어디에 올리든 그대로 필요하며, 앞단 프록시가 없으므로 방어 지점은 NestJS 한 곳에 모인다.
+**로컬 전용이라는 사실이 방어를 생략할 이유가 되지 않는다.** 네트워크 경계 방어는 범위 밖이지만 애플리케이션 계층 방어(입력 검증 · CORS · Host 대조 · Origin 검증)는 어디에 올리든 그대로 필요하며, 앞단 프록시가 없으므로 방어 지점은 NestJS 한 곳에 모인다. **D-16 뒤 모든 표면은 무인증이다** — 로그인 · 권한 · 감사 기록 · 레이트 리밋이 없고, 그 노출은 [04_threat_model.md](./04_threat_model.md) §무인증 표면이 기록된 잔여로 받는다.
 
 ## 파일 목차
 
 | 파일 | 내용 | 이관 원본 | 웨이브 |
 |------|------|----------|--------|
-| [01_authn_authz.md](./01_authn_authz.md) | 액세스 JWT · 리프레시 불투명 토큰(Redis 저장 · 즉시 폐기) · 쿠키 속성 · 역할 기반 인가 · WebSocket 첫 메시지 인증 | architecture §11.2 · §18 | W7 |
-| [02_secrets_config.md](./02_secrets_config.md) | .env 비커밋 · .env.example · Dictionary 전용 읽기 계정 · 부하 주입 표면 기본 비활성 · 백업 정책 | architecture §7.4 · §18 · tech_stack §10.3 | W7 |
-| [03_api_surface_defense.md](./03_api_surface_defense.md) | CORS 단일 오리진 · 레이트 리밋(사용자·토큰 기준) · WebSocket Origin 검증 · 보안 헤더 · ClickHouse 파라미터 바인딩 · 조회 범위 강제 | architecture §11.2 · §18 · tech_stack §10.4 | W7 |
-| [04_threat_model.md](./04_threat_model.md) | 자산 · 위협 · 통제 · **잔여 위험 등재** | 신설 | W7 |
+| [02_secrets_config.md](./02_secrets_config.md) | .env 비커밋 · .env.example · Dictionary 전용 읽기 계정 · 백업 정책 | architecture §7.4 · §18 · tech_stack §10.3 | W7 |
+| [03_api_surface_defense.md](./03_api_surface_defense.md) | CORS 단일 오리진 · Host 대조 · WebSocket Origin 검증 · ClickHouse 파라미터 바인딩 · 조회 범위 강제 · 상태를 바꾸는 POST · 라이브 실행 표면 방어 · 센서 데이터 · 설비 가동 표면 방어 | architecture §11.2 · §18 · tech_stack §10.4 | W7 |
+| [04_threat_model.md](./04_threat_model.md) | 자산 · 위협 · 통제 · 무인증 표면 · **잔여 위험 등재** | 신설 | W7 |
 | [05_local_exposure.md](./05_local_exposure.md) | 127.0.0.1 바인드 · 저장소 포트를 여는 이유와 안전장치 · PlcSim 루프백 · WSL2 mirrored의 함의 | tech_stack §10.4 · implementation_plan §2.5 · architecture §3 | W7 |
 
-검산: 본문 5 + README 1 = **6**
+검산: 본문 4 + README 1 = **5** · 결번 01(01_authn_authz — 로그인 · 권한과 함께 D-16 삭제)
 
 ## 고정 기준 (축약)
 
@@ -34,15 +35,14 @@
 | 채번 | **없음** — 리뷰 폴더 |
 | 노출 | 호스트 포트 전부 127.0.0.1 바인드 · TLS 없음(http · ws) |
 | 오리진 | CORS 허용 오리진 **1개**(웹 13001) · 와일드카드 금지 |
-| 토큰 | 수명은 2계층 조정값(현행 참고 액세스 15분 · 리프레시 14일 · 슬라이딩 금지 · 회전 없음) — 정본 [01_authn_authz.md](./01_authn_authz.md) |
-| 비밀번호 해시 | **Argon2id** · PHC 문자열 · 비용 파라미터 2계층 — 정본 [01_authn_authz.md](./01_authn_authz.md) |
-| 비밀 | 목록 **9** · 세 저장소 모두 비밀번호 필수 — 정본 [02_secrets_config.md](./02_secrets_config.md) |
-| 레이트 리밋 | class **4**(general · bulk_read · export · bulk_ingest) · 한도 값은 2계층 · 한도 사이 관계식 R1~R5는 1계층 — 정본 [03_api_surface_defense.md](./03_api_surface_defense.md) |
+| 인증 · 인가 | **없음(D-16)** — 전 표면 무인증 · 표면 앞의 검사는 출처 방어(CORS · Host · Origin)와 상태를 바꾸는 POST 검사(JSON 본문 · BFF Origin — REQ-GLB-27)뿐 — 잔여 정본 [04_threat_model.md](./04_threat_model.md) §무인증 표면 |
+| 비밀 | 목록 **7** · 세 저장소 모두 비밀번호 필수 — 정본 [02_secrets_config.md](./02_secrets_config.md) |
+| 레이트 리밋 | **없음(D-16)** — 계수할 신원이 없다 · 요청 하나의 크기만 범위 상한이 묶는다 — [03_api_surface_defense.md](./03_api_surface_defense.md) |
 | 내보내기 범위 상한 | 2계층(현행 참고 1일 · 상계 원시 보존) — 정본 [03_api_surface_defense.md](./03_api_surface_defense.md) |
-| 위협 모델 | 위협 × 통제 **29**행(닫힘 14 · 부분 15 · 통제 없는 위협 0) · 잔여 등재 **21** — 정본 [04_threat_model.md](./04_threat_model.md) |
+| 위협 모델 | 위협 × 통제 **21**행(닫힘 9 · 부분 12 · 통제 없는 위협 0) · 잔여 등재 **16** — 정본 [04_threat_model.md](./04_threat_model.md) |
 
 ## 관련 문서
 
 - [../README.md](../README.md) — 전역 불변식
 - [../07_api/README.md](../07_api/README.md) — 방어 대상 표면
-- [../03_requirements/02_auth.md](../03_requirements/02_auth.md) — 인증 계약
+- [../03_requirements/01_global_rules.md](../03_requirements/01_global_rules.md) — 출처 방어 계약(REQ-GLB-25 · 26)

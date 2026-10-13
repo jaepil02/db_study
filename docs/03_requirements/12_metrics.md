@@ -2,12 +2,13 @@
 
 > **대상**: 관측(OBS)의 동작 계약 — 단일 스크레이프 창구 · 도메인 계측의 등록 · 저장소 메트릭 주기 수집과 계열별 실패 격리 · 키 계열별 메모리 샘플링 · E2E 지연 게이지 · 헬스체크의 저장소별 확인 · **/api/v1/health 부분 실패 표현** · health · metrics 공개와 응답 내용 제한 · 스위치 상태 노출 — REQ-OBS-NN 채번 정본
 > **작성일**: 2026-09-24
+> **개정일**: 2026-10-11 — **D-16 알람 · 로그인 · 권한 · 측정 도구 삭제**(사용자 결정 2026-10-11) — REQ-OBS-06 설비 레이블 상한 근거 티어 L → **포트 대역 100** · M 티어 표현 삭제 · 10 공개 판정 근거 권한 매트릭스 → **전 표면 무인증(AUT-07 출처 검사만)** · 메모리 샘플 alarm 접두 삭제 · 관련 문서 권한 매트릭스 행 교체 — REQ 수 불변 · (리드 판정 — 도메인 11 → 8) 출처 방어 인용 02_auth · AUT-07 → **REQ-GLB-25 · 26** · 원천의 권한 매트릭스 인용 삭제 · 스위치 표시 전용 판정 자리 07_experiment_console(삭제) → 08_evidence_screens · D-16 정리(d4 전역 sweep) — 폐지 실험을 확정 수단으로 가리키던 자리 교정(EXP-38)
 > **개정일**: 2026-09-24 — W7 검수 반영 — 미확인 2행 닫힘(health 필드 이름 · OBS APP_ROLE) — REQ 수 불변
 > **개정일**: 2026-09-24 — W6 실험 채번 반영 — REQ-OBS-06 닫힌 레이블에 설비 추가 · 레이블 이름 · 조정값 · EXP 반영(정본 10_observability/01 · 06)
 > **개정일**: 2026-09-24 — W6 판정 반영 — observability 프로파일 구성원 불일치를 닫는다(prometheus · grafana 2 — 정본 09_tech_stack/03)
 > **개정일**: 2026-09-24 — W5 판정 반영 — REQ-OBS-10 · 11 — health 본문에 측정 기록 4요소 중 스위치 밖 3요소(커밋 해시 · 메모리 프로파일 · 용량 티어) 노출 추가(EXP-CONSOLE · EXP-COMPARE가 읽는다) — REQ 수 불변
 > **개정일**: 2026-09-24 — SW-11 LATEST_VALUE_WRITER 신설 반영(D-13 · 사용자 확정) — 스위치 10 → **11**
-> **원천**: 원본 architecture.md §3 · §11 · §14 · §16 · §17 · §18(커밋 ff66a37) · 원본 tech_stack.md §9 · §10.6(커밋 ff66a37) · 원본 data_flow.md §12.1 · §15 · §16(커밋 ff66a37) · 원본 implementation_plan.md §4.1 · §4.3 · §5 S2 · S5 · S6(커밋 ff66a37) · 저장소 루트 docs_plan.md 보정 #12 · 웨이브 인계 W2b 행 · D-06 · D-10 · [../02_features/11_metrics.md](../02_features/11_metrics.md) OBS-01~06 · [../02_features/12_permission_matrix.md](../02_features/12_permission_matrix.md) §GEN · OBS 표면 인가 · [../02_features/13_switch_matrix.md](../02_features/13_switch_matrix.md) 공통 규칙
+> **원천**: 원본 architecture.md §3 · §11 · §14 · §16 · §17 · §18(커밋 ff66a37) · 원본 tech_stack.md §9 · §10.6(커밋 ff66a37) · 원본 data_flow.md §12.1 · §15 · §16(커밋 ff66a37) · 원본 implementation_plan.md §4.1 · §4.3 · §5 S2 · S5 · S6(커밋 ff66a37) · 저장소 루트 docs_plan.md 보정 #12 · 웨이브 인계 W2b 행 · D-06 · D-10 · [../02_features/11_metrics.md](../02_features/11_metrics.md) OBS-01~06 · [../02_features/13_switch_matrix.md](../02_features/13_switch_matrix.md) 공통 규칙
 
 이 문서는 **측정 대상을 건드리지 않고 재는 계약**을 고정한다. 기능의 존재와 경계는 [../02_features/11_metrics.md](../02_features/11_metrics.md)가, 메트릭 이름 · 전수는 [../10_observability/01_metrics_catalog.md](../10_observability/01_metrics_catalog.md)가, 표면 명세는 [../07_api/10_metrics.md](../07_api/10_metrics.md)(W5)가 갖는다. OBS는 흐름 F-01~F-10 어디에도 주 경로로 참여하지 않으므로 이 문서의 흐름 칸은 전부 "해당 없음 — 관측"이다.
 
@@ -24,7 +25,7 @@
 | **REQ-OBS-03** | 저장소 메트릭(Redis INFO · XLEN · pg_stat_database · pg_stat_statements · system.metrics · system.events · system.parts)은 **정해진 주기로 모아 두고** 스크레이프는 마지막 수집값을 돌려준다. 한 계열의 수집이 실패하면 그 계열만 비우고 수집 오류 지표를 올리며 /metrics 자체는 응답한다 | 원본 architecture.md §14 · 원본 tech_stack.md §9 · OBS-02 · [../02_features/11_metrics.md](../02_features/11_metrics.md) 실패 시 보이는 것 | 스크레이프마다 저장소를 조회하면 스크레이프 빈도(프로파일 on · 직접 덤프 주기)가 저장소 부하를 바꿔 측정 조건이 관측 도구에 따라 달라진다 · 한 계열 실패로 /metrics 전체가 실패하면 ClickHouse 중단 실험 중 Redis · 파이프라인 지표까지 사라진다 | 스크레이프 주기를 바꿔도 저장소 쪽 통계 조회 횟수 불변 · clickhouse 정지 → /metrics 200 · ClickHouse 계열만 빈다 · 수집 오류 지표 증가 | OBS-02 | 해당 없음 — 관측 | 해당 없음 |
 | **REQ-OBS-04** | Redis 메모리는 인스턴스 합계가 아니라 **키 접두별 점유**로 노출하며 접두별 샘플 키의 MEMORY USAGE로 추정한다. 키 전수를 훑어 계산하지 않는다. stream 접두와 cache 접두의 추이를 같은 수집 주기로 낸다 | 원본 architecture.md §14 · 원본 data_flow.md §12.1 · OBS-03 | 전수 계산은 단일 스레드 Redis를 수집 동안 점유해 측정하려던 XADD · 조회 지연을 관측이 만든다 · 두 접두의 수집 주기가 다르면 축출 연쇄 그래프의 역상관을 판별할 수 없다 | 수집 중 Redis slowlog에 전수 순회 명령 0 · 두 접두 시계열의 타임스탬프 정렬 확인 | OBS-03 | 해당 없음 — 관측 | 해당 없음 |
 | **REQ-OBS-05** | E2E 지연 게이지는 ClickHouse에 주기 쿼리로 최근 창의 ingested_at − ts 분위수(p50 · p95 · p99)를 구해 낸다. **두 컬럼의 차 외의 방법으로 계산하지 않는다** — ts를 ingested_at으로, 또는 그 반대로 대체하지 않는다 | 원본 data_flow.md §15 · 전역 불변식 "시각 의미론" · OBS-04 · [01_global_rules.md](./01_global_rules.md) | 한쪽을 대체하면 E2E 지연이 0이나 상수가 되어 수집 → 버퍼 → 적재 전체의 지연을 SQL 한 줄로 잴 수 없다 · 창이 없으면 쿼리가 tag_raw 전부를 훑어 게이지가 측정 대상에 부하를 더한다 | 게이지 값과 같은 창의 수동 분위수 SQL 결과 대조 · 쿼리 로그의 스캔 범위가 창 안 | OBS-04 | 해당 없음 — 관측 | 해당 없음 |
-| **REQ-OBS-06** | 메트릭 레이블 값은 닫힌 집합(도메인 · 저장소 · 스위치 · 상태 코드 · 단계 · 설비 — 설비는 티어 구성으로 상한 · 최대 L 100)으로만 둔다. 태그 · 요청 단위 식별자를 레이블에 싣지 않는다 | [../02_features/11_metrics.md](../02_features/11_metrics.md) 실패 시 보이는 것(카디널리티 폭증) · OBS-01 | 태그 식별자를 레이블로 두면 M 티어의 태그 수만큼 시계열이 생겨 /metrics 응답이 커지고 스크레이프 자체가 이벤트 루프를 점유한다 | M 티어 부하에서 /metrics 응답 크기가 태그 수에 비례하지 않음 | OBS-01 · OBS-02 | 해당 없음 — 관측 | 해당 없음 |
+| **REQ-OBS-06** | 메트릭 레이블 값은 닫힌 집합(도메인 · 저장소 · 스위치 · 상태 코드 · 단계 · 설비 — 설비는 PlcSim 포트 대역으로 상한 · 최대 100)으로만 둔다. 태그 · 요청 단위 식별자를 레이블에 싣지 않는다 | [../02_features/11_metrics.md](../02_features/11_metrics.md) 실패 시 보이는 것(카디널리티 폭증) · OBS-01 | 태그 식별자를 레이블로 두면 태그 수만큼 시계열이 생겨 /metrics 응답이 커지고 스크레이프 자체가 이벤트 루프를 점유한다 | 설비 가동 부하에서 /metrics 응답 크기가 태그 수에 비례하지 않음 | OBS-01 · OBS-02 | 해당 없음 — 관측 | 해당 없음 |
 | **REQ-OBS-07** | /metrics는 observability 프로파일 없이도 직접 덤프할 수 있어야 한다. OBS는 노출까지만 하고 저장 · 시각화 · 알림은 프로파일이 한다 | 원본 architecture.md §14 · 원본 tech_stack.md §9 · §10.6 · [../02_features/11_metrics.md](../02_features/11_metrics.md) §관측 스택과의 경계 | 프로파일에 의존하면 정밀 측정 세션(프로파일 off · 직접 덤프)이 불가능해 모든 수치가 관측 스택의 CPU 몫이 섞인 상대 비교용으로만 남는다 | 프로파일 off 기동 → /metrics 직접 덤프 성공 | OBS-01 | 해당 없음 — 관측 | 해당 없음 |
 
 - 검산: 이 표의 REQ = REQ-OBS-01~07 = **7**
@@ -36,7 +37,7 @@
 |------|------|------|------|------|------|------|------|
 | **REQ-OBS-08** | /api/v1/health는 PostgreSQL · ClickHouse · Redis 셋을 **각각 실제 왕복으로** 확인하고 저장소마다 타임아웃을 둔다. 한 저장소가 응답하지 않아도 health 응답은 타임아웃 안에 끝난다 | 원본 architecture.md §3 · §11 · OBS-05 | 프로세스가 떴는지만 보면 컨테이너가 뜬 것과 접속을 받을 준비가 된 것을 가르지 못해 api가 먼저 올라와 커넥션 오류로 재시작 루프를 돌고 Collector가 불필요한 스풀 파일을 만든다 · 타임아웃이 없으면 멈춘 저장소 하나가 healthcheck를 무기한 붙잡는다 | 저장소 하나씩 정지 · 일시 정지(응답 없음) → health가 타임아웃 안에 응답 · 해당 저장소만 불가 표시 | OBS-05 | 해당 없음 — 관측 | 해당 없음 |
 | **REQ-OBS-09** | 세 저장소가 모두 가용이면 200, **하나라도 불가면 503**으로 응답한다. 두 경우 모두 **같은 본문 모양**(저장소별 상태 · 스위치 상태)을 내고 에러 코드 봉투를 쓰지 않는다 — 판정 §health 부분 실패 판정 | 원본 architecture.md §3(healthcheck가 HTTP 결과로 판정) · 11_glossary/02 채번 보류 · 이 문서 판정 · OBS-05 | 항상 200이면 Compose healthcheck가 저장소 불가를 보지 못해 "api healthy = 접속을 받을 준비가 됐다"가 거짓이 된다 · 에러 봉투로 바꾸면 불가 순간에 저장소별 상태가 사라져 어느 저장소가 원인인지 응답에서 읽을 수 없다 | 전부 가용 → 200 · redis 정지 → 503 · 본문의 저장소별 상태에 redis만 불가 · 두 응답의 본문 필드 집합 동일 | OBS-05 | 해당 없음 — 관측 | 해당 없음 — 코드 없음(판정) |
-| **REQ-OBS-10** | /api/v1/health와 /metrics는 **무인증 공개 표면**이다. 응답에 업무 데이터 · 비밀(접속 문자열 · 자격 증명 · 토큰)을 싣지 않는다 — health는 저장소별 상태 · 스위치 상태 · 측정 조건(커밋 해시 · 메모리 프로파일 · 용량 티어 — 비밀 아님)만, metrics는 집계 수치와 파라미터가 바인딩된 쿼리 문형만 낸다 | [../02_features/12_permission_matrix.md](../02_features/12_permission_matrix.md) §GEN · OBS 표면 인가 · 원본 architecture.md §18 · OBS-01 · OBS-05 | 인증을 걸면 healthcheck가 로그인을 요구하고 로그인은 api가 떠야 되는 순환이 생긴다 · 업무 데이터가 실리는 순간 "호출 주체가 기계이고 응답에 업무 데이터가 없다"는 공개 판정의 근거가 무효가 된다 | 무토큰 요청 → 200 또는 503(health) · 200(metrics) · 응답 본문에서 비밀 · 업무 값 문자열 검출 0 | OBS-01 · OBS-05 · OBS-06 | 해당 없음 — 관측 | 해당 없음 |
+| **REQ-OBS-10** | /api/v1/health와 /metrics는 **무인증 공개 표면**이다. 응답에 업무 데이터 · 비밀(접속 문자열 · 자격 증명 · 토큰)을 싣지 않는다 — health는 저장소별 상태 · 스위치 상태 · 측정 조건(커밋 해시 · 메모리 프로파일 · 용량 티어 — 비밀 아님)만, metrics는 집계 수치와 파라미터가 바인딩된 쿼리 문형만 낸다 | [01_global_rules.md](./01_global_rules.md) REQ-GLB-25 · 26(전 표면 무인증 · 출처 검사만) · 원본 architecture.md §18 · OBS-01 · OBS-05 | 컨테이너 healthcheck는 사람 없이 부르므로 막는 단계가 있으면 기동 판정이 끊긴다 · 업무 데이터가 실리는 순간 "호출 주체가 기계이고 응답에 업무 데이터가 없다"는 공개 판정의 근거가 무효가 된다 | 무토큰 요청 → 200 또는 503(health) · 200(metrics) · 응답 본문에서 비밀 · 업무 값 문자열 검출 0 | OBS-01 · OBS-05 · OBS-06 | 해당 없음 — 관측 | 해당 없음 |
 | **REQ-OBS-11** | 스위치 전부(정본 02_features/13)의 상태를 health 본문과 /metrics 레이블로 노출한다. 노출값은 **기동 시 실제로 주입된 구현**을 기준으로 하며 환경변수 문자열을 그대로 옮기지 않는다. SW-07은 밀리초 값을 내고, SW-01 off는 부팅 경고 상태를 함께 낸다. **health 본문은 측정 기록 4요소 중 나머지 셋(커밋 해시 · 메모리 프로파일 · 용량 티어)도 기동 시 주입값으로 함께 낸다** — 모르면 null이고 추정값으로 채우지 않는다(W5 판정 · 필드 모양 [../07_api/10_metrics.md](../07_api/10_metrics.md)) | [../02_features/13_switch_matrix.md](../02_features/13_switch_matrix.md) 공통 규칙 · 원본 implementation_plan.md §4.1 · D-10 · OBS-06 | 노출이 없으면 기록자가 환경변수를 손으로 옮겨 적다 틀려 같은 조건이라 믿은 두 측정의 조건이 다르다 · 문자열을 옮기면 오타로 기본 구현이 주입된 경우에도 off로 표시된다 | 스위치별 off 기동 → health · metrics 두 자리의 상태 일치 · 잘못된 값의 환경변수 → 실제 주입 구현이 노출 · SW-01 off → 경고 상태 · health run의 커밋 해시 = 실행 중 이미지 커밋 · 티어 환경변수 누락 → null | OBS-06 | 해당 없음 — 관측 | 해당 없음 |
 | **REQ-OBS-12** | OBS 표면은 **스위치를 바꾸지 않는다** — 읽기 전용이다. 전환은 환경변수와 api 재기동뿐이다 | D-06 · docs_plan 보정 #14 · OBS-06 | 전환 표면을 두면 런타임 토글이 되어 경로 안 분기로 돌아가고, 측정 중 스위치가 바뀌어 한 기록 안에서 조건이 섞인다 | health · metrics 표면에 쓰기 메서드 부재 확인 | OBS-06 | 해당 없음 — 관측 | 해당 없음 |
 
@@ -72,7 +73,7 @@ W1이 채번 보류로 넘긴 자리다. 판정은 **HTTP 상태로 가용 여�
 |------|------|------|------|------|------|
 | 저장소 메트릭 수집 주기 | MetricsModule 수집 타이머 | 기동 시 | 스크레이프마다 조회 | 기동 거부 | 15초 · [../10_observability/01_metrics_catalog.md](../10_observability/01_metrics_catalog.md) |
 | E2E 게이지 창 | 주기 쿼리 조건 | 쿼리 시 | 창 없는 전 기간 분위수 | 기동 거부 | 최근 5분 · 상동 |
-| 메모리 샘플 키 수 · 주기 | 접두별 샘플링 | 수집 주기 | 전수 계산 | 기동 거부 | 캐시 계열 무작위 200 · rt · alarm 순환 10 · stream 2키 직접 · 수집 주기마다(W6) · 상동 |
+| 메모리 샘플 키 수 · 주기 | 접두별 샘플링 | 수집 주기 | 전수 계산 | 기동 거부 | 캐시 계열 무작위 200 · rt 순환 10 · stream 2키 직접 · 수집 주기마다(W6) · 상동 |
 | health 저장소별 타임아웃 | health 처리 | 요청마다 | 무기한 대기 | 기동 거부 | 미정 · [../07_api/10_metrics.md](../07_api/10_metrics.md) |
 | Compose healthcheck 주기 · 재시도 | Compose 설정 | 기동 · 실행 중 | healthcheck 없는 api | 기동 순서 미보장 | 미정 · [../04_architecture/03_execution_topology.md](../04_architecture/03_execution_topology.md) |
 
@@ -111,7 +112,7 @@ W1이 채번 보류로 넘긴 자리다. 판정은 **HTTP 상태로 가용 여�
 | 원본 항목 | 이 문서의 반영 | 정본 |
 |------|------|------|
 | docs_plan 보정 #12 health · metrics 소유 | OBS가 두 표면을 소유한다 — REQ-OBS-01 · 08 | [../07_api/10_metrics.md](../07_api/10_metrics.md) |
-| docs_plan 보정 #14 스위치는 표시 전용 | REQ-OBS-12 — 전환 표면 없음 | [../08_screen/07_experiment_console.md](../08_screen/07_experiment_console.md) |
+| docs_plan 보정 #14 스위치는 표시 전용 | REQ-OBS-12 — 전환 표면 없음 | [../08_screen/08_evidence_screens.md](../08_screen/08_evidence_screens.md) |
 | 원본 implementation_plan.md §4.1 스위치 상태 노출 | REQ-OBS-11 | [../02_features/13_switch_matrix.md](../02_features/13_switch_matrix.md) |
 | 보정 7.1~7.5 | 해당 없음 | 해당 없음 |
 
@@ -123,13 +124,13 @@ W1이 채번 보류로 넘긴 자리다. 판정은 **HTTP 상태로 가용 여�
 | 스위치 상태 레이블 이름 · 메트릭 이름 규약 | 없다 | **W6 판정** — obs_switch_info(switch · env · value · impl) · 이름 규약 | [../10_observability/01_metrics_catalog.md](../10_observability/01_metrics_catalog.md) |
 | OBS의 APP_ROLE · 역할 분리 시 /metrics 집계 위치 | 원본 미지정 | 닫힘 — ADR-22(OBS는 전 역할 · 역할마다 자기 /metrics · 저장소 통계는 api 역할 한 곳) — [../04_architecture/02_module_boundaries.md](../04_architecture/02_module_boundaries.md) | [../04_architecture/02_module_boundaries.md](../04_architecture/02_module_boundaries.md)(W3) |
 | observability 프로파일 구성원 | prometheus · grafana · alertmanager · tempo 표기 불일치 | **W6 판정** — 구성원 prometheus · grafana 2 · alertmanager 채택하지 않음(수신처 없음 · D-02) · tempo 현 범위 밖 · 조건부 | [../09_tech_stack/03_data_infra.md](../09_tech_stack/03_data_infra.md) |
-| 관측 스택 on/off가 수치에 주는 영향 | "상대 비교용"(원본 architecture.md §14) | 미확인 — 확정 전 임의 값 고정 금지 | EXP-38 · [../10_observability/07_measurement_limits.md](../10_observability/07_measurement_limits.md) |
-| 수집 주기 · 게이지 창 · 샘플 수의 측정 부하 | 없다 | 미확인 — 확정 전 임의 값 고정 금지 | EXP-38 · [../10_observability/06_experiment_catalog.md](../10_observability/06_experiment_catalog.md) |
+| 관측 스택 on/off가 수치에 주는 영향 | "상대 비교용"(원본 architecture.md §14) | 미확인 — 확정 전 임의 값 고정 금지 · 확정 수단 없음(EXP-38 D-16 폐지) | [../10_observability/07_measurement_limits.md](../10_observability/07_measurement_limits.md) |
+| 수집 주기 · 게이지 창 · 샘플 수의 측정 부하 | 없다 | 미확인 — 확정 전 임의 값 고정 금지 · 확정 수단 없음(EXP-38 D-16 폐지) | [../10_observability/06_experiment_catalog.md](../10_observability/06_experiment_catalog.md) |
 
 ## 관련 문서
 
 - [../02_features/11_metrics.md](../02_features/11_metrics.md) — OBS 기능 목록 · 관측 스택과의 경계
-- [../02_features/12_permission_matrix.md](../02_features/12_permission_matrix.md) — health · metrics 공개 판정
+- [01_global_rules.md](./01_global_rules.md) — 전 표면 무인증 · 출처 검사(REQ-GLB-25 · 26)
 - [../02_features/13_switch_matrix.md](../02_features/13_switch_matrix.md) — 노출 대상 스위치 전수
 - [../07_api/10_metrics.md](../07_api/10_metrics.md) — /api/v1/health · /metrics 표면
 - [../10_observability/01_metrics_catalog.md](../10_observability/01_metrics_catalog.md) — 메트릭 전수 · 이름 규약

@@ -1,13 +1,17 @@
 # 04_architecture — 아키텍처
 
-> **대상**: db_study의 시스템 구조 — 조감도 · 모듈 경계 · 실행 토폴로지 · 저장소 분리 정책 · 지연 예산 · 백프레셔와 장애 · 용량 · 확장 로드맵 · 기술 결정
+> **대상**: db_study의 시스템 구조 — 조감도 · 모듈 경계 · 실행 토폴로지 · 저장소 분리 정책 · 지연 예산 · 백프레셔와 장애 · 용량 · 확장 로드맵 · 기술 결정 · 회사 카드 생산 라인 도입 설계
 > **작성일**: 2026-09-23
+> **개정일**: 2026-10-12 — **ADR-33 신설**(사용자 결정 2026-10-12 · D-16 부분 개정 — 직접 비교 ③ 데이터 정합성) — ADR 선점표 행 신설 · 검산 32 → **33** · 고정 기준(축약) 기술 결정 32 → **33**(현행 30 → **31**)
+> **개정일**: 2026-10-12 — **ADR-32 신설**(사용자 결정 2026-10-12 · D-05 부분 개정 — 직접 비교 비교 사본 TimescaleDB hypertable · 열 압축) — ADR 선점표 행 신설 · ADR-03 제목에 "주 엔진 미채택" · 검산 31 → **32** · 고정 기준(축약) 기술 결정 31 → **32**(현행 29 → **30**)
+> **개정일**: 2026-10-11 — **D-16 회사 도입 설계 신설**(사용자 결정 2026-10-11 — 사내 발표 · 회사 도입 · 카드 생산 라인 HMI · 결정 3) — 파일 목차에 **10_plant_adoption.md 행 신설**(현장 PLC Modbus TCP → 수집기 게이트웨이 → Redis 버퍼 → ClickHouse · PostgreSQL → HMI · 바꿔 끼울 자리 · 서버 구성 · 단계별 도입 · 보안 경계) · 문서 수 10 → **11** · ADR 선점표 말미에 **ADR-28~31 행 신설**(gated 동시 적재 · 설비 가동 키 · 마이그레이션 기준선 · 업무 방해 삭제 — 본문 정본 09는 d5-data) · 검산 27 → **31** · 다음 채번 ADR-28 → **ADR-32** · 고정 기준 기술 결정 27 · 현행 25 → **31 · 현행 29**
+> **개정일**: 2026-10-11 — **D-16 알람 · 로그인 · 권한 · 감사 · 작업지시 · 측정 도구 삭제**(사용자 결정 2026-10-11 · 리드 판정 — WRK 함께 폐지) — 파일 목차 02 · 03 · 04 · 05 · 07 행 · ADR 선점표 ADR-11 폐지 · ADR-22 주제 · 고정 기준 축약 분기 계층 3 → **두 갈래**(② 폐지) · 용량 티어 기록 판독용 · 기술 결정 현행 26 → **25** + 폐지 1 — 루트 고정 기준 갱신은 리드
 > **개정일**: 2026-09-28 — ADR-27 신설(DB 시각 UTC · 화면 KST · 사용자 요구 2026-09-28) — ADR 선점표 말미에 ADR-27 행 · 검산 26 → **27** · 요약 표 기술 결정 26 · 현행 25 → **27 · 현행 26** · 다음 채번 ADR-27 → **ADR-28**
 > **개정일**: 2026-09-28 — 웨이브 1 검수 반영(B-H1 · H2) — 요약 표 기술 결정 25 — ADR-01~25 · 현행 24 → **26 — ADR-01~26 · 현행 25 · 잠정 1**(ADR-26 신설 반영 누락 정정)
 > **개정일**: 2026-09-28 — ADR-26 신설(업무 쓰기 명령 경로) — ADR 선점표 말미에 ADR-26 행 · 검산 25 → **26** · 다음 채번 ADR-27
 > **개정일**: 2026-09-28 — 업무 쓰기 Redis 경유 개정(사용자 결정 2026-09-27) — 04_storage_split 행 "업무 쓰기가 Stream을 타지 않는 이유" → **업무 쓰기가 명령 스트림을 타는 방식** — 문서 수 불변
 > **개정일**: 2026-09-24 — S0 실측 반영 — ADR-14 색인 행 근거 문서에 05/04(롤업 DDL 윈도우 · ADR-14 보강) 추가
-> **원천**: [../README.md](../README.md)(전역 불변식 · 분기 3계층) · 원본 architecture.md §1~§5 · §9 · §13 · §15 · §17 · §19 · 원본 tech_stack.md §3 · §5.3 · §13 · 원본 data_flow.md §8.2 · §15 · 원본 implementation_plan.md §2 · §4.3 · §6 · §7(커밋 ff66a37)
+> **원천**: D-16(사용자 결정 2026-10-11) · [../README.md](../README.md)(전역 불변식 · 분기 계층) · 원본 architecture.md §1~§5 · §9 · §13 · §15 · §17 · §19 · 원본 tech_stack.md §3 · §5.3 · §13 · 원본 data_flow.md §8.2 · §15 · 원본 implementation_plan.md §2 · §4.3 · §6 · §7(커밋 ff66a37)
 
 "어떤 구조로 계약을 강제하는가"에 답하는 폴더다. **기술 결정 ADR-NN을 채번**한다. 요구사항이 "무엇이 참이어야 하는가"라면 아키텍처는 "무엇이 그것을 참으로 만드는가"다.
 
@@ -18,26 +22,27 @@
 | 파일 | 내용 | 이관 원본 | 웨이브 |
 |------|------|----------|--------|
 | [01_system_architecture.md](./01_system_architecture.md) | 조감도 · 시스템 컨텍스트 · 경계별 프로토콜 · 컨테이너 4 · **아키텍처 불변식 표** | architecture §1 · §2 · §3 | W3 |
-| [02_module_boundaries.md](./02_module_boundaries.md) | Stream 경계 원칙과 근거 4 · 경계 예외(알람 직접 호출)의 근거 · APP_ROLE · worker_threads 격리 · **스위치 = DI 포트 제약** · 리포지터리 구조 | architecture §4 · §9 · implementation_plan §4.3 · §6 · §7.3 | W3 |
-| [03_execution_topology.md](./03_execution_topology.md) | Compose 서비스 · healthcheck · 기동 순서 · named volume · 메모리 프로파일 · CPU 가중 · cpuset 배치 · 스냅샷과 복원 | architecture §3 · §13 · tech_stack §10.1~§10.5 · implementation_plan §2 | W3 |
-| [04_storage_split.md](./04_storage_split.md) | ★★ **저장소 분리·분기 정책 정본(학습 목표 ②)** — 3계층 분기 표 · 데이터 종류별 목적지와 근거 · 목적이 다른 세 쓰기 · 업무 쓰기가 명령 스트림을 타는 방식(옛 근거를 지키는 기전) · 중복 저장의 유일한 예외 | architecture §5 · tech_stack §5.3 · data_flow §8.2 | W3 |
-| [05_latency_budget.md](./05_latency_budget.md) | 구간별 p95 예산 · 지배 구간 · 측정 지점 · 알람 판정 구간 신설 | data_flow §15 · implementation_plan §7.3 | W3 |
+| [02_module_boundaries.md](./02_module_boundaries.md) | Stream 경계 원칙과 근거 4 · 경계 예외(현행 없음 — 새 예외가 답할 질문 4) · APP_ROLE 4값 · worker_threads 격리 · **스위치 = DI 포트 제약** · 리포지터리 구조 | architecture §4 · §9 · implementation_plan §4.3 · §6 · §7.3 | W3 |
+| [03_execution_topology.md](./03_execution_topology.md) | Compose 서비스 · healthcheck · 기동 순서 · named volume · 메모리 프로파일 · CPU 가중 · cpuset 배치 · 볼륨 초기화와 덤프 | architecture §3 · §13 · tech_stack §10.1~§10.5 · implementation_plan §2 | W3 |
+| [04_storage_split.md](./04_storage_split.md) | ★★ **저장소 분리·분기 정책 정본(학습 목표 ②)** — 분기 표(① · ③ — ② D-16 폐지) · 데이터 종류별 목적지와 근거 · 업무 쓰기가 명령 스트림을 타는 방식(옛 근거를 지키는 기전) · 중복 저장의 유일한 예외 | architecture §5 · tech_stack §5.3 · data_flow §8.2 | W3 |
+| [05_latency_budget.md](./05_latency_budget.md) | 구간별 p95 예산 · 지배 구간 · 측정 지점 · 업무 쓰기 명령 경로 구간 | data_flow §15 · implementation_plan §7.3 | W3 |
 | [06_backpressure_failure.md](./06_backpressure_failure.md) | 백프레셔 5단계 · 프로파일별 임계 · MAXLEN과 maxmemory 관계 · 장애 시나리오 · degrade 원칙 · **ClickHouse 중단 시 최신값 정지 문제** | architecture §9.3 · §17 · implementation_plan §7.2 | W3 |
-| [07_capacity_planning.md](./07_capacity_planning.md) | 용량 티어 S · M · M+ · L · 정상 상태 디스크 · 파생 지표 | architecture §15 | W3 |
+| [07_capacity_planning.md](./07_capacity_planning.md) | 용량 티어 S · M · M+ · L(기록 판독 · 구조 계산용) · 정상 상태 디스크 · 파생 지표 | architecture §15 | W3 |
 | [08_scaling_roadmap.md](./08_scaling_roadmap.md) | 확장 4단계 · 실측 진입 조건 · 삭제한 단계와 이유 | architecture §19 | W3 |
 | [09_decision_records.md](./09_decision_records.md) | **ADR-NN 채번 정본** — 맥락 · 결정 · 버린 대안 · 파급 4항목 고정 · 대체 결정의 상태 항목 | tech_stack §3 · §5.2 · §5.3 · §13 · implementation_plan §7 | W3 |
+| [10_plant_adoption.md](./10_plant_adoption.md) | **회사 카드 생산 라인 도입 설계**(현행 범위 밖 설계안 — D-02) — 전체 그림(PLC Modbus TCP → 수집기 → Redis Stream → ClickHouse · PostgreSQL → HMI) · 지금 가상인 것과 바꿔 끼울 자리 · 수집기 위치(경계 게이트웨이) · Redis 버퍼가 흡수하는 것과 못 하는 것 · 서버 구성 · 단계별 도입 3 · 용량 어림식 · 보안 경계(도입 전 해야 할 일) | 신설(D-16) | D-16 |
 
-검산: 본문 9 + README 1 = **10**
+검산: 본문 10 + README 1 = **11**
 
 ## ADR 선점표
 
-W3 착수 전 리드가 번호를 선점한다. 05_data_stores를 쓰는 팀원이 04_architecture와 동시에 이 번호를 인용하기 때문이다. 결정 본문의 정본은 [09_decision_records.md](./09_decision_records.md)이며, 제목은 본문 작성 때 다듬을 수 있지만 **번호와 주제는 바꾸지 않는다.** 새 결정은 ADR-28부터 말미에 채번한다.
+W3 착수 전 리드가 번호를 선점한다. 05_data_stores를 쓰는 팀원이 04_architecture와 동시에 이 번호를 인용하기 때문이다. 결정 본문의 정본은 [09_decision_records.md](./09_decision_records.md)이며, 제목은 본문 작성 때 다듬을 수 있지만 **번호와 주제는 바꾸지 않는다.** 새 결정은 ADR-32부터 말미에 채번한다.
 
 | ADR | 주제 | 원천 | 주 인용처 |
 |-----|------|------|----------|
 | ADR-01 | 백엔드 NestJS 단일 런타임(Python 데이터 평면 미채택) | tech_stack §3 · §13 | 04/02 · 09_tech_stack/06 |
 | ADR-02 | 프론트엔드 Next.js + Route Handler BFF · 고빈도는 api 직결 | tech_stack §4.1 · data_flow §7.2 | 04/01 · 07_api/01 |
-| ADR-03 | 시계열 엔진 ClickHouse(TimescaleDB · InfluxDB 미채택) | tech_stack §5.2 · §13 | 04/04 · 05/03 |
+| ADR-03 | 시계열 엔진 ClickHouse(TimescaleDB · InfluxDB 주 엔진 미채택 — 비교 사본의 TimescaleDB는 ADR-32) | tech_stack §5.2 · §13 | 04/04 · 05/03 |
 | ADR-04 | 수집 버퍼 Redis Streams(Kafka · RabbitMQ 보류) | tech_stack §5.3 · §13 | 04/02 · 04/08 |
 | ADR-05 | Redis 단일 인스턴스 · volatile-lru · TTL 유무로 축출 대상 구분 | architecture §8 · tech_stack §5.3 | 05/05 · 05/06 |
 | ADR-06 | 모듈 경계는 Redis Stream — 같은 프로세스여도 예외 없음 | architecture §1 · §9 | 04/02 |
@@ -45,7 +50,7 @@ W3 착수 전 리드가 번호를 선점한다. 05_data_stores를 쓰는 팀원�
 | ADR-08 | 역할 스위치는 DI 포트 · 구현 둘(런타임 분기 금지) | implementation_plan §4.3 | 04/02 · 02_features/13 |
 | ADR-09 | 배치 적재 읽기 · 삽입 분리(단일 flusher fan-in) — 보정 7.1 | implementation_plan §7.1 | 06/03 · 04/05 |
 | ADR-10 | 최신값 갱신 주체 — 잠정안 + 교체 가능한 포트 · 최종은 S6 실측 — 보정 7.2 | implementation_plan §7.2 | 04/06 · 06/05 |
-| ADR-11 | 알람 판정은 배치 단위 상태 조회 · Ingest 직접 호출은 경계 예외 — 보정 7.3 | implementation_plan §7.3 | 04/02 · 06/08 |
+| ADR-11 | 알람 판정은 배치 단위 상태 조회 · Ingest 직접 호출은 경계 예외 — 보정 7.3 · **폐지(D-16)** | implementation_plan §7.3 | 04/02 |
 | ADR-12 | 캐시 무효화 체인 6단(BFF · 브라우저 포함) — 보정 7.4 | implementation_plan §7.4 | 06/07 |
 | ADR-13 | TTL 강제는 린트가 아니라 키 계열별 래퍼 — 보정 7.5 | implementation_plan §7.5 | 05/05 |
 | ADR-14 | 적재 멱등은 insert_deduplication_token(ReplacingMergeTree 미채택) | architecture §7.1 | 05/03 · 05/04 · 06/03 |
@@ -56,14 +61,20 @@ W3 착수 전 리드가 번호를 선점한다. 05_data_stores를 쓰는 팀원�
 | ADR-19 | PostgreSQL 커넥션은 api in-process 풀 · PgBouncer 유예 | architecture §6 · tech_stack §5.1 · §13 | 05/02 · 04/08 |
 | ADR-20 | 관측 스택은 선택 프로파일 · 스크레이프 창구는 /metrics 하나 | architecture §14 · tech_stack §9 · §13 | 10_observability/01 · 09_tech_stack/03 |
 | ADR-21 | 백프레셔 1차 신호는 애플리케이션 적체 검사(그룹 lag + pending — XLEN이 아니다) · MAXLEN을 maxmemory보다 먼저 건다 | architecture §9.3 · data_flow §12.1 | 04/06 · 05/06 |
-| ADR-22 | APP_ROLE 배정 — SIM · GEN 모드 A는 collector 동거 · OBS 전 역할 · ALM 표면 api · 판정 worker | W3 신설 · 인계 | 04/02 · 01_overview/04 |
+| ADR-22 | APP_ROLE 배정 — SIM · GEN 모드 A는 collector 동거 · OBS 전 역할(옛 ALM 배정 · datagen 역할은 D-16 삭제) | W3 신설 · 인계 | 04/02 · 01_overview/04 |
 | ADR-23 | 백프레셔 하강 히스테리시스 | W3 신설 · 인계 | 04/06 · 11_glossary/03 |
 | ADR-24 | SW-10 off면 경고 단계 데드밴드 강화는 무동작 | W3 신설 · 인계 | 04/06 · 02_features/03 |
 | ADR-25 | CPU 바운드 단계의 piscina worker_threads 격리 | architecture §4 · tech_stack §3.3 | 04/02 · 04/05 |
 | ADR-26 | 업무 쓰기는 명령 스트림 · 직렬 워커 · 멱등 원장 · 동기 응답 | 사용자 결정 2026-09-27(개정 신설) | 06/07 · 04/04 · 04/02 |
 | ADR-27 | DB 처리 시간대 UTC · 저장 운영 경계 UTC · 달력 의미 경계만 KST 명시 · 화면 KST 한 번 | 사용자 요구 2026-09-28(개정 신설) | 11_glossary/05 · 05/03 · 05/09 |
+| ADR-28 | SW-09 gated 동시 적재(직접 비교 실행이 연 게이트 동안만 PostgreSQL 비교 사본에 COPY) · 비교 사본 정상형(키 · 참조 · 값 규칙) | 사용자 결정 2026-10-11(D-16 개정 신설) | 02_features/13 · 03_requirements/07 · 06/03 · 06/04 · 05/10 |
+| ADR-29 | 설비 가동은 실행 중 Redis 키(ctl:plant:power)가 정하고 기동 기본값은 SENSOR_AUTOGEN — 수집기 역할이 따른다 | 사용자 결정 2026-10-11(D-16 개정 신설) | 04/02 · 04/03 · 06/05 · 05/05 |
+| ADR-30 | 마이그레이션 기준선 재작성 | 사용자 결정 2026-10-11(D-16 개정 신설) | 05/09 |
+| ADR-31 | 직접 비교의 업무 방해 항목을 넣었다 뺀 이유(실측이 흔들림) | 사용자 결정 2026-10-11(D-16 개정 신설) | 07_api/09 · 06/10 · 05/01 |
+| ADR-32 | 직접 비교 비교 사본은 TimescaleDB hypertable(칸 1일) · 열 압축 — 넣기 검증 단계에서 압축한 뒤 재고 조회한다 | 사용자 결정 2026-10-12(D-05 개정 신설) | 05/10 · 05/09 · 09_tech_stack/03 |
+| ADR-33 | 직접 비교 ③은 데이터 정합성 — 두 저장소를 1분 칸마다 행 수 · 값 체크섬으로 대조(규칙 시험 삭제) | 사용자 결정 2026-10-12(D-16 개정 신설) | 07_api/09 · 06/10 · 08_screen/10 |
 
-검산: 선점 ADR-01~ADR-21 **21** + W3 신설 ADR-22~25 **4** + 개정 신설 ADR-26 · 27 **2** = **27**(결번 없음). 주제별 분류는 [09_decision_records.md](./09_decision_records.md)가 정한다
+검산: 선점 ADR-01~ADR-21 **21** + W3 신설 ADR-22~25 **4** + 개정 신설 ADR-26 · 27 **2** + D-16 개정 신설 ADR-28~31 **4** + D-05 개정 신설 ADR-32 **1** + D-16 개정 신설 ADR-33 **1** = **33**(결번 없음 · 폐지 1 — ADR-11 · 번호는 재사용하지 않는다). 주제별 분류는 [09_decision_records.md](./09_decision_records.md)가 정한다
 
 ## 고정 기준 (축약)
 
@@ -72,12 +83,12 @@ W3 착수 전 리드가 번호를 선점한다. 05_data_stores를 쓰는 팀원�
 | 항목 | 기준 |
 |------|------|
 | 실행 구성 | 컨테이너 **4개**(api 1 + 저장소 3) + 호스트 웹 · 관측 스택은 선택 프로파일 |
-| 분기 계층 | **3계층** — ① 원시값 → ClickHouse 전용 ② 알람 · 실적 → 세 저장소로 갈라짐 ③ 업무 CRUD → PostgreSQL 전용 |
+| 분기 계층 | **두 갈래** — ① 원시값 → ClickHouse 전용 ③ 업무 쓰기 → 명령 스트림 → PostgreSQL 전용 · ②(알람 · 생산 카운터)는 D-16 폐지 · 번호 재배치 없음 |
 | 백프레셔 | **5단계**(정상 · 주의 · 경고 · 위험 · 복구). 임계는 2계층 조정값이며 프로파일별 값의 정본은 [06_backpressure_failure.md](./06_backpressure_failure.md) |
-| 용량 티어 | **4개**(S · M · M+ · L) |
+| 용량 티어 | **4개**(S · M · M+ · L) — D-16 뒤 실험 축이 아니라 기록 판독 · 구조 계산용([07_capacity_planning.md](./07_capacity_planning.md)) |
 | 확장 단계 | **4단계**(역할 분리 · api 다중 인스턴스 · Redis 분리 · 큐 교체). 각 단계는 실측 진입 조건으로만 진입한다 |
-| 기술 결정 | **27** — ADR-01~27 · 현행 26 · 잠정 1(ADR-10) · 채번 정본 [09_decision_records.md](./09_decision_records.md) |
-| 보정 결정 | 원본 implementation_plan §7의 보정 5건(배치 트리거 · 최신값 소유 · 알람 조회 상한 · 무효화 체인 · TTL 강제)은 ADR로 결정을 고정하고 각 정본에 반영한다 |
+| 기술 결정 | **33** — ADR-01~33 · 현행 31 · 잠정 1(ADR-10) · 폐지 1(ADR-11 — D-16) · 채번 정본 [09_decision_records.md](./09_decision_records.md) |
+| 보정 결정 | 원본 implementation_plan §7의 보정 5건(배치 트리거 · 최신값 소유 · 알람 조회 상한 · 무효화 체인 · TTL 강제)은 ADR로 결정을 고정하고 각 정본에 반영한다 — 알람 조회 상한(ADR-11)은 대상과 함께 D-16 폐지 |
 
 ## 관련 문서
 
@@ -85,3 +96,4 @@ W3 착수 전 리드가 번호를 선점한다. 05_data_stores를 쓰는 팀원�
 - [../05_data_stores/README.md](../05_data_stores/README.md) — 저장소별 스키마와 키
 - [../06_pipeline/04_routing.md](../06_pipeline/04_routing.md) — 분기 기전 정본
 - [../09_tech_stack/06_decisions_rationale.md](../09_tech_stack/06_decisions_rationale.md) — 기술 선정 근거
+- [../08_screen/11_hmi_screen.md](../08_screen/11_hmi_screen.md) — 도입 설계가 붙이는 HMI 화면

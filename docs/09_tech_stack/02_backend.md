@@ -1,7 +1,9 @@
 # 백엔드 스택
 
-> **대상**: api 컨테이너의 런타임 구성 — NestJS + Fastify 어댑터 · 단일 런타임(ADR-01) · 모듈 11과 라이브러리 배정 · 데이터 평면 라이브러리(@clickhouse/client · ioredis · pg · modbus-serial · jsmodbus · msgpackr · piscina · prom-client)의 역할과 사용 제약 · piscina 워커 풀(ADR-25) · 스위치 12종의 환경변수와 DI 주입(ADR-08) · 스위치 밖 환경변수의 백엔드 쪽 읽기 규칙 · 요청 압축 · 보안 헤더
+> **대상**: api 컨테이너의 런타임 구성 — NestJS + Fastify 어댑터 · 단일 런타임(ADR-01) · 모듈 8과 라이브러리 배정 · 데이터 평면 라이브러리(@clickhouse/client · ioredis · pg · modbus-serial · jsmodbus · msgpackr · piscina · prom-client)의 역할과 사용 제약 · piscina 워커 풀(ADR-25) · 스위치 12종의 환경변수와 DI 주입(ADR-08) · 스위치 밖 환경변수의 백엔드 쪽 읽기 규칙 · 요청 압축 · 보안 헤더
 > **작성일**: 2026-09-24
+> **개정일**: 2026-10-11 — **D-16 설비 가동**(사용자 결정 2026-10-11 결정 3 · ADR-29) — 스위치 밖 환경변수 표 센서 자동 생성 게이트 → **설비 가동 기동 기본값 · 적용**(collector 역할이 기동 때 키를 지우고 1초마다 ctl:plant:power를 읽어 SIM · 모드 A · COL을 켜고 끈다 · ch:cacheinv 구독은 처음 켤 때 한 번) · 게이트 불릿 → 적용기 불릿 — 계열 수 불변
+> **개정일**: 2026-10-11 — **D-16 알람 · 로그인 · 권한 · 작업지시 · 측정 도구 삭제**(사용자 결정 2026-10-11 · 리드 판정 — WRK 함께 폐지) — 런타임 표 레이트 리밋 행 삭제(6 → **5**) · 모듈 11 → **8**(auth · work-orders · alarms 삭제) · datagen 모듈의 모드 D · datagen 역할 삭제 · SW-06 · SW-12 주입 모듈 정리 · 스위치 밖 환경변수 부하 주입 게이트 행 · 404 불릿 삭제(7 → **6**) · 미확인 해시 알고리즘 · 레이트 리밋 행 정리 · EXP-22 · 37 폐지 표기
 > **개정일**: 2026-10-03 — 센서 자동 생성 게이트(사용자 결정 2026-10-03 · SENSOR_AUTOGEN — 이름 정본 04_local_environment) — 스위치 밖 환경변수의 백엔드 읽기 표에 **센서 자동 생성 게이트 행** — 계열 6 → **7** · 모듈을 빼지 않고 기동 훅에서 막는 이유 불릿 — 모듈 수 불변
 > **개정일**: 2026-09-28 — 웨이브 1 검수 반영(B-M3) — 대상 줄 · 스위치 환경변수 절 스위치 11종 → **12종** · 주입 표에 **SW-12 행**(BIZ_WRITE_PATH · BizWritePort · master · alarms · work-orders) · 허용값 검증에 stream/direct — 모듈 수 불변
 > **개정일**: 2026-09-25 — S2 실측 반영(EXP-30 기록 012 · d32b09a) — msgpackr-extract S1 판정 끔 → **끔 유지(S2 재판정 → S5)**
@@ -26,33 +28,29 @@
 | HTTP 어댑터 | Fastify 어댑터 | 기본 Express 어댑터를 쓰지 않는다 | 원본 비교의 HTTP 처리량 근거(원본 예상치)가 전제를 잃는다 — 제어 평면 오버헤드가 커져 조회 p95에 프레임워크 비용이 섞인다 |
 | WebSocket | Nest 게이트웨이 + 네이티브 ws 어댑터 | Socket.IO 어댑터를 쓰지 않는다(ADR-02 파급 · 원본 tech_stack.md §13) | 자체 프로토콜 프레임이 고빈도 푸시마다 붙는다 |
 | 보안 헤더 | Fastify용 helmet 계열 플러그인 · HSTS만 끔 | TLS가 없으므로 HSTS를 켜지 않는다(원본 tech_stack.md §10.4) | HSTS를 켜면 브라우저가 localhost를 https로 올려 개발 서버가 닿지 않는다 |
-| 레이트 리밋 | Redis rl 키 · 사용자 · 토큰 기준 · Lua 원자 증가 | IP 기준 제한 금지 — 모든 요청이 127.0.0.1에서 온다 | IP 기준이면 모든 사용자가 한 버킷을 나눠 k6 부하가 사람의 요청을 429로 만든다 |
 
-- 검산: 구성 = **6**
-- CORS · 보안 헤더 · 레이트 리밋 · Origin 검증은 전부 NestJS가 처리한다 — 앞단 프록시가 없어 대신할 계층이 없다(원본 tech_stack.md §10.4). 등급 이름 · 한도의 정본은 [../12_security/03_api_surface_defense.md](../12_security/03_api_surface_defense.md)(W7)다.
+- 검산: 구성 = **5** · 옛 레이트 리밋 행(Redis rl 키 · 사용자 기준)은 로그인과 함께 D-16 삭제
+- CORS · 보안 헤더 · Host 대조 · Origin 검증은 전부 NestJS가 처리한다 — 앞단 프록시가 없어 대신할 계층이 없다(원본 tech_stack.md §10.4). 방어 지점의 정본은 [../12_security/03_api_surface_defense.md](../12_security/03_api_surface_defense.md)다.
 
 ## 모듈과 라이브러리 배정
 
-모듈 11의 이름과 평면은 [../04_architecture/02_module_boundaries.md](../04_architecture/02_module_boundaries.md) §리포지터리 구조가 정본이다. 이 표는 모듈마다 **측정 경로에 앉는 라이브러리**만 적는다.
+모듈 8의 이름과 평면은 [../04_architecture/02_module_boundaries.md](../04_architecture/02_module_boundaries.md) §리포지터리 구조가 정본이다. 이 표는 모듈마다 **측정 경로에 앉는 라이브러리**만 적는다.
 
 | 모듈 | 평면 | 저장소 클라이언트 | 프로토콜 · 직렬화 | 워커 풀 | APP_ROLE(ADR-22) |
 |------|------|------|------|------|------|
-| auth | 제어 | pg · ioredis(auth · sess · rl 래퍼) | 해당 없음 | 없음 | api |
 | master | 제어 | pg · ioredis(cache 래퍼 · ch 발행) | 해당 없음 | 없음 | api |
-| work-orders | 제어 | pg · ioredis(cache 래퍼) | 해당 없음 | 없음 | api |
-| alarms | 제어 | pg · @clickhouse/client · ioredis(alarm 래퍼) | 해당 없음 | 없음 | api · worker |
 | timeseries | 제어 | @clickhouse/client · ioredis(cache · lock 래퍼) | gzip(조회 캐시) | LTTB · gzip | api |
 | realtime | 제어 | ioredis(rt 래퍼 · ch 구독) · @clickhouse/client(SW-02 off) | WebSocket 프레임 | 없음 | api |
 | collector | 데이터 | ioredis(stream · rt 래퍼) | modbus-serial · msgpackr | 대량 인코딩 | collector |
 | plc-sim | 데이터 | 없음 | jsmodbus 서버 | 없음 | collector |
 | ingest | 데이터 | ioredis(stream · rt 래퍼) · @clickhouse/client · pg + pg-copy-streams(SW-09) | msgpackr 해제 | 해제 · 행 전개 | worker |
-| datagen | 데이터 | ioredis(stream 래퍼) · @clickhouse/client(모드 D) | msgpackr | 신호 벡터 생성 · 인코딩 | datagen · collector · api |
+| datagen | 데이터 | ioredis(stream 래퍼) | msgpackr | 신호 벡터 생성 · 인코딩 | collector · api |
 | metrics | 관측 | 세 저장소 통계 조회(api 역할 한 곳) | prom-client 텍스트 | 없음 | 전 역할 |
 
-- 검산: 모듈 = 제어 6 + 데이터 4 + 관측 1 = **11**
+- 검산: 모듈 = 제어 3 + 데이터 4 + 관측 1 = **8** · 옛 auth · work-orders · alarms는 D-16 삭제
 - **ioredis는 모듈이 직접 부르지 않는다 — 키 계열별 래퍼 3종만 부른다**(ADR-13). 표의 괄호가 그 래퍼가 여는 접두다. 래퍼 경계의 정본은 [../05_data_stores/05_redis_keyspace.md](../05_data_stores/05_redis_keyspace.md)다.
 - **worker 풀 열의 격리 대상 정본은 [../04_architecture/02_module_boundaries.md](../04_architecture/02_module_boundaries.md) §worker_threads 격리 대상이다.** 이 표는 인용이다.
-- APP_ROLE 열이 여럿인 모듈(alarms · datagen · metrics)은 역할마다 켜는 기능이 다르다 — 기능 선택은 모듈 초기화가 한다.
+- APP_ROLE 열이 여럿인 모듈(datagen · metrics)은 역할마다 켜는 기능이 다르다 — 기능 선택은 모듈 초기화가 한다.
 
 ## 데이터 평면 라이브러리
 
@@ -110,13 +108,13 @@ ADR-25의 결정 아래 piscina 풀의 운용 규칙이다. **워커 수의 값�
 | SW-03 | REDIS_QUERY_CACHE | TimeseriesCachePort | timeseries |
 | SW-04 | CACHE_KEY_TIME_SNAP | CacheKeyNormalizerPort | timeseries |
 | SW-05 | CACHE_STAMPEDE_LOCK | RebuildLockPort | timeseries |
-| SW-06 | REDIS_PUBSUB_FANOUT | RealtimeFanoutPort | ingest · alarms |
+| SW-06 | REDIS_PUBSUB_FANOUT | RealtimeFanoutPort | ingest |
 | SW-07 | WS_THROTTLE_MS | FrameThrottlePort | realtime |
 | SW-08 | INGEST_IDEMPOTENCY | BatchTokenPort | ingest |
 | SW-09 | CONTROL_TABLE_ENABLED | ControlTableSinkPort | ingest |
 | SW-10 | COLLECTOR_DEADBAND | DeadbandFilterPort | collector |
 | SW-11 | LATEST_VALUE_WRITER | LatestValueWritePort | ingest · collector |
-| SW-12 | BIZ_WRITE_PATH | BizWritePort | master · alarms · work-orders |
+| SW-12 | BIZ_WRITE_PATH | BizWritePort | master |
 
 - 검산: 스위치 행 수는 정본(02_features/13)을 다시 세지 않는다 — 이 표는 정본의 행을 하나씩 옮긴 인용이며 정본에 행이 늘면 이 표도 같은 변경 단위에서 는다
 - 주입 절차는 아래 순서다.
@@ -140,16 +138,14 @@ ADR-25의 결정 아래 piscina 풀의 운용 규칙이다. **워커 수의 값�
 | 계열 | 백엔드가 결정하는 것 | 결정 시점 | 노출 |
 |------|------|------|------|
 | 기동 역할 | 초기화할 모듈 · 기능 범위(ADR-22) | 부트스트랩 | health · 로그 |
-| 부하 주입 게이트 | 모드 C 라우트 등록 여부 — 꺼지면 라우트 자체가 없다 | 라우트 등록 | 스위치 목록에 넣지 않는다(07_api/09) |
-| 센서 자동 생성 게이트 | SIM 포트 · 모드 A 틱 · COL 폴링과 ch:cacheinv 구독의 시작 여부 — 꺼지면 셋 다 시작하지 않는다(모듈은 그대로 싣는다) | 기동 완료 훅 | health run.sensorAutogen(07_api/10) · off면 기동 로그 1줄 · 스위치 목록에 넣지 않는다 |
+| 설비 가동 기동 기본값 | 설비 가동의 출발 상태 — collector 역할(all 포함)이 기동 완료 훅에서 Redis 키 ctl:plant:power를 지우고 이 값부터 시작한 뒤 **1초마다 키를 읽어** SIM 포트 · 모드 A 틱 · COL 폴링을 켜고 끈다(ADR-29 · 모듈은 그대로 싣는다 · ch:cacheinv 구독은 처음 켤 때 한 번 하고 끝까지 둔다) | 기동 완료 훅 · 실행 중 1초 주기 | health run.sensorAutogen(적용 상태 · 07_api/10) · 기동 로그 1줄 · 전환마다 로그 · 스위치 목록에 넣지 않는다 |
 | 측정 조건 3 | health run 필드 값 — 모르면 null | 부트스트랩 | health run(07_api/10) |
 | 워커 풀 크기 | piscina 풀 크기 | 부트스트랩 | /metrics |
 | SIM 주입 계획 | 계획 파일 검증 · 적용 일정 | 부트스트랩 | health · 메트릭(06_pipeline/10) |
 | 저장소 접속 | 세 클라이언트의 접속 대상 | 부트스트랩 | 노출하지 않는다 — 비밀 |
 
-- 검산: 계열 = **7**
-- **센서 자동 생성 게이트는 모듈을 빼지 않고 기동 완료 훅에서 막는다.** APP_ROLE 표에서 SIM · 모드 A · COL 모듈을 빼면 COL 모듈 초기화가 하던 SW-01 · SW-10 포트 등록이 사라져 health switches의 impl이 null로 바뀐다 — 운영 게이트 하나가 스위치 상태 기록을 흔든다. 판정은 기동 시 1회라 조회 · 폴링 경로 안 분기가 아니다(ADR-08과 같은 원리).
-- **라우트가 없는 것과 403은 다르다.** 게이트가 꺼진 모드 C 표면은 404다 — 403은 역할을 바꾸면 풀린다는 오해를 부른다(07_api/09).
+- 검산: 계열 = **6** · 옛 부하 주입 게이트(모드 C 라우트)는 D-16 삭제
+- **설비 가동은 모듈을 빼지 않고 시작 · 정지 호출로 켜고 끈다.** APP_ROLE 표에서 SIM · 모드 A · COL 모듈을 빼면 COL 모듈 초기화가 하던 SW-01 · SW-10 포트 등록이 사라져 health switches의 impl이 null로 바뀐다 — 공장 스위치 하나가 스위치 상태 기록을 흔든다. 판정은 1초 주기의 적용기 한 자리이고 조회 · 폴링 경로 안 분기가 아니다(ADR-08과 같은 원리) · 켜기가 중간에 실패하면 앞서 켠 것을 되돌린다.
 - memoryLimitMb는 환경변수가 아니라 cgroup에서 읽는다 — 이 표에 없다.
 
 ## 미확인 · 미설계 등재
@@ -157,11 +153,10 @@ ADR-25의 결정 아래 piscina 풀의 운용 규칙이다. **워커 수의 값�
 | 항목 | 상태 | 확정 자리 |
 |------|------|------|
 | @clickhouse/client의 zstd 요청 압축 지원 | **닫힘(S2 착수 확인 2026-09-24)** — 고정 버전(버전은 03_data_infra 고정표)이 지원 · 적재 경로 zstd | [03_data_infra.md](./03_data_infra.md) |
-| HTTP 처리량 비교(Fastify 대 대안) | 원본 예상치만 — 미확인 · 확정 전 임의 값 고정 금지 | [06_decisions_rationale.md](./06_decisions_rationale.md) · **W6 미채번** — 프레임워크 교체 비교는 실험 카탈로그 밖 · 이 스택의 HTTP 상한은 EXP-22 · EXP-37 |
+| HTTP 처리량 비교(Fastify 대 대안) | 원본 예상치만 — 미확인 · 확정 전 임의 값 고정 금지 | [06_decisions_rationale.md](./06_decisions_rationale.md) · **W6 미채번** — 프레임워크 교체 비교는 실험 카탈로그 밖 · 이 스택의 HTTP 상한을 재던 EXP-22 · EXP-37은 폐지(D-16) |
 | 워커 수별 생성기 처리량 | **닫힘(S1 실측 · 기록 006 · 410a146 · 부하 실험 · M · 스위치 기본값)** — 워커 1 · 2 · 4 중앙값 api 위치(vCPU 5) 약 590만 · 1,031만 · 2,006만 pps · datagen 위치(vCPU 2) 약 609만 · 1,036만 · 1,045만 pps — 워커 수가 CPU 집합을 넘으면 처리량이 늘지 않고 사용률만 준다(0.72) | [../10_observability/06_experiment_catalog.md](../10_observability/06_experiment_catalog.md) EXP-21 |
 | msgpackr-extract(msgpackr 네이티브 해제 가속) | **S2 재판정 — 끔 유지** · 슬라이스 · 티어 S의 해제는 병목이 아니다(ing_decode_seconds p50 약 0.73 ms · 기록 012 · d32b09a · 부하 실험 · S · 스위치 기본값) · 해제가 병목 후보가 되는 S5 M 티어에서 다시 판정 | S5 · [03_data_infra.md](./03_data_infra.md) |
-| 비밀 환경변수 이름 · 비밀번호 해시 알고리즘 | **W7 닫힘** — 비밀 9 이름은 [04_local_environment.md](./04_local_environment.md) §환경변수 · 알고리즘 Argon2id(라이브러리 행은 [03_data_infra.md](./03_data_infra.md) 버전 고정표) | [../12_security/02_secrets_config.md](../12_security/02_secrets_config.md) · [../12_security/01_authn_authz.md](../12_security/01_authn_authz.md) |
-| 레이트 리밋 등급 이름 · 한도 | **W7 닫힘** — class general · bulk_read · export · bulk_ingest · 한도는 관계식 고정 · 값 2계층 미정 | [../12_security/03_api_surface_defense.md](../12_security/03_api_surface_defense.md) |
+| 비밀 환경변수 이름 | **W7 닫힘 · D-16 갱신** — 비밀 이름은 [04_local_environment.md](./04_local_environment.md) §환경변수 · 비밀번호 해시(Argon2id · hash-wasm)는 로그인과 함께 D-16 삭제 | [../12_security/02_secrets_config.md](../12_security/02_secrets_config.md) |
 
 ## 관련 문서
 

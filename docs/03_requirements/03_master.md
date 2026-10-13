@@ -2,6 +2,7 @@
 
 > **대상**: 마스터 데이터(MST · NestJS master 모듈)의 동작 계약 — 사이트 · 라인 · 설비 · Modbus 접속 설정 · 태그 마스터 쓰기 · 논리 삭제 · 스케일 변경 · 캐시 무효화 체인 · Dictionary 원천 — REQ-MST-NN 채번 정본
 > **작성일**: 2026-09-24
+> **개정일**: 2026-10-11 — **D-16 로그인 · 권한 · 감사 기록 · 알람 삭제**(사용자 결정 2026-10-11) — **REQ-MST-05(태그 쓰기와 감사 로그 한 트랜잭션) · 15(ADMIN 쓰기 인가) 폐지 · 결번** · Modbus 매핑 변경 판정의 감사 기록 → **명령 원장 applied_at** · 기능 → REQ 대응 27 → **18** · 에러 코드 인용 6 → **5**(auth.forbidden 삭제) · 미확인 알람 규칙 행 삭제 — REQ-MST 15 → **13**(결번 2)
 > **개정일**: 2026-09-27 — D-04 부분 개정 반영(사용자 결정 — 업무 쓰기도 Redis를 거친다 · 동기 응답) — 도입 단락의 ③계층 인용 "Stream을 타지 않음" → **명령 스트림 경유 · 커밋 뒤 응답**(REQ-GLB-12 개정) — REQ 수 불변
 > **개정일**: 2026-09-24 — 최종 정밀 검수 — REQ-MST-08 해설의 dictGet 이름 소실 불일치 → W3 판정(전 행 적재)으로 닫힘 표기
 > **개정일**: 2026-09-24 — W7 검수 반영 — REQ-MST-09 실패 칸 보정 7.4 단 번호 ④ · ⑤ → **⑤ · ⑥**(6단 번호) · 미확인 3행 닫힘(dict_tag 비활성 · 쓰기 표면 · tag_master_history 컬럼) — REQ 수 불변
@@ -27,13 +28,13 @@
 | ID | 요구 | 근거 | 위반 시 구체적 실패 | 검증 방법 | 관련 기능 | 관련 흐름 | 관련 에러 코드 |
 |------|------|------|------|------|------|------|------|
 | **REQ-MST-04** | 태그 쓰기는 Modbus 매핑(function_code · address · data_type · word_order) · 공학 단위(scale · offset_value · unit) · deadband · scan_rate_ms · range_min · range_max를 받는다. tag_code는 유일하며 중복은 common.duplicate_key/409, enum 허용값 밖 · 타입 불일치는 common.validation_failed/400이다. enum 값 집합의 정본은 [../11_glossary/03_enums_state_machines.md](../11_glossary/03_enums_state_machines.md) | 원본 architecture.md §6 tag_master · [../11_glossary/02_error_codes.md](../11_glossary/02_error_codes.md) common | word_order를 검증하지 않으면 잘못된 값이 예외 없이 엉뚱한 유한값으로 풀려 **범위 판정(BAD_RANGE)에서만** 드러난다 — 원인이 마스터라는 사실이 수집 쪽 품질 분포로 흩어진다 | 중복 tag_code · 허용값 밖 word_order 쓰기 주입 → 409 · 400 | MST-04 | F-05 | common.duplicate_key/409 · common.validation_failed/400 |
-| **REQ-MST-05** | 태그 쓰기는 한 트랜잭션에서 tag_master 변경과 audit_log(before · after)를 함께 쓰고 함께 롤백한다. audit_log 테이블의 소유는 WRK이며 MST는 같은 트랜잭션에서 쓰기만 한다. 감사 대상 판정 기준의 정본은 [11_work_orders.md](./11_work_orders.md) REQ-WRK-07 | 원본 architecture.md §18 감사 · [../02_features/10_work_orders.md](../02_features/10_work_orders.md) WRK-04 | 감사를 트랜잭션 밖에서 쓰면 변경은 커밋되고 감사는 실패하는 창이 생겨 **감사 없는 마스터 변경**이 남는다 | 감사 INSERT 실패를 주입해 tag_master 변경도 롤백되는지 확인 · 변경 1건당 audit_log 1행 대조 | MST-04 · MST-05 · MST-06 | F-05 | common.postgres_unavailable/503 |
 | **REQ-MST-06** | 태그는 물리 삭제하지 않고 is_active를 false로 바꾼다. tag_id는 시퀀스로만 발급하고 **영구 보존 · 재사용 금지**다. 태그 삭제 표면은 논리 삭제만 수행하며 DELETE 문을 실행하는 경로를 두지 않는다 | 원본 architecture.md §12 · REQ-GLB-14 | 물리 삭제하면 ClickHouse 과거 행이 고아 tag_id를 갖고, 시퀀스 대신 수동 번호를 쓰면 재사용된 번호가 과거 행에 다른 태그 이름을 붙인다 | 논리 삭제 후 tag_master 행 존재 · is_active false 조회 · api 계정의 tag_master DELETE 실행 이력 0 | MST-05 | F-05 | common.not_found/404 |
 | **REQ-MST-07** | **기존 태그의 scale · offset_value를 바꾸는 PATCH는 거절한다** — 코드는 master.scale_change_forbidden/409다. 스케일 변경은 별도의 새 태그 발급 동작으로만 한다 — 한 트랜잭션에서 ① 새 tag_id 발급 ② 이전 태그 비활성화 ③ tag_master_history에 이전 · 새 tag_id와 변경 전후 값 기록 ④ audit_log 기록. 표면 모양은 [../07_api/04_master.md](../07_api/04_master.md)(W5) | 원본 architecture.md §12 · docs_plan 보정 #15 · 웨이브 인계(태그 스케일 변경 PATCH) · REQ-GLB-14 | PATCH가 조용히 기존 행을 고치면 **과거 값의 공학 단위 의미가 바뀐다.** PATCH가 서버에서 새 태그를 만들어 주면 응답의 식별자가 요청 경로의 식별자와 달라져, 옛 tag_id를 쥔 클라이언트 · 알람 규칙이 비활성 태그를 계속 가리킨다 | 스케일 PATCH 주입 → 거절 · tag_master 불변 · 새 태그 발급 후 tag_master_history 1행 · 이전 tag_id의 tag_raw 값 불변 대조 | MST-06 | F-05 | master.scale_change_forbidden/409 |
 | **REQ-MST-08** | **비활성 태그는 조회에서 사라지지 않는다** — 식별자 조회는 200과 is_active false를 돌려주고 common.not_found/404는 마스터에 없는 식별자에만 쓴다. 비활성 태그는 Collector 폴링 대상에서 빠진다 — 실행 중 비활성화는 ch:cacheinv 신호로 다음 사이클부터 반영된다(W4). Dictionary는 is_active를 속성으로 싣고 비활성 태그도 적재한다(W3 판정) | 원본 architecture.md §7.4 · §12 · 웨이브 인계(비활성 태그 요청) · [../11_glossary/02_error_codes.md](../11_glossary/02_error_codes.md) common.not_found | 비활성 태그를 404로 내면 트렌드 화면이 과거 구간의 태그 메타를 얻을 길이 없어, 논리 삭제가 지키려던 **과거 데이터의 해석**이 조회에서 끊긴다 | 비활성 태그 식별자 조회 → 200 · is_active false · 없는 식별자 → 404 | MST-05 · MST-09 | F-04 · F-05 | common.not_found/404 |
 
 - **REQ-MST-08은 에러 코드를 새로 만들지 않는다.** 채번 보류 "비활성 태그 조회 · 수정 — 404인지 정상 응답인지"를 "존재하는 대상이므로 정상 응답"으로 닫는다. 비활성 태그의 **이름이 dictGet에서 사라지는 불일치**(원본 dict_tag WHERE is_active)는 이 판정과 별개이며 W3가 닫았다 — dict_tag는 tag_master 전 행을 싣고 is_active를 속성으로 둔다([../05_data_stores/07_cross_store_consistency.md](../05_data_stores/07_cross_store_consistency.md) §비활성 태그 이름 판정).
-- **판정 — Modbus 매핑(function_code · address · data_type · word_order) 변경은 REQ-MST-04의 PATCH로 허용하고 REQ-MST-05의 audit_log(before · after)에 남긴다(W5 리드 판정).** 매핑은 같은 물리량을 어느 레지스터 · 어떤 형식으로 읽는가의 해석 교정이라 값의 공학 단위 뜻을 바꾸지 않는다 — 새 tag_id 발급 대상은 변환식(scale · offset_value) 변경뿐이다(REQ-MST-07). 교정 전후 구간의 경계는 감사 행의 acted_at이 가른다. 표면 계약은 [../07_api/04_master.md](../07_api/04_master.md) #5.
+- **결번 REQ-MST-05**(태그 쓰기와 감사 로그 한 트랜잭션) · **REQ-MST-15**(ADMIN만 쓰기) — 감사 · 권한이 D-16으로 없다 · 재사용 금지.
+- **판정 — Modbus 매핑(function_code · address · data_type · word_order) 변경은 REQ-MST-04의 PATCH로 허용한다(W5 리드 판정).** 매핑은 같은 물리량을 어느 레지스터 · 어떤 형식으로 읽는가의 해석 교정이라 값의 공학 단위 뜻을 바꾸지 않는다 — 새 tag_id 발급 대상은 변환식(scale · offset_value) 변경뿐이다(REQ-MST-07). 교정 전후 구간의 경계는 그 명령의 원장 행(biz_command_log.applied_at)이 가른다 — 감사 로그는 D-16으로 없다. 표면 계약은 [../07_api/04_master.md](../07_api/04_master.md) #5.
 
 ## 요구사항 — 캐시 무효화 체인 · Dictionary
 
@@ -45,12 +46,11 @@
 | **REQ-MST-12** | ClickHouse 시계열 행에는 tag_id(4바이트)만 저장하고 태그명 · 단위 문자열을 싣지 않는다. 메타는 조회 시점에 dictGet으로 붙인다 — 두 DB를 트랜잭션으로 묶지 않는 원칙의 실행 자리다 | 원본 architecture.md §7.4 · §12 · REQ-GLB-14 | 태그명을 행에 복사하면 이름 변경이 **과거 행 수정**(ClickHouse mutation)이 되고, 두 DB 쓰기를 묶을 방법이 없어 한쪽만 바뀐 창이 생긴다 | tag_raw 컬럼 목록에 문자열 메타 컬럼 부재 조회 · 태그명 변경 후 과거 구간 조회 결과에 새 이름이 붙는지 확인 | MST-09 | F-04 | 해당 없음 |
 | **REQ-MST-13** | 태그 메타 사본은 cache:tagmeta에 두고 TTL을 단다(현행 참고 600초 · 소유 [../05_data_stores/05_redis_keyspace.md](../05_data_stores/05_redis_keyspace.md) — 단일 Hash인지 태그별 키인지 W3). 미스 · 축출 · Redis 불가면 PostgreSQL에서 읽어 채운다. 최신값은 담지 않는다 | 원본 architecture.md §5 · §8.2 · 원본 data_flow.md §3 · §5 | 축출을 오류로 다루면 maxmemory 하향 실험에서 Collector 기동과 최신값 메타 부착이 실패한다. 최신값을 담으면 봉인 계열 rt:latest와 캐시 계열이 같은 사실을 갖는다 | cache:tagmeta 삭제 후 Collector 기동 · 최신값 조회가 PostgreSQL 경유로 성립하는지 확인 | MST-07 | F-01 · F-03 | 해당 없음 |
 
-## 요구사항 — 저장소 장애 · 권한
+## 요구사항 — 저장소 장애
 
 | ID | 요구 | 근거 | 위반 시 구체적 실패 | 검증 방법 | 관련 기능 | 관련 흐름 | 관련 에러 코드 |
 |------|------|------|------|------|------|------|------|
 | **REQ-MST-14** | PostgreSQL에 접속할 수 없으면 마스터 읽기 · 쓰기는 common.postgres_unavailable/503으로 실패하고 **시계열 조회는 계속**된다(REQ-MST-11). 캐시에 사본이 있는 목록 조회는 사본으로 응답한다 | 원본 architecture.md §17 PostgreSQL 중단 | 시계열 조회까지 503을 내면 업무 DB 장애가 대시보드 장애로 번져 저장소 분리의 이점이 사라진다 | docker stop postgres — 태그 쓰기 503 · 시계열 조회 200 동시 확인 | MST-01 · MST-02 · MST-03 · MST-04 | F-04 · F-05 · F-10 | common.postgres_unavailable/503 |
-| **REQ-MST-15** | 마스터 쓰기(MST-01~06)는 ADMIN만 한다. 조회는 인증 사용자 전원이다. 권한 밖 쓰기는 auth.forbidden/403이다. 판정 정본은 [../02_features/12_permission_matrix.md](../02_features/12_permission_matrix.md) | 권한 매트릭스 MST 행 · 원본 architecture.md §18 | 쓰기 주체가 둘이면 감사 로그의 행위자로 변경 책임을 읽을 수 없다. Modbus 접속 설정을 운영자가 바꾸면 SIMULATED 판정의 원천이 흔들린다 | OPERATOR · ENGINEER 계정의 쓰기 호출 → 403 · ADMIN → 성공 | MST-01 · MST-02 · MST-03 · MST-04 · MST-05 · MST-06 | F-05 | auth.forbidden/403 |
 
 ## 인계 판정
 
@@ -62,7 +62,7 @@
 | 비활성 태그 조회 · 수정 — 404인지 정상 응답인지 | **정상 응답(200 · is_active false).** 새 코드 없음 | 논리 삭제의 목적이 과거 데이터 해석 보존이다. 404는 "대상 없음"이며 비활성 태그는 존재한다 | 404 — 과거 구간 화면이 태그 메타를 얻지 못해 논리 삭제가 물리 삭제와 같은 결과가 된다 | REQ-MST-08 |
 
 - 검산: 인계 항목 = **2** · 새 코드로 닫힘 **1**(스케일 변경 — master.scale_change_forbidden/409) · 새 코드 없음 **1**(비활성 태그)
-- **판정 경계 — 비활성 태그의 "수정"은 일반 쓰기 규칙을 그대로 따른다.** 스케일 외 메타 수정은 REQ-MST-04 · 05가 적용되고, 스케일 변경은 활성 여부와 무관하게 REQ-MST-07로 거절된다. 비활성 태그를 다시 활성화하는 동작의 허용 여부는 표면 문제라 [../07_api/04_master.md](../07_api/04_master.md)(W5)가 정한다.
+- **판정 경계 — 비활성 태그의 "수정"은 일반 쓰기 규칙을 그대로 따른다.** 스케일 외 메타 수정은 REQ-MST-04가 적용되고, 스케일 변경은 활성 여부와 무관하게 REQ-MST-07로 거절된다. 비활성 태그를 다시 활성화하는 동작의 허용 여부는 표면 문제라 [../07_api/04_master.md](../07_api/04_master.md)(W5)가 정한다.
 
 ## 기능 → REQ 대응
 
@@ -70,12 +70,12 @@
 
 | 기능 ID | 기능명 | 대응 REQ | 수 |
 |------|------|------|------|
-| MST-01 | 사이트 · 라인 관리 | REQ-MST-01 · 14 · 15 | 3 |
-| MST-02 | 설비 관리 | REQ-MST-02 · 14 · 15 | 3 |
-| MST-03 | Modbus 접속 설정 관리 | REQ-MST-03 · 14 · 15 | 3 |
-| MST-04 | 태그 마스터 관리 | REQ-MST-04 · 05 · 14 · 15 | 4 |
-| MST-05 | 태그 논리 삭제 | REQ-MST-05 · 06 · 08 · 15 | 4 |
-| MST-06 | 스케일 변경 시 새 태그 발급 | REQ-MST-05 · 07 · 15 | 3 |
+| MST-01 | 사이트 · 라인 관리 | REQ-MST-01 · 14 | 2 |
+| MST-02 | 설비 관리 | REQ-MST-02 · 14 | 2 |
+| MST-03 | Modbus 접속 설정 관리 | REQ-MST-03 · 14 | 2 |
+| MST-04 | 태그 마스터 관리 | REQ-MST-04 · 14 | 2 |
+| MST-05 | 태그 논리 삭제 | REQ-MST-06 · 08 | 2 |
+| MST-06 | 스케일 변경 시 새 태그 발급 | REQ-MST-07 | 1 |
 | MST-07 | 태그 메타 캐시 | REQ-MST-13 | 1 |
 | MST-08 | 캐시 무효화 체인 | REQ-MST-09 · 10 | 2 |
 | MST-09 | Dictionary 원천 제공 | REQ-MST-08 · 10 · 11 · 12 | 4 |
@@ -83,8 +83,8 @@
 ### 검산
 
 - 기능 = MST-01~09 = **9** · 대응 없는 기능 **0**
-- 대응 수 합(중복 허용) = 3 + 3 + 3 + 4 + 4 + 3 + 1 + 2 + 4 = **27**
-- REQ-MST 채번 = 01~15 = **15** · 기능에 대응하지 않는 REQ **0**
+- 대응 수 합(중복 허용) = 2 + 2 + 2 + 2 + 2 + 1 + 1 + 2 + 4 = **18**
+- 현행 REQ-MST = 01~04 · 06~14 = **13** · 결번 2(05 감사 동시 쓰기 · 15 ADMIN 인가 — D-16 · 재사용 금지) · 채번 13 + 2 = **15** · 기능에 대응하지 않는 현행 REQ **0**
 
 ## 에러 코드
 
@@ -93,11 +93,10 @@
 | common.validation_failed/400 | REQ-MST-03 · 04 | enum 허용값 밖 · 타입 불일치 |
 | common.not_found/404 | REQ-MST-02 · 06 · 08 | 마스터에 없는 식별자에만 — 비활성은 여기가 아니다 |
 | common.duplicate_key/409 | REQ-MST-04 | tag_code 유일 제약 |
-| common.postgres_unavailable/503 | REQ-MST-01 · 02 · 05 · 14 | 업무 CRUD만 실패 |
-| auth.forbidden/403 | REQ-MST-15 | ADMIN 외 쓰기 |
+| common.postgres_unavailable/503 | REQ-MST-01 · 02 · 14 | 업무 CRUD만 실패 |
 | master.scale_change_forbidden/409 | REQ-MST-07 | 새 태그 발급 동작으로 다시 요청 — master 네임스페이스의 첫 코드 |
 
-- 검산: 유효 코드 인용 = common 4 + auth 1 + master 1 = **6**행 · 채번 대기 **0**
+- 검산: 유효 코드 인용 = common 4 + master 1 = **5**행 · 채번 대기 **0**
 - **무효화 체인 실패(REQ-MST-10)에는 코드가 없다.** 캐시 계열 degrade라 응답은 성공이며 드러나는 자리는 캐시 삭제 실패 계수 · ClickHouse 오류 메트릭이다.
 
 ## 미확인 · 미설계 등재
@@ -107,7 +106,6 @@
 | 비활성 태그 과거 행의 태그명 | 닫힘 — dict_tag가 tag_master 전 행(비활성 포함)을 싣고 is_active를 속성으로 둔다 — [../05_data_stores/07_cross_store_consistency.md](../05_data_stores/07_cross_store_consistency.md) | [../05_data_stores/07_cross_store_consistency.md](../05_data_stores/07_cross_store_consistency.md)(W3) |
 | 새 태그 발급 표면 · 라인 · 사이트 · 접속 설정 쓰기 표면 | 닫힘 — 기능 근거로 표면 12 신설 — [../07_api/04_master.md](../07_api/04_master.md) | [../07_api/04_master.md](../07_api/04_master.md)(W5) |
 | 실행 중 마스터 변경의 Collector 반영 | **W4 판정** — ch:cacheinv 구독 · REQ-MST-03 · 08 반영 | [../06_pipeline/02_collect.md](../06_pipeline/02_collect.md) |
-| 비활성 태그를 가리키는 알람 규칙 | 판정을 멈추는지 규칙을 남기는지 없다 | [../06_pipeline/08_alarm.md](../06_pipeline/08_alarm.md)(W4) |
 | tag_master_history 컬럼 | 닫힘 — 컬럼 10(history_id · 이전 · 새 tag_id · 변경 전후 스케일 · 오프셋 · 변경 시각 · 행위자 · 사유) — [../05_data_stores/01_postgresql_schema.md](../05_data_stores/01_postgresql_schema.md) | [../05_data_stores/01_postgresql_schema.md](../05_data_stores/01_postgresql_schema.md)(W3) |
 | 캐시 삭제 실패 계수의 메트릭 이름 | **W6 판정** — mst_cache_delete_failures_total · mst_dict_reloads_total | [../10_observability/01_metrics_catalog.md](../10_observability/01_metrics_catalog.md) |
 | 무효화 층별 반영 시간 | 3계층 미확인 — 미확인 · 확정 전 임의 값 고정 금지. 원본 예상치: Dictionary 최대 10분(③ 생략 시) · BFF 최대 30초 | [../06_pipeline/07_business_crud.md](../06_pipeline/07_business_crud.md)(W4) · EXP-29(AC-06 기록) |

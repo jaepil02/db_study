@@ -1,7 +1,8 @@
 # F-08 롤업 집계 (09_rollup)
 
-> **대상**: F-08 롤업 흐름의 기전 정본 — 삽입 한 번이 발동하는 MV 연쇄 · 계층별 담당 조회 · MV 실패의 감지 · **원시 성공 · MV 실패 뒤 같은 토큰 재시도의 MV 재실행 판별(ⓑ — S0 실측)과 이중 계수 대응** · **롤업 공백 구간 재계산 절차** · 늦게 도착한 데이터 · 백필(모드 D)과의 관계 · 보존 경계와 정합 대조
+> **대상**: F-08 롤업 흐름의 기전 정본 — 삽입 한 번이 발동하는 MV 연쇄 · 계층별 담당 조회 · MV 실패의 감지 · **원시 성공 · MV 실패 뒤 같은 토큰 재시도의 MV 재실행 판별(ⓑ — S0 실측)과 이중 계수 대응** · **롤업 공백 구간 재계산 절차** · 늦게 도착한 데이터 · 보존 경계와 정합 대조
 > **작성일**: 2026-09-24
+> **개정일**: 2026-10-11 — **D-16 측정 도구 삭제**(사용자 결정 2026-10-11) — 모드 D 백필 삭제 — §백필과의 관계 삭제 · 늦은 행 원인 표의 모드 D 백필 행 삭제(4 → **3**) · 관련 문서 모드 D 행 삭제 · D-16 정리(d4 전역 sweep) — 폐지 실험을 확정 수단으로 가리키던 자리 교정(EXP-31)
 > **개정일**: 2026-09-25 — S3 통합 발견 — 재계산 삽입 설정에 deduplicate_insert_select 'disable' 병기(26.8에서 insert_deduplicate 0만 주면 무시됨 — 발견 즉시 닫음)
 > **개정일**: 2026-09-24 — ClickHouse 26.8 LTS 전환(사용자 결정 · 25.x 보안 지원 종료) — 판별 근거에 26.8(기록 004) — 적재 측 거절은 26.8에서 원시를 커밋하고 MV만 거절(ⓑ로 메움) · 부분 실패 이중 계수 26.8 3/3 · 보강 아래 부분 실패 정확(미측정 닫힘) · 재계산 insert_deduplicate 0 근거를 버전 종속으로
 > **개정일**: 2026-09-24 — S0 실측 반영(EXP-32 · 기록 001) — ⓐ · ⓑ 판별 → **ⓑ**(종속 MV가 다시 돈다) · 이중 계수 발견과 ADR-14 보강 반영 · 의심 구간 판정을 계측 전용으로 · 재계산 삽입(경로 A · B ⑤)에 insert_deduplicate 0(롤업 윈도우가 같은 내용을 버림 — 실측) · ingested_at은 INSERT 문 하나에 한 값(블록 7개 · 2개 모두 고유값 1) — 경로 A의 단위를 배치로 · 미확인 표 2행 닫힘
@@ -11,7 +12,7 @@
 
 F-08은 **tag_raw 삽입 블록이 분 · 시간 · 일 롤업으로 접히기까지**다. 애플리케이션이 하는 일이 없는 흐름이다 — tag_raw 삽입이 mv_tag_1m을 발동하고, tag_1m 삽입이 mv_tag_1h를, tag_1h 삽입이 mv_tag_1d를 발동한다(ING-12). 배치 잡 · 락 · 스케줄러가 없다. 그래서 **이 흐름의 기전은 정상 경로가 아니라 실패 경로에 있다** — MV는 원자적이지 않고, 삽입 블록만 보며, 재시도와의 관계가 미확인이다.
 
-롤업 테이블 · MV의 DDL · 조합자 · bad_cnt 조건 · 일 경계 시간대 · 백필 절차의 저장소 쪽 정본은 [../05_data_stores/04_clickhouse_rollup.md](../05_data_stores/04_clickhouse_rollup.md)다. 이 문서는 그 객체들이 **적재 흐름과 어떻게 맞물려 실패하고 어떻게 메우는가**를 고정한다. 롤업 객체는 ING 소유이며(W3 확정) 재계산의 주체도 ING 쪽 운영 절차다.
+롤업 테이블 · MV의 DDL · 조합자 · bad_cnt 조건 · 일 경계 시간대의 저장소 쪽 정본은 [../05_data_stores/04_clickhouse_rollup.md](../05_data_stores/04_clickhouse_rollup.md)다. 이 문서는 그 객체들이 **적재 흐름과 어떻게 맞물려 실패하고 어떻게 메우는가**를 고정한다. 롤업 객체는 ING 소유이며(W3 확정) 재계산의 주체도 ING 쪽 운영 절차다.
 
 ## 삽입 한 번의 연쇄
 
@@ -71,7 +72,7 @@ flusher INSERT plc.tag_raw(배치 · 토큰 T)
 
 | 대조 | 버킷 단위 비교 | 합격 | 어긋나면 | 대조 범위 |
 |------|------|------|------|------|
-| 원시 대 분 | count(tag_raw) 대 countMerge(cnt) — (device_id · tag_id · 분) | 정확 일치 | MV 실패 · 백필 공백 · 분리 중 적재 | 원시 보존 안 |
+| 원시 대 분 | count(tag_raw) 대 countMerge(cnt) — (device_id · tag_id · 분) | 정확 일치 | MV 실패 · 분리 중 적재 | 원시 보존 안 |
 | 분 대 시간 | countMerge(tag_1m) 합 대 countMerge(tag_1h) — 시간 | 정확 일치 | mv_tag_1h 분리 · 체인 실패 | 분 보존 안 |
 | 시간 대 일 | countMerge(tag_1h) 합 대 countMerge(tag_1d) — KST 일 | 정확 일치 | mv_tag_1d 분리 · 체인 실패 | 시간 보존 안 |
 | avg | avg(value) 대 avgMerge(avg_v) | 상계식 2·γ(n)·S/n 이내 | 실제 누락 · 부분 상태 누락 | 원시 보존 안 |
@@ -97,7 +98,7 @@ flusher INSERT plc.tag_raw(배치 · 토큰 T)
 
 - **경로 A가 기본이다.** 실패한 삽입의 원시 행은 같은 ingested_at 값을 갖는다(서버 DEFAULT now64가 **INSERT 문마다 1회** 평가 — S0 실측) — 의심 구간 기록의 ts 범위 안에서 롤업에 기여하지 않은 ingested_at 값을 찾아 그 행만 mv_tag_1m이 붙은 채로 tag_1m에 INSERT SELECT(insert_deduplicate 0 · deduplicate_insert_select 'disable' — 26.8은 뒤 설정이 앞 설정을 대체한다 · 25.8은 롤업 윈도우가 같은 내용 재삽입을 오류 없이 버렸다 · 버전 종속이라 절차로 고정)하면 연쇄가 tag_1h · tag_1d의 빠진 기여분까지 정확히 더한다. 큰 INSERT가 여러 블록으로 쪼개져도 ingested_at은 **한 값**이다(S0 실측 — 블록 7개 · 2개 모두 고유값 1 · 기록 001). 그래서 ingested_at은 블록이 아니라 배치(INSERT 하나)를 가른다 — 한 배치 안의 일부 블록만 롤업에서 빠진 경우는 ingested_at으로 가르지 못해 경로 B로 간다.
 - **경로 B의 단위가 KST 일인 이유** — 분 버킷의 기여는 시간 · 일 버킷에도 들어가 있으므로 분만 비우면 상위 롤업은 옛 부분 상태를 그대로 갖는다. 일 버킷은 시간 · 분 버킷을 전부 품으므로 **일 단위로 세 롤업을 함께 비우고** 그 일의 원시를 tag_1m에 넣으면 연쇄가 세 롤업을 일관되게 다시 만든다.
-- **countMerge > count는 두 원인이다** — 원시가 TTL로 이미 떨어진 버킷(정상 — 롤업이 원시보다 오래 산다)이거나 백필 이중 실행이다. 원시 보존 밖이면 판정할 원천이 없어 대조에서 뺀다.
+- **countMerge > count는 두 원인이다** — 원시가 TTL로 이미 떨어진 버킷(정상 — 롤업이 원시보다 오래 산다)이거나 같은 행의 이중 적재다. 원시 보존 밖이면 판정할 원천이 없어 대조에서 뺀다.
 
 | 경로 B 단계 | 동작 | 막는 것 | 금지된 대체 |
 |------|------|------|------|
@@ -117,25 +118,10 @@ flusher INSERT plc.tag_raw(배치 · 토큰 T)
 |------|------|------|------|
 | 적체 소진 · 스풀 재발행 | 옛 ts의 블록이 늦게 들어와 과거 버킷에 **새 부분 상태 행**이 생긴다 | 조회는 -Merge + GROUP BY라 머지 전에도 정확하다(MV 제약 #3) | 과거 구간 조회 캐시는 TTL만큼 옛 결과 — [06_timeseries_read.md](./06_timeseries_read.md) §늦게 도착한 데이터 |
 | 원시 보존 밖 ts(7일 넘은 행) | tag_raw 파트는 다음 TTL 머지에서 떨어지지만 **MV는 이미 롤업에 더했다** | 롤업에는 있고 원시에는 없다 | 원시 대 분 대조에서 countMerge > count — 대조 제외 |
-| 모드 D 백필 | MV를 분리한 채 원시를 넣고 롤업을 직접 채운다 | 절차대로면 정확 | §백필과의 관계 |
 | DLQ 재처리 | 원 토큰으로 재삽입 — MV가 정상 연쇄 | 정확 | 재처리가 중복 제거되면 §MV 실패와 같은 토큰 재시도와 같은 미확인 |
 
-- 검산: 원인 = **4**
+- 검산: 원인 = **3** · 옛 모드 D 백필 행은 D-16 폐지
 - **B형 — 버킷 하나에 여러 부분 상태 행이 있는 것은 중복이 아니다.** 결론 — AggregatingMergeTree는 머지 전까지 같은 키의 행을 파트마다 따로 둔다. 반대 시나리오 — 조회가 -Merge 없이 컬럼을 그대로 읽으면 같은 분이 여러 행으로 보여 "중복"으로 신고되고, 그것을 FINAL로 고치면 조회마다 머지 비용이 붙는다. 파생 지침 — 롤업 조회는 언제나 GROUP BY 버킷 · -Merge다(REQ-TSQ-07).
-
-## 백필과의 관계
-
-모드 D 백필(GEN-08)은 F-09의 쓰기이지만 롤업을 직접 채우므로 이 흐름과 맞물린다. 절차의 정본은 [../05_data_stores/04_clickhouse_rollup.md](../05_data_stores/04_clickhouse_rollup.md) §백필 절차, 실행 주체와 명령은 [10_datagen_inject.md](./10_datagen_inject.md)다.
-
-| 백필 단계 | 롤업 흐름에서의 뜻 | 어기면 |
-|------|------|------|
-| 주입 정지 확인 | 분리 중 들어오는 정상 적재가 없다 | 원시에는 있고 롤업에는 없는 조용한 공백 |
-| mv_tag_1m 하나만 분리 | tag_1m 직접 채우기가 상위 MV를 발동해 tag_1h · tag_1d가 연쇄로 찬다 | 상위를 분리하면 상위 롤업을 두 번 더 따로 채워야 한다 |
-| 원시 보존 창 안 ts | 원시가 남아 재계산 · 대조가 가능하다 | 창 밖 ts는 TTL 머지에서 곧 사라져 대조 원천이 없다 |
-| 재연결 뒤 세 count 대조 | 백필 공백 · 이중 실행 검출 | 이중 실행이면 countMerge > count |
-
-- 검산: 단계 = **4**
-- **백필은 멱등 토큰이 없다**(REQ-GEN-11 — ING를 우회한다). 백필을 두 번 돌리면 원시와 롤업이 모두 두 배가 되고 원시 대 분 count는 **맞는다** — 계층 간 대조로는 이중 실행을 못 잡는다. 검출은 생성 수 대 원시 count(REQ-NFR-01)다.
 
 ## 보존 경계와 롤업
 
@@ -156,14 +142,13 @@ flusher INSERT plc.tag_raw(배치 · 토큰 T)
 | 여러 블록으로 쪼개진 INSERT의 ingested_at 동일성 | **닫힘(S0 실측)** — INSERT 문 하나에 한 값 · 경로 A는 배치 단위로 가른다 | EXP-32 · 이 문서 §롤업 공백 재계산 |
 | MV 캐스케이드 지연 · MV가 삽입 처리량에 더하는 비용 | 3계층 미확인 — 원본 예상치 100 ms | REQ-NFR-04 |
 | **재계산 삽입의 중복 제거 해제 설정 이름** | **닫힘(S3 통합 확인)** — 26.8은 deduplicate_insert(INSERT) · deduplicate_insert_select(INSERT SELECT)가 insert_deduplicate를 대체해 앞 설정만 주면 무시된다(적재 SW-08 off에서 확인 · 06_pipeline/03). 26.8의 INSERT SELECT는 기본값(enable_when_possible)에서 같은 내용 두 번째 삽입을 버리지 않았다(S3 확인 — 기록 004와 같다) — 절차는 두 설정을 모두 명시해 버전 · 기본값에 기대지 않는다 | 이 문서 §롤업 공백 재계산 · [../05_data_stores/04_clickhouse_rollup.md](../05_data_stores/04_clickhouse_rollup.md) |
-| p95 원시 대 롤업 허용 범위 | 3계층 미확인 — 확정 수단 EXP-31(원시 내 순위 오차) | [../03_requirements/14_acceptance_criteria.md](../03_requirements/14_acceptance_criteria.md) §미확인 등재 |
+| p95 원시 대 롤업 허용 범위 | 3계층 미확인 · 확정 수단 없음(원시 내 순위 오차 EXP-31 D-16 폐지) | [../03_requirements/14_acceptance_criteria.md](../03_requirements/14_acceptance_criteria.md) §미확인 등재 |
 | 롤업 의심 구간 · MV 오류 계수 메트릭 이름 | **W6 판정** — ing_rollup_suspect_batches_total · ing_mv_errors_total{result} | [../10_observability/01_metrics_catalog.md](../10_observability/01_metrics_catalog.md) |
 
 ## 관련 문서
 
-- [../05_data_stores/04_clickhouse_rollup.md](../05_data_stores/04_clickhouse_rollup.md) — 롤업 DDL · MV 제약 · 백필 절차 정본
+- [../05_data_stores/04_clickhouse_rollup.md](../05_data_stores/04_clickhouse_rollup.md) — 롤업 DDL · MV 제약 정본
 - [../05_data_stores/03_clickhouse_schema.md](../05_data_stores/03_clickhouse_schema.md) — 중복 제거 · MV 오류 설정
 - [../05_data_stores/08_retention_lifecycle.md](../05_data_stores/08_retention_lifecycle.md) — 계층별 보존
 - [03_ingest_batch.md](./03_ingest_batch.md) — 같은 토큰 재시도 · 의심 구간 기록 주체
 - [06_timeseries_read.md](./06_timeseries_read.md) — 해상도 선택 · 늦은 데이터와 캐시
-- [10_datagen_inject.md](./10_datagen_inject.md) — 모드 D 백필 실행

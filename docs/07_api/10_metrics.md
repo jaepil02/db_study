@@ -2,6 +2,8 @@
 
 > **대상**: OBS 도메인 표면 — GET /api/v1/health(저장소별 상태 · 스위치 12종의 실제 주입 구현 · 부분 실패 503) · GET /metrics(Prometheus 텍스트 · 스위치 상태 레이블) · 두 표면의 공개 판정 반영 · **health 본문 필드 이름 판정** · **저장소별 타임아웃 판정**
 > **작성일**: 2026-09-24
+> **개정일**: 2026-10-11 — **D-16 설비 가동 · SW-09 gated**(사용자 결정 2026-10-11) — run.sensorAutogen 실효값(게이트 × 역할) → **실효값(이 프로세스가 지금 센서 데이터를 만드는가 — 설비 가동 실행 중 상태 × 역할)** · 기동 시 1회 → **실행 중에 바뀐다**(06_realtime #4) · 스위치 표 SW-09 값 on · off → **off · on · gated**(gated도 PostgresControlSink)
+> **개정일**: 2026-10-11 — **D-16 로그인 · 권한 · 옛 perf 직접 재 보기 · 측정 도구 삭제**(사용자 결정 2026-10-11) — 표면 요약 역할 열 → **인증 열(무인증)** · 공통 규약 인증 · 인가 행의 레이트 리밋 · REQ-AUT-16 삭제 · 호출 화면 EXP-PERF 삭제(perf 화면 폐지) · 측정 기록 그림 불릿 일반화 · sensorAutogen 불릿의 도구 출력(bench · 모드 B · D · oltp-lab) 삭제 · 레이블 상한 근거 티어 → 포트 대역 · 관련 문서 폐지 화면 행 삭제 — 표면 수 불변 · (리드 판정 — 대상 문서 파일 삭제) 원천의 권한 매트릭스(삭제) 인용 삭제 · D-16 정리(d4 전역 sweep) — 폐지 실험을 확정 수단으로 가리키던 자리 교정(EXP-38) · D-16 정리(d4 전역 sweep) — 공개 판정 근거의 토큰 수명 · 권한 매트릭스 인용 교정
 > **개정일**: 2026-10-05 — 센서 자동 생성 게이트 검수 반영(리드 판정 M1) — run.sensorAutogen 게이트 값 → **실효값(게이트 × 역할)** — 게이트 on이고 APP_ROLE이 수집기를 띄우는 역할일 때만 on(api · worker는 off) — 필드 행 · 공통 규약 응답 내용 · run 행 문구 · **실효값 근거 불릿 신설** — 필드 수 · 표면 · 에러 코드 수 불변
 > **개정일**: 2026-10-03 — 센서 자동 생성 게이트 SENSOR_AUTOGEN 신설(사용자 결정 2026-10-03 · 스위치 밖 운영 게이트 · 이름 정본 09_tech_stack/04) — health run에 **sensorAutogen**(on · off) — 필드 행 10 → **11** · 최상위 필드 5 불변 · 공통 규약 응답 내용 · #1 호출 화면(EXP-FLOW 꺼짐 안내) · 응답 예시 run · run 근거 불릿 — 표면 · 에러 코드 수 불변
 > **개정일**: 2026-10-03 — D-15 학습자 눈높이 한 화면(사용자 지시 2026-10-03 — 08_screen/08_evidence_screens · 01_standards §한 화면 원칙) — 측정 조건 서랍 → **각주 툴팁**(읽기 전용 단락 · #1 호출 화면 · EXP-PERF 불릿 · run 근거 불릿 · 관련 문서) · EXP-PERF 불릿의 기록 곡선 · 배수 지도 → 그림 1 · 그림 2 — 표면 · 기능 불변
@@ -11,9 +13,9 @@
 > **개정일**: 2026-09-24 — W6 실험 채번 반영 — 레이블 이름 · 설비 레이블 · EXP 반영(정본 10_observability/01 · 06)
 > **개정일**: 2026-09-24 — W6 판정 반영 — Compose api healthcheck timeout **3초**(저장소 타임아웃 1,000 ms의 3배 · 정본 09_tech_stack/03) · run 환경변수 이름 MEMORY_PROFILE · CAPACITY_TIER · COMMIT_HASH(정본 09_tech_stack/04) — 필드 수 불변
 > **개정일**: 2026-09-24 — W5 판정 반영 — health 본문에 측정 조건 **run**(commitHash · memoryProfile · memoryLimitMb · capacityTier) 신설 — 최상위 필드 4 → **5** · 필드 행 8 → **10** · #1 호출 화면에 EXP-COMPARE · EXP-COMPARE 비교 값은 표면 없음(BFF의 docs/measurements 읽기)
-> **원천**: 원본 architecture.md §3 · §11 · §14 · §18(커밋 ff66a37) · 원본 implementation_plan.md §4.1(커밋 ff66a37) · REQ-OBS-01~12 · REQ-GLB-04 · 16 · D-06 · D-10 · ADR-08 · ADR-22 · docs_plan.md 실행 계획 보정 #12 · #14 · [../02_features/11_metrics.md](../02_features/11_metrics.md) OBS-01~06 · [../02_features/13_switch_matrix.md](../02_features/13_switch_matrix.md) · [../02_features/12_permission_matrix.md](../02_features/12_permission_matrix.md) §GEN · OBS 표면 인가 · [../04_architecture/03_execution_topology.md](../04_architecture/03_execution_topology.md) healthcheck · docs_plan.md 웨이브 인계 W5 07_api 행(health 본문 필드 이름 · 저장소별 타임아웃)
+> **원천**: 원본 architecture.md §3 · §11 · §14 · §18(커밋 ff66a37) · 원본 implementation_plan.md §4.1(커밋 ff66a37) · REQ-OBS-01~12 · REQ-GLB-04 · 16 · D-06 · D-10 · ADR-08 · ADR-22 · docs_plan.md 실행 계획 보정 #12 · #14 · [../02_features/11_metrics.md](../02_features/11_metrics.md) OBS-01~06 · [../02_features/13_switch_matrix.md](../02_features/13_switch_matrix.md) · [../04_architecture/03_execution_topology.md](../04_architecture/03_execution_topology.md) healthcheck · docs_plan.md 웨이브 인계 W5 07_api 행(health 본문 필드 이름 · 저장소별 타임아웃)
 
-OBS 표면은 **둘뿐이고 둘 다 공개다.** /api/v1/health는 Compose가 api의 healthcheck로 자격 증명 없이 부르고(인증을 걸면 기동이 순환한다), /metrics는 Prometheus 스크레이프와 정밀 측정 세션의 직접 덤프가 토큰 수명과 무관하게 읽는다. 공개의 근거는 도달 가능성이 아니라 **호출 주체가 기계이고 응답에 업무 데이터가 없다**는 것이다 — 업무 데이터가 실리는 순간 판정이 무효다(권한 매트릭스 §GEN · OBS 표면 인가).
+OBS 표면은 **둘뿐이고 둘 다 공개다.** /api/v1/health는 Compose가 api의 healthcheck로 자격 증명 없이 부르고(인증을 걸면 기동이 순환한다), /metrics는 Prometheus 스크레이프와 정밀 측정 세션의 직접 덤프가 자격 증명 없이 읽는다. D-16 뒤 모든 표면이 무인증이지만 이 둘은 **무인증이 설계 결정**이다. 공개의 근거는 도달 가능성이 아니라 **호출 주체가 기계이고 응답에 업무 데이터가 없다**는 것이다 — 업무 데이터가 실리는 순간 판정이 무효다(옛 권한 매트릭스 판정은 D-16으로 문서와 함께 삭제 — [../12_security/04_threat_model.md](../12_security/04_threat_model.md) §공개 표면이 잇는다).
 
 **두 표면은 읽기 전용이다.** 스위치를 바꾸는 쓰기 메서드가 없다 — 전환은 환경변수와 api 재기동뿐이다(D-06 · REQ-OBS-12). 두 실증 화면(EXP-PERF · EXP-FLOW)의 각주 툴팁이 스위치 상태를 표시하는 원천이 이 두 표면이지만, 화면은 표시만 한다(docs_plan 보정 #14 · 실험 콘솔 EXP-CONSOLE은 폐지 — D-14).
 
@@ -23,9 +25,9 @@ metrics 네임스페이스는 정의만 있고 코드가 0이다. health의 503�
 
 | 항목 | 규칙 | 근거 |
 |------|------|------|
-| 인증 · 인가 | 공개 — Authorization을 보지 않는다 · 레이트 리밋 계수 대상 아님(user_id 없음) | REQ-OBS-10 · REQ-AUT-16 |
+| 인증 · 인가 | 무인증 — 다른 표면과 같다(D-16) · Host 대조만 | REQ-OBS-10 · [01_conventions.md](./01_conventions.md) §출처 방어 |
 | 응답 내용 | 업무 데이터 · 비밀(접속 문자열 · 자격 증명 · 토큰)을 싣지 않는다 · health는 저장소별 상태 · 스위치 상태 · 측정 조건(커밋 해시 · 메모리 프로파일 · 용량 티어 · 센서 자동 생성 실효값)만 | REQ-OBS-10 · 11 |
-| 경로 | 기계 호출 직결 · 화면(EXP-PERF · EXP-FLOW)은 BFF 경유 | [01_conventions.md](./01_conventions.md) §BFF 경유와 직결 |
+| 경로 | 기계 호출 직결 · 화면(EXP-FLOW)은 BFF 경유 | [01_conventions.md](./01_conventions.md) §BFF 경유와 직결 |
 | 쓰기 | 없음 — GET만 | REQ-OBS-12 |
 | 캐시 | 없음 · Cache-Control no-store | [01_conventions.md](./01_conventions.md) §캐시 헤더 |
 | 에러 코드 | 없음 — metrics 네임스페이스 코드 0 · health 부분 실패는 코드 없는 503 | [../11_glossary/02_error_codes.md](../11_glossary/02_error_codes.md) 채번 보류의 처리 결과 |
@@ -35,14 +37,14 @@ metrics 네임스페이스는 정의만 있고 코드가 0이다. health의 503�
 
 ## 표면 요약
 
-| # | 메서드 | 경로 | 기능 ID | 역할 | 캐시 | 에러 코드 | 호출 화면 | 원본 여부 |
+| # | 메서드 | 경로 | 기능 ID | 인증 | 캐시 | 에러 코드 | 호출 화면 | 원본 여부 |
 |:-:|------|------|------|------|------|------|------|------|
-| 1 | GET | /api/v1/health | OBS-05 · 06 | 공개 | 없음 | 없음 — 부분 실패는 코드 없는 503 | EXP-FLOW(각주 툴팁 · 자동 생성 꺼짐 안내) · EXP-PERF(각주 툴팁) | 원본 |
-| 2 | GET | /metrics | OBS-01 · 02 · 03 · 04 · 06 | 공개 | 없음 | 없음 | EXP-FLOW | 원본 |
+| 1 | GET | /api/v1/health | OBS-05 · 06 | 무인증 | 없음 | 없음 — 부분 실패는 코드 없는 503 | EXP-FLOW(각주 툴팁 · 자동 생성 꺼짐 안내) | 원본 |
+| 2 | GET | /metrics | OBS-01 · 02 · 03 · 04 · 06 | 무인증 | 없음 | 없음 | EXP-FLOW | 원본 |
 
 - 검산: 표면 = **2** · REST JSON 1 + 메트릭 텍스트 1 = **2** · 원본 2 + 신설 0
 - 기능 6이 두 표면에 앉는다 — /metrics 4(OBS-01~04) + health 1(OBS-05) + 양쪽 1(OBS-06) = **6**
-- EXP-PERF의 그림 1 승패 막대 · 그림 2 규모 곡선 값은 **api 표면이 없다** — BFF가 docs/measurements를 읽기 전용으로 읽는다(W5 리드 판정 · 폐지 화면 EXP-COMPARE의 역전 지점 패널과 같은 경로 · D-14). 이 화면이 api에서 읽는 것은 각주 툴팁의 #1 run · switches뿐이다.
+- 측정 기록을 그리는 화면 값(승패 막대 · 규모 곡선)은 **api 표면이 없다** — BFF가 docs/measurements를 읽기 전용으로 읽는다(W5 리드 판정). 옛 EXP-PERF 화면과 그 실행(perf)은 D-16으로 지웠다.
 - 기계 호출 주체(Compose healthcheck · Prometheus · 직접 덤프)는 화면 코드가 아니라 호출 화면 열에 적지 않는다 — [01_conventions.md](./01_conventions.md) §BFF 경유와 직결의 기계 호출 행이 갖는다.
 
 ## #1 GET /api/v1/health
@@ -77,14 +79,14 @@ metrics 네임스페이스는 정의만 있고 코드가 0이다. health의 503�
 | switches.*.name · value · impl · warning | 문자열 · 문자열 또는 정수 · 문자열 또는 null · 문자열 또는 null | 환경변수 이름 · 실제 값 · 실제 주입된 구현 이름(**포트가 아직 코드에 없는 도입 전 스위치는 null** — value는 기동 설정값) · 경고 |
 | **run** | 객체 | 측정 조건 — 기록 4요소 중 스위치 밖 3요소(아래 넷) · 센서 자동 생성 실효값(아래 하나) |
 | **run.commitHash · memoryProfile · memoryLimitMb · capacityTier** | 문자열 · 문자열 · 정수 · 문자열(S · M · M+ · L) — 각각 null 가능 | 빌드된 커밋 해시 · 메모리 프로파일 이름 · api 컨테이너의 실제 메모리 상한(cgroup에서 읽음) · 기동 시 주입된 용량 티어 |
-| **run.sensorAutogen** | 문자열 on · off — null 없음 | 센서 자동 생성 **실효값(게이트 × 역할)** — 환경변수 SENSOR_AUTOGEN(스위치가 아니다)이 on이고 이 프로세스의 APP_ROLE이 수집기를 띄우는 역할일 때만 on · 그 밖은 off(예: 수집기가 없는 api · worker는 게이트가 on이어도 off) — off면 이 프로세스에 SIM 포트 · 모드 A 틱 · 수집기 폴링이 없어 화면의 센서 데이터는 직접 보내 보기(07_api/09 flow 실행)가 보낸다 — 측정용 주입 모드(B · C · D)는 게이트와 무관하다 |
+| **run.sensorAutogen** | 문자열 on · off — null 없음 | 센서 자동 생성 **실효값** — 이 프로세스가 **지금** SIM 포트 · 모드 A 틱 · 수집기 폴링을 돌리고 있으면 on · 그 밖은 off. 설비 가동(06_realtime #3 · #4 — 실행 중 상태 ctl:plant:power · 키가 없으면 기동 기본값 SENSOR_AUTOGEN)이 켜졌고 이 프로세스의 APP_ROLE이 수집기를 띄우는 역할이며 그 전환이 적용됐을 때만 on이다(수집기가 없는 api · worker는 늘 off) — off면 화면의 센서 데이터는 직접 보내 보기 · 직접 비교(07_api/09 flow · compare 실행)가 보낸다 |
 
 - 검산: 필드 행 = **11** · 최상위 필드 = status · checkedAt · stores · switches · run = **5**
-- **run을 싣는 이유(W5 리드 판정)** — 측정 기록의 4요소(커밋 해시 · 메모리 프로파일 · 용량 티어 · 스위치 상태 — REQ-GLB-17)를 한 응답에서 읽게 한다. 두 실증 화면의 각주 툴팁이 기록 조건을 손으로 옮겨 적지 않는다 — 옮겨 적다 틀리면 같은 조건이라 믿은 두 측정의 조건이 다르다. 셋 다 비밀이 아니다.
+- **run을 싣는 이유(W5 리드 판정)** — 측정 기록의 4요소(커밋 해시 · 메모리 프로파일 · 용량 티어 · 스위치 상태 — REQ-GLB-17)를 한 응답에서 읽게 한다. 화면의 각주 툴팁이 기록 조건을 손으로 옮겨 적지 않는다 — 옮겨 적다 틀리면 같은 조건이라 믿은 두 측정의 조건이 다르다. 셋 다 비밀이 아니다.
 - **값은 기동 시 주입값이며 모르면 null이다.** 커밋 해시는 이미지 빌드 인자, 메모리 프로파일 · 용량 티어는 기동 환경변수에서 읽는다(환경변수 MEMORY_PROFILE · CAPACITY_TIER · 빌드 인자 COMMIT_HASH — 이름 정본 [../09_tech_stack/04_local_environment.md](../09_tech_stack/04_local_environment.md)). 추정값으로 채우지 않는다 — null은 "그 측정 기록은 4요소가 빠져 인용할 수 없다"는 표지다. memoryLimitMb만은 프로파일 이름과 별도로 cgroup의 실제 상한을 읽는다 — 스위치와 같은 "실제 적용값" 원칙(REQ-OBS-11)이다.
-- **sensorAutogen을 run에 싣는 이유(사용자 결정 2026-10-03)** — 자동 생성이 켜진 실행은 수집기가 늘 스트림에 싣는 배경 적재 위에서 재고, 꺼진 실행은 직접 보낸 양만 흐른다. 이 칸이 없으면 배경 적재가 있고 없는 두 측정이 같은 조건으로 읽힌다. 기동 시 1회 · 허용값 밖이면 기동 거부라 모르는 값(null)이 없다 — 기본값(앱 on · 로컬 Compose off)은 이름 정본 [../09_tech_stack/04_local_environment.md](../09_tech_stack/04_local_environment.md)가 갖는다. 기록 4요소의 정의는 바꾸지 않는다 — 4요소에 더해지는 조건 칸이다.
-- **sensorAutogen은 health에만 싣는다.** 도구 출력(bench · 모드 B · 모드 D · oltp-lab)의 run에 넣으면 수집기를 띄우지 않는 별도 프로세스가 api의 SENSOR_AUTOGEN을 모른 채 자기 기본값(on)을 적는다 — 그 칸은 실제 실행과 어긋난다.
-- **sensorAutogen은 게이트 값이 아니라 실효값이다(검수 반영 2026-10-05).** 게이트 값을 그대로 실으면 역할 분리 실행(APP_ROLE api · worker — 수집기 없음)의 기록이 게이트 on이라 배경 적재가 있었던 것처럼 읽힌다 — 실제로는 그 프로세스가 센서 데이터를 하나도 만들지 않았다. 역할 판정의 기준은 그 프로세스가 SIM · 모드 A · 수집기를 띄우는가 하나다 — 어느 역할이 띄우는지는 역할 배정 정본 [../04_architecture/02_module_boundaries.md](../04_architecture/02_module_boundaries.md) §APP_ROLE 배정이 갖는다. 값은 이 프로세스 기준이다 — 다른 컨테이너의 collector 역할이 싣는 데이터는 그 프로세스의 health가 말한다.
+- **sensorAutogen을 run에 싣는 이유(사용자 결정 2026-10-03)** — 자동 생성이 켜진 실행은 수집기가 늘 스트림에 싣는 배경 적재 위에서 재고, 꺼진 실행은 직접 보낸 양만 흐른다. 이 칸이 없으면 배경 적재가 있고 없는 두 측정이 같은 조건으로 읽힌다. 값은 **응답 순간의 적용 상태**다 — D-16부터 설비 가동이 실행 중에 바뀌므로 기동 시 1회 값이 아니다(사용자 결정 2026-10-11 결정 3). 모르는 값(null)이 없다 — 기동 기본값(SENSOR_AUTOGEN — 앱 on · 로컬 Compose off · 허용값 밖이면 기동 거부)은 이름 정본 [../09_tech_stack/04_local_environment.md](../09_tech_stack/04_local_environment.md)가 갖는다. 측정 기록은 측정 구간 동안 이 값이 바뀌지 않았는지를 함께 본다([../10_observability/04_experiment_protocol.md](../10_observability/04_experiment_protocol.md)). 기록 4요소의 정의는 바꾸지 않는다 — 4요소에 더해지는 조건 칸이다.
+- **sensorAutogen은 health에만 싣는다.** 수집기를 띄우지 않는 별도 프로세스의 출력에 넣으면 그 프로세스가 api의 SENSOR_AUTOGEN을 모른 채 자기 기본값(on)을 적는다 — 그 칸은 실제 실행과 어긋난다. 옛 도구 출력(bench · 모드 B · 모드 D · oltp-lab)은 D-16으로 지웠다.
+- **sensorAutogen은 게이트 · 키 값이 아니라 실효값이다(검수 반영 2026-10-05 · D-16).** 설비 가동 키는 켜졌는데 수집기가 아직 따라오지 않은 1초 사이에도 off다. 게이트 값을 그대로 실으면 역할 분리 실행(APP_ROLE api · worker — 수집기 없음)의 기록이 게이트 on이라 배경 적재가 있었던 것처럼 읽힌다 — 실제로는 그 프로세스가 센서 데이터를 하나도 만들지 않았다. 역할 판정의 기준은 그 프로세스가 SIM · 모드 A · 수집기를 띄우는가 하나다 — 어느 역할이 띄우는지는 역할 배정 정본 [../04_architecture/02_module_boundaries.md](../04_architecture/02_module_boundaries.md) §APP_ROLE 배정이 갖는다. 값은 이 프로세스 기준이다 — 다른 컨테이너의 collector 역할이 싣는 데이터는 그 프로세스의 health가 말한다.
 - **error에 원문 메시지를 싣지 않는 이유** — 드라이버 오류 문자열에는 접속 문자열 · 호스트 · 사용자 이름이 섞인다. 공개 표면의 응답에 비밀이 실리면 공개 판정이 무효다(REQ-OBS-10).
 - **도입 전 스위치의 impl은 null이다(S2 as-built).** 주입되지 않은 구현 이름을 적으면 "실제 주입 구현"이 거짓이 되고, 키를 빼면 측정 기록의 스위치 키(현재 12 — 정본 [../02_features/13_switch_matrix.md](../02_features/13_switch_matrix.md))가 비어 4요소가 성립하지 않는다([../10_observability/04_experiment_protocol.md](../10_observability/04_experiment_protocol.md) BFF 판독 규칙 4) — 키는 싣고 impl만 비운다. obs_switch_info는 impl 레이블이 비지 않게 주입된 스위치만 낸다.
 - **switches의 키 집합은 정본의 스위치 전부다.** 개수를 이 문서가 세지 않는다 — 스위치가 늘면 키가 늘 뿐이고 응답 필드 추가 규칙(v1 유지)을 따른다. 정본 [../02_features/13_switch_matrix.md](../02_features/13_switch_matrix.md).
@@ -103,7 +105,7 @@ metrics 네임스페이스는 정의만 있고 코드가 0이다. health의 503�
 | SW-06 | on · off | RedisPubSubFanout · DirectGatewayFanout | null |
 | SW-07 | **정수(ms)** — 0이면 병합 없음 | WindowMergeThrottle · PassthroughThrottle | null |
 | SW-08 | on · off | DeterministicBatchToken · NoBatchToken | null |
-| SW-09 | on · off | PostgresControlSink · NoopControlSink | null |
+| SW-09 | **off · on · gated** — gated는 직접 비교 실행이 게이트를 켠 배치만 싣는다 | PostgresControlSink(on · gated) · NoopControlSink(off) | null |
 | SW-10 | on · off | TagDeadbandFilter · PassthroughFilter | null |
 | SW-11 | ingest · collector | IngestLatestValueWriter · CollectorLatestValueWriter | null |
 | SW-12 | stream · direct | StreamBizWriter · DirectBizWriter | null |
@@ -162,7 +164,7 @@ metrics 네임스페이스는 정의만 있고 코드가 0이다. health의 503�
 | 내용 | 앱 기본 · HTTP · WebSocket · 파이프라인(OBS-01) + 저장소 메트릭(OBS-02) + 키 접두별 메모리(OBS-03) + E2E 지연 게이지(OBS-04) + 스위치 상태 레이블(OBS-06) |
 | 저장소 메트릭 | 스크레이프 때 저장소를 조회하지 않는다 — 주기 수집(현행 참고 15초)의 마지막 값을 낸다 |
 | 부분 실패 | 한 계열 수집 실패는 그 계열만 비우고 수집 오류 지표를 올린다 · **/metrics 자체는 200** |
-| 레이블 | 닫힌 집합(도메인 · 저장소 · 스위치 · 상태 코드 · 단계 · 설비 — 티어 구성으로 상한)만 · 태그 · 요청 단위 식별자 금지 |
+| 레이블 | 닫힌 집합(도메인 · 저장소 · 스위치 · 상태 코드 · 단계 · 설비 — PlcSim 포트 대역으로 상한)만 · 태그 · 요청 단위 식별자 금지 |
 | 이름 · 레이블 이름 | 정본 [../10_observability/01_metrics_catalog.md](../10_observability/01_metrics_catalog.md) — 스위치 상태는 obs_switch_info(레이블 switch · env · value · impl) · 경고 obs_switch_warning |
 | 관련 REQ | REQ-OBS-01 · 02 · 03 · 04 · 05 · 06 · 07 · 10 · 11 |
 
@@ -189,7 +191,7 @@ metrics 네임스페이스는 정의만 있고 코드가 0이다. health의 503�
 | 스위치 상태 레이블 이름 · 메트릭 이름 | **닫힘(W6)** — obs_switch_info · 이름 전수 | [../10_observability/01_metrics_catalog.md](../10_observability/01_metrics_catalog.md) |
 | 역할 분리 뒤 health · metrics의 자리 | APP_ROLE별 컨테이너가 각자 두 표면을 내는지 없다 — 현행 범위 밖(확장 1단계) | [../04_architecture/02_module_boundaries.md](../04_architecture/02_module_boundaries.md) · [../04_architecture/08_scaling_roadmap.md](../04_architecture/08_scaling_roadmap.md) |
 | health에 부하 주입 게이트 상태를 실을지 | 싣지 않는다(스위치가 아니다 · REQ-OBS-10 내용 한정) — 측정 기록에 사람이 적는다 | [09_datagen.md](./09_datagen.md) · [../10_observability/04_experiment_protocol.md](../10_observability/04_experiment_protocol.md) §조건 칸 |
-| /metrics 응답 크기 · 스크레이프 지연 | 3계층 미확인 — obs_metrics_response_bytes로 계측 · EXP-38이 잰다 | [../10_observability/07_measurement_limits.md](../10_observability/07_measurement_limits.md) |
+| /metrics 응답 크기 · 스크레이프 지연 | 3계층 미확인 — obs_metrics_response_bytes로 계측 · 재려던 EXP-38은 D-16 폐지 | [../10_observability/07_measurement_limits.md](../10_observability/07_measurement_limits.md) |
 
 ## 관련 문서
 
@@ -199,5 +201,4 @@ metrics 네임스페이스는 정의만 있고 코드가 0이다. health의 503�
 - [../02_features/13_switch_matrix.md](../02_features/13_switch_matrix.md) — 스위치 · 포트 구현 이름 정본
 - [../04_architecture/03_execution_topology.md](../04_architecture/03_execution_topology.md) — healthcheck · 기동 순서
 - [../10_observability/01_metrics_catalog.md](../10_observability/01_metrics_catalog.md) — 메트릭 이름 정본
-- [../08_screen/07_experiment_console.md](../08_screen/07_experiment_console.md) — EXP-CONSOLE 화면(폐지 · D-14 — 폐지 전 원문 보존)
-- [../08_screen/08_evidence_screens.md](../08_screen/08_evidence_screens.md) — EXP-PERF · EXP-FLOW 각주 툴팁 · 흐름 메트릭
+- [../08_screen/08_evidence_screens.md](../08_screen/08_evidence_screens.md) — EXP-FLOW 각주 툴팁 · 흐름 메트릭

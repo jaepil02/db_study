@@ -2,6 +2,8 @@
 
 > **대상**: observability 프로파일에서 보는 것 — 알림 경로 판정 · 대시보드 6 · 대시보드별 핵심 패널 · **축출 연쇄 패널(캐시 히트율 대 Stream 점유 메모리 역상관)** · 알림 규칙(**스트림 알림을 적체 기준으로**) · 알림 임계 조회 계약 · 관측 부하 규칙
 > **작성일**: 2026-09-24
+> **개정일**: 2026-10-11 — D-16 직접 비교 반영(코드 as-built — backpressure_stage 발행자는 publisher compare 하나) — 파이프라인 전경 백프레셔 단계 패널 발행자별 → **직접 비교 발행** · **A형 불릿 신설**(적체 경보 backpressure_stage 항은 직접 비교 동안에만 움직인다 · 수집기 쪽은 spool_active · 랙) · control_copy_failed가 직접 비교 넣기의 비교 사본 COPY 실패도 센다 — 규칙 수 불변
+> **개정일**: 2026-10-11 — **D-16 알람 · 측정 도구 삭제**(사용자 결정 2026-10-11) — 알림 규칙 14 → **13**(alarm_eval_gap 삭제 · 신설 7 → **6**) · 판정 표 알림 14 → **13** · 호스트 대시보드 k6 CPU 삭제 · 축출 연쇄 패널 지침의 스냅샷 복원 · EXP-18 폐지 표기 · 디스크 임계의 대조 실험 디스크 예산 인용 삭제 · 관측 부하 규칙 5 → **4**(k6 결과 전송 삭제 · 콘솔 폴링 행 → 화면 폴링과 스크레이프) · EXP-38 폐지 표기 · D-16 정리(d4 전역 sweep) — API 패널 설계 거절 삭제 · 실험 열 폐지 실험 표기 · 오류율 판독 규칙 식 교정 · D-16 정리(d4 전역 sweep) — 폐지 실험을 확정 수단으로 가리키던 자리 교정(대시보드 실험 열)
 > **원천**: 원본 architecture.md §14 · §16 · §19(커밋 ff66a37) · 원본 tech_stack.md §9 · §10.6(커밋 ff66a37) · 원본 implementation_plan.md §5 S6(커밋 ff66a37) · docs_plan.md 보정 #17 · 웨이브 인계 W6 10/03 행(스트림 길이 MAXLEN 80% → 적체 기준) · ADR-20 · ADR-21 · ADR-23 · REQ-OBS-03 · 07 · AC-12 · AC-32 · [01_metrics_catalog.md](./01_metrics_catalog.md) · [../09_tech_stack/03_data_infra.md](../09_tech_stack/03_data_infra.md) 관측 스택 구성원
 
 이 문서는 **관측 스택을 켰을 때 무엇을 보고 무엇에 경보하는가**를 고정한다. OBS는 노출까지만 하고 저장 · 시각화 · 알림은 선택 기동 observability 프로파일이 한다(REQ-OBS-07). 프로파일 구성원의 정본은 [../09_tech_stack/03_data_infra.md](../09_tech_stack/03_data_infra.md)(prometheus · grafana)이고 이 문서는 그 위에서 도는 대시보드와 규칙을 갖는다.
@@ -30,12 +32,12 @@ docs_plan 보정 #17(관측 스택 구성원 불일치) 중 알림 쪽을 이 �
 
 | 대시보드 | 답하는 질문 | 핵심 패널 | 출처 | 주로 쓰는 실험 |
 |------|------|------|------|------|
-| 파이프라인 전경 | 적재가 수집을 따라가는가 | 컨슈머 랙(lag · pending 분리) · 백프레셔 단계(발행자별) · 초당 포인트 · 배치 크기 · DLQ · 스풀 · E2E p50 · p95 · p99 · 6a · 6b · 6c | api /metrics | EXP-16 · 20 · 22~26 · 30 · 34 |
-| ClickHouse | 삽입과 머지가 버티는가 | 초당 삽입 행 · 활성 파트 · 새 파트율 · 머지 진행 · 압축률 · 쿼리 p95 · 메모리 · 디스크 여유 | api /metrics(system.*) | EXP-25 · 26 · 34 · 35 |
-| PostgreSQL | 업무 경로 · 대조군이 버티는가 | 커밋 · 연결 · 버퍼 적중 · 락 대기 · 상위 문형 10 · 데드 튜플 · WAL | api /metrics(pg_stat_*) | EXP-36 · EXP-01~05 적재 |
-| Redis | 한 인스턴스 안에서 누가 메모리를 먹는가 | 접두별 점유(봉인 · 캐시 색 구분) · ops/s · 스트림 길이 · 출력 버퍼 · 축출 · **축출 연쇄 패널** | api /metrics(INFO · 표본) | EXP-17 · 18 · 39 |
-| API | 조회가 수집 부하에 끌려가는가 | 표면별 p50 · p95 · p99 · 요청 수 · 5xx · 설계 거절 · 오류율 · 이벤트 루프 지연 p95 · WebSocket 연결 · 연결당 프레임 | api /metrics | EXP-07~12 · 27 · 37 |
-| 호스트 | 머신이 포화됐는가 | 컨테이너별 CPU · 메모리 · 디스크 대기 · k6 CPU | **Prometheus 출처 없음** — docker stats · iostat 기록 | 전 실험의 조건 칸 |
+| 파이프라인 전경 | 적재가 수집을 따라가는가 | 컨슈머 랙(lag · pending 분리) · 백프레셔 단계(직접 비교 발행 — publisher compare) · 초당 포인트 · 배치 크기 · DLQ · 스풀 · E2E p50 · p95 · p99 · 6a · 6b · 6c | api /metrics | EXP-16 · 20 · 30(옛 EXP-22~26 · 34는 D-16 폐지) |
+| ClickHouse | 삽입과 머지가 버티는가 | 초당 삽입 행 · 활성 파트 · 새 파트율 · 머지 진행 · 압축률 · 쿼리 p95 · 메모리 · 디스크 여유 | api /metrics(system.*) | 없음(옛 EXP-25 · 26 · 34 · 35는 D-16 폐지) |
+| PostgreSQL | 업무 경로 · 대조군이 버티는가 | 커밋 · 연결 · 버퍼 적중 · 락 대기 · 상위 문형 10 · 데드 튜플 · WAL | api /metrics(pg_stat_*) | 없음(옛 EXP-36 · EXP-01~05 적재는 D-16 폐지) |
+| Redis | 한 인스턴스 안에서 누가 메모리를 먹는가 | 접두별 점유(봉인 · 캐시 색 구분) · ops/s · 스트림 길이 · 출력 버퍼 · 축출 · **축출 연쇄 패널** | api /metrics(INFO · 표본) | 없음(옛 EXP-17 · 18 · 39는 D-16 폐지) |
+| API | 조회가 수집 부하에 끌려가는가 | 표면별 p50 · p95 · p99 · 요청 수 · 5xx · 오류율 · 이벤트 루프 지연 p95 · WebSocket 연결 · 연결당 프레임 | api /metrics | EXP-10 · 11(옛 EXP-07~09 · 12 · 27 · 37은 D-16 폐지) |
+| 호스트 | 머신이 포화됐는가 | 컨테이너별 CPU · 메모리 · 디스크 대기 | **Prometheus 출처 없음** — docker stats · iostat 기록 | 전 실험의 조건 칸 |
 
 - 검산: 대시보드 = **6**
 - **스위치 상태 행을 모든 대시보드 머리에 둔다.** obs_switch_info · obs_run_info를 표 패널로 올려, 화면을 캡처한 순간의 4요소가 같은 화면에 남게 한다 — 캡처에 조건이 없으면 그 그래프는 기록에 인용할 수 없다.
@@ -53,7 +55,7 @@ docs_plan 보정 #17(관측 스택 구성원 불일치) 중 알림 쪽을 이 �
 | ClickHouse · 활성 파트 | 새 파트율과 함께 본다 | 활성 파트만 보면 머지가 따라잡는 동안의 부담이 안 보인다 |
 | Redis · 스트림 길이 | **메모리 양 · 트리밍 감시로만** — MAXLEN 근처가 정상 | 적체로 읽으면 정상 운전을 위험으로 판정한다(ADR-21) |
 | Redis · keyspace 적중 | 참고용 — 판정은 cache:q 히트율 | rl · auth 조회가 섞인 적중률로 캐시 효과를 판정한다(REQ-NFR-10) |
-| API · 오류율 | 설계 거절을 뺀 식(파생 지표) | 백프레셔가 잘 동작할수록 오류율이 나빠 보인다(REQ-NFR-11) |
+| API · 오류율 | 5xx ÷ 요청(파생 지표 — 설계된 거절 코드가 없어 차감항 없음 · D-16) | 설계된 거절이 다시 생긴 뒤에도 빼지 않으면 백프레셔가 잘 동작할수록 오류율이 나빠 보인다(REQ-NFR-11) |
 | API · 이벤트 루프 p95 | 수집 부하 단계 패널과 같은 가로축 | 조회 p95 악화를 조회 코드 탓으로 돌린다 — 확장 1단계 진입 근거를 놓친다 |
 
 - 검산: 규칙 = **8**
@@ -72,7 +74,7 @@ docs_plan 보정 #17(관측 스택 구성원 불일치) 중 알림 쪽을 이 �
 
 - 검산: 패널 행 = **5**
 - **다섯 행은 같은 가로축 · 같은 수집 주기다.** 점유 메모리 표본과 히트율이 다른 주기로 찍히면 선후 판독이 주기 차이를 인과로 읽는다(REQ-OBS-04).
-- **정상 구성에서 이 패널은 평평하다(B형).** 결론 — M 티어 정상 구성은 봉인 + 캐시 합이 maxmemory 안이라 축출이 없다. 반대 시나리오 — 평평한 패널을 "연쇄 재현 실패"로 기록하면 재현 조건(maxmemory 하향 · 태그 500 설비)을 빠뜨린 실험이 결함 보고가 된다. 파생 지침 — EXP-18은 스냅샷 복원 직후(Stream 빈 상태)부터 충전 곡선을 따라 이 패널을 기록한다.
+- **정상 구성에서 이 패널은 평평하다(B형).** 결론 — M 티어 정상 구성은 봉인 + 캐시 합이 maxmemory 안이라 축출이 없다. 반대 시나리오 — 평평한 패널을 "연쇄 재현 실패"로 기록하면 재현 조건(maxmemory 하향 · 태그 500 설비)을 빠뜨린 실험이 결함 보고가 된다. 파생 지침 — 이 패널은 Stream이 빈 상태부터 충전 곡선을 따라 읽는다(이 패널로 연쇄를 재현하던 EXP-18은 실행 도구 삭제로 폐지(D-16)).
 - 이 패널이 확장 3단계(Redis 분리) 진입 판정의 화면이다 — 히트율과 Stream 점유 메모리의 역상관 · 히트율 절대값([../04_architecture/08_scaling_roadmap.md](../04_architecture/08_scaling_roadmap.md)).
 
 ## 알림 규칙
@@ -93,10 +95,10 @@ collect_failing            increase(obs_collect_errors_total[5m]) > 0           
 stream_boundary_bypassed   max(obs_switch_warning) == 1                                   for 0m    정보
 control_copy_failed        increase(ing_control_copy_failures_total[5m]) > 0              for 0m    경고
 rollup_suspect             increase(ing_mv_errors_total{result="error"}[5m]) > 0          for 0m    경고
-alarm_eval_gap             increase(alm_eval_gap_batches_total[5m]) > 0                   for 0m    정보
 ```
 
-- **규칙은 14개다** — 원본 6(랙 증가 · 스트림 · DLQ · 파트 · 디스크 · 히트율) 중 스트림 1을 적체 둘(backlog_warning · backlog_critical)로 바꾸고 신설 7(트리밍 결함 · 랙 산출 불가 · 수집 실패 · SW-01 off · 대조군 실패 · 롤업 의심 · 판정 무효 구간)을 더했다. 검산: 원본 유지 5 + 적체 대체 2 + 신설 7 = **14**
+- **규칙은 13개다** — 원본 6(랙 증가 · 스트림 · DLQ · 파트 · 디스크 · 히트율) 중 스트림 1을 적체 둘(backlog_warning · backlog_critical)로 바꾸고 신설 6(트리밍 결함 · 랙 산출 불가 · 수집 실패 · SW-01 off · 대조군 실패 · 롤업 의심)을 더했다 — 옛 판정 무효 구간(alarm_eval_gap)은 알람과 함께 D-16 삭제. 검산: 원본 유지 5 + 적체 대체 2 + 신설 6 = **13**
+- **A형 — 적체 경보의 backpressure_stage 항이 직접 비교 넣기 · 무결성 동안에만 움직이는 것은 고장이 아니다(D-16 as-built).** 통념은 단계 게이지가 늘 수집기 적체를 보인다는 것이다. 부정 — 이 게이지를 쓰는 발행자는 지금 직접 비교 하나다(옛 모드 B · C는 D-16 삭제 · Collector는 이 게이지를 쓰지 않는다). 진짜 축은 **누가 적체 검사를 하고 게이지를 쓰는가**다. 대체 경로 — 수집기 쪽 위험은 backlog_critical의 둘째 항 spool_active와 컨슈머 랙 패널이 드러낸다 · control_copy_failed는 직접 비교 넣기의 비교 사본 COPY 실패(기본 키 충돌 등)도 센다.
 - **복구 단계(4)는 경고에서 뺀다.** 복구는 위험을 지난 이력 상태이고 재발행 중 적체가 오르면 재발행만 멈춘다(ADR-23) — 복구 중에 경고가 울리면 재발행이 만든 적체가 외부 적체로 읽힌다.
 - **랙 증가는 기울기로 본다.** 원본 "5분간 지속 증가"를 절대값 임계로 바꾸지 않는다 — 정상 상태 랙 상한(REQ-NFR-05)이 미확인이라 절대값을 박을 수 없다.
 
@@ -109,9 +111,9 @@ alarm_eval_gap             increase(alm_eval_gap_batches_total[5m]) > 0         
 | clickhouse_parts_high · disk_low · cache_hit_low | 경고 · 위험 · 정보 | 유지 — 임계는 2계층 | 파트 폭주 · 디스크 포화(장애 #10) · 확장 3단계 진입 신호 |
 | lag_unknown · collect_failing | 경고 · 정보 | 신설 | 판정량이 비는 동안 단계가 직전값에 머무는 것을 드러낸다 · 한 계열만 빈 /metrics를 드러낸다 |
 | stream_boundary_bypassed | 정보 | 신설 | SW-01 off가 정상 경로로 오인되는 것을 막는다(REQ-GLB-04) |
-| control_copy_failed · rollup_suspect · alarm_eval_gap | 경고 · 경고 · 정보 | 신설 | 무효 · 의심 구간이 생겼음을 실험 수행자에게 알린다 — 구간은 로그 이벤트([02_instrumentation.md](./02_instrumentation.md) §구간 기록) |
+| control_copy_failed · rollup_suspect | 경고 · 경고 | 신설 | 무효 · 의심 구간이 생겼음을 실험 수행자에게 알린다 — 구간은 로그 이벤트([02_instrumentation.md](./02_instrumentation.md) §구간 기록) |
 
-- 검산: 표의 알림 = 1 + 2 + 1 + 1 + 3 + 2 + 1 + 3 = **14**
+- 검산: 표의 알림 = 1 + 2 + 1 + 1 + 3 + 2 + 1 + 2 = **13**
 
 ### 스트림 알림 판정
 
@@ -133,7 +135,7 @@ alarm_eval_gap             increase(alm_eval_gap_batches_total[5m]) > 0         
 | 임계 | 계층 | 기준 시점 | 금지된 대체 | 현행 참고 · 소유 |
 |------|------|------|------|------|
 | 파트 임계 | 2계층 | Prometheus 규칙 로드 | REQ-NFR-13 목표(미확인)를 알림 임계로 씀 | 활성 파트 200(원본) · 이 문서 |
-| 잔여 임계 | 2계층 | 상동 | 절대 바이트 | 디스크 20%(원본) · 이 문서 · 대조 실험 디스크 예산 식이 인용 |
+| 잔여 임계 | 2계층 | 상동 | 절대 바이트 | 디스크 20%(원본) · 이 문서 |
 | 히트율 임계 · 지속 | 2계층 | 상동 | keyspace 적중률 | 50% · 10분(원본) · 이 문서 |
 | 랙 증가 창 | 2계층 | 상동 | 절대값 임계 | 5분(원본) · 이 문서 |
 | 적체 단계 임계 | 2계층 | Collector 기동 | 알림 쪽 별도 비율 | MAXLEN 비율 · [../04_architecture/06_backpressure_failure.md](../04_architecture/06_backpressure_failure.md) |
@@ -146,21 +148,20 @@ alarm_eval_gap             increase(alm_eval_gap_batches_total[5m]) > 0         
 | 규칙 | 내용 | 어기면 |
 |------|------|------|
 | 스크레이프 주기 ≥ 수집 주기 | Prometheus 스크레이프(현행 참고 15초 · 원본)는 저장소 통계 수집 주기보다 짧게 두지 않는다 | 같은 마지막 값을 여러 번 가져가 저장 · 조회 부하만 는다 |
-| 콘솔 폴링 ≥ 스크레이프 | EXP-CONSOLE 폴링(현행 15초 · 소유 [../08_screen/07_experiment_console.md](../08_screen/07_experiment_console.md))은 스크레이프보다 짧지 않다 | 콘솔이 관측 스택보다 큰 관측 부하가 된다 |
+| 화면 폴링과 스크레이프 | 옛 EXP-CONSOLE 폴링(15초)은 스크레이프보다 짧지 않게 두었다(D-14 화면 폐지 · D-16 파일 삭제) · 지금 EXP-FLOW는 /metrics를 5초로 읽되 BFF 해석 한 번이다([../08_screen/08_evidence_screens.md](../08_screen/08_evidence_screens.md)) | 화면 폴링이 관측 스택보다 큰 관측 부하가 된다 |
 | 정밀 세션은 프로파일 off | 측정 기록 수치는 직접 덤프에서 | 관측 스택이 측정 대상과 CPU를 나눠 절대값이 흔들린다 |
 | 대시보드 새로고침 | 스크레이프 주기보다 짧게 두지 않는다 | Grafana 쿼리가 Prometheus를 불필요하게 두드린다 |
-| k6 결과 전송 | k6 → Prometheus 원격 쓰기(Prometheus 쪽 수신 기능은 켠다 — 설정 정본 [../09_tech_stack/03_data_infra.md](../09_tech_stack/03_data_infra.md))는 탐색 세션에만 | 정밀 세션에서 원격 쓰기가 k6 CPU를 먹어 생성기 포화 판정이 흔들린다 |
 
-- 검산: 규칙 = **5**
-- 관측 스택이 수치에 주는 영향의 크기는 3계층 미확인이다 — EXP-38이 같은 부하에서 프로파일 on/off를 재어 [07_measurement_limits.md](./07_measurement_limits.md)에 올린다.
+- 검산: 규칙 = **4** · 옛 k6 결과 전송 행은 측정 도구와 함께 D-16 삭제
+- 관측 스택이 수치에 주는 영향의 크기는 3계층 미확인이다 — 같은 부하에서 프로파일 on/off를 재던 EXP-38은 실행 도구 삭제로 폐지(D-16)돼 지금 확정 수단이 없다([07_measurement_limits.md](./07_measurement_limits.md)).
 
 ## 미확인 · 미설계 등재
 
 | 항목 | 상태 | 확정 자리 |
 |------|------|------|
-| 관측 프로파일 on/off의 수치 영향 | 3계층 미확인 | EXP-38 |
+| 관측 프로파일 on/off의 수치 영향 | 3계층 미확인 | EXP-38(폐지(D-16)) |
 | 대시보드 정의 파일의 형식 · 버전 관리 | 미설계 — 코드 착수 항목 | [../09_tech_stack/05_tooling_devops.md](../09_tech_stack/05_tooling_devops.md) |
-| 확장 3단계 진입의 히트율 · 상관 현행 값 | 3계층 미확인 — 원본 목표 50% 미만 · 역상관 | EXP-18 · [../04_architecture/08_scaling_roadmap.md](../04_architecture/08_scaling_roadmap.md) |
+| 확장 3단계 진입의 히트율 · 상관 현행 값 | 3계층 미확인 — 원본 목표 50% 미만 · 역상관 | EXP-18(폐지(D-16)) · [../04_architecture/08_scaling_roadmap.md](../04_architecture/08_scaling_roadmap.md) |
 
 ## 관련 문서
 
@@ -169,4 +170,4 @@ alarm_eval_gap             increase(alm_eval_gap_batches_total[5m]) > 0         
 - [../09_tech_stack/03_data_infra.md](../09_tech_stack/03_data_infra.md) — 관측 스택 구성원
 - [../04_architecture/06_backpressure_failure.md](../04_architecture/06_backpressure_failure.md) — 판정량 · 단계 임계
 - [../05_data_stores/06_redis_memory.md](../05_data_stores/06_redis_memory.md) — 축출 연쇄 재현 조건
-- [06_experiment_catalog.md](./06_experiment_catalog.md) — EXP-18 축출 연쇄
+- [06_experiment_catalog.md](./06_experiment_catalog.md) — EXP-18 축출 연쇄(폐지(D-16))

@@ -1,7 +1,10 @@
 # REQ-RLT — 실시간 요구사항
 
-> **대상**: 실시간(RLT)의 동작 계약 — 최신값 읽기 · STALE 판정 · 메타 부착 · 빈 키 복원과 Redis 불가 503의 구분 · SW-02 읽기 포트 교체 · WebSocket 연결과 인증 · 스로틀 병합 · 연결 관리 · 재연결 동기화 · 알람 푸시 · 무효화 신호 중계 · ClickHouse 중단 중 최신값 정지의 표시 — REQ-RLT-NN 채번 정본
+> **대상**: 실시간(RLT)의 동작 계약 — 최신값 읽기 · STALE 판정 · 메타 부착 · 빈 키 복원과 Redis 불가 503의 구분 · SW-02 읽기 포트 교체 · WebSocket 연결과 출처 검사 · 스로틀 병합 · 연결 관리 · 재연결 동기화 · 무효화 신호 중계 · ClickHouse 중단 중 최신값 정지의 표시 — REQ-RLT-NN 채번 정본
 > **작성일**: 2026-09-24
+> **개정일**: 2026-10-11 — 웨이브 6 코드 수정 반영(r5-code 검수 M4 · L7 · 리드 보안 판정 §5-4) — REQ-RLT-19 본문 Content-Type application/json · **센서 데이터 지우는 동안 켜기 400 path purge**(끄기는 받는다) · **켜기 중간 실패 되돌림** · 실패 · 검증 칸 보강 — REQ 수 불변
+> **개정일**: 2026-10-11 — **D-16 설비 가동 · HMI 개요 신설**(사용자 결정 2026-10-11 결정 3 · 공용 계약 packages/shared plant.ts) — **REQ-RLT-19 설비 가동 스위치 · REQ-RLT-20 HMI 개요** 신설(§요구사항 — 설비 가동 · HMI 개요 · REQ-RLT-18은 D-16 결번이라 건너뛴다) · 문서 전체 REQ를 세는 자리 §장애 표시 · 스위치 → **새 절** · 실패 전수 8 → **11** · 기능 → REQ 대응 RLT-10 · 11 — REQ-RLT 현행 16 → **18**(채번 18 → **20**)
+> **개정일**: 2026-10-11 — **D-16 알람 · 로그인 · 권한 삭제**(사용자 결정 2026-10-11) — **REQ-RLT-14(알람 푸시) · 18(역할 인가) 폐지 · 결번** · REQ-RLT-09 첫 메시지 토큰 인증 → **핸드셰이크 Host · Origin 검사만**(토큰 없음 · URL 토큰 금지는 의미 상실로 삭제) · 17 발행자 Alarm 삭제 · SW-06 팬아웃 채널 ch:alarm 삭제 · 실패 전수 인증 실패 표현 삭제 · 대상 줄 알람 푸시 · 인증 삭제 · 기능 → REQ 대응 RLT-08 행 삭제 · 절 제목 장애 표시 · 스위치 · 인가 → **장애 표시 · 스위치** — REQ-RLT 18 → **16**(결번 2) · (리드 판정 — 도메인 11 → 8) 출처 방어 인용 02_auth · AUT-07 → **REQ-GLB-25 · 26** · D-16 정리(d4 전역 sweep) — 폐지 실험을 확정 수단으로 가리키던 자리 교정(EXP-07)
 > **개정일**: 2026-09-24 — 최종 정밀 검수 — 조회 계약 도입문의 소유처 미정 → W5 고정 완료 · 최신값 성능 미확인 행에 EXP-07 연결 · 최신값 갱신 주체 행 행선지 ADR(W3) → ADR-10(잠정 ingest) · SW-11 · EXP-15
 > **개정일**: 2026-09-24 — W7 검수 반영 — 복원 락 키 lock:rebuild:{device 단위 식별자} → **lock:rebuild:rt:{device_id}** · 소유 05_data_stores/05(값은 미정 유지) · 미확인 4행 닫힘(구독 방식 · 신규 설비 응답 · tagmeta 미스 응답 · 락 키 분리) — REQ 수 불변
 > **개정일**: 2026-09-24 — W7 보안 판정 반영 — REQ-RLT-09의 Origin 실패 종료 적용 시점 S7 → **S2**(인증 실패는 S7) — REQ 수 불변(정본 12_security/03)
@@ -37,27 +40,37 @@
 
 | ID | 요구 | 근거 | 위반 시 실패 | 검증 방법 | 관련 기능 | 관련 흐름 | 관련 에러 코드 |
 |------|------|------|------|------|------|------|------|
-| **REQ-RLT-09** | /ws/realtime 연결은 첫 메시지로 토큰을 받아 인증하고 **URL에 토큰을 받지 않는다.** 핸드셰이크 Origin은 CORS 허용 목록과 같은 규칙으로 검증한다. 인증 · Origin 실패는 HTTP 코드가 아니라 연결 종료로 표현한다(Origin 검증은 S2부터 · 인증은 S7부터 — REQ-AUT-13) | 원본 architecture.md §11.2 · §18 · 원본 data_flow.md §9 · RLT-05 · [02_auth.md](./02_auth.md) | URL 토큰은 접근 로그 · 브라우저 기록에 남아 액세스 토큰이 유출된다 · Origin을 보지 않으면 다른 오리진의 페이지가 로그인된 브라우저로 소켓을 연다 | 쿼리 파라미터 토큰 연결 → 거절 · 허용 밖 Origin → 종료 · 종료 코드 대조([../07_api/11_websocket.md](../07_api/11_websocket.md)) | RLT-05 | F-07 | 해당 없음 — 연결 종료 |
+| **REQ-RLT-09** | /ws/realtime 핸드셰이크의 Host · Origin을 허용 목록(CORS와 같은 규칙)으로 검증한다. 실패는 HTTP 코드가 아니라 연결 종료로 표현한다(S2부터 — REQ-GLB-26). 토큰 인증은 없다(D-16) | 원본 architecture.md §11.2 · §18 · 원본 data_flow.md §9 · RLT-05 · [01_global_rules.md](./01_global_rules.md) REQ-GLB-26 | Origin을 보지 않으면 다른 오리진의 페이지가 같은 브라우저로 소켓을 열어 실시간 값을 읽는다 | 허용 밖 Origin → 종료 · 종료 코드 대조([../07_api/11_websocket.md](../07_api/11_websocket.md)) | RLT-05 | F-07 | 해당 없음 — 연결 종료 |
 | **REQ-RLT-10** | 구독한 설비마다 ch:rt:{device_id}를 구독하고 소켓 ↔ 설비 매핑을 인스턴스 안 구독 레지스트리가 갖는다. 소켓이 닫히면 그 소켓의 매핑을 지우고, 구독자가 0이 된 채널은 구독을 해지한다 | 원본 data_flow.md §9 · RLT-05 · RLT-07 | 레지스트리를 정리하지 않으면 닫힌 소켓 몫의 채널 구독이 남아 Redis 출력 버퍼와 api 메모리가 연결 횟수에 비례해 새어 나간다 | 연결 · 구독 · 종료 N회 반복 → 활성 구독 채널 수가 열린 소켓의 구독 합과 일치 | RLT-05 · RLT-07 | F-07 | 해당 없음 |
 | **REQ-RLT-11** | 스로틀 창 안에 들어온 같은 태그의 중간값을 버리고 최종값만 한 프레임으로 보낸다. 창 크기는 SW-07이며 0이면 병합 없이 매 갱신을 전송한다 | 원본 data_flow.md §9 · §9.1 · RLT-06 · SW-07 | 병합이 없으면 태그 500개 · 10 Hz에서 연결당 초당 수천 프레임이 나가 브라우저 탭이 멈추고 api 이벤트 루프가 팬아웃에 묶인다 | SW-07 기본값과 0에서 같은 부하 → 연결당 초당 프레임 수 · nodejs_eventloop_lag_p95_seconds 대조 | RLT-06 | F-07 | 해당 없음 |
 | **REQ-RLT-12** | 주기 ping에 pong이 연속으로 정해진 횟수만큼 오지 않으면 소켓을 닫고 구독을 정리한다. 느린 브라우저는 게이트웨이의 **소켓 송신 대기량 한도**로 그 소켓만 절단한다(종료 코드 4413). Redis Pub/Sub 출력 버퍼 한도는 **api 구독 연결 보호의 최후선**이다 — 넘으면 인스턴스의 구독 연결이 끊겨 전원 푸시가 멈추므로(4503) 송신 대기량 한도가 먼저 걸리게 둔다(W5 판정) | 원본 data_flow.md §9 · §9.2 · RLT-07 · [../07_api/11_websocket.md](../07_api/11_websocket.md) | 죽은 소켓을 닫지 않으면 끊긴 클라이언트 몫의 프레임 생성이 계속된다 · 느린 브라우저를 출력 버퍼로 다루면 탭 하나의 지연이 인스턴스 전원의 푸시 중단이 된다 · 출력 버퍼 한도가 없으면 api가 채널을 못 따라갈 때 Redis 메모리를 채워 봉인 계열 쓰기(XADD)까지 OOM으로 막는다 | 클라이언트 pong 차단 → 정해진 주기 후 연결 종료 · 수신 지연 브라우저 → 그 소켓만 4413 · 다른 소켓 푸시 계속 · Redis client list의 출력 버퍼 상한 확인 | RLT-07 | F-07 | 해당 없음 |
 | **REQ-RLT-13** | 클라이언트는 끊기면 지수 백오프(상한 있음)로 재연결하고 **재연결 직후 REST 최신값을 1회 읽어** 끊긴 동안의 공백을 메운다. 서버는 끊긴 동안의 메시지를 재전송하지 않는다 | 원본 data_flow.md §9 · §9.2 · RLT-07 · [14_acceptance_criteria.md](./14_acceptance_criteria.md) WebSocket 재연결 | 동기화가 없으면 재연결 전 마지막 값이 화면에 남아 끊긴 동안의 변화가 영영 보이지 않는다 · 백오프 상한이 없으면 api 재시작 동안 전 클라이언트가 재연결 폭주를 건다 | 연결 강제 종료 후 복구 → 재연결 간격이 지수로 증가 · 재연결 직후 REST 최신값 요청 1건 · 화면 값 = rt:latest | RLT-07 | F-07 · F-03 | 해당 없음 |
-| **REQ-RLT-14** | ch:alarm을 구독해 알람 발생 · 해제 이벤트를 연결된 클라이언트에 브로드캐스트한다. **알람을 판정하지 않고 확인을 받지 않으며**, 전달 실패가 알람 확정에 영향을 주지 않는다 | 원본 data_flow.md §8 · §9.2 · RLT-08 · [10_alarms.md](./10_alarms.md) | 푸시 전달을 확정 조건으로 두면 구독자가 없는 순간의 알람이 확정되지 않는다 — Pub/Sub은 구독자 없는 메시지를 버린다 | 구독자 0에서 알람 발생 → alarm_event 행 생성 · 구독자 있을 때 → 발생 · 해제 프레임 수신 | RLT-08 | F-06 · F-07 | 해당 없음 |
 | **REQ-RLT-15** | ch:cacheinv를 구독해 마스터 쓰기 뒤의 무효화 신호를 WebSocket으로 브라우저에 전달한다. 이 채널은 SW-06의 대상이 아니다 — SW-06 off에서도 구독을 유지한다 | 원본 implementation_plan.md §7.4 · RLT-09 · [../02_features/13_switch_matrix.md](../02_features/13_switch_matrix.md) SW-06 판정 | 신호가 브라우저에 닿지 않으면 무효화 체인이 BFF에서 끝나 브라우저 쿼리 캐시가 staleTime만큼 옛 값을 보여 캐시 정합성 인수 기준이 반드시 실패한다 · SW-06이 이 채널까지 끄면 정합성 계약이 스위치 상태에 따라 달라진다 | 태그명 변경 → 브라우저가 신호 수신 · 다음 조회에 새 이름 · SW-06 off에서 같은 결과 | RLT-09 | F-05 | 해당 없음 |
 
-- 검산: 이 표의 REQ = REQ-RLT-09~15 = **7**
+- 검산: 이 표의 현행 REQ = REQ-RLT-09~13 · 15 = **6** · 결번 REQ-RLT-14 알람 푸시(D-16)
 - **REQ-RLT-13은 A형이다.** 통념은 "WebSocket이면 변화를 빠짐없이 받는다"이지만 Pub/Sub은 fire-and-forget이라 끊긴 동안의 값을 버린다. 진짜 축은 전달 보장이 아니라 **복구 수단**이며, 대체 경로는 재연결 직후의 REST 최신값 1회다.
 
-## 요구사항 — 장애 표시 · 스위치 · 인가
+## 요구사항 — 장애 표시 · 스위치
 
 | ID | 요구 | 근거 | 위반 시 실패 | 검증 방법 | 관련 기능 | 관련 흐름 | 관련 에러 코드 |
 |------|------|------|------|------|------|------|------|
 | **REQ-RLT-16** | 최신값 갱신 주체가 Ingest인 동안 ClickHouse 중단은 rt:latest 갱신 정지로 이어지며, 그 정지는 REQ-RLT-03의 STALE로 드러나야 한다. 갱신 주체를 옮기는 결정은 S6 실측 전에 하지 않는다 | 원본 implementation_plan.md §7.2 · 원본 data_flow.md §12.3 · RLT-03 · [../04_architecture/09_decision_records.md](../04_architecture/09_decision_records.md) | STALE이 드러나지 않으면 ClickHouse 5분 중단 동안 대시보드가 마지막 값을 정상처럼 보여 운영자가 설비 이상을 놓친다 | clickhouse 정지 → scan_rate_ms × 배수 경과 후 전 태그 STALE · 복구 뒤 STALE 해제 | RLT-03 | F-03 · F-10 | 해당 없음 |
-| **REQ-RLT-17** | SW-06 off는 발행자(Ingest · Alarm)가 게이트웨이를 직접 부르게 하며 **api 인스턴스가 하나일 때만** 쓴다. on/off 모두 같은 프레임 내용을 낸다 | [../02_features/13_switch_matrix.md](../02_features/13_switch_matrix.md) SW-06 · 조합 제약 #6 · 원본 data_flow.md §9 | 인스턴스가 둘인 구성에서 off로 돌리면 다른 인스턴스의 소켓이 값을 받지 못해 "팬아웃 경계 비용"이 아니라 누락이 측정된다 | SW-06 on/off 각각 같은 부하 → 프레임 내용 동일 · 발행 → 수신 지연 대조 | RLT-05 · RLT-08 | F-07 | 해당 없음 |
-| **REQ-RLT-18** | S7 이후 최신값 REST와 WebSocket 구독은 역할이 1개 이상인 인증 사용자 전원에게 연다. S2~S6은 무인증이며 이 요구가 적용되지 않는다 | [../02_features/12_permission_matrix.md](../02_features/12_permission_matrix.md) RLT · D-07 | 역할로 막으면 OPERATOR 대시보드가 최신값을 읽지 못한다 — 읽기 원칙(인증 사용자 전원)과 어긋난다 | 역할 1개 이상 사용자 → 200 · 역할 0 사용자 → 403 · 무토큰 → 401 | RLT-01 · RLT-02 · RLT-05 | F-03 · F-07 | auth.unauthenticated/401 · auth.forbidden/403 |
+| **REQ-RLT-17** | SW-06 off는 발행자(Ingest)가 게이트웨이를 직접 부르게 하며 **api 인스턴스가 하나일 때만** 쓴다. on/off 모두 같은 프레임 내용을 낸다 | [../02_features/13_switch_matrix.md](../02_features/13_switch_matrix.md) SW-06 · 조합 제약 #6 · 원본 data_flow.md §9 | 인스턴스가 둘인 구성에서 off로 돌리면 다른 인스턴스의 소켓이 값을 받지 못해 "팬아웃 경계 비용"이 아니라 누락이 측정된다 | SW-06 on/off 각각 같은 부하 → 프레임 내용 동일 · 발행 → 수신 지연 대조 | RLT-05 | F-07 | 해당 없음 |
 
-- 검산: 이 표의 REQ = REQ-RLT-16~18 = **3** · 문서 전체 REQ = 8 + 7 + 3 = **18**(REQ-RLT-01~18 · 결번 없음)
+- 검산: 이 표의 현행 REQ = REQ-RLT-16 · 17 = **2** · 결번 REQ-RLT-18 역할 인가(D-16) — 문서 전체는 §요구사항 — 설비 가동 · HMI 개요의 검산이 센다
 - **REQ-RLT-16은 B형이다.** ClickHouse가 멈췄는데 대시보드가 멈추는 것은 현행 설계의 알려진 결합이다. 결합을 끊는 안(Collector 갱신)은 S6에서 ClickHouse 중단 중 대시보드 생존으로 비교하며, 그 전까지 STALE이 유일한 신호다.
+
+## 요구사항 — 설비 가동 · HMI 개요
+
+D-16(사용자 결정 2026-10-11 결정 3)이 들인 현장 화면의 백엔드다. 표면 정본 [../07_api/06_realtime.md](../07_api/06_realtime.md) #3~#5 · 기전 정본 [../06_pipeline/05_realtime_read.md](../06_pipeline/05_realtime_read.md) §설비 가동 · HMI 개요. **알람 · 원격 조작은 요구하지 않는다** — 상태와 데이터 종류만 보인다.
+
+| ID | 요구 | 근거 | 위반 시 실패 | 검증 방법 | 관련 기능 | 관련 흐름 | 관련 에러 코드 |
+|------|------|------|------|------|------|------|------|
+| **REQ-RLT-19** | 설비 가동의 실행 중 상태는 Redis **봉인 계열** ctl:plant:power(Hash state on · off · changed_at epoch ms · TTL 없음)다 — 키가 없으면 기동 기본값 SENSOR_AUTOGEN을 쓴다. 쓰기(#4 — 본문 Content-Type application/json의 {on})는 센서 데이터를 지우는 동안 켜기를 common.validation_failed/400(fields path purge — 지우기와 같은 프로세스 안 잠금 · 켜는 동안은 지우기가 plant_running으로 막힌다)으로 거절하고 끄기는 언제나 받는다. 같은 상태면 그대로 두고(바뀐 시각 유지 · 키가 없고 기본값과 같으면 키도 만들지 않는다) 다르면 상태 · 시각을 함께 바꾸는 원자 스크립트 하나로 하며, 응답은 "적었다"다(반영은 1초 안 · 응답이 포트가 다 열렸음을 뜻하지 않는다). 수집기 역할(APP_ROLE all · collector)은 **기동 때 키를 지워** 이번 기동을 기동 기본값부터 시작하고, 1초마다 키를 읽어 원하는 상태와 적용 상태가 다르면 켜기(수집 정의 — 처음은 기동 로드 · 다시 켤 때 다시 읽기 → 가상 PLC 포트 → 모드 A 틱 → 폴링) · 끄기(폴링 → 틱 → 포트)를 한다 — 전환은 한 번에 하나 · 겹친 읽기는 건너뛴다 · 각 시작 · 정지는 멱등이다 · **켜기가 중간에 실패하면 앞서 켠 포트 · 틱 · 폴러를 되돌린 뒤** 다음 읽기에서 다시 맞춘다. **키를 읽지 못하면 지금 상태를 유지한다**(모르는 상태를 기본값으로 덮지 않는다) · 표면은 503 realtime.latest_unavailable. health run.sensorAutogen은 이 프로세스가 지금 실제로 센서 데이터를 만들고 있는지(적용 상태)다 | D-16 결정 3 · 사용자 결정 2026-10-03(저절로 쌓이지 않게 — 꺼짐 기본) · REQ-GLB-08 · 27 · [../05_data_stores/05_redis_keyspace.md](../05_data_stores/05_redis_keyspace.md) | 캐시 계열(TTL · 축출)에 두면 메모리 압박에서 키가 사라져 켜 둔 공장이 아무 신호 없이 기동 기본값(꺼짐)으로 돌아간다 · 기동 때 키를 지우지 않으면 켠 채 내린 스택이 재기동만으로 센서 데이터를 다시 쌓는다 · 읽기 실패를 꺼짐으로 읽으면 Redis 순간 끊김 한 번에 30대가 멈췄다 켜진다 · 응답을 "다 켜졌다"로 쓰면 화면이 1초 안의 전환 중 상태를 거짓으로 그린다 · sensorAutogen에 기동 기본값을 실으면 켠 뒤 측정이 배경 적재 없음으로 기록된다 · 지우는 동안 켜기를 받으면 TRUNCATE 직후 가동 행이 들어와 지운 결과가 거짓이 된다 · 켜기가 중간에 실패한 채 적용 상태만 꺼짐으로 두면 앞서 띄운 폴러가 남아 끄기로 멈추지 못하고 다시 켤 때 같은 설비 폴러가 겹친다 | api 시험 plant-power(같은 상태 그대로 · 원자 쓰기 · 기동 기본값 · 키 지우기 · 1초 맞추기 · 읽기 실패 유지 · 순서 · 지우는 중 켜기 400 · 끄기 통과 · 켜기 중간 실패 되돌림) · sensor-autogen · surface-plant · 실기동 — 켬 → 5초 뒤 가동 · 대기 · 정지 합 30 · health sensorAutogen on → 끔 → 정지 30 → 켠 채 api 재기동 → 꺼짐(AC-47) | RLT-10 | F-01 · F-09 | realtime.latest_unavailable/503 · common.validation_failed/400 |
+| **REQ-RLT-20** | HMI 개요(#5)는 카드 라인 사이트의 활성 설비(코드 모양 L1~L3-공정 — 시연 설비 · 슬라이스 제외) · 활성 태그를 메타로 삼고 지금 값은 **rt:latest 파이프라인 1회**로만 읽는다 — 요청마다 PostgreSQL · ClickHouse를 부르지 않는다. 메타는 api 프로세스 메모리 사본(10초 · 동시 요청은 한 번만 읽는다 · 다시 읽기 실패면 마지막 사본 · 사본이 아예 없으면 503 common.postgres_unavailable)이다. 상태 4 판정은 순서대로 ① 설비 가동 꺼짐 → 전부 정지 ② 태그 지금 값 중 가장 최근 ts가 PLANT_OFFLINE_AFTER_MS(5초)보다 오래됨 → 통신 끊김 — 단 켠 지 5초 안이면 정지(깨어나는 중) ③ STATE 태그가 BAD_COMM이거나 값이 없음 → 통신 끊김 ④ STATE 값 2 가동 · 1 대기 · 0 정지다. 초당 점 수는 같은 프로세스에 수집기가 있으면 태그별 발행 누계의 3초 창 차분(measured — 0.9초 미만이면 셀 수 없다) · 없으면 가동 켜짐이고 통신 중인 설비의 태그 주기 합(nominal)이며 기준을 pointsPerSecBasis에 적는다. 값은 공학 단위 그대로 · 계약 형식(FLOAT32 · UINT32 · UINT16) 밖 태그는 빼고 경고한다 | D-16 결정 3 · REQ-RLT-01 · 06 · 계약 packages/shared plant.ts · [../02_features/08_realtime.md](../02_features/08_realtime.md) RLT-11 | 1초 폴링이 PostgreSQL을 매번 부르면 화면 하나가 초당 업무 DB 조회 1회를 상시로 만든다 · ClickHouse로 지금 값을 채우면 RLT의 B형 차단기(REQ-RLT-06)를 우회한다 · 켠 직후를 끊김으로 판정하면 켜자마자 30칸이 회색으로 깜박인다 · 기준 없이 초당 점 수를 내면 주기 합(명목)이 실제 발행처럼 읽힌다 · 형식 밖 태그를 넣으면 계약 파싱이 실패해 화면 전체가 빈다 | api 시험 plant-overview(상태 판정 경계 · 깨어나는 중 · BAD_COMM · measured 창 · nominal · 메타 사본 · 형식 밖 제외) · surface-plant · 실기동 — 켬 → 상태 합 30 · 초당 점 수가 명목 합(231점 — 구조값) 근처 · basis measured(리드 통합 확인 2026-10-11) | RLT-11 | F-03 | realtime.latest_unavailable/503 · common.postgres_unavailable/503 |
+
+- 검산: 이 표의 현행 REQ = REQ-RLT-19 · 20 = **2** · 문서 전체 현행 REQ = 8 + 6 + 2 + 2 = **18** · 결번 2(14 · 18 — 재사용 금지) · 채번 18 + 2 = **20**(REQ-RLT-01~20)
+- **B형 — 설비 가동은 스위치(SW-NN)가 아니다.** 결론 — 실행 중에 켜고 끄며 재기동이 필요 없다. 반대 시나리오 — 스위치로 두면 DI 구현 교체(전환 = 재기동)가 되어 화면 버튼이 컨테이너 재기동을 부르게 되고, 스위치 상태가 측정 기록 4요소에 들어가 가동 여부와 Redis 역할이 한 축에 섞인다. 파생 지침 — 가동 여부는 health run.sensorAutogen(측정 조건 칸)과 직접 비교 결과의 plant_on으로만 기록한다.
 
 ## 조회 계약 — 2계층 조정값
 
@@ -82,7 +95,7 @@
 | 스위치 | 교체 대상 | on | off | 지키는 조건 | 요구 |
 |------|------|------|------|------|------|
 | SW-02 REDIS_LATEST_CACHE | 최신값 읽기 포트 | rt:latest HGETALL | ClickHouse argMax 점조회 | 갱신 · 발행은 그대로 | REQ-RLT-08 |
-| SW-06 REDIS_PUBSUB_FANOUT | 팬아웃 포트(ch:rt · ch:alarm) | PUBLISH · SUBSCRIBE | 게이트웨이 직접 호출 | 단일 인스턴스 · ch:cacheinv 제외 | REQ-RLT-15 · 17 |
+| SW-06 REDIS_PUBSUB_FANOUT | 팬아웃 포트(ch:rt) | PUBLISH · SUBSCRIBE | 게이트웨이 직접 호출 | 단일 인스턴스 · ch:cacheinv 제외 | REQ-RLT-15 · 17 |
 | SW-07 WS_THROTTLE_MS | 프레임 스로틀 포트 | 창 안 최종값만 | 0 — 매 갱신 전송 | 프레임 내용은 창과 무관하게 최종값이 같다 | REQ-RLT-11 |
 
 - 검산: RLT가 받는 스위치 = SW-02 · SW-06 · SW-07 = **3**. 채번 · 포트 이름 · 원본 예상치의 정본은 [../02_features/13_switch_matrix.md](../02_features/13_switch_matrix.md)다.
@@ -97,28 +110,32 @@
 | ClickHouse 중단(현행 갱신 주체) | 200 · STALE 경고 | STALE 비율 | REQ-RLT-16 |
 | 수집 정지 · 생성 모드의 과거 ts | 200 · STALE 경고 | STALE 비율 | REQ-RLT-03 |
 | 느린 구독자 · pong 미수신 | 연결 종료 | 연결 수 · 종료 수 | REQ-RLT-12 |
-| WebSocket Origin 실패(S2부터) · 인증 실패(S7부터) | 연결 종료 | 종료 코드 정본 [../07_api/11_websocket.md](../07_api/11_websocket.md) | REQ-RLT-09 |
+| WebSocket Host · Origin 실패 | 연결 종료 | 종료 코드 정본 [../07_api/11_websocket.md](../07_api/11_websocket.md) | REQ-RLT-09 |
 | 스로틀 창 0 | 프레임 폭증 | 초당 프레임 · nodejs_eventloop_lag_p95_seconds | REQ-RLT-11 |
+| 설비 가동 · HMI 개요 중 Redis 불가 | 503 · 수집기는 지금 상태 유지 | realtime.latest_unavailable/503 | REQ-RLT-19 · 20 |
+| HMI 개요 메타 사본 없음 + PostgreSQL 불가 | 503(사본이 있으면 200) | common.postgres_unavailable/503 | REQ-RLT-20 |
+| 설비 가동 켬 직후 · 수집 끊김 | 200 · 5초 안 정지 · 그 뒤 통신 끊김 | 본문 state · totals.offline | REQ-RLT-20 |
 
-- 검산: 상황 = **8** · HTTP 코드를 내는 행 2(latest_unavailable · not_found) + 코드 없는 행 6 = **8**
+- 검산: 상황 = **11** · HTTP 코드를 내는 행 4(latest_unavailable 2 · not_found · postgres_unavailable) + 코드 없는 행 7 = **11**
 
 ## 기능 → REQ 대응 검산
 
-[../02_features/08_realtime.md](../02_features/08_realtime.md)의 기능 9개 전부가 적어도 하나의 REQ에 대응한다.
+[../02_features/08_realtime.md](../02_features/08_realtime.md)의 현행 기능 10개 전부가 적어도 하나의 REQ에 대응한다.
 
 | 기능 ID | 기능명 | 대응 REQ |
 |------|------|------|
-| RLT-01 | 설비 전체 최신값 | REQ-RLT-01 · 06 · 07 · 08 · 18 |
-| RLT-02 | 단일 태그 최신값 | REQ-RLT-02 · 06 · 07 · 08 · 18 |
+| RLT-01 | 설비 전체 최신값 | REQ-RLT-01 · 06 · 07 · 08 |
+| RLT-02 | 단일 태그 최신값 | REQ-RLT-02 · 06 · 07 · 08 |
 | RLT-03 | STALE 판정 · 메타 부착 | REQ-RLT-03 · 04 · 16 |
 | RLT-04 | 빈 키 복원과 503 | REQ-RLT-05 · 06 |
-| RLT-05 | WebSocket 구독 | REQ-RLT-09 · 10 · 17 · 18 |
+| RLT-05 | WebSocket 구독 | REQ-RLT-09 · 10 · 17 |
 | RLT-06 | 스로틀 병합 | REQ-RLT-11 |
 | RLT-07 | 연결 관리 · 재연결 동기화 | REQ-RLT-10 · 12 · 13 |
-| RLT-08 | 알람 푸시 | REQ-RLT-14 · 17 |
 | RLT-09 | 무효화 신호 중계 | REQ-RLT-15 |
+| RLT-10 | 설비 가동 스위치 | REQ-RLT-19 |
+| RLT-11 | HMI 설비 개요 | REQ-RLT-20 |
 
-- 검산: 기능 9 중 대응 REQ 있음 9 · 누락 0 = **9** · 기능에 대응하지 않는 REQ 0(유령 0). REQ 총수를 세는 자리는 §요구사항 — 장애 표시 · 스위치 · 인가의 검산 하나다
+- 검산: 현행 기능 10 중 대응 REQ 있음 10 · 누락 0 = **10**(RLT-08 결번) · 기능에 대응하지 않는 현행 REQ 0(유령 0). REQ 총수를 세는 자리는 §요구사항 — 설비 가동 · HMI 개요의 검산 하나다
 
 ## 원본 보정 반영
 
@@ -133,7 +150,7 @@
 
 | 항목 | 원본에서 확인되는 것 | 상태 | 확정 자리 |
 |------|------|------|------|
-| 최신값 조회 p95 · on/off 차이 | 원본 목표 10 ms 이하(4 vCPU 가정) · 원본 예상치 off 30~150 ms · on 0.3~1 ms | 미확인 — 확정 전 임의 값 고정 금지 · EXP-07 | [13_nonfunctional.md](./13_nonfunctional.md) · [../10_observability/06_experiment_catalog.md](../10_observability/06_experiment_catalog.md) |
+| 최신값 조회 p95 · on/off 차이 | 원본 목표 10 ms 이하(4 vCPU 가정) · 원본 예상치 off 30~150 ms · on 0.3~1 ms | 미확인 — 확정 전 임의 값 고정 금지 · 확정 수단 없음(EXP-07 · REQ-NFR-07 D-16 폐지 · S2 기록 013) | [13_nonfunctional.md](./13_nonfunctional.md) · [../10_observability/06_experiment_catalog.md](../10_observability/06_experiment_catalog.md) |
 | Pub/Sub → WebSocket 도달 지연 · 동시 연결 수 | 원본 목표 150 ms · 500 연결 이상 | 미확인 — 확정 전 임의 값 고정 금지 | 상동 |
 | 구독 방식 | 쿼리 파라미터(원본 architecture.md §11) 대 subscribe 메시지(원본 data_flow.md §9) | 닫힘 — subscribe 메시지로 고정 · 쿼리 파라미터 구독을 받지 않는다 — [../07_api/11_websocket.md](../07_api/11_websocket.md) | [../07_api/11_websocket.md](../07_api/11_websocket.md)(W5) |
 | 복원 창 안에 행이 없는 설비의 응답 | 원본에 없다 — 신규 설비의 첫 수집 전 | 닫힘 — 200 빈 목록 · 락 만료까지 재복원 금지 — [../06_pipeline/05_realtime_read.md](../06_pipeline/05_realtime_read.md) | [../06_pipeline/05_realtime_read.md](../06_pipeline/05_realtime_read.md)(W4) |
@@ -148,5 +165,4 @@
 - [../07_api/06_realtime.md](../07_api/06_realtime.md) — 최신값 REST 표면
 - [../07_api/11_websocket.md](../07_api/11_websocket.md) — WebSocket 프로토콜 · 종료 코드
 - [../11_glossary/05_units_and_time.md](../11_glossary/05_units_and_time.md) — STALE 판정식
-- [10_alarms.md](./10_alarms.md) — 알람 발행 계약
 - [14_acceptance_criteria.md](./14_acceptance_criteria.md) — 최신값 정확성 · WebSocket 재연결 인수 기준

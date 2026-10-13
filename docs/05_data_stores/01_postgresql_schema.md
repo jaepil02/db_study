@@ -1,7 +1,10 @@
 # PostgreSQL 업무 스키마 (01_postgresql_schema)
 
-> **대상**: PostgreSQL 업무 테이블 15의 컬럼 · 타입 · 컬럼 제약 · 도메인 소유 · tag_master_history 설계 · **biz_command_log 설계(업무 명령 멱등 원장)** · 저장 enum 값 집합 확정(condition_type · severity · work_order.status) · 인계 판정(site.timezone · 알람 담당자 · 무인증 기간 감사 행위자) · 튜닝 파라미터와 조정값 소유처 — 테이블명 · 컬럼명 채번 정본
+> **대상**: PostgreSQL 업무 테이블 7 · 실행 보관 1(run_result)의 컬럼 · 타입 · 컬럼 제약 · 소유 · tag_master_history 설계 · **biz_command_log 설계(업무 명령 멱등 원장)** · **run_result 설계(D-16)** · 저장 enum 값 집합 확정(biz_command_log.status) · 인계 판정(site.timezone) · 튜닝 파라미터와 조정값 소유처 — 테이블명 · 컬럼명 채번 정본 · 폐지 테이블 결번 기록
 > **작성일**: 2026-09-24
+> **개정일**: 2026-10-12 — **D-05 부분 개정 · ADR-32**(직접 비교 비교 사본 TimescaleDB hypertable · 열 압축 · 마이그레이션 009) — #15 수명 일 파티션 → **hypertable 칸 1일 · 열 압축 · TimescaleDB 보존 정책 7일** · 비고에 009(컬럼 · 키 · 규칙 그대로) · 관리 테이블 불릿에 hypertable 칸 · 압축 표 · 튜닝 timezone 근거에 칸 경계(epoch 하루 배수) · 확장 불릿 셋 → **넷(timescaledb 추가) · 생성 자리 001 · migrate 관리자 단계 · 정본 링크(03_data_infra)** — 테이블 · 파라미터 수 불변
+> **개정일**: 2026-10-11 — **D-16 카드 라인 · 직접 비교 결과 보관**(사용자 결정 2026-10-11 · 마이그레이션 006 · 008) — **테이블 #17 run_result 신설**(GEN 소유 · 직접 비교 종결 결과 · 추가 전용 · §run_result 설계) — 테이블 8 → **9**(업무 7 + 대조군 1 + 실행 보관 1) · 소유 테이블 없는 도메인 6 → **5**(GEN이 run_result 소유) · tag_master에 **tag_kind** 컬럼(006 · NULL 허용 · CHECK 8값) · enum 값 확정에 tag_master.tag_kind 8 · run_result.type 1 · part 3 · status 3 · 대조군 행 비고에 007(기본 키 · 참조 · 값 규칙) · 미확인 간섭 크기 행에 업무 방해 실험 삭제(ADR-31)
+> **개정일**: 2026-10-11 — **D-16 알람 · 로그인 · 권한 · 감사 · 작업지시 삭제**(사용자 결정 2026-10-11 · 리드 판정 — WRK 함께 폐지) — 웨이브 1 새 기준선(순번 001~005)에 맞춤 — **테이블 8 삭제**(alarm_rule · alarm_event · user_account · role · user_role · work_order · production_log · audit_log — 번호 #7~#14 결번) · 업무 15 → **7** · 합계 16 → **8** · biz_command_log 소유 WRK → **명령 기전(공통)** · §테이블 명세 — ALM · AUT · WRK 삭제 · tag_master_history changed_by 삭제(10 → **9**컬럼) · actor 늘 NULL · enum 확정 14값 → **3**(work_order.status 허용 전이 삭제) · 인계 판정 4 → **2** · 미확인 6행 삭제 · run_perf 실행 수명 객체 불릿 삭제 · 공통 규약의 rule · user · alarm · work_order · threshold 예시 삭제
 > **개정일**: 2026-09-28 — 최종 검증 반영(v-wave2 L) — 인증 뒤 NULL 감사 행 예외 문구 "행 하나" → **예외 부류 하나(시연 전용 행 대상 감사 행 · 명령마다)**
 > **개정일**: 2026-09-28 — UTC 검수 반영(r-utc L1) — site.timezone 판정 칸의 옛 문장에 "(W3 원문)" 표지 · 원문의 파티션 경계는 이 값을 따르지 않는다(ADR-27)
 > **개정일**: 2026-09-28 — 라이브 실행 검수 반영(리드 재판정 2026-09-28) — 인계 판정 audit_log.user_id NULL의 뜻 "무인증 기간의 행위" → **무인증 기간의 행위 또는 시스템 시연(라이브 flow — 시연 전용 행)** · 인증 도입 뒤 NULL 결함 불릿에 시연 전용 행 대상 행 제외 — 판정 수 불변
@@ -14,17 +17,17 @@
 > **개정일**: 2026-09-24 — 최종 정밀 검수 — 빈 표 칸을 닫힌 어휘 해당 없음으로 채움(표 열 규약) · 미확인 등재 3행 닫힘(enum 반영 · RATE_OF_CHANGE 경계 · 비활성 태그 규칙)
 > **개정일**: 2026-09-24 — W7 검수 반영 — 미확인 1행 닫힘(실적 기록 상태 조건) — 테이블 수 불변
 > **개정일**: 2026-09-24 — W7 보안 판정 반영 — password_hash 알고리즘 미기재 → **Argon2id**(PHC 자기 기술 문자열 · 컬럼 형 불변)(정본 12_security/01)
-> **원천**: ADR-27(사용자 요구 2026-09-28) · 원본 architecture.md §5 · §6 · §12 · §13 · §18(커밋 ff66a37) · 원본 tech_stack.md §5.1 · §10.2(커밋 ff66a37) · 원본 data_flow.md §7 · §8 · §8.2(커밋 ff66a37) · 원본 implementation_plan.md §2.3(커밋 ff66a37) · docs_plan.md 보정 #15 · 웨이브 인계 W3 05_data_stores/01 행 · ADR-16 · ADR-19 · D-04 · D-11 · 사용자 결정 2026-09-27(업무 쓰기 Redis 경유) · [../06_pipeline/07_business_crud.md](../06_pipeline/07_business_crud.md) §업무 명령 경로 · [../README.md](../README.md) 고정 기준 PostgreSQL 테이블
+> **원천**: D-05 부분 개정(사용자 결정 2026-10-12) · ADR-32 · 마이그레이션 009 · D-16(사용자 결정 2026-10-11) · 웨이브 1 새 기준선 infra/postgres/migrations 001~005 · ADR-27(사용자 요구 2026-09-28) · 원본 architecture.md §5 · §6 · §12 · §13 · §18(커밋 ff66a37) · 원본 tech_stack.md §5.1 · §10.2(커밋 ff66a37) · 원본 data_flow.md §7 · §8 · §8.2(커밋 ff66a37) · 원본 implementation_plan.md §2.3(커밋 ff66a37) · docs_plan.md 보정 #15 · 웨이브 인계 W3 05_data_stores/01 행 · ADR-16 · ADR-19 · D-04 · D-11 · 사용자 결정 2026-09-27(업무 쓰기 Redis 경유) · [../06_pipeline/07_business_crud.md](../06_pipeline/07_business_crud.md) §업무 명령 경로 · [../README.md](../README.md) 고정 기준 PostgreSQL 테이블
 
-이 문서는 PostgreSQL에 앉는 **업무 데이터의 모양**을 고정한다. 테이블 수는 루트 고정 기준(업무 15 + 대조군 1)을 그대로 따르고, 이 문서가 채번하는 것은 **컬럼 이름 · 타입 · 컬럼 단위 제약**이다. 테이블 사이의 제약 · 인덱스 · 파티션 · 커넥션 · 한계 등재는 [02_postgresql_constraints.md](./02_postgresql_constraints.md)가, 대조군 plc_tag_raw_control의 명세는 [10_olap_vs_rdb_control.md](./10_olap_vs_rdb_control.md)가 갖는다.
+이 문서는 PostgreSQL에 앉는 **업무 데이터의 모양**을 고정한다. 테이블 수는 루트 고정 기준(업무 7 + 대조군 1 + 실행 보관 1)을 그대로 따르고, 이 문서가 채번하는 것은 **컬럼 이름 · 타입 · 컬럼 단위 제약**이다. 테이블 사이의 제약 · 인덱스 · 파티션 · 커넥션 · 한계 등재는 [02_postgresql_constraints.md](./02_postgresql_constraints.md)가, 대조군 plc_tag_raw_control의 명세는 [10_olap_vs_rdb_control.md](./10_olap_vs_rdb_control.md)가 갖는다.
 
-**PostgreSQL은 분기 ③계층(업무 CRUD)과 ②계층의 확정 이벤트를 받는다.** 시계열 원시값은 한 행도 싣지 않는다 — 대조군은 분기 목적지가 아니라 SW-09 on의 실험 계측물이다(D-04 · D-05). 업무 쓰기는 명령 스트림(stream:biz:cmd)을 거쳐 워커가 트랜잭션 하나로 커밋하고, 그 트랜잭션이 biz_command_log에 명령 판정을 함께 남긴다(사용자 결정 2026-09-27 · [../06_pipeline/07_business_crud.md](../06_pipeline/07_business_crud.md) §업무 명령 경로). Redis에 오는 것은 명령이지 업무 행이 아니다.
+**PostgreSQL은 분기 ③계층(업무 CRUD)만 받는다**(②계층 알람 판정은 D-16 폐지). 시계열 원시값은 한 행도 싣지 않는다 — 대조군은 분기 목적지가 아니라 SW-09 on의 실험 계측물이다(D-04 · D-05). 업무 쓰기는 명령 스트림(stream:biz:cmd)을 거쳐 워커가 트랜잭션 하나로 커밋하고, 그 트랜잭션이 biz_command_log에 명령 판정을 함께 남긴다(사용자 결정 2026-09-27 · [../06_pipeline/07_business_crud.md](../06_pipeline/07_business_crud.md) §업무 명령 경로). Redis에 오는 것은 명령이지 업무 행이 아니다.
 
 **아래 DDL 조각은 설계 계약이지 구현 코드가 아니다.** 마이그레이션 파일의 모양과 도구는 [09_migrations_seed.md](./09_migrations_seed.md)가, 버전은 [../09_tech_stack/03_data_infra.md](../09_tech_stack/03_data_infra.md)가 정한다.
 
 ## 테이블 목록
 
-도메인 소유의 기준은 **쓰기 표면과 수명 주기를 누가 결정하는가**다. 다른 도메인이 같은 트랜잭션에서 쓰는 테이블(audit_log)은 소유와 쓰기가 갈리며 그 잔여는 [02_postgresql_constraints.md](./02_postgresql_constraints.md) 한계 등재가 받는다.
+도메인 소유의 기준은 **쓰기 표면과 수명 주기를 누가 결정하는가**다. 여러 업무 명령이 같은 트랜잭션에서 쓰는 원장(biz_command_log)은 소유를 도메인 밖 명령 기전에 둔다.
 
 | # | 테이블 | 소유 도메인 | 분기 계층 | 원본 예상 규모 | 수명 | 비고 |
 |:-:|------|:---------:|:-------:|------------|------|------|
@@ -34,22 +37,15 @@
 | 4 | modbus_config | MST | ③ | 수백 행 | device와 1:1 | host 루프백 = 시뮬레이션 설비 |
 | 5 | tag_master | MST | ③ | 수천~수만 행 | 무기한 · tag_id 영구 보존 | 시스템 전체의 메타 원천 |
 | 6 | tag_master_history | MST | ③ | 스케일 변경 횟수 | 무기한 · 추가 전용 | **보정 #15 신설** |
-| 7 | alarm_rule | ALM | ③ | 수백 행 | 무기한 · enabled로 비활성 | 해당 없음 |
-| 8 | alarm_event | ALM | ② | 월 수만 행 | 월 파티션 · 보존 정본 08 | ②계층의 PostgreSQL 쓰기 |
-| 9 | user_account | AUT | ③ | 수백 행 | 무기한 | 시드로만 생성 |
-| 10 | role | AUT | ③ | 3행 | 고정 | 값 OPERATOR · ENGINEER · ADMIN |
-| 11 | user_role | AUT | ③ | 수백 행 | 무기한 | 다대다 · 합집합 판정 |
-| 12 | work_order | WRK | ③ | 수만~수십만 행 | 무기한 | status 값 §enum 값 확정 |
-| 13 | production_log | WRK | ③ | 수만~수십만 행 | 무기한 | 사람이 입력하는 실적 |
-| 14 | audit_log | WRK | ③ | 쓰기 표면 호출 수 | 무기한 · 추가 전용 | 쓰기는 MST · WRK · ALM |
-| 15 | plc_tag_raw_control | ING | 대조군 | 용량 단계 행 수 | 일 파티션 · 실험 단위 | 명세 정본 [10_olap_vs_rdb_control.md](./10_olap_vs_rdb_control.md) |
-| 16 | **biz_command_log** | WRK | ③ | 업무 쓰기 수 | 무기한 · 추가 전용(보존 정본 [08_retention_lifecycle.md](./08_retention_lifecycle.md) #16) | **신설** — 업무 명령 멱등 원장 · 쓰기는 명령 기전(MST · WRK · ALM 명령 모두) · §biz_command_log 설계 |
+| 15 | plc_tag_raw_control | ING | 대조군 | 비교 구간 행 수(사흘치 약 6천만) | **TimescaleDB hypertable 칸 1일 · 열 압축**(009 — ADR-32) · 보존 7일(TimescaleDB 보존 정책) · 직접 비교 · 지우기가 비운다 | 명세 정본 [10_olap_vs_rdb_control.md](./10_olap_vs_rdb_control.md) · 기본 키 · 참조 · 값 규칙(007 — D-16 · 009가 표를 다시 만들 때 그대로) |
+| 16 | **biz_command_log** | 명령 기전(공통) | ③ | 업무 쓰기 수 | 무기한 · 추가 전용(보존 정본 [08_retention_lifecycle.md](./08_retention_lifecycle.md) #16) | 업무 명령 멱등 원장 · 쓰기는 명령 기전(지금은 MST 명령) · §biz_command_log 설계 |
+| 17 | **run_result** | GEN | 해당 없음 — 실행 보관 | 직접 비교 실행 수 | 무기한 · 추가 전용 · 센서 데이터 지우기가 남긴다 | **D-16 신설** — 직접 비교 종결 결과 · §run_result 설계 |
 
-- 검산: 업무 = MST 6(#1~#6) + ALM 2(#7 · #8) + AUT 3(#9~#11) + WRK 4(#12~#14 · #16) = **15** · 대조군 1(#15) · 합계 15 + 1 = **16**
-- **biz_command_log를 WRK가 소유하는 것은 audit_log와 같은 판정이다.** 쓰기는 모든 업무 명령에서 오지만 기준(상태 값 · 보존 · 추가 전용)은 한 도메인이 정한다 — 소유 도메인이 없는 테이블을 만들면 도메인 공백 매트릭스에 없는 주체가 생긴다. 번호 #16은 식별자이지 순서가 아니다(말미 채번).
-- **소유 테이블이 없는 도메인은 6이다** — COL · SIM · GEN · TSQ · RLT · OBS. ING는 PostgreSQL에서 대조군 하나만 소유한다(ING-11). 도메인 공백의 정본 매트릭스는 [../01_overview/04_domain_map.md](../01_overview/04_domain_map.md)다.
-- 도구가 스스로 만드는 관리 테이블(마이그레이션 이력 · pg_partman 설정 · 확장 카탈로그)은 업무 테이블이 아니며 위 합계에 넣지 않는다 — 판정 근거는 [09_migrations_seed.md](./09_migrations_seed.md)다.
-- **라이브 실행(perf)의 실행 수명 객체 plc.run_perf_raw · run_perf_raw는 이 문서의 객체 수에 세지 않는다 — 모양 · 수명의 정본은 [10_olap_vs_rdb_control.md](./10_olap_vs_rdb_control.md) §실행 수명 객체다.**
+- 검산: 업무 = MST 6(#1~#6) + 명령 기전 1(#16) = **7** · 대조군 1(#15) · 실행 보관 1(#17) · 합계 7 + 1 + 1 = **9** · 결번 #7~#14(alarm_rule · alarm_event · user_account · role · user_role · work_order · production_log · audit_log — D-16 · 폐지 전 원문 커밋 28c0cc9)
+- **biz_command_log의 소유는 명령 기전(도메인 밖 공통 경로 — biz 모듈)이다**(D-16 — 옛 소유 WRK 폐지). 쓰기는 모든 업무 명령에서 오고 기준(상태 값 · 보존 · 추가 전용)은 명령 기전 정본([../06_pipeline/07_business_crud.md](../06_pipeline/07_business_crud.md) §업무 명령 경로)이 정한다. 번호 #16은 식별자이지 순서가 아니다(말미 채번).
+- **소유 테이블이 없는 도메인은 5이다** — COL · SIM · TSQ · RLT · OBS. ING는 PostgreSQL에서 대조군 하나만 소유하고(ING-11), GEN은 실행 보관 run_result 하나만 소유한다(GEN-13 · D-16 — 옛 "GEN은 소유 테이블이 없다"를 대체).
+- **run_result는 업무 데이터도 측정 기록도 아니다.** 직접 비교 화면(⑤)이 api 재기동 뒤에도 마지막 결과를 보이려는 화면 보관이다 — 업무 명령 경로(Redis 명령 스트림)를 타지 않고 실행이 종결 직전 직접 INSERT한다. 측정 기록의 정본은 여전히 docs/measurements다. 도메인 공백의 정본 매트릭스는 [../01_overview/04_domain_map.md](../01_overview/04_domain_map.md)다.
+- 도구가 스스로 만드는 관리 테이블(마이그레이션 이력 · pg_partman 설정 · 확장 카탈로그 · 비교 사본 hypertable의 칸과 압축 표 — TimescaleDB 내부 스키마)은 업무 테이블이 아니며 위 합계에 넣지 않는다 — 판정 근거는 [09_migrations_seed.md](./09_migrations_seed.md)다.
 
 ## 공통 규약
 
@@ -58,19 +54,19 @@
 | 시각 타입 | 전부 timestamptz · 컬럼명은 _at 또는 planned_ 접두 | 원본 architecture.md §6 "시간대 혼동은 시계열 시스템의 최대 버그 원인". timestamp(시간대 없음)는 세션 TimeZone이 바뀌면 같은 문자열이 다른 순간이 된다 |
 | 식별자 발급 | integer · bigint 모두 GENERATED ALWAYS AS IDENTITY — 애플리케이션이 값을 넣지 못한다 · **예외 biz_command_log.cmd_id(uuid)** — 요청이 정하는 멱등 키라 PK가 아닌 UNIQUE 컬럼으로 둔다 | BY DEFAULT로 두면 시드 · 수동 INSERT가 번호를 지정해 시퀀스와 충돌하고, tag_id 재사용 금지(원본 architecture.md §12)가 애플리케이션 규율로만 남는다 |
 | tag_id 폭 | integer(4바이트) | ClickHouse 모든 행에 실리는 키다 — UUID(16바이트)면 저장량이 4배다(원본 architecture.md §6) |
-| 저빈도 참조 키 | integer — site · line · device · rule · user · role | 수천 행을 넘지 않는 마스터에 bigint를 쓰면 ClickHouse UInt32 컬럼과 폭이 어긋난다 |
-| 고빈도 누적 키 | bigint — alarm_event · work_order · production_log · audit_log · tag_master_history · biz_command_log | 수명이 무기한인 누적 테이블은 21억을 넘는 날 시퀀스가 멈춘다 |
+| 저빈도 참조 키 | integer — site · line · device | 수천 행을 넘지 않는 마스터에 bigint를 쓰면 ClickHouse UInt32 컬럼과 폭이 어긋난다 |
+| 고빈도 누적 키 | bigint — tag_master_history · biz_command_log | 수명이 무기한인 누적 테이블은 21억을 넘는 날 시퀀스가 멈춘다 |
 | 닫힌 값 집합 | **text + CHECK** — PostgreSQL enum 타입을 쓰지 않는다 | enum 라벨은 삭제 · 순서 변경이 어렵다. 값 집합의 정본은 [../11_glossary/03_enums_state_machines.md](../11_glossary/03_enums_state_machines.md)이고 CHECK는 그 사본이다 |
-| 측정값 | double precision — 알람 trigger_value 포함 | 전역 불변식 "측정값 Float64". numeric으로 받으면 Float64 비트가 10진 변환을 거쳐 ClickHouse alarm_eval.value와 같은 값인지 비트로 대조할 수 없다 |
-| 설정 수치 | numeric — scale · offset_value · deadband · range · threshold | 사람이 10진으로 입력하는 설정이다. 0.1을 이진 근사로 저장하면 입력값과 조회값이 달라 보인다 |
-| 논리 삭제 | is_active · enabled boolean NOT NULL · 물리 삭제 표면 없음 | 물리 삭제하면 ClickHouse 과거 행의 tag_id · rule_id가 고아가 된다(REQ-MST-06 · REQ-ALM-01) |
+| 측정값 | double precision — 대조군 value | 전역 불변식 "측정값 Float64". numeric으로 받으면 Float64 비트가 10진 변환을 거쳐 ClickHouse tag_raw.value와 같은 값인지 비트로 대조할 수 없다 |
+| 설정 수치 | numeric — scale · offset_value · deadband · range | 사람이 10진으로 입력하는 설정이다. 0.1을 이진 근사로 저장하면 입력값과 조회값이 달라 보인다 |
+| 논리 삭제 | is_active boolean NOT NULL · 물리 삭제 표면 없음 | 물리 삭제하면 ClickHouse 과거 행의 tag_id · device_id가 고아가 된다(REQ-MST-06) |
 | NULL 허용 | 뜻이 있는 부재만 — 아래 명세의 "NULL 뜻" 열에 적힌 것 외에는 NOT NULL | NULL의 뜻이 적히지 않은 컬럼은 구현마다 다른 뜻으로 채워 조회 조건이 갈린다 |
 
-- **닫힌 값 집합을 PostgreSQL enum 타입으로 올리지 않는 것은 B형이다.** 결론 — CHECK 사본은 정본과 두 자리에 있게 된다. 반대 시나리오 — enum 타입이면 work_order.status 값 하나를 폐지할 때 라벨 삭제가 불가능해 타입을 새로 만들고 컬럼을 이관해야 한다. 파생 지침 — CHECK를 고치는 마이그레이션과 [../11_glossary/03_enums_state_machines.md](../11_glossary/03_enums_state_machines.md) 개정을 같은 변경 단위로 묶는다.
+- **닫힌 값 집합을 PostgreSQL enum 타입으로 올리지 않는 것은 B형이다.** 결론 — CHECK 사본은 정본과 두 자리에 있게 된다. 반대 시나리오 — enum 타입이면 biz_command_log.status 값 하나를 폐지할 때 라벨 삭제가 불가능해 타입을 새로 만들고 컬럼을 이관해야 한다. 파생 지침 — CHECK를 고치는 마이그레이션과 [../11_glossary/03_enums_state_machines.md](../11_glossary/03_enums_state_machines.md) 개정을 같은 변경 단위로 묶는다.
 
 ## 테이블 명세 — MST
 
-마스터 6 테이블이다. 쓰기 권한은 ADMIN이고(REQ-MST-15) 쓰기는 audit_log를 같은 트랜잭션에서 쓴다(REQ-MST-05).
+마스터 6 테이블이다. 쓰기는 명령 경로로 biz_command_log와 같은 트랜잭션에서 커밋한다(REQ-GLB-12 · 무인증 — D-16).
 
 | 테이블 | 컬럼 | 타입 | 컬럼 제약 | NULL 뜻 · 설명 |
 |------|------|------|------|------|
@@ -108,59 +104,10 @@
 | tag_master | scan_rate_ms | integer | NOT NULL · CHECK 양수 | STALE 판정의 기준 주기 |
 | tag_master | range_min · range_max | numeric | NULL 허용 · 둘 다 있으면 min < max | NULL = 범위 판정 없음 — BAD_RANGE를 내지 않는다 |
 | tag_master | is_active | boolean | NOT NULL · DEFAULT true | 논리 삭제 · 폴링 대상 여부 |
+| tag_master | **tag_kind** | text | NULL 허용 · CHECK 8값(006) | 태그 종류 TEMP · PRESSURE · SPEED · CURRENT · VIBRATION · COUNT · STATE · OTHER — **NULL = 종류 없음**(S2 슬라이스 · 시연 설비 · 마스터 표면으로 만든 태그 — 가상 PLC는 GEN_PROFILE 구성 · HMI는 템플릿 접미 · 그도 없으면 기타) · 카드 라인 시드가 채운다 · 마스터 표면 계약 밖(새 태그 발급은 옛 태그의 값을 잇는다) |
 
 - 검산: MST 테이블 = site · production_line · device · modbus_config · tag_master + tag_master_history(§tag_master_history 설계) = **6**
 - **range_min · range_max를 NULL로 두는 태그는 BAD_RANGE(4)를 받지 않는다.** COUNTER 프로파일처럼 범위가 없는 태그를 억지 범위로 채우면 랩어라운드 순간이 불량으로 집계된다.
-
-## 테이블 명세 — ALM · AUT · WRK
-
-| 테이블 | 컬럼 | 타입 | 컬럼 제약 | NULL 뜻 · 설명 |
-|------|------|------|------|------|
-| alarm_rule | rule_id | integer | PK · IDENTITY ALWAYS | ClickHouse alarm_eval.rule_id UInt32의 원천 |
-| alarm_rule | tag_id | integer | NOT NULL · FK tag_master | 비활성 태그의 규칙 처리는 W4 [../06_pipeline/08_alarm.md](../06_pipeline/08_alarm.md) |
-| alarm_rule | condition_type | text | NOT NULL · CHECK 4값 | §enum 값 확정 |
-| alarm_rule | threshold | numeric | NOT NULL | 조건별 뜻은 §enum 값 확정 |
-| alarm_rule | **threshold_low** | numeric | NULL 허용 | **신설** — OUT_OF_RANGE의 하한. 그 외 조건은 NULL |
-| alarm_rule | debounce_ms | integer | NOT NULL · CHECK 0 이상 | ts(측정 시각) 기준 경과(REQ-ALM-08) |
-| alarm_rule | severity | smallint | NOT NULL · CHECK 1~3 | §enum 값 확정 · alarm_eval.severity로 복사 |
-| alarm_rule | enabled | boolean | NOT NULL · DEFAULT true | 규칙을 끄는 유일한 수단(REQ-ALM-01) |
-| alarm_event | event_id | bigint | PK(event_id, occurred_at) · IDENTITY ALWAYS | 파티션 키를 PK에 포함해야 한다 — 02 |
-| alarm_event | rule_id | integer | NOT NULL · FK alarm_rule | 해당 없음 |
-| alarm_event | occurred_at | timestamptz | NOT NULL · 파티션 키 | PENDING → ACTIVE를 일으킨 판정 행의 **ts** — 벽시계가 아니다 |
-| alarm_event | cleared_at | timestamptz | NULL 허용 | NULL = 열린 이벤트. 해제를 확정한 판정 행의 ts |
-| alarm_event | trigger_value | double precision | NOT NULL | 확정 판정 행의 value — Float64 그대로 |
-| alarm_event | state | text | NOT NULL · CHECK IN ('ACTIVE', 'CLEARED') | 생애 축 2값(W1 판정) |
-| alarm_event | acked_by | integer | NULL 허용 · FK user_account | NULL = 미확인 |
-| alarm_event | acked_at | timestamptz | NULL 허용 | acked_by와 짝 — 결합 CHECK는 02 |
-| user_account | user_id | integer | PK · IDENTITY ALWAYS | 해당 없음 |
-| user_account | email | text | NOT NULL · UNIQUE | 소문자 정규화 후 저장 |
-| user_account | password_hash | text | NOT NULL | 해시 알고리즘 정본 [../12_security/01_authn_authz.md](../12_security/01_authn_authz.md) |
-| user_account | is_active | boolean | NOT NULL · DEFAULT true | 비활성 계정 로그인은 auth.invalid_credentials 재사용 |
-| role | role_id | smallint | PK · IDENTITY ALWAYS | 해당 없음 |
-| role | role_code | text | NOT NULL · UNIQUE · CHECK 3값 | OPERATOR · ENGINEER · ADMIN — 누적 아님 |
-| user_role | user_id · role_id | integer · smallint | PK(user_id, role_id) · FK 각각 | 다대다 · 합집합 판정 |
-| work_order | order_id | bigint | PK · IDENTITY ALWAYS | 해당 없음 |
-| work_order | line_id | integer | NOT NULL · FK production_line | 해당 없음 |
-| work_order | order_no | text | NOT NULL · UNIQUE | 중복은 DB 제약 위반 → common.duplicate_key/409 |
-| work_order | product_code | text | NOT NULL | 제품 마스터 테이블은 없다 — 자유 문자열 |
-| work_order | target_qty | integer | NOT NULL · CHECK 양수 | 해당 없음 |
-| work_order | planned_start · planned_end | timestamptz | NOT NULL · planned_end > planned_start | 해당 없음 |
-| work_order | status | text | NOT NULL · DEFAULT 'PLANNED' · CHECK 4값 | §enum 값 확정 |
-| production_log | log_id | bigint | PK · IDENTITY ALWAYS | 해당 없음 |
-| production_log | order_id | bigint | NOT NULL · FK work_order | 해당 없음 |
-| production_log | recorded_at | timestamptz | NOT NULL | 실적 시각 — 사람이 입력한다 |
-| production_log | good_qty · defect_qty | integer | NOT NULL · CHECK 0 이상 | 해당 없음 |
-| audit_log | audit_id | bigint | PK · IDENTITY ALWAYS | 해당 없음 |
-| audit_log | user_id | integer | **NULL 허용** · FK user_account | **NULL = 무인증 기간(인증 도입 S7 ② 전)의 행위** — §인계 판정 |
-| audit_log | acted_at | timestamptz | NOT NULL · DEFAULT now() | 트랜잭션 시작 시각 — 같은 트랜잭션의 업무 행과 같은 값 |
-| audit_log | action | text | NOT NULL · CHECK IN ('INSERT', 'UPDATE') | 물리 DELETE 표면이 없다 — 논리 삭제 · 확인 · 상태 변경은 UPDATE |
-| audit_log | target_table | text | NOT NULL | 업무 테이블 이름 |
-| audit_log | **target_key** | text | NOT NULL | **신설** — 대상 행의 PK 값. 복합 키는 컬럼 순서대로 잇는다 |
-| audit_log | before_value · after_value | jsonb | before NULL 허용 · after NOT NULL | before NULL = INSERT |
-
-- 검산: 이 표의 테이블 = ALM 2(alarm_rule · alarm_event) + AUT 3(user_account · role · user_role) + WRK 3(work_order · production_log · audit_log) = **8** · MST 6과 합쳐 6 + 8 = **14** · §biz_command_log 설계 1을 더해 업무 **15**
-- **audit_log.target_key를 신설한 이유** — 원본은 before · after jsonb뿐이라 INSERT 행의 대상 식별이 after 안에 숨는다. "이 작업지시의 변경 이력"이 jsonb 경로 조회가 되어 인덱스를 탈 수 없다(REQ-WRK-10 범위 조회).
-- **alarm_event.occurred_at은 측정 시각이다.** 디바운스를 ts로 재므로(REQ-ALM-08) 발생 시각도 같은 시계를 쓴다. 벽시계로 찍으면 백프레셔 소진 중 확정된 이벤트가 소진 시각에 몰려 "알람 폭주"로 보인다.
 
 ## tag_master_history 설계
 
@@ -174,13 +121,12 @@ docs_plan 보정 #15가 신설한 테이블이다. 원본은 "태그 마스터�
 | old_scale · old_offset_value | numeric | NOT NULL | 이전 태그의 공학 단위 변환식 |
 | new_scale · new_offset_value | numeric | NOT NULL | 새 태그의 변환식 |
 | changed_at | timestamptz | NOT NULL · DEFAULT now() | 발급 트랜잭션 시각 |
-| changed_by | integer | NULL 허용 · FK user_account | audit_log.user_id와 같은 NULL 뜻 |
 | reason | text | NULL 허용 | 사람이 적는 사유 |
 
-- 검산: 컬럼 = history_id · old_tag_id · new_tag_id · old_scale · old_offset_value · new_scale · new_offset_value · changed_at · changed_by · reason = **10**
-- **이 테이블은 tag_id의 계보만 담는다.** 태그명 · 단위 · 범위 같은 일반 메타 변경은 tag_id를 바꾸지 않으므로 audit_log before · after가 담는다. 모든 변경을 여기에 겹쳐 쓰면 같은 변경의 기록이 두 테이블에 생겨 어느 쪽이 정본인지 갈린다.
+- 검산: 컬럼 = history_id · old_tag_id · new_tag_id · old_scale · old_offset_value · new_scale · new_offset_value · changed_at · reason = **9** · 옛 changed_by(FK user_account)는 계정과 함께 D-16 삭제
+- **이 테이블은 tag_id의 계보만 담는다.** 태그명 · 단위 · 범위 같은 일반 메타 변경은 tag_id를 바꾸지 않아 여기에 쓰지 않는다 — 그 변경의 흔적은 명령 원장(biz_command_log의 kind · result)이 갖는다(옛 audit_log before · after는 D-16 삭제).
 - **new_tag_id UNIQUE가 계보를 선형으로 만든다.** 한 새 태그가 두 이전 태그에서 나올 수 없으므로 "이 tag_id의 조상"은 old_tag_id를 따라가는 단일 경로다. 트렌드 화면이 스케일 변경 전후 구간을 이어 그릴 때 이 경로를 쓴다.
-- 쓰기는 한 트랜잭션에서 ① 새 태그 INSERT ② 이전 태그 is_active false ③ 이 테이블 INSERT ④ audit_log INSERT 순이다(REQ-MST-07). 이 행이 빠져도 DB는 막지 못한다 — 한계 등재 [02_postgresql_constraints.md](./02_postgresql_constraints.md).
+- 쓰기는 한 트랜잭션에서 ① 새 태그 INSERT ② 이전 태그 is_active false ③ 이 테이블 INSERT ④ biz_command_log INSERT 순이다(REQ-MST-07). 이 행이 빠져도 DB는 막지 못한다 — 한계 등재 [02_postgresql_constraints.md](./02_postgresql_constraints.md).
 
 ## biz_command_log 설계
 
@@ -193,57 +139,55 @@ docs_plan 보정 #15가 신설한 테이블이다. 원본은 "태그 마스터�
 | kind | text | NOT NULL | 쓰기 종류(예 master.site.create) — 값 집합은 표면이 늘 때마다 늘어 CHECK를 걸지 않는다 |
 | status | text | NOT NULL · CHECK 3값 | APPLIED · REJECTED · EXPIRED — §enum 값 확정 |
 | result | jsonb | NOT NULL | api가 돌려줄 HTTP 상태 · 본문 또는 오류 코드 · 세부 — biz:result 키와 같은 모양 |
-| **actor** | bigint | **NULL 허용 · FK 없음** | 봉투의 actor(요청자 user_id) — 명령 조회의 요청자 대조 기준 · NULL = 인증 전(S7 ②) 요청. FK를 걸지 않아 user_account 행의 존재와 무관하게 원장이 남는다 |
+| **actor** | bigint | **NULL 허용 · FK 없음** | 봉투의 actor — 명령 조회의 요청자 대조 기준 · 사용자 계정이 없어(D-16) 늘 NULL이다. FK가 없어 계정 테이블과 무관하게 원장이 남는다 |
 | requested_at | timestamptz | NOT NULL | 봉투의 requestedAt — 명령 유효 창의 기준 |
 | applied_at | timestamptz | NOT NULL · DEFAULT now() | 판정을 기록한 트랜잭션 시각(거절 · 만료도 같은 컬럼) |
 
 - 검산: 컬럼 = log_id · cmd_id · kind · status · result · actor · requested_at · applied_at = **8**
 - **APPLIED 행은 업무 행과 같은 트랜잭션에서 쓴다.** 원장을 트랜잭션 밖(Redis · 별도 커밋)에 두면 커밋과 원장 사이 크래시 창에서 재전달이 이미 커밋된 변경을 다시 적용한다 — 멱등이 원장 한 행에 기대는 이유다.
 - **REJECTED 행은 롤백 뒤 별도 트랜잭션이다.** 업무 트랜잭션이 롤백되면 그 안의 원장 행도 사라지므로 거절은 따로 남긴다. 이 쓰기가 실패하면 같은 cmdId 재요청이 다시 적용을 시도한다 — 거절 판정은 다시 계산되고 이중 적용은 생기지 않는다.
-- **PostgreSQL 불가는 행을 남기지 않는다.** 행을 쓸 수단이 없으므로 결과 키에만 503이 남고, 같은 cmdId 재요청은 적용을 새로 시도한다(재생 없음 — REQ-WRK-06).
+- **PostgreSQL 불가는 행을 남기지 않는다.** 행을 쓸 수단이 없으므로 결과 키에만 503이 남고, 같은 cmdId 재요청은 적용을 새로 시도한다(재생 없음 — REQ-MST-14).
 - **추가 전용이다** — 판정이 바뀌지 않으므로 UPDATE · DELETE 권한을 주지 않는다([02_postgresql_constraints.md](./02_postgresql_constraints.md) §가드 트리거와 DB 권한). 보존은 무기한 · 정리 주체 없음이다([08_retention_lifecycle.md](./08_retention_lifecycle.md) #16).
-- **actor는 명령의 요청자이지 감사 행위자의 정본이 아니다.** 감사 행위자의 정본은 같은 트랜잭션의 audit_log.user_id 그대로다. actor는 명령 조회 GET /api/v1/commands/{cmdId}가 요청자와 대조하는 기준이다 — 결과 키가 만료된 뒤에도 원장만으로 남의 명령 결과를 막아야 하고(대조 규칙 [../07_api/01_conventions.md](../07_api/01_conventions.md) §업무 쓰기 경로), REJECTED · EXPIRED 행은 audit_log 행이 없어 거기서 요청자를 읽을 수 없다. **FK를 걸지 않는다** — 원장은 추가 전용 기록이라 user_account 쪽 변경에 묶이면 기록이 막히거나 사라진다.
+- **actor는 명령의 요청자 칸이다.** 명령 조회 GET /api/v1/commands/{cmdId}가 요청자와 대조하는 기준이지만 로그인이 없어(D-16) 늘 NULL이고 대조는 늘 같다고 본다(대조 규칙 [../07_api/01_conventions.md](../07_api/01_conventions.md) §업무 쓰기 경로). 컬럼은 남긴다 — 요청자를 다시 가를 일이 생기면 칸을 새로 만들지 않는다.
+
+## run_result 설계
+
+직접 비교 실행(GEN-13)의 **종결 결과 보관**이다(D-16 · 마이그레이션 008). 실행 상태는 api 메모리(진행 1 + 마지막 1)라 재기동이면 사라진다 — 직접 비교 화면이 부분별 마지막 결과를 계속 보이도록 종결 직전 한 행을 남긴다. 표면 정본 [../07_api/09_datagen.md](../07_api/09_datagen.md) #6.
+
+| 컬럼 | 타입 | 컬럼 제약 | 뜻 |
+|------|------|------|------|
+| run_id | uuid | PK | 실행 ID — api가 발급한 runId(IDENTITY 예외 — 실행 객체와 같은 값이어야 한다) |
+| type | text | NOT NULL · CHECK IN ('compare') | 실행 종류 — flow는 남기지 않는다 |
+| part | text | NOT NULL · CHECK IN ('ingest', 'query', 'integrity') | 부분 — 옛 업무 방해(interfere)는 사용자 결정으로 삭제(ADR-31 · 008이 처음부터 3값) |
+| params | jsonb | NOT NULL | 적용된 매개변수 {part, spanHours} |
+| status | text | NOT NULL · CHECK IN ('completed', 'stopped', 'failed') | 종결 3값 |
+| result | jsonb | NULL 허용 | **NULL = 완료가 아니다**(중단 · 실패) — 완료면 공용 계약 CompareRunResult 모양 |
+| started_at · ended_at | timestamptz | NOT NULL · CHECK ended_at ≥ started_at | 시작 · 종결 |
+| commit_hash | text | NULL 허용 | **NULL = 빌드 인자 없음** — 실행 때 api 커밋 |
+| switches | jsonb | NOT NULL | 실행 때 스위치 값(health switches의 value) |
+| plant_on | boolean | NOT NULL | 실행 시작 또는 끝에 설비 가동이 켜져 있었는가 — 켜져 있었으면 그 부하가 섞인 값 |
+
+- 검산: 컬럼 = run_id · type · part · params · status · result · started_at · ended_at · commit_hash · switches · plant_on = **11**(started_at · ended_at를 한 행에 적었다)
+- 인덱스 run_result_latest_idx (type, part, ended_at DESC) — 부분마다 최근 1건을 한 번 내려간다(정본 [02_postgresql_constraints.md](./02_postgresql_constraints.md)).
+- **추가 전용이다** — app_rw는 INSERT · SELECT만 가진다(UPDATE · DELETE · TRUNCATE 회수 — biz_command_log와 같은 권한 관례). 결과는 바뀌지 않고 보관 실패는 실행 종결을 막지 않는다.
+- **센서 데이터 지우기가 이 테이블을 지우지 않는다**(D-16 결정 5 — 남기는 것). 그래서 지운 뒤에도 ⑤ 화면은 마지막 결과를 보이고, 조회 대결의 사전 확인은 저장소에 행이 있는지를 따로 본다(datagen.compare_no_data).
+- 읽기는 지금 부분 집합만 · 저장된 json이 지금 계약과 어긋나면 result만 NULL로 읽는다 — 계약이 바뀌어도 옛 행이 표면을 깨지 않는다.
 
 ## enum 값 확정
 
-웨이브 인계 "condition_type · severity · work_order.status 값 미설계"(W2 · W3 행)를 닫는다. 확정 값은 [../11_glossary/03_enums_state_machines.md](../11_glossary/03_enums_state_machines.md) 미설계 enum 3행의 반영 제안으로 올리고, 이 문서의 CHECK는 그 사본이 된다.
+이 문서가 CHECK로 거는 닫힌 값 집합이다. 값의 정본은 [../11_glossary/03_enums_state_machines.md](../11_glossary/03_enums_state_machines.md)이고 CHECK는 그 사본이다.
 
-| enum | 값 | 뜻 · 판정 식의 모양 | 원본 근거 | 판정 |
+| enum | 값 | 뜻 | 원본 근거 | 판정 |
 |------|------|------|------|------|
-| alarm_rule.condition_type | GT | value > threshold | 조건 종류 "초과"(원본 data_flow.md §8) | 저장 문자열 확정 |
-| 상동 | LT | value < threshold | "미만" | 상동 |
-| 상동 | OUT_OF_RANGE | value < threshold_low 또는 value > threshold | "범위 이탈" | **threshold_low 신설** — 원본 threshold 하나로 양쪽 경계를 표현할 수 없다 |
-| 상동 | RATE_OF_CHANGE | abs(value − 직전 value) ÷ (ts − 직전 ts)초 > threshold | "변화율" | threshold 단위 = 공학 단위/초 · 직전 값은 alarm:state가 보관([05_redis_keyspace.md](./05_redis_keyspace.md)) |
-| alarm_rule.severity | 1 LOW | 참고 | smallint · alarm_eval.severity UInt8 복사(원본 architecture.md §6 · §7.3) | 값 범위 1~3 확정 |
-| 상동 | 2 MEDIUM | 주의 | 상동 | 상동 |
-| 상동 | 3 HIGH | 즉시 대응 | 상동 | 상동 |
-| work_order.status | PLANNED | 등록 직후 · 초기 상태 | text · (line_id, status) 인덱스(원본 architecture.md §6) | 확정 |
-| 상동 | IN_PROGRESS | 생산 중 | 상동 | 상동 |
-| 상동 | COMPLETED | 생산 완료 · 종결 | 상동 | 상동 |
-| 상동 | CANCELLED | 취소 · 종결 | 상동 | 상동 |
-| biz_command_log.status | APPLIED | 명령이 업무 행에 반영됐다 | 신설(사용자 결정 2026-09-27) | **확정 · 11_glossary/03 반영 제안** |
+| biz_command_log.status | APPLIED | 명령이 업무 행에 반영됐다 | 신설(사용자 결정 2026-09-27) | 확정 · 11_glossary/03 반영 |
 | 상동 | REJECTED | 도메인 오류로 반영하지 않았다 — result에 오류 코드 | 상동 | 상동 |
 | 상동 | EXPIRED | 명령 유효 창을 넘어 적용하지 않았다 | 상동 | 상동 |
+| tag_master.tag_kind | TEMP · PRESSURE · SPEED · CURRENT · VIBRATION · COUNT · STATE · OTHER | 온도 · 압력 · 속도 · 전류 · 진동 · 수량 · 상태 · 기타 | 신설(D-16 · 공용 계약 packages/shared card-line.ts TAG_KINDS) | 확정 · 11_glossary/03 반영 |
+| run_result.type | compare | 직접 비교 | 신설(D-16) | 상동 |
+| run_result.part | ingest · query · integrity | 넣기 · 조회 대결 · 무결성 | 신설(D-16 · COMPARE_PARTS) | 상동 |
+| run_result.status | completed · stopped · failed | 실행 종결 3값(실행 status 5의 종결 부분집합) | 신설(D-16) | 상동 |
 
-- 검산: condition_type **4** + severity **3** + work_order.status **4** + biz_command_log.status **3** = 14값
-- **OUT_OF_RANGE는 tag_master.range_min · range_max를 쓰지 않는다(A형).** 통념은 "범위 이탈 알람은 태그 범위를 쓴다"이다. 그러나 태그 범위 밖 값은 BAD_RANGE(4)가 되고 BAD 계열은 판정에서 빠진다(REQ-ALM-06) — 태그 범위로 판정하면 이 조건은 **영원히 발생하지 않는다.** 진짜 축은 운전 범위(규칙)와 계측 범위(태그)의 구분이다. 대체 경로 — 규칙이 자기 경계를 갖고, 운전 범위는 계측 범위 안쪽에 둔다.
-- **severity를 숫자 3단으로 둔 이유** — 알림 채널이 없어(외부 알림 Out 범위) 심각도가 바꾸는 것은 정렬 · 필터뿐이다. 숫자는 ORDER BY severity DESC 한 줄로 정렬되고 alarm_eval UInt8 복사에 변환이 없다. 문자열이면 두 저장소에서 정렬 규칙을 따로 구현해야 한다.
-- **RATE_OF_CHANGE의 직전 값은 판정 경로가 가진다.** 원본 alarm:state 필드(상태 · 연속 위반 횟수 · 최초 위반 시각)에는 직전 값이 없어 이 조건을 판정할 재료가 없었다 — 필드 추가는 [05_redis_keyspace.md](./05_redis_keyspace.md), 판정 식의 기전은 [../06_pipeline/08_alarm.md](../06_pipeline/08_alarm.md)(W4)가 소유한다.
-
-### work_order.status 허용 전이
-
-REQ-WRK-04가 요구한 허용 전이 표다. 표 밖 전이는 work_orders.invalid_status_transition/409로 거절한다.
-
-| 이전 | 다음 | 뜻 | 되돌림 |
-|------|------|------|------|
-| PLANNED | IN_PROGRESS | 생산 착수 | 없음 |
-| PLANNED | CANCELLED | 착수 전 취소 | 없음 — 종결 |
-| IN_PROGRESS | COMPLETED | 생산 완료 | 없음 — 종결 |
-| IN_PROGRESS | CANCELLED | 생산 중단 | 없음 — 종결 |
-
-- 검산: 허용 전이 = **4** · 초기 상태 1(PLANNED) · 종결 상태 2(COMPLETED · CANCELLED)
-- **종결에서 나가는 전이가 없다.** COMPLETED를 IN_PROGRESS로 되돌리면 production_log의 실적이 "완료 후 추가 생산"인지 "재개"인지 구분할 수 없다. 잘못 종결한 지시는 새 작업지시로 다시 등록한다.
-- 전이 규칙은 조건부 UPDATE 하나(현재 상태 확인과 쓰기 결합)로 서비스가 강제하고 DB CHECK는 값 집합만 막는다 — 전이 쌍의 DB 백스톱 부재는 한계 등재 [02_postgresql_constraints.md](./02_postgresql_constraints.md)다.
+- 검산: biz_command_log.status 3 + tag_master.tag_kind 8 + run_result.type 1 + part 3 + status 3 = **18**값 · 옛 alarm_rule.condition_type 4 · severity 3 · work_order.status 4와 work_order.status 허용 전이 표는 D-16으로 테이블과 함께 삭제
 
 ## 인계 판정
 
@@ -252,13 +196,9 @@ REQ-WRK-04가 요구한 허용 전이 표다. 표 밖 전이는 work_orders.inva
 | 인계 항목 | 판정 | 근거 | 버린 대안의 실패 |
 |------|------|------|------|
 | site.timezone 용도 vs 표시 Asia/Seoul 고정 | **컬럼을 유지하되 값은 'Asia/Seoul' 하나로 CHECK 고정한다.** (W3 원문) 표시 · 달력 경계(tag_1d 하루 · 파티션 경계)는 시스템 단일 시간대이며 이 컬럼이 바꾸지 않는다 — **뜻 개정(ADR-27 · 2026-09-28 · 원문의 파티션 경계는 이 값을 따르지 않는다)**: 이 값은 **표시 · 달력 의미 시간대**(화면 변환 · tag_1d 하루)이고 DB 처리 · 저장 운영 경계(파티션 · TTL)는 UTC다 · CHECK 값은 불변 | 달력 경계 시간대 판정 [04_clickhouse_rollup.md](./04_clickhouse_rollup.md) · [03_clickhouse_schema.md](./03_clickhouse_schema.md) — 모든 사이트가 한 tag_1d를 공유한다 · 달력 의미 경계 닫힌 목록 [../11_glossary/05_units_and_time.md](../11_glossary/05_units_and_time.md) | ① 컬럼 삭제 — 원본 ERD와 어긋나고 다중 시간대 확장의 자리까지 지운다. ② 자유 값 허용 — 다른 값이 들어오는 순간 사이트의 하루와 tag_1d의 하루가 **조용히** 어긋난다 |
-| 알람 담당자 배정 컬럼 | **두지 않는다.** alarm_event의 갱신은 확인(acked_by · acked_at)과 해제(state · cleared_at) 둘로 닫는다 | ALM-01~09에 배정 기능이 없다. 원본 "담당자 배정 등"(원본 data_flow.md §8.2)은 PostgreSQL을 고르는 이유의 예시다 | 컬럼만 두기 — 쓰는 기능이 없는 컬럼은 구현이 임의 뜻(최초 확인자 · 규칙 소유자)으로 채워 두 뜻이 섞인다 |
-| 인증 도입(S7 ②) 전 무인증 기간 audit_log 행위자 | **user_id NULL을 허용하고 NULL = 무인증 기간의 행위 또는 시스템 시연(라이브 flow — 시연 전용 행 · actor null)으로 정의한다.** 시드 계정으로 채우지 않는다 — 예외는 alarm_event.acked_by 하나다(결합 CHECK 때문에 시드 계정이 대리 · 판정 [../07_api/07_alarms.md](../07_api/07_alarms.md) §인증 전 확인 행위자 판정) · 확인의 audit_log.user_id는 NULL 유지 | 인증 도입은 S7 ②이고(S7 ① 알람도 무인증) 마스터 쓰기 감사는 S4부터다(REQ-MST-05 · REQ-WRK-12). 행위자를 모르는 사실을 그대로 기록한다 | 시드 계정 대입 — 인증 도입(S7 ②) 이후 같은 계정의 실제 행위와 **구분할 수 없어** 감사가 거짓 귀속을 담는다. 시스템 전용 계정 신설 — 계정 생성 표면이 없는 원칙(REQ-AUT-17)에 예외 계정을 만든다 |
-| tag_master_history 컬럼 | §tag_master_history 설계 — 10컬럼 · new_tag_id UNIQUE | REQ-MST-07 기록 내용 | 일반 메타 변경까지 담기 — audit_log와 정본이 둘이 된다 |
+| tag_master_history 컬럼 | §tag_master_history 설계 — 9컬럼 · new_tag_id UNIQUE | REQ-MST-07 기록 내용 | 일반 메타 변경까지 담기 — 명령 원장과 정본이 둘이 된다 |
 
-- 검산: 판정 = **4**
-- **인증 도입(S7 ②) 이후 user_id NULL은 결함이다.** 인증된 쓰기 표면만 감사 대상이므로(REQ-WRK-07) 인증 도입(S7 ②) 이후에 NULL 행이 생기면 인증 없이 열린 쓰기 표면이 있다는 뜻이다 — 예외는 하나 — 대상이 시연 전용 행(사이트 DEMO-FLOW · 라인 DEMO-FLOW-L · 설비 DEMO-FLOW-DEV)인 감사 행이다(명령마다 생긴다 · 라이브 flow의 시스템 시연 · [../06_pipeline/10_datagen_inject.md](../06_pipeline/10_datagen_inject.md) §시연 전용 행). DB는 단계를 모르므로 막지 못한다 — 한계 등재 [02_postgresql_constraints.md](./02_postgresql_constraints.md) · 검증은 인증 도입(S7 ②) 이후 구간의 NULL 행 중 대상이 시연 전용 행이 아닌 행 수 0 조회다.
-- 시드 쓰기는 감사하지 않는다 — 사람이 쓰기 표면으로 일으킨 변경이 아니다(REQ-WRK-07 기준 · [09_migrations_seed.md](./09_migrations_seed.md)).
+- 검산: 판정 = **2** · 옛 알람 담당자 배정 · 무인증 기간 감사 행위자 판정은 D-16으로 대상 테이블과 함께 삭제
 
 ## 튜닝 파라미터
 
@@ -274,25 +214,19 @@ REQ-WRK-04가 요구한 허용 전이 표다. 표 밖 전이는 work_orders.inva
 | wal_compression | 디스크 쓰기 절감 | zstd | 상동 | 상동 | 대조군 비교 축 VACUUM/WAL 증폭의 측정 조건 |
 | checkpoint_timeout | 체크포인트 스파이크 완화 | 15min | 상동 | 상동 | 해당 없음 |
 | random_page_cost | 로컬 SSD | 1.1 | 상동 | 상동 | 해당 없음 |
-| timezone(DB 기본) | DB 처리 시간대 UTC(ADR-27) — 설정 파일 timezone · log_timezone과 DB 기본값(관리자 단계) 두 자리를 같게 | UTC | 상동 | 상동 | **신설** — 월 · 일 파티션 경계 계산이 세션 시간대를 따른다(02) · 옛 값 Asia/Seoul(달력 경계 시간대와 같게)은 ADR-27이 대체 |
+| timezone(DB 기본) | DB 처리 시간대 UTC(ADR-27) — 설정 파일 timezone · log_timezone과 DB 기본값(관리자 단계) 두 자리를 같게 | UTC | 상동 | 상동 | **신설** — 월 · 일 파티션 경계 계산이 세션 시간대를 따른다(02) · 옛 값 Asia/Seoul(달력 경계 시간대와 같게)은 ADR-27이 대체 · 009 뒤 비교 사본의 칸 경계는 epoch 하루 배수(UTC 자정)라 세션 시간대를 따르지 않는다 — 빈 볼륨 004 재생의 일 파티션은 여전히 이 값을 따른다(ADR-32) |
 
 - 검산: 파라미터 = **9** · 원본 8 + 신설 1(timezone)
-- **대조군과 업무 테이블이 같은 인스턴스 · 같은 shared_buffers를 쓴다.** SW-09 on 실험 중에는 대조군 쿼리가 버퍼를 밀어내 업무 CRUD p95가 오른다 — 목표 ① 실험과 목표 ② 측정을 섞지 않는 조합 제약 #4([../02_features/13_switch_matrix.md](../02_features/13_switch_matrix.md))의 저장소 쪽 이유다.
-- 확장은 pg_stat_statements · pg_partman · auto_explain 셋이다(원본 tech_stack.md §5.1). 확장 생성은 마이그레이션 첫 순번이 한다([09_migrations_seed.md](./09_migrations_seed.md)).
+- **대조군과 업무 테이블이 같은 인스턴스 · 같은 shared_buffers를 쓴다.** SW-09 on 실험 중에는 대조군 쓰기 · 쿼리가 버퍼를 밀어내 업무 명령 p95가 오른다 — 목표 ① 실험과 목표 ② 측정을 섞지 않는 조합 제약 #4([../02_features/13_switch_matrix.md](../02_features/13_switch_matrix.md))의 저장소 쪽 이유다.
+- 확장은 pg_stat_statements · pg_partman · auto_explain(원본 tech_stack.md §5.1) · timescaledb(ADR-32 — 비교 사본) 넷이다. 생성 자리 — pg_stat_statements는 001 · pg_partman · timescaledb는 migrate 관리자 단계 · auto_explain은 설정 파일 적재만 한다. 로드 방식의 정본은 [../09_tech_stack/03_data_infra.md](../09_tech_stack/03_data_infra.md) §PostgreSQL 확장과 설정 파일이고, 적용 순서는 [09_migrations_seed.md](./09_migrations_seed.md) §저장소 간 적용 순서다.
 
 ## 미확인 · 미설계 등재
 
 | 항목 | 상태 | 확정 자리 |
 |------|------|------|
-| condition_type · severity · work_order.status 값 | 닫힘 — 이 문서가 확정하고 11_glossary/03이 반영했다(미설계 3 → 0) | [../11_glossary/03_enums_state_machines.md](../11_glossary/03_enums_state_machines.md) |
-| RATE_OF_CHANGE의 첫 판정(직전 값 없음) · 직전 값의 BAD 행 처리 | 닫힘(W4) — 경계 조건 판정 | [../06_pipeline/08_alarm.md](../06_pipeline/08_alarm.md) §조건 평가와 RATE_OF_CHANGE 경계 |
-| 비활성 태그를 가리키는 alarm_rule | 닫힘(W4) — DB는 FK만 유지하고 판정 경로가 비활성 태그 규칙을 처리한다 | [../06_pipeline/08_alarm.md](../06_pipeline/08_alarm.md) §비활성 태그 규칙 |
-| 생산 실적 기록 시점의 작업지시 상태 조건 | 닫힘 — IN_PROGRESS인 지시에만 기록 · 밖이면 work_orders.production_log_not_allowed/409 — [../07_api/08_work_orders.md](../07_api/08_work_orders.md) | [../07_api/08_work_orders.md](../07_api/08_work_orders.md)(W5) |
-| password_hash 알고리즘 | **W7 닫힘** — Argon2id · 알고리즘 · 파라미터 · 솔트를 담은 자기 기술 문자열 하나(text 그대로) · 비용 파라미터 값은 2계층 미정 | [../12_security/01_authn_authz.md](../12_security/01_authn_authz.md) |
 | work_mem · maintenance_work_mem의 개발 · 중간 프로파일 값 | 원본 미기재 — 산정 규칙만 | 이 문서(S5 대조 실험 전 확정) |
-| biz_command_log 보존 기간 · 정리 주체 | **닫힘** — 무기한 · 정리 주체 없음(audit_log와 같은 판정) · 결과 키 TTL보다 긴 관계 성립 | [08_retention_lifecycle.md](./08_retention_lifecycle.md) |
-| biz_command_log.status 값의 enum 사전 반영 | 제안 — 이 문서가 확정 · 사전 반영 대기 | [../11_glossary/03_enums_state_machines.md](../11_glossary/03_enums_state_machines.md) |
-| 업무 CRUD p95 · 대조군 동거 시 간섭 크기 | 3계층 미확인 — 확정 전 임의 값 고정 금지 | [../03_requirements/13_nonfunctional.md](../03_requirements/13_nonfunctional.md) REQ-NFR-09 |
+| biz_command_log 보존 기간 · 정리 주체 | **닫힘** — 무기한 · 정리 주체 없음 · 결과 키 TTL보다 긴 관계 성립 | [08_retention_lifecycle.md](./08_retention_lifecycle.md) |
+| 업무 CRUD p95 · 대조군 동거 시 간섭 크기 | 3계층 미확인 — 확정 전 임의 값 고정 금지 · 직접 비교에 업무 방해를 넣었다가 실측이 흔들려 뺐다(ADR-31 — 사용자 결정 2026-10-11) | [../03_requirements/13_nonfunctional.md](../03_requirements/13_nonfunctional.md) REQ-NFR-09(폐지 표기) |
 
 ## 관련 문서
 
@@ -301,5 +235,5 @@ REQ-WRK-04가 요구한 허용 전이 표다. 표 밖 전이는 work_orders.inva
 - [erd.md](./erd.md) — 전역 ERD
 - [07_cross_store_consistency.md](./07_cross_store_consistency.md) — tag_id 불변 · 스케일 변경 · Dictionary
 - [../11_glossary/03_enums_state_machines.md](../11_glossary/03_enums_state_machines.md) — enum 값 정본
-- [../03_requirements/11_work_orders.md](../03_requirements/11_work_orders.md) — 상태 전이 · 감사 계약
+- [../03_requirements/03_master.md](../03_requirements/03_master.md) — 마스터 쓰기 계약
 - [../04_architecture/09_decision_records.md](../04_architecture/09_decision_records.md) — ADR-16 · ADR-19

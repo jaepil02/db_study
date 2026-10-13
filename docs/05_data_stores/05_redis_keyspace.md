@@ -1,7 +1,10 @@
 # Redis 키 공간 (05_redis_keyspace)
 
-> **대상**: Redis 단일 인스턴스의 영역 접두 10 · 키 패턴 전수 · 값 모양 · TTL 조회 계약 · 네이밍 · 계열별 실패 전략 · Pub/Sub 채널 5 · **봉인 표** · 키 계열별 래퍼 강제(ADR-13) · 키 인계 판정 — Redis 키 패턴 채번 정본
+> **대상**: Redis 단일 인스턴스의 영역 접두 7 · 키 패턴 전수 · 값 모양 · TTL 조회 계약 · 네이밍 · 계열별 실패 전략 · Pub/Sub 채널 4 · **봉인 표** · 키 계열별 래퍼 강제(ADR-13) · 키 인계 판정 — Redis 키 패턴 채번 정본
 > **작성일**: 2026-09-24
+> **개정일**: 2026-10-11 — 웨이브 6 코드 수정 반영(r5-code 검수 L8) — rt:latest 행 쓰기 칸에 **신선도 가드**(Ingest 쓰기는 지금 − 1시간보다 오래된 점 제외) — 키 · 봉인 칸 수 불변
+> **개정일**: 2026-10-11 — **D-16 설비 가동 · 동시 적재 게이트 · 센서 데이터 지우기**(사용자 결정 2026-10-11 · ADR-28 · ADR-29) — **새 접두 ctl(봉인 — 실행 중 제어 상태) · ctl:plant:power 신설** · **cache:dual:active 신설**(SW-09 gated 게이트 · 값 runId · TTL 10초) — 영역 접두 6 → **7**(봉인 2 → **3**) · 활성 키 패턴 16 → **18**(봉인 4 → **5** · 캐시 8 → **9**) · 봉인 칸 12 → **15** · 역봉인 8 → **9** · 통제 칸 23 → **27** · 래퍼 노출에 XTRIM MAXLEN 0 · SCAN · DEL · UNLINK(센서 데이터 현황 · 지우기 · 시험 키 정리) · 실패 전략 9 → **11** · 인계 판정 11 → **13** · 원본 대조 16 → **18** · 네이밍 스캔 규칙에 앱 SCAN 2곳
+> **개정일**: 2026-10-11 — **D-16 알람 · 로그인 · 권한 · 작업지시 · 측정 도구 삭제**(사용자 결정 2026-10-11 · 리드 판정 — WRK 함께 폐지) — 영역 접두 10 → **6**(alarm · rl · sess · auth 폐지) · 활성 키 패턴 24 → **16**(alarm:state · cache:alarmrules · cache:perm · cache:alarmevents · cache:workorders · rl · auth:refresh · ch:alarm 삭제) · 채널 5 → **4** · 실패 전략 12 → **9**행 · 봉인 칸 15 → **12** · 역봉인 14 → **8** · 통제 칸 32 → **23** · 래퍼 접두 배정 10 → **6** · 인계 판정 6행 D-16 폐지 표기 · alarm:state 필드 판정 · 목록 Hash · auth 예외 불릿 삭제 · stream:plc:raw 발행자 모드 C · bulk 503 삭제 · actor 늘 NULL · 미확인 rl · ACK 행 삭제
 > **개정일**: 2026-09-28 — 코드 검수 반영(r-code-api H1 · M2) — stream:biz:cmd 소비 XAUTOCLAIM → **PEL 재읽기(ID 0)** · lock:biz:writer 락 연산 호출 상한 500 ms · 갱신 결과 소유자 아님 · 불확실 구분 · 획득 이어 쓰기 — 키 패턴 수 · 칸 수 불변
 > **개정일**: 2026-09-28 — 웨이브 1 검수 반영(B-M7 · B-H4 · B-M4) — **lock:biz:writer** 신설(업무 명령 단일 소비자 강제 · 캐시 계열 lock · SET NX PX · 현행 참고 TTL 15초 · 갱신 5초 · 토큰 확인 해제 · 실패 시 소비 중단 · 대기) — lock 활성 2 → **3** · 활성 키 패턴 23 → **24** · 역봉인 칸 13 → **14** · 통제 칸 31 → **32** · 실패 전략 11 → **12**행 · biz:result 값에 **actor**(명령 조회 요청자 대조) · stream:biz:cmd 쓰기 실패의 원인 구분 "계수가 가른다" → **Redis 불가 = unavailable · PostgreSQL 불가 = failed** — 영역 접두 · 봉인 칸 · 래퍼 접두 배정 불변
 > **개정일**: 2026-09-28 — 503 코드 판정 정정(리드 · d-biz-b — HTTP 규약 "대응이 같으면 한 코드") — Redis 불가 업무 쓰기 코드 common.command_bus_unavailable → **common.postgres_unavailable/503 재사용**(PostgreSQL 불가와 한 코드 · 원인은 biz_commands_total{result=unavailable} · 표면 정본 07_api/01)
@@ -26,75 +29,65 @@ Redis는 **단일 인스턴스 · volatile-lru**다(ADR-05). 인스턴스를 스
 |------|------|------|------|------|------|:------:|
 | stream | 수집 버퍼 · DLQ · 업무 명령 버퍼 | 봉인 | **금지** | 축출되지 않는다 | DurableKeyClient | 3 |
 | rt | realtime — 태그 최신값 | 봉인 | **금지** | 상동 | DurableKeyClient | 1 |
-| alarm | 알람 판정 핫 상태 | 봉인 | **금지** | 상동 | DurableKeyClient | 1 |
-| cache | 조회 · 마스터 · 목록 사본 · 흐름 구독 표지 | 캐시 | **필수** | 압박 시 LRU로 밀려난다 | CacheKeyClient | 8 |
+| **ctl** | 실행 중 제어 상태 — 설비 가동 | 봉인 | **금지** | 상동 | DurableKeyClient | 1 |
+| cache | 조회 · 마스터 사본 · 흐름 구독 표지 · 동시 적재 게이트 | 캐시 | **필수** | 압박 시 LRU로 밀려난다 | CacheKeyClient | 5 |
 | lock | 단일 실행 락 | 캐시 | **필수** | 상동 | CacheKeyClient | 3 |
-| rl | 레이트 리밋 계수 | 캐시 | **필수** | 상동 | CacheKeyClient | 1 |
-| sess | 세션 | 캐시 | **필수** | 상동 | CacheKeyClient | **0 — 예약** |
-| auth | 리프레시 토큰 | 캐시 | **필수** | 상동 | CacheKeyClient | 1 |
 | **biz** | 업무 명령 결과 우편함 | 캐시 | **필수** | 상동 | CacheKeyClient | 1 |
-| ch | Pub/Sub 채널 | 채널 | 해당 없음 — 키가 아니다 | 메모리에 남지 않는다 | FanoutPublisher | 5 |
+| ch | Pub/Sub 채널 | 채널 | 해당 없음 — 키가 아니다 | 메모리에 남지 않는다 | FanoutPublisher | 4 |
 
-- 검산: 영역 접두 = 봉인 3(stream · rt · alarm) + 캐시 6(cache · lock · rl · sess · auth · biz) + 채널 1(ch) = **10** — 루트 고정 기준과 같아야 한다(리드 갱신)
-- 검산: 활성 키 패턴 = 봉인 3 + 1 + 1 = 5 · 캐시 8 + 3 + 1 + 0 + 1 + 1 = 14 · 채널 5 → 5 + 14 + 5 = **24**. 세는 자리는 이 표 하나이며 아래 표들은 이 수를 다시 세지 않는다
+- 검산: 영역 접두 = 봉인 3(stream · rt · ctl) + 캐시 3(cache · lock · biz) + 채널 1(ch) = **7** — 루트 고정 기준과 같아야 한다 · 옛 alarm · rl · sess · auth는 D-16 폐지 · ctl은 D-16 신설
+- 검산: 활성 키 패턴 = 봉인 3 + 1 + 1 = 5 · 캐시 5 + 3 + 1 = 9 · 채널 4 → 5 + 9 + 4 = **18**. 세는 자리는 이 표 하나이며 아래 표들은 이 수를 다시 세지 않는다
 - **biz를 cache 아래에 두지 않고 접두로 가른다(판정 §인계 판정 #11).** 생존 정책은 cache와 같지만(TTL 필수 · 축출 허용) 원천 조회 방식이 다르다 — cache 계열은 미스면 원천을 읽어 **다시 채우고**, biz:result는 미스면 원장을 읽기만 하고 **채우지 않는다**(결과 키는 워커만 쓴다). 접두 기준 모니터링(히트율 · 키 수)도 섞이지 않는다.
-- **sess는 활성 키 패턴 없이 접두만 예약한다(판정 §인계 판정).** 접두를 지우면 루트 고정 기준의 접두 수가 바뀐다 — 접두 수 변경은 리드 제안으로 올린다.
 
 ## 봉인 계열 키
 
-TTL을 붙이지 않는다. 사라지면 복구할 수 없거나(stream · alarm) 원천을 과부하시키는 복원이 필요한(rt) 데이터다.
+TTL을 붙이지 않는다. 사라지면 복구할 수 없거나(stream) 원천을 과부하시키는 복원이 필요한(rt) 데이터다.
 
 | 키 패턴 | 자료구조 | 값 · 필드 | 크기 제어 | 쓰는 주체 | 읽는 주체 |
 |------|------|------|------|------|------|
-| stream:plc:raw | Stream · 컨슈머 그룹 grp:ingest | 엔트리 1 = 스캔 사이클 1 — MessagePack 컬럼 배열(v · d · s · t0 · tg · dt · va · q) | XADD MAXLEN ~ (근사 트리밍) | COL · GEN 모드 B · C | ING(XREADGROUP · XACK · XAUTOCLAIM) |
+| stream:plc:raw | Stream · 컨슈머 그룹 grp:ingest | 엔트리 1 = 스캔 사이클 1 — MessagePack 컬럼 배열(v · d · s · t0 · tg · dt · va · q) | XADD MAXLEN ~ (근사 트리밍) | COL · GEN 모드 B(흐름 시연) | ING(XREADGROUP · XACK · XAUTOCLAIM) |
 | stream:plc:dlq | Stream | 엔트리 1 = **실패한 원 엔트리 1** + 원 엔트리 ID + 오류 사유 + **원 배치 토큰**(재시도 소진 사유만 · W4) | XADD MAXLEN ~ | ING(재시도 소진 · 해독 불가) | 사람의 DLQ 재처리 절차 — 재처리 전용 컨슈머 그룹 **grp:dlq**(W4 · [../06_pipeline/11_backpressure_failure.md](../06_pipeline/11_backpressure_failure.md) §DLQ 재처리) |
-| rt:latest:{device_id} | Hash | 필드 tag_id · 값 "ts,value,quality"(ts는 epoch ms 10진) | 태그 수만큼 · **필드 조건부 쓰기(새 ts ≥ 저장 ts · W4)** | SW-11 쓰기 주체(ingest 기본 · collector) — LatestValueWritePort(ADR-10 잠정 · S6 최종) · RLT-04 워밍 · 기동 복원 | RLT · TSQ-08 진행 구간 |
+| rt:latest:{device_id} | Hash | 필드 tag_id · 값 "ts,value,quality"(ts는 epoch ms 10진) | 태그 수만큼 · **필드 조건부 쓰기(새 ts ≥ 저장 ts · W4)** · Ingest 쓰기는 지금 − 1시간보다 오래된 점을 건너뛴다(신선도 가드 · 웨이브 6) | SW-11 쓰기 주체(ingest 기본 · collector) — LatestValueWritePort(ADR-10 잠정 · S6 최종) · RLT-04 워밍 · 기동 복원 | RLT · TSQ-08 진행 구간 |
+| **ctl:plant:power** | Hash | 필드 state(on · off) · changed_at(epoch ms 10진) | 키 1 · **같은 상태면 그대로 두는 원자 스크립트 쓰기** | 설비 가동 표면(RLT-10 — 06_realtime #4) · 수집기 역할 기동 때 DEL(이번 기동은 기동 기본값부터) | 수집기 역할(1초마다 — 가상 PLC · 모드 A · 폴링을 켜고 끈다) · 06_realtime #3 · #5 · 센서 데이터 지우기(가동 중 409) · 직접 비교(plant_on) |
 | **stream:biz:cmd** | Stream · 컨슈머 그룹 **grp:biz-writer**(소비자 1) | 엔트리 1 = 업무 명령 1 — cmdId · kind · payload(JSON) · actor · requestedAt | XADD MAXLEN ~ — **관계: 명령 유효 창 동안의 최대 업무 쓰기 수 이상**(값 · 메모리는 [06_redis_memory.md](./06_redis_memory.md)) | api 업무 쓰기 표면(SW-12 stream) | 명령 워커(XREADGROUP · XACK · PEL 재읽기 ID 0 — XAUTOCLAIM 없음) — **lock:biz:writer를 쥔 워커 하나만** |
-| alarm:state:{rule_id} | Hash | state · first_breach_ts · breach_count · event_id · **first_clear_ts · last_value · last_ts** | 규칙 수만큼 | ALM-03 판정기 하나 — **확인 표면은 쓰지 않는다**(W4 · state 값 NORMAL · PENDING · ACTIVE · CLEARING) | ALM-03 |
 
 - **DLQ 엔트리를 원 엔트리 단위로 둔다(판정).** 원본은 "실패 배치 + 오류 사유"(원본 architecture.md §8.1)라 배치 통째(최대 수만 행)가 엔트리 하나가 될 수 있었다 — 그러면 DLQ MAXLEN이 엔트리 수로는 작아도 메모리로는 Stream 본체를 넘는다. 원 엔트리 단위면 크기가 본 Stream 엔트리와 같아 메모리 산정([06_redis_memory.md](./06_redis_memory.md))이 닫히고, 재처리가 원 엔트리 ID로 추적된다.
-- **alarm:state 필드 7 중 셋을 신설한다.** 원본 필드(상태 · 연속 위반 횟수 · 최초 위반 시각) + event_id(원본 data_flow.md §8)만으로는 ① CLEARING 디바운스의 경과를 잴 시작 시각이 없고 ② RATE_OF_CHANGE의 직전 값이 없다([01_postgresql_schema.md](./01_postgresql_schema.md) §enum 값 확정). 시각 필드는 전부 **epoch ms 정수**다 — 문자열 날짜면 디바운스 계산이 매번 파싱을 거치고 시간대 없는 문자열이 9시간 어긋난 디바운스를 만든다([../11_glossary/05_units_and_time.md](../11_glossary/05_units_and_time.md)의 판정을 여기서 확정).
-- 검산: alarm:state 필드 = 원본 3 + event_id 1 + 신설 3 = **7**
+- **ctl:plant:power가 봉인인 이유(ADR-29)** — 축출되면 켜 둔 설비 가동이 아무 신호 없이 기동 기본값(꺼짐)으로 돌아가 HMI 30대가 이유 없이 멈춘다 — 스위치가 사람 모르게 바뀌는 실패다. 원천이 없는 데이터(사람이 누른 상태)라 캐시 계열이 될 수 없다. **rt를 빌리지 않는다** — rt는 "지금 값의 휘발 사본(진실은 ClickHouse)"이라 지우기가 rt:latest:*를 지울 때 함께 지워질 자리이고 뜻이 다르다. 그래서 봉인 계열에 새 접두 ctl을 채번했다(§인계 판정 #12).
+- **봉인 키를 앱이 지우는 자리는 셋이다(D-16)** — 센서 데이터 지우기의 rt:latest:* 전부(SCAN → UNLINK) · 직접 비교 무결성 정리의 시험 설비 rt:latest · 수집기 역할 기동 때 ctl:plant:power. 봉인은 "TTL · 축출로 사라지지 않는다"이지 "아무도 지우지 않는다"가 아니다 — 지우는 주체는 각각 하나로 고정한다. stream:plc:raw · stream:plc:dlq는 지우기가 엔트리만 XTRIM MAXLEN 0으로 비우고 **키 · 소비 그룹은 남긴다** — 그룹이 사라지면 Ingest의 다음 XREADGROUP이 그룹 없음으로 멈춘다.
 - **stream:biz:cmd가 봉인인 이유** — 적용 전 명령이 축출되면 api가 202로 받은 쓰기가 조용히 사라진다. 원천이 없는 데이터(사람의 요청)라 캐시 계열이 될 수 없다. 크기는 MAXLEN이 끊고, 미적용 명령이 트리밍으로 잘리는 잔여는 한계 등재 #25다([02_postgresql_constraints.md](./02_postgresql_constraints.md)).
 - 컨슈머 그룹 grp:ingest · grp:biz-writer와 PEL은 각 스트림 키의 일부라 따로 세지 않는다. 미확인 엔트리가 PEL에 남아 있는 한 MAXLEN 트리밍이 그 엔트리를 잘라도 PEL 항목은 남는다 — 이 경우가 결함 계수 stream_trimmed_unacked다([06_redis_memory.md](./06_redis_memory.md)).
 
 ## 캐시 계열 키
 
-TTL 없이 만들지 않는다. 사라져도 원천(PostgreSQL · ClickHouse)에서 다시 채울 수 있는 사본 · 계수 · 락이다 — auth만 예외로 원천이 없다(§실패 전략).
+TTL 없이 만들지 않는다. 사라져도 원천(PostgreSQL · ClickHouse · 게이트웨이)에서 다시 채울 수 있는 사본 · 표지 · 락 · 결과 우편함이다.
 
 | 키 패턴 | 자료구조 | 값 | 무효화 | 쓰는 · 읽는 기능 | 비고 |
 |------|------|------|------|------|------|
 | cache:q:{sha1} | String | gzip 압축 JSON 조회 결과 | **TTL만** — 과거 구간은 불변 | TSQ-03 · 04 | 키 = 정규화 쿼리의 SHA-1 40자 |
 | cache:tagmeta:{tag_id} | Hash | 태그 메타 사본(device_id · tag_code · tag_name · unit · 매핑 · 범위 · is_active) | 태그 쓰기 커밋 뒤 DEL | MST-07 · COL-01 · RLT-02 · 03 | **태그별 키 판정** §인계 판정 |
 | cache:devlist:{site_id} | String | 설비 목록 JSON | 설비 쓰기 커밋 뒤 DEL | MST-02 | 해당 없음 |
-| cache:alarmrules | String | 활성 규칙 전체 JSON | 규칙 쓰기 커밋 뒤 DEL | ALM-01 · 02 | 해당 없음 |
-| **cache:perm:{user_id}** | String | 역할 집합 JSON | 역할 변경 커밋 뒤 DEL | AUT-05 | **신설 이름** — 원본은 TTL만 있었다 |
-| **cache:alarmevents** | Hash | 필드 = 정규화 목록 쿼리 SHA-1 · 값 = gzip JSON | 확인 커밋 뒤 **키 하나 DEL** | ALM-07 · 08 | **신설** — 첫 채움 기준 만료(EXPIRE NX) |
-| **cache:workorders** | Hash | 상동(작업지시 · 실적 조회) | 작업지시 · 실적 쓰기 커밋 뒤 키 하나 DEL | WRK-01 · 03 | **신설** — 상동 |
-| **cache:flow:subscribed** | String | 표지 값(게이트웨이 인스턴스 식별) | **TTL만** — 흐름 구독 연결이 0이 되면 갱신을 멈춰 만료된다 | WebSocket 게이트웨이 쓰기(5초마다 갱신) · 흐름 요약 발행자(Ingest 워커 · 판정기 · 명령 워커) 읽기(최대 5초 간격) | **신설**(EXP-FLOW · 정본 [../07_api/11_websocket.md](../07_api/11_websocket.md) §흐름 이벤트) — 원천은 게이트웨이의 구독 연결 수 · 없으면 발행하지 않는다 |
+| **cache:flow:subscribed** | String | 표지 값(게이트웨이 인스턴스 식별) | **TTL만** — 흐름 구독 연결이 0이 되면 갱신을 멈춰 만료된다 | WebSocket 게이트웨이 쓰기(5초마다 갱신) · 흐름 요약 발행자(Ingest 워커 · 명령 워커) 읽기(최대 5초 간격) | **신설**(EXP-FLOW · 정본 [../07_api/11_websocket.md](../07_api/11_websocket.md) §흐름 이벤트) — 원천은 게이트웨이의 구독 연결 수 · 없으면 발행하지 않는다 |
+| **cache:dual:active** | String | 직접 비교 실행의 runId | **TTL만 · 실행이 종결 때 DEL** — 실행이 2초마다 다시 써 열어 두고, 실행이 죽으면 TTL로 저절로 닫힌다 | 직접 비교 실행(GEN-13) 쓰기 · ING-11 flusher 읽기(SW-09 gated — 배치마다 · 읽기 캐시 500 ms) | **신설(D-16 · ADR-28)** — 동시 적재 게이트 · 원천은 진행 중 실행 |
 | **lock:rebuild:q:{sha1}** | String | 소유자 토큰(UUID) · SET NX PX | 소유자 검증 Lua로 해제 | TSQ-05 | 조회 캐시 재구성 락 |
 | **lock:rebuild:rt:{device_id}** | String | 상동 | 상동 | RLT-04 | 최신값 빈 키 복원 락 |
 | **lock:biz:writer** | String | 소유자 토큰(워커 인스턴스 UUID) · 획득 스크립트(비었으면 SET PX · 값이 내 토큰이면 PEXPIRE) | 쥔 워커가 주기 갱신(토큰 확인) · 종료 시 토큰 확인 해제 · 죽으면 TTL 만료 | 명령 워커 — 쥔 동안만 grp:biz-writer를 소비 · 못 쥔 워커는 대기 · 재시도 | **신설** — 업무 명령 단일 소비자 강제 락(기전 [../06_pipeline/07_business_crud.md](../06_pipeline/07_business_crud.md) §적용 단계) |
-| **rl:{class}:{user_id}:{unix_minute}** | String | INCR 계수 | 분 창 만료 | AUT-06 | class = 한도 등급 |
-| **biz:result:{cmdId}** | String | 명령 결과 JSON — status(APPLIED · REJECTED · EXPIRED · 또는 PostgreSQL 불가) · **actor(요청자 user_id · 인증 전 NULL — 명령 조회의 요청자 대조)** · HTTP 상태 · 본문 또는 오류 코드 | **TTL만** — 원장(biz_command_log)이 원천 | 명령 워커 쓰기 · api 응답 · 명령 조회 읽기 | **신설** — cmdId는 UUID 문자열 · 미스면 원장을 읽고 **다시 채우지 않는다** |
-| auth:refresh:{refresh_token_id} | String | user_id | 로그아웃 시 DEL | AUT-01~03 | rt: 접두 금지(원본 개명) · **refresh_token_id = 토큰의 암호학적 요약값 — 원문을 키에 쓰지 않는다**(12_security/01) |
+| **biz:result:{cmdId}** | String | 명령 결과 JSON — status(APPLIED · REJECTED · EXPIRED · 또는 PostgreSQL 불가) · **actor(요청자 — 늘 NULL · D-16 · 명령 조회의 요청자 대조 칸)** · HTTP 상태 · 본문 또는 오류 코드 | **TTL만** — 원장(biz_command_log)이 원천 | 명령 워커 쓰기 · api 응답 · 명령 조회 읽기 | **신설** — cmdId는 UUID 문자열 · 미스면 원장을 읽고 **다시 채우지 않는다** |
 
-- **목록 캐시를 Hash 하나에 모으는 이유** — 목록 조회는 범위 · 필터 조합마다 결과가 달라 키가 여럿 생기는데, 쓰기 한 건이 그 전부를 무효화해야 한다. 키를 흩으면 무효화에 패턴 검색(KEYS)이 필요하고 KEYS는 금지다. Hash 하나면 DEL 한 번이 조합 전부를 지운다. 만료는 EXPIRE NX로 **첫 채움 시점 기준**이라 어떤 조합도 TTL보다 오래 낡지 않는다.
 - **lock:biz:writer가 업무 명령의 단일 소비자를 강제한다(리드 판정).** 소비자 이름 고정(biz-writer-1)만으로는 막지 못한다 — 워커 둘이 같은 이름으로 XREADGROUP하면 Redis는 둘을 한 소비자로 보고 두 프로세스가 서로 다른 명령을 동시에 적용해 순서 보존이 깨진다. 락을 쥔 워커만 소비하고, 쥔 워커가 죽으면 TTL 뒤 다른 워커가 이어받아 PEL부터 소진한다. 쥔 워커의 소비가 TTL보다 오래 멈추면 락이 넘어가 두 워커가 잠시 겹칠 수 있다 — 갱신 주기를 TTL의 3분의 1로 두는 이유이며 겹친 명령의 이중 적용은 원장 UNIQUE가 막는다. 락 연산(획득 · 갱신 · 해제)의 호출 상한은 500 ms다(캐시 50 ms와 별개). 갱신 결과는 소유자 아님(0) = 즉시 소비 중단 · 불확실(시간 초과 · 오류) = 락 유지 · 소비 계속 · 다음 주기 재시도(마지막 확인 — 호출을 보낸 시각 — 뒤 다음 주기 전에 TTL이 지날 수 있으면 지금 중단 · 명령 처리 루프도 확인 뒤 TTL이 지나면 중단)이고, 획득은 값이 내 토큰이면 이어 쓴다(획득 · 이어 쓰기 한 스크립트).
+- **cache:dual:active가 캐시 계열인 이유(ADR-28)** — 게이트는 실행이 살아 있는 동안만 열려야 한다. 봉인으로 두면 실행 중 api가 죽은 뒤 게이트가 영구히 열려 설비 가동 데이터가 PostgreSQL 비교 사본에 계속 쌓인다 — TTL이 "실행이 죽으면 닫힌다"를 보장한다. 축출되면 그 배치들이 PostgreSQL에서 빠져 넣기 결과의 행 수 대조가 어긋나는데, 그 실패는 결과(rows · postgresFailures)에 그대로 드러난다.
+- **센서 데이터 지우기는 조회 사본 cache:q:*만 지운다**(SCAN → DEL) — 마스터 사본(cache:tagmeta · cache:devlist)은 센서 데이터가 아니라 남긴다. Redis가 degrade면 지우지 못한 사본은 TTL로 사라진다.
 - **lock:rebuild를 두 하위 공간으로 가른다.** 원본은 조회 캐시 락(쿼리 해시)과 최신값 복원 락(설비)을 같은 lock:rebuild:{…}에 두었다 — 식별자 공간이 겹치면 우연히 같은 문자열을 가진 두 락이 서로를 막는다(REQ-RLT-05 · REQ-TSQ-12).
-- auth:refresh는 캐시 계열이지만 원천 DB가 없다. 축출되면 해당 사용자는 재로그인이다 — 수집 적체가 로그아웃으로 번지는 경로이며 그 차단이 MAXLEN 산정의 이유다([06_redis_memory.md](./06_redis_memory.md) · [../02_features/01_auth.md](../02_features/01_auth.md)).
 
 ## Pub/Sub 채널
 
 | 채널 | 발행자 | 구독자 | 페이로드 | SW-06 대상 |
 |------|------|------|------|:------:|
 | ch:rt:{device_id} | **SW-11 최신값 쓰기 주체**(ingest 기본 · collector) — 조건부 쓰기가 받아들인 필드만(W4) | WebSocket 게이트웨이 | 변경된 태그 값 배열 | 대상 |
-| ch:alarm | ALM(PostgreSQL 커밋 뒤 · REQ-ALM-10) | WebSocket 게이트웨이 | 알람 열림 · 닫힘 이벤트 | 대상 |
 | ch:cacheinv | 업무 쓰기 커밋 뒤 — 명령 워커(SW-12 direct면 api) · modbus_config만 바꾼 쓰기도 cache:devlist 키 이름으로(W4) | 다른 api 인스턴스 · RLT-09 브라우저 중계 · **Collector 마스터 재로드(W4)** | 무효화된 키 이름 | **대상 아님** |
 | **ch:bizreply** | 명령 워커 — 결과 SET 뒤 | api 인스턴스마다 구독자 1(대기 맵) | cmdId | **대상 아님** |
-| **ch:flow** | Ingest 워커(인계 없는 배치 — flusher) · 판정기(인계 배치 — ⑦ 뒤) · 명령 워커(명령 1건당 · SW-12 direct면 api) — **구독 중 표지가 있을 때만** | WebSocket 게이트웨이 — 흐름 구독 연결이 있는 인스턴스만 SUBSCRIBE | 배치 · 업무 명령 요약 1건(event batch · biz — 값은 싣지 않는다 · 정본 [../07_api/11_websocket.md](../07_api/11_websocket.md) §흐름 이벤트) | **대상 아님** |
+| **ch:flow** | Ingest 워커(flusher — 배치당 1건) · 명령 워커(명령 1건당 · SW-12 direct면 api) — **구독 중 표지가 있을 때만** | WebSocket 게이트웨이 — 흐름 구독 연결이 있는 인스턴스만 SUBSCRIBE | 배치 · 업무 명령 요약 1건(event batch · biz — 값은 싣지 않는다 · 정본 [../07_api/11_websocket.md](../07_api/11_websocket.md) §흐름 이벤트) | **대상 아님** |
 
-- 검산: 채널 = **5** · SW-06 대상 2(ch:rt · ch:alarm) + 비대상 3(ch:cacheinv · ch:bizreply · ch:flow)
+- 검산: 채널 = **4** · SW-06 대상 1(ch:rt) + 비대상 3(ch:cacheinv · ch:bizreply · ch:flow) · 옛 ch:alarm은 D-16 폐지
 - **ch:cacheinv가 SW-06 밖인 이유** — 끄면 무효화 체인 ③ · ⑥단(6단 번호 — [../06_pipeline/07_business_crud.md](../06_pipeline/07_business_crud.md))이 스위치 상태에 따라 달라져 정합성 계약에 스위치가 생긴다(판정 정본 [../02_features/13_switch_matrix.md](../02_features/13_switch_matrix.md)).
 - **ch:bizreply가 SW-06 밖인 이유** — 응답 경로다. 끄면 업무 쓰기 응답이 스위치 상태에 따라 달라진다. 알림을 놓친 api는 대기 상한 뒤 202를 내고 결과는 결과 키 · 원장에 남는다 — 누락이 적용 누락이 되지 않는다.
 - **흐름 구독 표지를 rt가 아니라 cache에 둔다(리드 판정).** 표지는 TTL로 스스로 사라져야 하는데 rt는 봉인 계열이라 TTL 명령을 노출하지 않는다 — rt 아래 두면 §네이밍 규칙 "접두 = 생존 정책"을 어긴다(원본 rt:{refresh_token_id} 개명과 같은 사례). 게이트웨이가 5초마다 다시 채우는 표지라 캐시 계열 정의(원천에서 다시 채울 수 있는 것)에 맞는다.
@@ -111,20 +104,15 @@ TTL은 2계층 조정값이다. 본문에 값을 박지 않고 **키 모양 · �
 | cache:q:{sha1} | 캐시 쓰기 시 · to와 api 서버 시계의 현재 버킷 비교 | ±20% | 구간 구분 없는 단일 TTL · 과거 구간 명시 무효화 | 컴파일 실패 | 완전 과거 300초 · 현재 버킷 30초 · 최근 5분 미캐시 · [../06_pipeline/06_timeseries_read.md](../06_pipeline/06_timeseries_read.md) |
 | cache:tagmeta:{tag_id} | 캐시 쓰기 시 | ±20% | 쓰기 뒤 DEL 생략 · 새 값 덮어쓰기 | 컴파일 실패 | 600초 · 이 문서 |
 | cache:devlist:{site_id} | 캐시 쓰기 시 | ±20% | 상동 | 컴파일 실패 | 600초 · 이 문서 |
-| cache:alarmrules | 캐시 쓰기 시 | ±20% | 규칙 변경 시 DEL 생략 | 컴파일 실패 | 300초 · 이 문서 |
-| cache:perm:{user_id} | 캐시 쓰기 시 | ±20% | 역할 변경 시 DEL 생략 | 컴파일 실패 | 300초 · 이 문서 |
-| cache:alarmevents | **첫 필드 채움 시 1회(EXPIRE NX)** | 없음 | 필드마다 만료 갱신 — 인기 조합이 영원히 안 낡는다 | 컴파일 실패 | 30초 · 이 문서 |
-| cache:workorders | 상동 | 없음 | 상동 | 컴파일 실패 | 60초 · 이 문서 |
 | cache:flow:subscribed | 게이트웨이 갱신 시 | 없음 | TTL 없는 표지 · 발행자가 배치마다 읽기 · 마지막 구독자 뒤에도 갱신 | 컴파일 실패 | 15초 · 갱신 5초 · 이 문서 — 발행자 확인 간격 5초는 [../07_api/11_websocket.md](../07_api/11_websocket.md) |
+| cache:dual:active | 실행이 게이트를 쓸 때(켤 때 · 2초마다 갱신) | 없음 — 정확 TTL(지터가 갱신 주기와의 관계를 깨면 갱신 사이에 게이트가 닫힌다) | TTL 없는 게이트 · 배치마다 Redis 읽기(읽기 캐시 없이) · 한 번의 읽기 실패를 즉시 닫힘으로 읽기 · 사람 · 화면이 켜기 | 컴파일 실패 | TTL 10초 · 갱신 2초 · flusher 읽기 캐시 500 ms · 읽기 실패 때 직전 열림을 믿는 상한 10초(= TTL) · 켜고 끈 뒤 실행이 1초 기다림 · 이 문서(코드 소유 apps/api common/redis/cache-key-client · modules/ingest) |
 | lock:rebuild:q:{sha1} | 락 획득 시(PX) | 없음 | 만료 없는 락 · 소유자 검증 없는 DEL | 컴파일 실패 | 5000 ms · 대기 50 ms × 3회 · [../06_pipeline/06_timeseries_read.md](../06_pipeline/06_timeseries_read.md) |
 | lock:rebuild:rt:{device_id} | 락 획득 시(PX) | 없음 | 상동 | 컴파일 실패 | **복원 쿼리 타임아웃 이상** — 현행 참고 5,000 ms(S2 판정 · 복원 쿼리 타임아웃 2,000 ms는 ../06_pipeline/05) · 이 문서 |
 | lock:biz:writer | 락 획득 · 갱신 시(PX) | 없음 | 만료 없는 락 · 토큰 확인 없는 갱신 · 해제 · **락 없이 grp:biz-writer 소비** | 컴파일 실패 | **갱신 주기의 3배 이상** — 현행 참고 TTL 15초 · 갱신 5초 · 못 쥔 워커의 재시도 5초 · 이 문서 |
-| rl:{class}:{user_id}:{unix_minute} | 창의 첫 INCR 시 | 없음 | TTL 없는 계수 · IP 기준 계수 | 컴파일 실패 | 90초(1분 창 + 여유) · 한도 [../12_security/03_api_surface_defense.md](../12_security/03_api_surface_defense.md) |
-| auth:refresh:{refresh_token_id} | 발급 시 | 없음 | TTL 없는 토큰 · rt: 접두 | 컴파일 실패 | 14일 · [../12_security/01_authn_authz.md](../12_security/01_authn_authz.md) |
 | biz:result:{cmdId} | 결과 SET 시 | 없음 | TTL 없는 결과 · 미스에서 원장 값으로 다시 채우기 · 원장 대신 결과 키만으로 멱등 판정 | 컴파일 실패 | 300초 · 이 문서 — **명령 유효 창과 같은 값**([../06_pipeline/07_business_crud.md](../06_pipeline/07_business_crud.md) §시간 초과 · 명령 조회) |
 
 - 검산: TTL 계약 행 = 캐시 계열 활성 키 패턴 전부(§영역 접두 표) — 누락 0
-- **지터는 cache 접두의 단건 키에만 래퍼가 자동으로 건다(판정).** 원본은 "TTL에 ±20% 무작위 가산"을 모든 TTL 키에 걸었다(원본 architecture.md §8.3). 락에 지터가 붙으면 만료가 소유자 작업보다 먼저 와 스탬피드가 다시 열리고, rl에 붙으면 분 창 계수가 창 밖으로 새며, auth에 붙으면 토큰 수명이 사용자마다 달라진다.
+- **지터는 cache 접두의 단건 키에만 래퍼가 자동으로 건다(판정).** 원본은 "TTL에 ±20% 무작위 가산"을 모든 TTL 키에 걸었다(원본 architecture.md §8.3). 락에 지터가 붙으면 만료가 소유자 작업보다 먼저 와 스탬피드가 다시 열린다.
 - **"부재 시 = 컴파일 실패"가 ADR-13의 뜻이다.** TTL은 CacheKeyClient 쓰기 메서드의 필수 인자라 빠뜨린 호출은 빌드되지 않는다 — 런타임 기동 거부보다 한 단계 앞에서 막는다.
 
 ## 네이밍 규칙
@@ -134,8 +122,8 @@ TTL은 2계층 조정값이다. 본문에 값을 박지 않고 **키 모양 · �
 | 계층 | 영역:용도:식별자 — 콜론 계층 · 앞이 넓은 범주. 하위 공간이 필요하면 용도 뒤에 한 단 더(lock:rebuild:q:{…}) | 접두 기준 모니터링(히트율 · 키 수)이 섞인다 |
 | 접두 = 생존 정책 | 새 용도가 기존 접두의 TTL 정책과 다르면 **접두를 빌리지 않는다** | rt:{refresh_token_id}처럼 TTL 금지 접두 아래 TTL 키가 생겨 어느 래퍼 규칙도 맞지 않는다(원본 개명 사례) |
 | 접두 채번 | 영역 접두는 이 문서에서만 늘린다 · 봉인인지 캐시인지 먼저 정한다 | 정책 미정 키가 기본 래퍼로 들어가 생존 정책이 우연으로 정해진다 |
-| 식별자 | 정수 id · SHA-1 16진 40자 · epoch 정수(unix_minute)만. 문자열 날짜 금지 | 시간대 없는 날짜 문자열이 키를 두 개로 가른다 |
-| 스캔 | KEYS 금지 — 필요하면 SCAN + COUNT(운영 도구만) | 단일 스레드 Redis가 키 공간 전체를 훑는 동안 모든 명령이 멈춘다 |
+| 식별자 | 정수 id · SHA-1 16진 40자 · UUID(cmdId · runId) · epoch 정수만. 문자열 날짜 금지 · 고정 이름 키(ctl:plant:power · cache:dual:active)는 인스턴스에 하나뿐인 상태다 | 시간대 없는 날짜 문자열이 키를 두 개로 가른다 |
+| 스캔 | KEYS 금지 — 필요하면 SCAN + COUNT(운영 도구 · 센서 데이터 현황의 rt:latest 키 수 · 지우기의 rt:latest:* · cache:q:* 두 자리 — D-16) | 단일 스레드 Redis가 키 공간 전체를 훑는 동안 모든 명령이 멈춘다 |
 | 쓰기 주체 | 키 패턴 하나에 쓰는 모듈 하나(rt:latest의 워밍 · SW-11 collector만 예외 · 같은 봉인 래퍼 · 조건부 쓰기로 순서 역전 차단) | 두 모듈이 다른 값 형식으로 같은 키를 덮어쓴다 |
 | 값 인코딩 | 시각은 epoch ms 정수 · 숫자는 10진 문자열 · 구조는 JSON(대형은 gzip) | 파서가 둘이 된다 |
 
@@ -147,22 +135,20 @@ TTL은 2계층 조정값이다. 본문에 값을 박지 않고 **키 모양 · �
 
 | 계열 · 키 | 호출이 실패하면 | 시간 제한 | 드러나는 형태 | 근거 |
 |------|------|------|------|------|
-| stream:plc:raw 쓰기 | **명시적 실패** → Collector 스풀 전환 · bulk 주입은 datagen.stream_full/503 | 없음 — 실패를 삼키지 않는다 | spool_active · 백프레셔 위험 단계 | 원본 architecture.md §17 |
+| stream:plc:raw 쓰기 | **명시적 실패** → Collector 스풀 전환 · 흐름 시연 발행은 멈추고 센다 | 없음 — 실패를 삼키지 않는다 | spool_active · 백프레셔 위험 단계 | 원본 architecture.md §17 |
 | stream:plc:raw 읽기 | XREADGROUP 실패 → Ingest 대기 · 재시도 | 없음 | consumer_lag | 원본 data_flow.md §12.2 |
 | stream:biz:cmd 쓰기 | **명시적 실패** → 업무 쓰기 common.postgres_unavailable/503(재사용 — 원인은 biz_commands_total result 레이블이 가른다 · Redis 불가 = unavailable · PostgreSQL 불가 = failed) — 원장 · PostgreSQL로 우회하지 않는다 | 없음 | biz_commands_total{result=unavailable} | 사용자 결정 2026-09-27 — 새 대가 · [../06_pipeline/07_business_crud.md](../06_pipeline/07_business_crud.md) |
-| rt:latest 읽기 | **503** — ClickHouse 점조회로 대체하지 않는다 | 없음 | 최신값 API 503 | 원본 data_flow.md §5 — 키만 빈 경우의 복원과 다르다 |
-| alarm:state | 판정 중단 — 명시적 실패 | 없음 | 판정 지연 | REQ-ALM-07 |
+| rt:latest 읽기 | **503** — ClickHouse 점조회로 대체하지 않는다 | 없음 | 최신값 API 503 · HMI 개요 503 | 원본 data_flow.md §5 — 키만 빈 경우의 복원과 다르다 |
+| ctl:plant:power 읽기 · 쓰기 | **명시적 실패** — 표면 503 realtime.latest_unavailable · 수집기 역할은 **지금 상태를 유지**(모르는 상태를 기본값으로 덮지 않는다) · 지우기는 켜진 것으로 보고 409 | 없음 | durable_wrapper_failures_total{prefix="ctl"} · 수집기 경고 로그(상태가 바뀔 때만) | REQ-RLT-19 — 기본값으로 덮으면 Redis 순간 끊김 한 번에 30대가 멈췄다 켜진다 |
+| cache:dual:active | 켜기 쓰기 실패 → **직접 비교 실행 failed**(게이트 없이 PostgreSQL이 받지 않아 비교가 성립하지 않는다) · 갱신 실패는 삼킨다(TTL 안 다음 갱신) · 읽기 실패 → 직전 "열림"을 10초까지 믿고 그 뒤 닫힘 | 캐시 래퍼 50 ms | 실행 status failed · 넣기 결과 rows 차 · COPY 실패 계수 | REQ-ING-19 — 최대 속도 넣기 중 래퍼 타임아웃 한 번을 닫힘으로 읽으면 그 배치들이 PostgreSQL에서 빠진다 |
 | cache:* | 짧은 타임아웃 뒤 **조용히 degrade** — 원천 직접 조회 · cache:flow:subscribed는 읽기 실패를 "표지 없음"으로 보고 흐름 요약을 내지 않는다(측정 오염 쪽으로 안전) | 현행 50 ms · [../06_pipeline/06_timeseries_read.md](../06_pipeline/06_timeseries_read.md) | 캐시 히트율 · 지연 상승 | 원본 architecture.md §17 degrade 원칙 |
 | lock:rebuild:* | 락 없이 원천 조회 — 스탬피드를 감수한다 | 상동 | 원천 동시 쿼리 수 | 캐시 실패가 요청 실패가 되지 않게 |
 | lock:biz:writer | **소비 중단 · 대기** — 락 없이 소비하지 않는다 · 재시도 주기마다 다시 쥔다 · 갱신 결과가 불확실(시간 초과 · 오류)이면 락 유지 · 소비 계속(마지막 확인 뒤 다음 주기 전에 TTL이 지날 수 있으면 중단 — 불릿 "lock:biz:writer가 업무 명령의 단일 소비자를 강제한다") | 상동 | biz_stream_lag 상승 · 대기 상한 202 | 락 없는 소비는 단일 소비자 강제를 깨 적용 순서가 뒤집힌다 — 스탬피드 감수와 반대 판정 |
-| rl:* | **통과** — 계수 없이 요청을 받는다 | 상동 | 레이트 리밋 통과 계수 | W2b 판정 [../03_requirements/02_auth.md](../03_requirements/02_auth.md) |
 | biz:result | 쓰기 실패는 삼키고 계수 — api는 대기 상한 뒤 202 · 읽기 실패 · 미스는 원장 조회로 **degrade** | 상동 | 202 비율 · 명령 조회의 원장 조회 수 | 원장이 원천이다 |
-| auth:refresh | **거절** — 우회할 원천이 없다 | 상동 | auth.token_store_unavailable/503(로그인 · 갱신 · 로그아웃) | REQ-AUT-14 |
 | ch:* 발행 | 무시하고 계수 — 푸시 누락은 재연결 재조회가 메운다 | 상동 | 발행 실패 계수 | Pub/Sub은 영속하지 않는다 |
 
-- 검산: 행 = **12** · 명시적 실패 4(stream:plc:raw 쓰기 · stream:biz:cmd 쓰기 · rt 읽기 · alarm) + 대기 2(stream 읽기 · lock:biz:writer) + degrade · 통과 · 무시 5(cache · lock:rebuild · rl · biz · ch) + 거절 1(auth) = **12**
+- 검산: 행 = **11** · 명시적 실패 5(stream:plc:raw 쓰기 · stream:biz:cmd 쓰기 · rt 읽기 · ctl:plant:power · cache:dual:active 켜기) + 대기 2(stream 읽기 · lock:biz:writer) + degrade · 무시 4(cache · lock:rebuild · biz · ch) = **11** · 옛 alarm · rl · auth 행은 D-16 폐지
 - **stream:biz:cmd 쓰기를 원장 직접 쓰기로 우회하지 않는다(B형).** 결론 — Redis가 멈추면 업무 쓰기도 멈춘다. 반대 시나리오 — XADD 실패 때 api가 트랜잭션을 직접 커밋하면 같은 순간 워커가 적용 중인 앞 명령과 쓰기 순서가 뒤집히고, 직렬 적용 주체가 둘이 되어 순서 보존이 깨진다. 파생 지침 — 옛 경로는 스위치(SW-12 direct)로만 고른다.
-- **auth:refresh는 캐시 계열의 예외 행이다(B형).** 결론 — Redis가 멈추면 로그인 · 토큰 갱신이 거절된다. 반대 시나리오 — degrade(원천 조회)로 두려면 원천이 있어야 하는데 리프레시 토큰의 원천은 Redis뿐이다. 통과시키면 폐기한 토큰이 유효해진다. 파생 지침 — TTL 정책(캐시 계열)과 실패 전략(거절)은 별개 축이며, 래퍼는 degrade 신호를 돌려주고 판단은 AUT가 한다.
 
 ## 봉인 표
 
@@ -174,7 +160,7 @@ TTL은 2계층 조정값이다. 본문에 값을 박지 않고 **키 모양 · �
 | stream:plc:dlq | ✔ 상동 | ✔ 상동 | ✔ 상동 | 3 |
 | stream:biz:cmd | ✔ 상동 | ✔ 상동 | ✔ 상동 | 3 |
 | rt:latest:{device_id} | ✔ 상동 · 워밍 쓰기도 같은 래퍼(REQ-RLT-05) | ✔ 상동 | ✔ 상동 — **필드 TTL(HEXPIRE)도 막는다** | 3 |
-| alarm:state:{rule_id} | ✔ 상동 | ✔ 상동 | ✔ 상동 | 3 |
+| ctl:plant:power | ✔ 상동 · 원자 쓰기 스크립트도 같은 래퍼 | ✔ 상동 | ✔ 상동 | 3 |
 
 - **②는 ①과 정책 하나에 기대는 칸이다.** maxmemory-policy가 allkeys-lru로 바뀌면 ①이 그대로여도 ②가 전부 무너진다 — 정책 값의 정본은 [06_redis_memory.md](./06_redis_memory.md)이며 정책 변경은 이 표 전체의 재검산 사유다.
 - **③에 필드 TTL을 넣은 이유** — Redis 8은 Hash 필드 단위 만료를 지원한다. 키에 TTL이 없어도 rt:latest의 필드가 만료되면 최신값이 조용히 사라지는 같은 실패가 생긴다.
@@ -183,10 +169,8 @@ TTL은 2계층 조정값이다. 본문에 값을 박지 않고 **키 모양 · �
 
 | 키 패턴 | ④ TTL 없는 생성 · PERSIST 비노출 |
 |------|------|
-| cache:q:{sha1} · cache:tagmeta:{tag_id} · cache:devlist:{site_id} · cache:alarmrules · cache:perm:{user_id} · cache:alarmevents · cache:workorders · cache:flow:subscribed | ✔ 각 1칸 — 8 |
+| cache:q:{sha1} · cache:tagmeta:{tag_id} · cache:devlist:{site_id} · cache:flow:subscribed · cache:dual:active | ✔ 각 1칸 — 5 |
 | lock:rebuild:q:{sha1} · lock:rebuild:rt:{device_id} · lock:biz:writer | ✔ 각 1칸 — 3 |
-| rl:{class}:{user_id}:{unix_minute} | ✔ 1 |
-| auth:refresh:{refresh_token_id} | ✔ 1 |
 | biz:result:{cmdId} | ✔ 1 |
 
 - **PERSIST를 막는 이유** — PERSIST는 TTL을 지워 캐시 키를 영구 · 비축출 키로 바꾼다. 봉인 계열이 아닌데 봉인처럼 남는 키가 메모리 예산 밖에서 쌓인다.
@@ -198,9 +182,9 @@ TTL은 2계층 조정값이다. 본문에 값을 박지 않고 **키 모양 · �
 ### 검산
 
 - 봉인 칸(①~③) = 봉인 키 패턴 5 × 3 = **15**
-- 역봉인 칸(④) = 8 + 3 + 1 + 1 + 1 = **14** = 캐시 계열 활성 키 패턴 수(§영역 접두 표)와 같아야 한다
+- 역봉인 칸(④) = 5 + 3 + 1 = **9** = 캐시 계열 활성 키 패턴 수(§영역 접두 표)와 같아야 한다
 - 전역 비노출 칸(⑤) = 래퍼 **3**
-- 통제 칸 합계 = 15 + 14 + 3 = **32**
+- 통제 칸 합계 = 15 + 9 + 3 = **27** · 옛 alarm:state 3칸 · cache 4 · rl · auth 역봉인 6칸은 D-16 폐지 · ctl:plant:power 3칸 · cache:dual:active 1칸은 D-16 신설
 - **새 키 패턴을 들이면 이 절의 칸과 §영역 접두 표의 활성 수를 같은 변경 단위에서 고친다.** 봉인이면 ①~③ 3칸, 캐시면 ④ 1칸이 는다 — 늘지 않으면 계열이 정해지지 않은 키다.
 
 ## 키 계열별 래퍼 강제
@@ -209,11 +193,11 @@ ADR-13(보정 7.5)의 계약이다. 인터페이스 이름과 책임만 적는�
 
 | 래퍼 | 접두 | 노출하는 것 | 노출하지 않는 것 | 실패 처리 |
 |------|------|------|------|------|
-| DurableKeyClient | stream · rt · alarm | XADD(MAXLEN 필수 인자) · XREADGROUP · XACK · XAUTOCLAIM · XLEN · XPENDING · XINFO GROUPS(적체 판정량) · HSET · HGET · HGETALL · **rt:latest 필드 조건부 쓰기 스크립트(W4)** · 파이프라인 | 모든 TTL 명령(키 · 필드) · KEYS · FLUSH 계열 | 예외를 그대로 던진다 — 백프레셔 발동 |
-| CacheKeyClient | cache · lock · rl · sess · auth · biz | TTL 필수 쓰기(SET · HSET + EXPIRE NX · INCR + 창 만료) · GET · HGET · DEL · 소유자 검증 락 해제 | TTL 없는 쓰기 · PERSIST · KEYS · FLUSH 계열 | 짧은 타임아웃 · 예외를 삼키고 미스(degrade) 신호를 돌려준다 |
+| DurableKeyClient | stream · rt · ctl | XADD(MAXLEN 필수 인자) · XREADGROUP · XACK · XAUTOCLAIM · XLEN · XPENDING · XINFO GROUPS(적체 판정량) · HSET · HGET · HGETALL · **rt:latest 필드 조건부 쓰기 스크립트(W4)** · 파이프라인 · **XTRIM MAXLEN 0 · rt:latest SCAN · DEL · UNLINK · ctl:plant:power 원자 쓰기 스크립트 · DEL(D-16)** | 모든 TTL 명령(키 · 필드) · KEYS · FLUSH 계열 · XGROUP DESTROY | 예외를 그대로 던진다 — 백프레셔 발동 · 실패는 durable_wrapper_failures_total{prefix} |
+| CacheKeyClient | cache · lock · biz | TTL 필수 쓰기(SET · HSET + EXPIRE NX · 정확 TTL SET — 게이트) · GET · HGET · DEL · 소유자 검증 락 해제 · **cache:q:* SCAN · DEL(D-16 — 지우기)** | TTL 없는 쓰기 · PERSIST · KEYS · FLUSH 계열 | 짧은 타임아웃 · 예외를 삼키고 미스(degrade) 신호를 돌려준다 |
 | FanoutPublisher | ch | PUBLISH · SUBSCRIBE | 키 명령 전부 | 발행 실패를 계수하고 삼킨다 |
 
-- 검산: 래퍼 = **3** · 접두 배정 3 + 6 + 1 = 10 — 모든 접두가 정확히 한 래퍼에 속한다
+- 검산: 래퍼 = **3** · 접두 배정 3 + 3 + 1 = 7 — 모든 접두가 정확히 한 래퍼에 속한다
 - **린트가 아니라 타입이 막는다.** 원본은 "린트 규칙으로 강제"라 적었으나(원본 architecture.md §8.3) 린터는 "cache: 키 SET에 TTL 인자가 있는가"를 검사할 수 없다(원본 implementation_plan.md §7.5). 접두가 래퍼를 고르고 래퍼의 메서드 시그니처가 TTL 유무를 고정한다.
 - **래퍼는 접두를 스스로 붙인다.** 호출자가 접두 문자열을 쓰면 봉인 접두를 캐시 래퍼로 쓰는 실수가 타입을 통과한다 — 래퍼 메서드는 용도 이름과 식별자만 받는다.
 
@@ -222,15 +206,15 @@ ADR-13(보정 7.5)의 계약이다. 인터페이스 이름과 책임만 적는�
 ```plain
 새 키 패턴
 ├─ 사라지면 복구 불가 또는 원천 과부하?
-│  ├─ 예 → 봉인 계열(stream · rt · alarm)      DurableKeyClient · 봉인 표 3칸 · 메모리 예산 06에 행 추가
+│  ├─ 예 → 봉인 계열(stream · rt · ctl)        DurableKeyClient · 봉인 표 3칸 · 메모리 예산 06에 행 추가
 │  └─ 아니오 ↓
 ├─ 원천에서 다시 채울 수 있는 사본 · 계수 · 락?
-│  ├─ 예 → 캐시 계열(cache · lock · rl · auth · biz)  CacheKeyClient · TTL 계약 행 · 역봉인 1칸
+│  ├─ 예 → 캐시 계열(cache · lock · biz)       CacheKeyClient · TTL 계약 행 · 역봉인 1칸
 │  └─ 아니오 → 키로 만들지 않는다               목적지 미정 데이터(04_storage_split 먼저)
 └─ 기존 접두의 정책과 다른가? → 접두를 빌리지 않고 이 문서에서 새 접두를 채번한다
 ```
 
-- **두 질문의 순서가 중요하다.** "원천이 있는가"를 먼저 물으면 auth:refresh처럼 원천이 없는 캐시 계열을 봉인으로 오판한다 — 생존 정책(축출 허용 여부)이 먼저, 실패 전략이 나중이다.
+- **두 질문의 순서가 중요하다.** "원천이 있는가"를 먼저 물으면 cache:flow:subscribed처럼 DB 원천 없이 다시 채워지는 표지를 봉인으로 오판한다 — 생존 정책(축출 허용 여부)이 먼저, 실패 전략이 나중이다.
 - **목적지가 정해지지 않은 데이터는 키가 되지 않는다.** 새 데이터 종류는 [../04_architecture/04_storage_split.md](../04_architecture/04_storage_split.md)의 분기 표에 먼저 올라야 한다(고유 규칙).
 
 ## 인계 판정
@@ -240,19 +224,21 @@ ADR-13(보정 7.5)의 계약이다. 인터페이스 이름과 책임만 적는�
 | # | 인계 항목 | 판정 | 버린 대안의 실패 |
 |:-:|------|------|------|
 | 1 | cache:tagmeta 단일 Hash(원본 data_flow.md §3 · §5) vs 태그별 키(원본 architecture.md §8.2) | **태그별 키 cache:tagmeta:{tag_id}.** 무효화 단위 = 쓰기 단위(태그 하나 · 원본 data_flow.md §7도 DEL cache:tagmeta:3401) · 축출 단위 = 태그 하나. 설비 단위 조회는 파이프라인 다건 HGETALL 1왕복 | 단일 Hash — 태그 하나를 고쳐도 전체를 DEL해 모든 Collector · 최신값 조회가 동시에 미스를 내고 PostgreSQL로 몰린다. 축출도 통째라 메모리 압박 한 번에 메타 전체가 사라진다 |
-| 2 | sess:{session_id} 소비 기능 없음 | **키 패턴 폐지 · sess 접두는 예약으로 유지.** 인증은 JWT + auth:refresh로 닫혔다 | 유지 — 쓰는 기능이 없는 TTL 키 규칙이 구현에 "세션 저장소가 있다"는 오해를 준다 |
+| 2 | sess:{session_id} 소비 기능 없음 | **키 패턴 폐지 · sess 접두도 D-16으로 폐지**(로그인 없음 — 옛 판정은 접두 예약) | 해당 없음 |
 | 3 | lock:job:rollup 소비자 없음(롤업은 MV) | **폐지.** 재도입 조건 = 체이닝 깊이 3을 넘는 롤업을 배치 잡으로 옮길 때([04_clickhouse_rollup.md](./04_clickhouse_rollup.md)) | 유지 — 백필 · 재계산이 이 락을 "단일 실행 보장"으로 빌려 쓰며 뜻이 흐려진다 |
-| 4 | rl 키에 엔드포인트 자리 없음(원본 architecture.md §18 "엔드포인트별") | **rl:{class}:{user_id}:{unix_minute}** — class는 한도 등급 — **general · bulk_read · export · bulk_ingest**(W7 확정). class 값 집합과 한도의 정본은 [../12_security/03_api_surface_defense.md](../12_security/03_api_surface_defense.md) | 엔드포인트 경로를 키에 — 경로 파라미터마다 키가 생겨 한도가 식별자 단위로 쪼개진다 |
+| 4 | rl 키에 엔드포인트 자리 없음(원본 architecture.md §18 "엔드포인트별") | **D-16 폐지** — 레이트 리밋 삭제(옛 판정 rl:{class}:{user_id}:{unix_minute}) | 해당 없음 |
 | 5 | lock:rebuild 식별자 공간 충돌(쿼리 해시 vs 설비) | **lock:rebuild:q:{sha1} · lock:rebuild:rt:{device_id}** 두 하위 공간 | 같은 공간 — 두 종류의 락이 이름으로 구분되지 않아 만료 값도 하나로 묶인다 |
-| 6 | 작업지시 BFF 캐시 키 | **Redis는 cache:workorders(Hash · 키 하나 DEL). BFF 서버 fetch 캐시는 두지 않는다(no-store)** — ③계층의 read-your-writes가 BFF 캐시로 깨지지 않게 | BFF 캐시 유지 — 쓰기 응답 직후 목록이 최대 revalidate 창만큼 옛 값이다. 막으려면 태그 무효화 ④단을 작업지시에도 걸어야 해 체인이 넓어진다 |
+| 6 | 작업지시 BFF 캐시 키 | **D-16 폐지** — 작업지시 삭제(옛 판정 cache:workorders Hash · BFF no-store) | 해당 없음 |
 | 7 | **rt:seq:{device_id} 소비자 없음(신규)** | **폐지.** 스캔 일련번호는 tag_raw.scan_seq · Stream 필드 s가 갖고, 갱신 확인은 rt:latest의 ts(STALE 판정)가 한다 | 유지 — 봉인 키는 축출되지 않으므로 아무도 읽지 않는 키가 설비 수만큼 영구히 남는다 |
-| 8 | **권한 캐시 키 모양(신규 · AUT-05)** | cache:perm:{user_id} | 해당 없음 |
-| 9 | **알람 이벤트 목록 캐시 키(신규 · ALM-07)** | cache:alarmevents(Hash) | 조합별 흩은 키 — 확인 한 건의 무효화에 KEYS가 필요하다 |
-| 10 | alarm:state 최초 위반 시각의 형식(W1 판정 확정 자리) | epoch ms 정수 · 필드 7로 확장 | 해당 없음 |
+| 8 | 권한 캐시 키 모양(AUT-05) | **D-16 폐지**(옛 판정 cache:perm:{user_id}) | 해당 없음 |
+| 9 | 알람 이벤트 목록 캐시 키(ALM-07) | **D-16 폐지**(옛 판정 cache:alarmevents Hash) | 해당 없음 |
+| 10 | alarm:state 최초 위반 시각의 형식 | **D-16 폐지**(옛 판정 epoch ms 정수 · 필드 7) | 해당 없음 |
 | 11 | **업무 명령 키(신규 · 사용자 결정 2026-09-27)** | stream:biz:cmd(봉인) · **biz:result:{cmdId}(새 접두 biz · 캐시 계열)** · ch:bizreply | 결과를 cache:bizresult로 — 미스면 원천으로 다시 채운다는 cache 계열의 뜻과 어긋나 결과 키를 원장 값으로 되채우는 구현이 나오고, 워커만 쓴다는 쓰기 주체 규칙이 깨진다 · 명령을 stream:plc:raw에 함께 — ING가 해독 불가로 DLQ에 격리한다 |
+| 12 | **설비 가동 상태 키(신규 · D-16 결정 3)** | **새 봉인 접두 ctl · ctl:plant:power**(Hash · TTL 없음 · 원자 쓰기) — 실행 중 제어 상태는 지금 값(rt)도 사본(cache)도 아니다 | cache 아래 — 메모리 압박에서 축출되면 켜 둔 공장이 아무 신호 없이 꺼진다 · rt 아래 — 지우기가 rt:latest:*를 지울 때 함께 지워질 자리이고 "ClickHouse가 진실인 휘발 사본"이라는 rt의 뜻과 반대다(이 키에는 다른 진실이 없다) |
+| 13 | **동시 적재 게이트 키(신규 · D-16 결정 2)** | **cache:dual:active**(캐시 계열 · TTL 10초 · 값 runId · 실행이 2초마다 갱신) | 봉인 — 실행이 죽은 뒤 게이트가 영구히 열려 가동 데이터가 비교 사본에 계속 쌓인다 · 프로세스 메모리 플래그 — 실행(api)과 flusher(worker)가 다른 프로세스면 서로 보지 못한다 |
 
-- 검산: 판정 = **11** · 원본 키 폐지 3(#2 · #3 · #7) · 늘어난 키 패턴 7(#5 분할 1 · #6 cache:workorders · #8 cache:perm · #9 cache:alarmevents · #11 업무 명령 3)
-- 원본 키 패턴 수와의 대조 — 원본 17(봉인 §8.1 5 + 캐시 §8.2 9 + 채널 3) − 폐지 3 + 분할 1(lock:rebuild) + 신설 3(cache:perm · cache:alarmevents · cache:workorders) + 업무 명령 3(stream:biz:cmd · biz:result · ch:bizreply) + 흐름 이벤트 2(ch:flow · cache:flow:subscribed) + 단일 소비자 락 1(lock:biz:writer) = **24** = §영역 접두 표의 활성 수
+- 검산: 판정 = **13** · D-16 폐지 6(#2 · #4 · #6 · #8 · #9 · #10) · 원본 키 폐지 3(#2 · #3 · #7) · 현행 늘어난 키 패턴 6(#5 분할 1 · #11 업무 명령 3 · #12 · #13 D-16 신설 2)
+- 원본 키 패턴 수와의 대조 — 원본 17(봉인 §8.1 5 + 캐시 §8.2 9 + 채널 3) − 폐지 3 + 분할 1(lock:rebuild) + 신설 3(cache:perm · cache:alarmevents · cache:workorders) + 업무 명령 3(stream:biz:cmd · biz:result · ch:bizreply) + 흐름 이벤트 2(ch:flow · cache:flow:subscribed) + 단일 소비자 락 1(lock:biz:writer) = 24 − D-16 폐지 8(alarm:state · cache:alarmrules · cache:perm · cache:alarmevents · cache:workorders · rl · auth:refresh · ch:alarm) + D-16 신설 2(ctl:plant:power · cache:dual:active) = **18** = §영역 접두 표의 활성 수
 - **#1의 대가 — Collector 기동 로드는 PostgreSQL에서 태그 목록을 먼저 읽는다.** 태그별 키는 "이 설비의 태그가 무엇인가"를 열거할 수 없다(KEYS 금지). Collector는 기동 1회에 tag_master를 읽고 cache:tagmeta:{tag_id}를 워밍한다 — 기전 [../06_pipeline/02_collect.md](../06_pipeline/02_collect.md)(W4)와 정합이 필요하다.
 
 ## 미확인 · 미설계 등재
@@ -261,9 +247,7 @@ ADR-13(보정 7.5)의 계약이다. 인터페이스 이름과 책임만 적는�
 |------|------|------|
 | 래퍼 메서드가 용도 이름 · 식별자만 받는 모양 | **S2 as-built 차이** — S2 래퍼는 키 전체 문자열을 받고 접두 판정(봉인 접두 거부 · 캐시 접두만 TTL 지터)으로 계열 혼용을 **런타임에** 막는다. 타입 수준 강제(용도별 메서드)는 아니다 — 키 계열이 늘어나는 S3(dict · 멱등 토큰) 전에 용도별 메서드로 바꾼다 | S3 · 이 문서 §키 계열별 래퍼 강제 |
 | lock:rebuild:rt 만료 값 | **S2 판정 5,000 ms** — 복원 쿼리 타임아웃(2,000 ms · 소유 [../06_pipeline/05_realtime_read.md](../06_pipeline/05_realtime_read.md)) 이상 계약 성립. 복원 쿼리 시간 자체는 3계층 미확인 — 실측이 타임아웃에 근접하면 두 값을 함께 올린다 | 이 문서 |
-| rl class 값 집합 · 등급별 한도 | **W7 닫힘** — class 4 확정 · 한도는 관계식 고정 · 값 2계층 미정 | [../12_security/03_api_surface_defense.md](../12_security/03_api_surface_defense.md) |
-| DLQ 재처리 경로 · alarm_eval DLQ가 같은 stream:plc:dlq인지 | **W4 판정** — 원 토큰 직접 삽입 절차 · grp:dlq · alarm_eval은 DLQ에 격리하지 않는다 | [../06_pipeline/11_backpressure_failure.md](../06_pipeline/11_backpressure_failure.md) · [../06_pipeline/08_alarm.md](../06_pipeline/08_alarm.md)(W4) |
-| ACK가 alarm:state를 바꾸는 주체 | **W4 판정** — 판정기 단독 · 해소 첫 감지 때 acked_at 조회 | [../06_pipeline/08_alarm.md](../06_pipeline/08_alarm.md)(W4) |
+| DLQ 재처리 경로 | **W4 판정** — 원 토큰 직접 삽입 절차 · grp:dlq | [../06_pipeline/11_backpressure_failure.md](../06_pipeline/11_backpressure_failure.md) |
 | rt:latest 덮어쓰기의 ts 비교 | **W4 판정** — 조건부 쓰기 · 한계 등재 [02_postgresql_constraints.md](./02_postgresql_constraints.md) #2 갱신 | [../06_pipeline/05_realtime_read.md](../06_pipeline/05_realtime_read.md)(W4) |
 | 캐시 호출 타임아웃 값 | 현행 50 ms · 소유 W4 확정 | [../06_pipeline/06_timeseries_read.md](../06_pipeline/06_timeseries_read.md)(W4) |
 | stream:biz:cmd MAXLEN 값 · 명령 · 결과 키 메모리 | 관계만 판정(MAXLEN ≥ 명령 유효 창 동안의 최대 업무 쓰기 수) · 값과 메모리 예산 행은 미정 | [06_redis_memory.md](./06_redis_memory.md) |

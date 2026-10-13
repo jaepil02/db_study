@@ -2,10 +2,14 @@
 
 > **대상**: db_study 문서군이 쓰는 산업 프로토콜 · 수집 · 시계열 저장 · Redis 스트림 · 조회 캐시 · 흐름 제어 · 실행 환경 · 실험 용어 — 용어 정의 정본
 > **작성일**: 2026-09-24
+> **개정일**: 2026-10-12 — **D-16 부분 개정 · ADR-33**(직접 비교 ③ 무결성 → 데이터 정합성 · 두 저장소 1분 칸 대조) — 직접 비교 행 정의 무결성 → **데이터 정합성** · §8 실험에 **데이터 정합성 · 1분 칸 · 값 체크섬 · 빠진 구간** 신설(빠진 구간 인접 용어에 넣기 실패 수는 빠진 행의 상한) — §8 용어 11 → **15** · 전체 86 → **90**(13 + 7 + 16 + 15 + 9 + 6 + 9 + 15)
+> **개정일**: 2026-10-12 — **D-05 부분 개정 · ADR-32**(직접 비교 비교 사본 TimescaleDB hypertable · 열 압축 · 마이그레이션 009) — §8 실험에 **hypertable · 칸(chunk) · 열 압축(columnstore)** 신설 · 대조군 · 비교 사본 행에 엔진 · 옛 대조군 인접 용어 · 센서 데이터 지우기 행 인접 용어 partman → **TimescaleDB 보존 정책** — §8 용어 8 → **11** · 전체 83 → **86**(13 + 7 + 16 + 15 + 9 + 6 + 9 + 11)
+> **개정일**: 2026-10-11 — **D-16 새 용어**(사용자 결정 2026-10-11 결정 2 · 3 · 5 · ADR-28 · ADR-29) — §7 실행 환경 · 웹에 **카드 라인 · 설비 가동 · HMI 개요** · §8 실험에 **직접 비교 · 동시 적재 게이트 · 센서 데이터 지우기** 신설 · 대조군 행 → **대조군 · 비교 사본**(기본 off → gated · 정상형) · BFF 행 거치는 표면에 설비 가동 · HMI 개요 · 직접 비교 결과 · 센서 데이터
+> **개정일**: 2026-10-11 — **D-16 알람 · 로그인 · 권한 · 감사 · 작업지시 · 측정 도구 삭제**(사용자 결정 2026-10-11 · 리드 판정 — WRK 함께 폐지 · 대상 문서 파일 삭제) — 용어 삭제 3(목적이 다른 세 쓰기 · 스냅샷 · 복원 · 부하 시나리오) · 표기 규칙 "동기화" 행 삭제 · 예시의 알람 · 권한 · 작업지시 · 토큰 · 모드 C · D 표현 정리 · 봉인 · 캐시 접두 → stream · rt / cache · lock · biz · 채널 ch:alarm → ch:flow
 > **개정일**: 2026-09-25 — S3 구현 반영 — 컨슈머 이름 ingest-{pid}-{n} → **ingest-{n}**(정본 04_id_conventions)
 > **개정일**: 2026-09-24 — W7 검수 반영 — MAXLEN 트리밍 · 백프레셔 행의 길이 기준 → **적체 기준**(ADR-21) · 캐시 스탬피드 락 키 lock:rebuild:{key} → **lock:rebuild:q:{sha1}**(정본 05_data_stores/05) — 용어 수 불변
 > **개정일**: 2026-09-24 — W6 실험 채번 반영 — 컨슈머 랙 정의를 lag + pending으로(정본 10_observability/01 · 06)
-> **원천**: 원본 tech_stack.md §5.3 · §6 · §7 · §10.1 · §10.3(커밋 ff66a37) · 원본 data_flow.md §3 · §3.1 · §3.3 · §4 · §4.2 · §4.3 · §6 · §7.2 · §9 · §10 · §12(커밋 ff66a37) · 원본 architecture.md §7 · §8 · §9 · §10 · §12(커밋 ff66a37)
+> **원천**: 원본 tech_stack.md §5.3 · §6 · §7 · §10.1 · §10.3(커밋 ff66a37) · 원본 data_flow.md §3 · §3.1 · §3.3 · §4 · §4.2 · §4.3 · §6 · §7.2 · §9 · §10 · §12(커밋 ff66a37) · 원본 architecture.md §7 · §8 · §9 · §10 · §12(커밋 ff66a37) · D-05 부분 개정(사용자 결정 2026-10-12) · D-16 부분 개정(사용자 결정 2026-10-12) · [../04_architecture/09_decision_records.md](../04_architecture/09_decision_records.md) ADR-32 · ADR-33
 
 용어마다 **정의 · 이 시스템에서의 쓰임 · 혼동하기 쉬운 인접 용어 · 정본**을 적는다. 정의는 일반 뜻이고, 쓰임은 이 시스템이 그 용어로 가리키는 구체 대상이다. 둘이 다르면 쓰임이 우선한다 — 예컨대 이 시스템의 "PLC"는 실장비가 아니라 PlcSim 모듈이 흉내 내는 Modbus 서버다.
 
@@ -35,7 +39,7 @@
 |------|------|------------------|-------------------|------|
 | 디코딩 | 워드 배열을 타입 값으로 바꾸는 단계 | 워드 순서 적용 → 타입 변환 순서로 한다 | 공학 단위 변환 — 디코딩 뒤 단계 | [../06_pipeline/02_collect.md](../06_pipeline/02_collect.md) |
 | 공학 단위 변환 | 원시값을 사람이 읽는 물리량으로 바꾸는 선형 변환 | eng = raw × scale + offset_value. 범위 판정 · 데드밴드는 변환 후 값으로 한다 | 단위 부착 — 조회 시 Dictionary가 unit 문자열을 붙이는 것 | [05_units_and_time.md](./05_units_and_time.md) |
-| 품질 판정 | 값마다 신뢰도 코드를 매기는 단계 | 범위 밖 → BAD_RANGE · 예외 응답 → BAD_COMM · 타임아웃 → BAD_TIMEOUT(행 없음) · 생성기 산출 → SIMULATED | 알람 판정 — 품질이 아니라 조건 위반을 본다 | [03_enums_state_machines.md](./03_enums_state_machines.md) |
+| 품질 판정 | 값마다 신뢰도 코드를 매기는 단계 | 범위 밖 → BAD_RANGE · 예외 응답 → BAD_COMM · 타임아웃 → BAD_TIMEOUT(행 없음) · 생성기 산출 → SIMULATED | STALE — 저장 경로가 아니라 조회 시점 판정이다 | [03_enums_state_machines.md](./03_enums_state_machines.md) |
 | 데드밴드 | 직전 전송값 대비 변화량이 임계보다 작으면 전송을 생략하는 필터 | tag_master.deadband(공학 단위 절대값). **원본 파형을 잃으므로** 성능 측정은 데드밴드 0으로 하고 효과는 별도 실험으로 잰다. SW-10이 켜고 끈다 | 다운샘플링 — 조회 시 줄이는 것 · 데드밴드는 저장 전에 버린다 | [../02_features/13_switch_matrix.md](../02_features/13_switch_matrix.md) |
 | 결측 | 기대한 시점의 행이 없는 것 | 타임아웃 · 재빌드 중단 · DROPOUT 프로파일이 만든다. 재빌드 결측은 장애가 아니라 정상 동작으로 기록한다 | STALE — 조회 시점의 판정 · 결측은 저장된 사실 | [../06_pipeline/11_backpressure_failure.md](../06_pipeline/11_backpressure_failure.md) |
 | scan_seq | 스캔 사이클 일련번호 | Stream 필드 s → tag_raw.scan_seq. 사이클 누락 탐지에 쓴다 | 엔트리 ID — Redis가 붙이는 번호 | [../06_pipeline/12_data_contract.md](../06_pipeline/12_data_contract.md) |
@@ -45,9 +49,9 @@
 
 | 용어 | 정의 | 이 시스템에서의 쓰임 | 혼동하기 쉬운 인접 용어 | 정본 |
 |------|------|------------------|-------------------|------|
-| 시계열 | 시각이 붙은 측정값의 연속 | 태그 원시값 · 판정 전수. **추가 전용 · 갱신 없음 · 범위 집계**라는 성격이 ClickHouse 전용 분기의 근거다 | 이벤트 — 알람 확정 이벤트는 상태가 갱신되므로 PostgreSQL로 간다 | [../04_architecture/04_storage_split.md](../04_architecture/04_storage_split.md) |
+| 시계열 | 시각이 붙은 측정값의 연속 | 태그 원시값. **추가 전용 · 갱신 없음 · 범위 집계**라는 성격이 ClickHouse 전용 분기의 근거다 | 업무 행 — 갱신되는 사실이라 PostgreSQL로 간다 | [../04_architecture/04_storage_split.md](../04_architecture/04_storage_split.md) |
 | 롱 포맷 | 한 행 = (시각 · 태그 · 값) 하나인 배치 | tag_raw의 형태. 태그가 늘어도 스키마가 바뀌지 않는다 | 와이드 포맷 — 한 행에 태그마다 컬럼 · 태그 추가가 스키마 변경이 된다 | [../05_data_stores/03_clickhouse_schema.md](../05_data_stores/03_clickhouse_schema.md) |
-| MergeTree | 삽입마다 정렬된 불변 조각을 만들고 뒤에서 합치는 ClickHouse 엔진 계열 | tag_raw · alarm_eval은 MergeTree · 롤업은 AggregatingMergeTree | ReplacingMergeTree — 쓰지 않는다. 중복 제거는 삽입 토큰으로 한다 | [../05_data_stores/03_clickhouse_schema.md](../05_data_stores/03_clickhouse_schema.md) |
+| MergeTree | 삽입마다 정렬된 불변 조각을 만들고 뒤에서 합치는 ClickHouse 엔진 계열 | tag_raw는 MergeTree · 롤업은 AggregatingMergeTree | ReplacingMergeTree — 쓰지 않는다. 중복 제거는 삽입 토큰으로 한다 | [../05_data_stores/03_clickhouse_schema.md](../05_data_stores/03_clickhouse_schema.md) |
 | 파트 | INSERT 한 번이 만드는 불변 데이터 조각 | 배치가 작으면 파트가 폭증해 too many parts로 삽입이 막힌다 — 배치 크기의 존재 이유다 | 파티션 — 파트를 묶는 논리 구획 | [../06_pipeline/03_ingest_batch.md](../06_pipeline/03_ingest_batch.md) |
 | 머지 | 작은 파트를 큰 파트로 합치는 백그라운드 작업 | 머지가 밀리면 삽입 지연이 오르고 백프레셔가 시작된다 | 롤업 — 해상도를 낮추는 집계 · 머지는 같은 해상도의 재배치 | [../04_architecture/06_backpressure_failure.md](../04_architecture/06_backpressure_failure.md) |
 | 파티션 | PARTITION BY 식으로 나눈 구획. 삭제 · 보존의 단위 | tag_raw는 일자 파티션이라 TTL 삭제가 파티션 DROP으로 즉시 끝난다. 행 단위 DELETE는 비동기 mutation이라 비싸다 | 파트 — 파티션 안의 물리 조각 | [../05_data_stores/08_retention_lifecycle.md](../05_data_stores/08_retention_lifecycle.md) |
@@ -58,7 +62,7 @@
 | 롤업 캐스케이드 | MV의 타깃에 또 MV가 붙어 삽입이 연쇄되는 구조 | 원시 → 분 → 시 → 일을 별도 배치 잡 없이 삽입 시점에 완성한다. 체이닝은 3단계까지 | 배치 잡 롤업 — 쓰지 않는다 | [../05_data_stores/04_clickhouse_rollup.md](../05_data_stores/04_clickhouse_rollup.md) |
 | -State · -Merge 조합자 | 집계의 중간 상태를 저장(-State)하고 조회 때 합치는(-Merge) 함수 접미 | 롤업 컬럼은 상태를 저장하므로 **조회 시 반드시 -Merge로 읽는다**. 상태를 합치는 순서가 달라 avg의 최하위 비트가 달라질 수 있다 | 최종값 — 롤업 컬럼에는 최종값이 없다 | [05_units_and_time.md](./05_units_and_time.md) |
 | Dictionary | 외부 원천을 메모리에 올려 키 조회로 붙이는 ClickHouse 객체 | dict_tag가 PostgreSQL tag_master를 주기 적재해 태그명 · 단위를 dictGet으로 붙인다. 시계열에는 tag_id만 저장한다 | 조인 — 매 조회마다 PostgreSQL을 읽지 않는다 | [../05_data_stores/07_cross_store_consistency.md](../05_data_stores/07_cross_store_consistency.md) |
-| 백필 | 과거 시각의 데이터를 나중에 대량으로 채우는 것 | 모드 D. MV를 분리하고 INSERT SELECT로 롤업을 직접 채운 뒤 다시 붙인다 | 재처리 — Stream 안 엔트리를 다시 읽는 것 | [../05_data_stores/04_clickhouse_rollup.md](../05_data_stores/04_clickhouse_rollup.md) |
+| 백필 | 과거 시각의 데이터를 나중에 대량으로 채우는 것 | 옛 모드 D(D-16 폐지)가 MV를 분리하고 INSERT SELECT로 롤업을 직접 채웠다 — 지금은 백필 도구가 없다 | 재처리 — Stream 안 엔트리를 다시 읽는 것 | [../05_data_stores/04_clickhouse_rollup.md](../05_data_stores/04_clickhouse_rollup.md) |
 | 중복 제거 토큰 | 같은 토큰의 INSERT를 한 번만 반영하게 하는 삽입 설정 | 배치 내용에 **결정적**인 해시(엔트리 ID 범위 + 행 수). 무작위 UUID면 재시작 후 같은 배치가 다른 토큰을 받아 중복된다 | 멱등 키(HTTP) — 요청 단위 · 토큰은 배치 단위 | [../06_pipeline/03_ingest_batch.md](../06_pipeline/03_ingest_batch.md) |
 | 중복 제거 윈도우 | 서버가 토큰을 기억하는 최근 파트 수 | 재시도 백오프 합계가 이 윈도우 안에 머물러야 중복이 막힌다(2계층) | TTL — 시간 기준 · 윈도우는 파트 개수 기준 | [../06_pipeline/03_ingest_batch.md](../06_pipeline/03_ingest_batch.md) |
 
@@ -76,17 +80,17 @@
 | 컨슈머 랙 | 그룹이 아직 처리하지 못한 양 = 그룹 lag(미배달) + pending(미확인) — XLEN이 아니다 | consumer_lag. 백프레셔 판정량(ADR-21)과 같은 양이며 정상 단계의 계측 지표이고, XACK 누락이 있으면 영원히 0이 되지 않는다 | 스트림 길이 — 트리밍 전 전체 엔트리 수 · 랙은 미처리분 | [../10_observability/01_metrics_catalog.md](../10_observability/01_metrics_catalog.md) |
 | DLQ | Dead Letter Queue — 재시도를 소진한 배치의 격리처 | stream:plc:dlq에 배치와 오류 사유를 넣는다. dlq_count가 늘면 알린다 | 스풀 — 발행 실패의 임시 버퍼 | [../06_pipeline/03_ingest_batch.md](../06_pipeline/03_ingest_batch.md) |
 | MAXLEN 트리밍 | XADD 때 길이 상한을 넘는 오래된 엔트리를 잘라내는 것 | **최후 안전장치**다. 오류 없이 조용히 버리므로 미소비 엔트리가 잘리면 stream_trimmed_unacked로 결함 계측한다. 1차 백프레셔 신호는 적체 검사가 만든다 | 축출 — 메모리 정책이 키를 지우는 것 | [../04_architecture/06_backpressure_failure.md](../04_architecture/06_backpressure_failure.md) |
-| 봉인 계열 · 캐시 계열 | TTL 금지 키 접두(stream · rt · alarm)와 TTL 필수 키 접두(cache · lock · rl · sess · auth) | 단일 인스턴스에서 **접두 하나가 생존 정책의 경계**다. 실패 전략도 정반대 — 봉인은 명시적 실패, 캐시는 조용한 degrade | 영속 · 휘발 — 봉인은 "축출되지 않는다"이지 "영속"이 아니다. rt:latest는 봉인 계열이면서 ClickHouse에서 재구성하는 휘발 사본이다 | [../05_data_stores/05_redis_keyspace.md](../05_data_stores/05_redis_keyspace.md) |
+| 봉인 계열 · 캐시 계열 | TTL 금지 키 접두(stream · rt)와 TTL 필수 키 접두(cache · lock · biz) | 단일 인스턴스에서 **접두 하나가 생존 정책의 경계**다. 실패 전략도 정반대 — 봉인은 명시적 실패, 캐시는 조용한 degrade | 영속 · 휘발 — 봉인은 "축출되지 않는다"이지 "영속"이 아니다. rt:latest는 봉인 계열이면서 ClickHouse에서 재구성하는 휘발 사본이다 | [../05_data_stores/05_redis_keyspace.md](../05_data_stores/05_redis_keyspace.md) |
 | volatile-lru | TTL 있는 키만 LRU로 축출하는 메모리 정책 | TTL 없는 봉인 계열은 축출 후보가 아니다. TTL 키가 다 밀린 뒤에는 쓰기가 OOM으로 실패한다 | allkeys-lru — Stream까지 조용히 지운다 · 쓰지 않는다 | [../05_data_stores/06_redis_memory.md](../05_data_stores/06_redis_memory.md) |
-| AOF | Append Only File — 쓰기 명령 로그 영속화 | 재기동 시 미소비 Stream 엔트리와 PEL을 보존하는 목적이다 | 스냅샷(task snapshot) — 실험 롤백용 볼륨 묶음 | [../04_architecture/03_execution_topology.md](../04_architecture/03_execution_topology.md) |
-| Pub/Sub | 채널 구독자 전원에게 메시지를 보내는 fire-and-forget 방송 | ch:rt:{device_id} · ch:alarm · ch:cacheinv. 구독자가 없으면 사라지므로 **저장 경로로 쓰지 않는다** | Stream — 보존 · 재처리 가능 | [../06_pipeline/05_realtime_read.md](../06_pipeline/05_realtime_read.md) |
+| AOF | Append Only File — 쓰기 명령 로그 영속화 | 재기동 시 미소비 Stream 엔트리와 PEL을 보존하는 목적이다 | 스냅샷 — 옛 실험 롤백용 볼륨 묶음(D-16 폐지) | [../04_architecture/03_execution_topology.md](../04_architecture/03_execution_topology.md) |
+| Pub/Sub | 채널 구독자 전원에게 메시지를 보내는 fire-and-forget 방송 | ch:rt:{device_id} · ch:cacheinv · ch:flow. 구독자가 없으면 사라지므로 **저장 경로로 쓰지 않는다** | Stream — 보존 · 재처리 가능 | [../06_pipeline/05_realtime_read.md](../06_pipeline/05_realtime_read.md) |
 | 최신값 Hash | 설비별 태그 최신값을 담는 Hash | rt:latest:{device_id} — field tag_id · 값 "ts,value,quality". **휘발 사본이며 진실은 ClickHouse다** | 조회 캐시 — TTL로 만료 · 최신값은 덮어쓰기 | [../06_pipeline/05_realtime_read.md](../06_pipeline/05_realtime_read.md) |
 
 ## 5. 조회 · 캐시
 
 | 용어 | 정의 | 이 시스템에서의 쓰임 | 혼동하기 쉬운 인접 용어 | 정본 |
 |------|------|------------------|-------------------|------|
-| cache-aside | 조회가 캐시를 먼저 보고 미스면 원천을 읽어 채우는 패턴 | 시계열 조회 · 마스터 · 권한 · 알람 규칙 캐시 | write-through — 쓰는 쪽이 캐시를 갱신 · 최신값 Hash만 이 방식이다 | [../06_pipeline/06_timeseries_read.md](../06_pipeline/06_timeseries_read.md) |
+| cache-aside | 조회가 캐시를 먼저 보고 미스면 원천을 읽어 채우는 패턴 | 시계열 조회 · 마스터 캐시 | write-through — 쓰는 쪽이 캐시를 갱신 · 최신값 Hash만 이 방식이다 | [../06_pipeline/06_timeseries_read.md](../06_pipeline/06_timeseries_read.md) |
 | 캐시 무효화 | 원천 변경 후 캐시를 지우는 것 | **커밋 후 DEL**이 규칙이다. 커밋 전에 지우면 사이에 옛 값이 다시 채워져 영구히 남는다. 갱신이 아니라 삭제한다 | TTL 만료 — 시간이 지우는 것 | [../06_pipeline/07_business_crud.md](../06_pipeline/07_business_crud.md) |
 | 해상도 자동 선택 | 조회 범위 길이로 원시 · 1m · 1h · 1d 테이블을 서버가 고르는 것 | 편의가 아니라 **보호 장치**다. 없으면 긴 범위의 원시 조회가 ClickHouse를 메모리 한계로 죽인다 | 다운샘플링 — 선택 뒤 남은 포인트를 줄이는 것 | [../06_pipeline/06_timeseries_read.md](../06_pipeline/06_timeseries_read.md) |
 | 시간 스냅 | 캐시 키의 from · to를 버킷 경계로 내림하는 정규화 | 없으면 초 단위 now()로 매 요청이 다른 키가 된다. SW-04가 켜고 끈다 | 버킷 — 롤업 집계 단위 | [05_units_and_time.md](./05_units_and_time.md) |
@@ -106,30 +110,40 @@
 | at-least-once | 최소 한 번 전달 — 중복은 허용하고 유실은 막는 보장 | XACK를 삽입 성공 뒤로 미뤄 얻는다. 중복은 중복 제거 토큰이 막아 exactly-once에 준하는 효과가 난다 | exactly-once — 전송 계층이 보장하지 않는다 | [../06_pipeline/03_ingest_batch.md](../06_pipeline/03_ingest_batch.md) |
 | 멱등 | 같은 작업을 여러 번 해도 결과가 한 번과 같은 성질 | 배치 삽입의 멱등은 결정적 토큰이 만든다. SW-08을 끄면 재시도 중복을 재현한다 | 순서 보장 — 멱등과 무관하다 | [../02_features/13_switch_matrix.md](../02_features/13_switch_matrix.md) |
 | E2E 지연 | 측정 시각부터 조회 가능 시각까지의 전체 지연 | ingested_at − ts 하나로 잰다 | Stream 대기 지연 — 한 구간 · 엔트리 단위 | [05_units_and_time.md](./05_units_and_time.md) |
-| 목적이 다른 세 쓰기 | 한 판정 결과를 성격이 다른 세 저장소에 각자 쓰는 것 | 알람의 PostgreSQL(확정 이벤트) · ClickHouse(판정 전수) · Redis(핫 상태). 부분 실패 시 진실은 alarm_event다 | dual-write · CDC — 같은 데이터의 복제 · 이것은 복제가 아니다 | [../04_architecture/04_storage_split.md](../04_architecture/04_storage_split.md) |
 
 ## 7. 실행 환경 · 웹
 
 | 용어 | 정의 | 이 시스템에서의 쓰임 | 혼동하기 쉬운 인접 용어 | 정본 |
 |------|------|------------------|-------------------|------|
-| BFF | Backend For Frontend — 웹 전용 서버 계층 | Next.js Route Handler. 로그인 · 토큰 갱신(httpOnly 리프레시 쿠키) · 저빈도 조회 · 작업지시 CRUD만 거친다 | 직결 경로 — 최신값 · 시계열 · WebSocket은 BFF를 거치지 않고 api로 바로 간다 | [../06_pipeline/07_business_crud.md](../06_pipeline/07_business_crud.md) |
-| 직결 경로 | 브라우저가 api 포트에 바로 요청하는 경로 | 고빈도 · 대용량 요청. 오리진은 CORS 허용 목록, 신원은 Bearer 액세스 토큰으로 검증한다 | 프록시 — 두지 않는다 | [../12_security/03_api_surface_defense.md](../12_security/03_api_surface_defense.md) |
+| BFF | Backend For Frontend — 웹 전용 서버 계층 | Next.js Route Handler. 저빈도 조회 · 마스터 쓰기 · 명령 조회 · 라이브 실행 · 설비 가동 · HMI 개요 · 직접 비교 결과 · 센서 데이터 · health · metrics만 거친다 · 상태를 바꾸는 POST는 Origin이 허용 출처일 때만 중계한다 | 직결 경로 — 최신값 · 시계열 · WebSocket은 BFF를 거치지 않고 api로 바로 간다 | [../06_pipeline/07_business_crud.md](../06_pipeline/07_business_crud.md) |
+| 직결 경로 | 브라우저가 api 포트에 바로 요청하는 경로 | 고빈도 · 대용량 요청. 오리진은 CORS 허용 목록과 Host 대조로 검증한다(무인증 — D-16) | 프록시 — 두지 않는다 | [../12_security/03_api_surface_defense.md](../12_security/03_api_surface_defense.md) |
 | APP_ROLE | 한 이미지에서 기동할 모듈 범위를 고르는 환경변수 | 기본 all. 역할 분리(확장 로드맵 1단계)는 코드 변경 없이 이 값만 바꾼다 | 역할 스위치 SW-NN — Redis 역할을 끄고 켜는 실험 손잡이 | [../04_architecture/02_module_boundaries.md](../04_architecture/02_module_boundaries.md) |
 | 볼륨 | 컨테이너 밖에 유지되는 저장 영역 | named volume 4 — pgdata · chdata · redisdata · spooldata. bind mount는 Docker Desktop 파일 공유 계층을 타 DB 랜덤 I/O가 느려져 쓰지 않는다 | bind mount — 호스트 경로 직접 연결 | [../04_architecture/03_execution_topology.md](../04_architecture/03_execution_topology.md) |
-| 스냅샷 · 복원 | 실험 전 볼륨을 통째로 묶고 되돌리는 절차 | task snapshot · task restore. 없으면 같은 조건의 재측정이 불가능하다 | AOF — 저장소 자체의 영속화 | [../10_observability/04_experiment_protocol.md](../10_observability/04_experiment_protocol.md) |
 | 메모리 프로파일 | Docker 할당 메모리 기준의 컨테이너 상한 묶음 | 부하 실험 · 개발 2종. 성능 수치는 부하 실험 프로파일에서만 기록한다 | 용량 티어 — 데이터 양의 축 | [../04_architecture/03_execution_topology.md](../04_architecture/03_execution_topology.md) |
 | 용량 티어 | 부하 · 데이터 규모 단계 | S · M · M+ · L. 측정 기록 4요소의 하나 | 메모리 프로파일 — 자원의 축 | [../04_architecture/07_capacity_planning.md](../04_architecture/07_capacity_planning.md) |
+| 카드 라인 | 카드 생산 라인 3 × 공정 10 = 설비 30대를 흉내 낸 로컬 기본 시드(D-16 결정 3) | 사이트 CARD-FAB · 라인 3 · 설비 30 · 태그 129(종류 8 · 주기 3) · 가상 PLC 포트 5020~5049. 생성기가 태그 종류(tag_kind)로 신호를 고른다 | S2 슬라이스 시드 — 설비 1 · 태그 8(seed 인자로만) | [../05_data_stores/09_migrations_seed.md](../05_data_stores/09_migrations_seed.md) §시드(카드 라인) |
+| 설비 가동 | 센서 자동 생성(가상 PLC 포트 · 모드 A 틱 · 수집기 폴링)을 실행 중에 켜고 끄는 상태 | Redis 봉인 키 ctl:plant:power · HMI 화면 스위치 하나 · 수집기 역할이 1초 안에 따른다 · 재기동이면 기동 기본값(로컬 꺼짐)부터 | SENSOR_AUTOGEN — 기동 기본값일 뿐 실행 중 상태가 아니다 · 역할 스위치 — 재기동으로만 바꾼다 | [../07_api/06_realtime.md](../07_api/06_realtime.md) #3 · #4 · ADR-29 |
+| HMI 개요 | 카드 라인 30대의 상태와 지금 값을 한 번에 내는 요약 | 06_realtime #5 — 설비마다 가동 · 대기 · 정지 · 통신 끊김 · 초당 데이터 수(같은 프로세스 수집기면 실측 · 아니면 공칭) · 지금 값은 Redis만 읽는다 | 최신값 조회 — 설비 하나의 전체 태그 값 | [../07_api/06_realtime.md](../07_api/06_realtime.md) #5 |
 
 ## 8. 실험
 
 | 용어 | 정의 | 이 시스템에서의 쓰임 | 혼동하기 쉬운 인접 용어 | 정본 |
 |------|------|------------------|-------------------|------|
 | 역할 스위치 | Redis의 역할 하나(또는 데드밴드)를 끄고 켜는 실험 손잡이 | SW-NN. 환경변수 + DI 초기화 선택이라 **런타임 토글이 아니다** — 바꾸려면 재기동한다 | 기능 플래그 — 런타임 전환 · 쓰지 않는다 | [../02_features/13_switch_matrix.md](../02_features/13_switch_matrix.md) |
-| 대조군 | ClickHouse와 같은 데이터 · 같은 쿼리를 PostgreSQL에 두는 비교 대상 | plc_tag_raw_control. **중복 저장이 아니라 실험 계측물**이며 SW-09 off가 기본이다 | 백업 · 복제 — 대조군은 운영 데이터가 아니다 | [../05_data_stores/10_olap_vs_rdb_control.md](../05_data_stores/10_olap_vs_rdb_control.md) |
+| 대조군 · 비교 사본 | ClickHouse와 같은 데이터 · 같은 쿼리를 PostgreSQL에 두는 비교 대상 — D-16 뒤 이름은 비교 사본 | plc_tag_raw_control. **중복 저장이 아니라 비교 계측물**이다 · TimescaleDB hypertable(마이그레이션 009 — D-05 부분 개정)이고 기본 키 · 외래 키 · 검사 제약을 가진 정상형(007 그대로) · SW-09 gated(기본)면 직접 비교 실행 동안만 실린다 | 백업 · 복제 — 운영 데이터가 아니다 · 옛 대조군 — 기록 035~053을 낸 일반 PostgreSQL 동형 테이블 | [../05_data_stores/10_olap_vs_rdb_control.md](../05_data_stores/10_olap_vs_rdb_control.md) · ADR-28 · ADR-32 |
+| hypertable | 시간 열로 구간마다 칸을 저절로 나누는 TimescaleDB(PostgreSQL 확장)의 테이블 — 겉으로는 테이블 하나다 | 비교 사본 plc_tag_raw_control 하나만 hypertable이다(D-05 부분 개정 · 마이그레이션 009). 같은 서버 · 같은 SQL · 같은 기본 키 · 외래 키 · CHECK를 그대로 쓴다 — 업무 테이블은 일반 테이블이다 | 선언 분할 테이블(pg_partman 일 파티션) — 비교 사본의 옛 모양(004 · 007) · 파티션을 미리 만들어야 했다 | [../05_data_stores/10_olap_vs_rdb_control.md](../05_data_stores/10_olap_vs_rdb_control.md) · ADR-32 |
+| 칸(chunk) | hypertable이 시간 구간마다 만드는 실제 자식 테이블 — 삭제 · 압축의 단위 | 칸 1일 · 경계 UTC 자정(ClickHouse 일 파티션과 같은 날) · 넣을 때 스스로 생긴다 · 보존 정책이 칸을 통째로 지운다 · 직접 비교 구간 비우기는 통째로 덮은 칸을 drop_chunks로 지우고 걸친 칸은 그 구간만 DELETE한다 | 파티션(ClickHouse) — 같은 UTC 날 구획이고 삭제 단위인 점도 같다 · 파트 — 삽입 한 번의 조각이라 칸이 아니다 | [../05_data_stores/10_olap_vs_rdb_control.md](../05_data_stores/10_olap_vs_rdb_control.md) · [../05_data_stores/08_retention_lifecycle.md](../05_data_stores/08_retention_lifecycle.md) |
+| 열 압축(columnstore) | 칸 하나의 행을 열마다 묶어 압축하고 따로 둔 압축 표로 옮기는 TimescaleDB 기능 | 묶음(segmentby) device_id · tag_id · 묶음 안 ts 순 · **자동 압축 정책이 없다** — 넣기 검증 단계가 그 구간 칸만 압축하고 조회 대결은 압축된 칸을 읽는다 · 크기는 압축 표를 포함하는 TimescaleDB 크기 함수로 읽는다(칸 표만 합치면 압축 뒤 거의 0으로 보인다) | 코덱(ClickHouse) — 처음부터 열로 저장하고 열마다 압축한다 · 열 압축은 행으로 넣은 칸을 나중에 열로 바꾼다 | ADR-32 · [../05_data_stores/10_olap_vs_rdb_control.md](../05_data_stores/10_olap_vs_rdb_control.md) |
+| 직접 비교 | 같은 센서 데이터를 Redis Stream으로 두 저장소에 똑같이 싣고 넣기 · 조회 대결 · 데이터 정합성을 재는 실행(D-16 결정 2 · ③은 ADR-33) | 실행 종류 compare · 부분 하나 = 실행 하나 · 결과는 run_result에 보관하는 시연값이다(측정 기록 아님) | 측정 실험 EXP-NN — 4요소 기록 · 옛 대조 실험 EXP-01~05는 D-16 폐지 | [../07_api/09_datagen.md](../07_api/09_datagen.md) §직접 비교 |
+| 데이터 정합성 | 두 저장소에 같은 데이터가 똑같이 있는지 맞춰 보는 것 | 직접 비교 ③(part consistency — ADR-33). 마지막 **완료** 넣기 구간을 두 저장소에서 1분 칸마다 행 수 · 값 체크섬으로 세고 앱이 맞춰 UTC 날별 행 수 · 빠진 구간 · 값이 다른 칸을 낸다 · **읽기만 한다** — SW-09 · 설비 가동 조건이 없고 게이트를 켜지 않는다 | 무결성(규칙 시험) — 규칙 어긴 데이터를 막는가 · 옛 ③이었고 D-16 부분 개정(2026-10-12)으로 지웠다 · 비교 사본의 키 · 참조 · 값 규칙은 그대로 남는다 · 저장소 간 정합 — 마스터와 시계열의 참조 정합(07_cross_store_consistency) | ADR-33 · [../07_api/09_datagen.md](../07_api/09_datagen.md) §직접 비교 |
+| 1분 칸 | 시각을 epoch 1분 배수(UTC)로 내린 대조 단위 | 데이터 정합성이 두 저장소를 맞추는 단위 — ClickHouse는 밀리초를 60,000으로 정수 나눗셈 · PostgreSQL은 time_bucket 1분으로 같은 칸을 만든다 · 두 저장소 모두 행이 없는 칸은 세지 않는다 | 칸(chunk) — TimescaleDB의 하루 단위 자식 테이블 · 1분 칸은 저장 구조가 아니라 세는 단위다 · 롤업 1분 버킷(tag_1m) — 저장된 집계라 대조에 쓰지 않는다 | ADR-33 · [05_units_and_time.md](./05_units_and_time.md) |
+| 값 체크섬 | 1분 칸 안 값들을 정수로 바꿔 더한 합 — 행 수가 같을 때 값까지 같은지 보는 표지 | floor(value × 1000)의 정수 합. 행 수가 같은데 체크섬이 다르면 **값이 다른 칸**이다 | 값 합(sum(value)) — 부동소수 합은 더하는 순서에 따라 끝자리가 갈려 같은 행이라도 두 저장소가 맞지 않는다 · 해시 — 행 하나하나를 맞추지 않는다 | ADR-33 · [05_units_and_time.md](./05_units_and_time.md) §부동소수 |
+| 빠진 구간 | 한 저장소의 행이 다른 쪽보다 모자란 이어진 1분 칸들 | 데이터 정합성 결과 gaps — 모자란 쪽(store) · 시작 · 끝 · 모자란 행 수 · 앞에서부터 상한 개수만 싣고 전체 수는 따로 센다(상한은 공용 계약 CONSISTENCY_GAP_LIMIT) | 넣기 결과의 PostgreSQL 실패 수 — 시간 제한을 넘긴 COPY도 실패로 세지만 서버가 커밋하기도 해 **빠진 행의 상한이지 같은 값이 아니다** · 빠진 행의 정본은 대조다(ADR-33 후속 판정) | ADR-33 · [../07_api/09_datagen.md](../07_api/09_datagen.md) §직접 비교 |
+| 동시 적재 게이트 | 직접 비교 실행이 켜 둔 동안만 같은 배치를 PostgreSQL에도 싣게 하는 Redis 키 | cache:dual:active · TTL 10초(실행이 2초마다 다시 쓴다) · SW-09 gated에서만 본다 | 역할 스위치 — 재기동 전환 · 게이트는 실행 중 판정(ADR-08의 기록된 예외) | [../06_pipeline/04_routing.md](../06_pipeline/04_routing.md) §gated 게이트 판정 · ADR-28 |
+| 센서 데이터 지우기 | 쌓인 센서 데이터만 버튼 하나로 지우는 동작(D-16 결정 5) | 09_datagen #8 — ClickHouse 원본 · 롤업 · 비교 사본 · 대기줄 엔트리 · 지금 값 · 조회 사본을 지우고 설비 · 태그 · 업무 · 실행 결과는 남긴다 · 실행 · 가동 · 적체가 있으면 409 | 보존 만료 — ClickHouse TTL · 비교 사본의 TimescaleDB 보존 정책이 날짜로 지운다 | [../05_data_stores/08_retention_lifecycle.md](../05_data_stores/08_retention_lifecycle.md) §센서 데이터 지우기 |
 | 주입 모드 | 생성 데이터를 어느 계층에 넣는가(A~D) | 한 번에 하나의 계층만 부하를 준다 | 신호 프로파일 — 값의 모양 · 주입 모드는 경로 | [03_enums_state_machines.md](./03_enums_state_machines.md) |
-| 신호 프로파일 | 생성기가 값을 만드는 규칙(8종) | 압축률 실험의 축. 생성 데이터는 SIMULATED로 표지한다 | 부하 시나리오 — 시간에 따른 부하 모양 | [03_enums_state_machines.md](./03_enums_state_machines.md) |
-| pps | points per second — 초당 포인트 수 | 수집 · 적재 부하의 단위. 포인트 하나 = tag_raw 행 하나 | rps — 초당 HTTP 요청 수 · 모드 C에서만 둘이 함께 쓰인다 | [05_units_and_time.md](./05_units_and_time.md) |
-| 부하 시나리오 | k6로 주입하는 부하의 시간 모양 | Baseline · Ramp-up · Spike · Soak · Breakpoint + k6 밖의 장애 주입 | 주입 모드 — 경로의 축 | [../10_observability/05_load_scenarios.md](../10_observability/05_load_scenarios.md) |
+| 신호 프로파일 | 생성기가 값을 만드는 규칙(8종) | 압축률 실험의 축. 생성 데이터는 SIMULATED로 표지한다 | 주입 모드 — 경로의 축 | [03_enums_state_machines.md](./03_enums_state_machines.md) |
+| pps | points per second — 초당 포인트 수 | 수집 · 적재 부하의 단위. 포인트 하나 = tag_raw 행 하나 | rps — 초당 HTTP 요청 수 · 수집 부하의 단위가 아니다 | [05_units_and_time.md](./05_units_and_time.md) |
 
 ## 표기 규칙
 
@@ -140,7 +154,6 @@
 | 명령 · 설정 이름 | XADD · XACK · XAUTOCLAIM · MAXLEN · volatile-lru는 원문 그대로 평문 | 인라인 백틱을 쓰지 않으므로 원문 표기 자체가 식별 표지다 |
 | "큐" | Redis Stream을 "큐"라고 부르지 않는다 | 큐는 소비하면 사라진다는 통념을 불러 XACK 뒤 잔존 · 트리밍 · 재처리 서술을 틀리게 읽힌다 |
 | "캐시" | 최신값 Hash를 "캐시"라고 부르지 않는다 | 캐시 계열(TTL 필수 · degrade)과 봉인 계열(TTL 금지 · 명시적 실패)의 정반대 정책이 이름에서 섞인다 |
-| "동기화" | 알람의 세 쓰기를 "동기화"라고 부르지 않는다 | 동기화는 같은 데이터를 맞춘다는 뜻이라 CDC 도입 제안의 근거로 오독된다 |
 | 흐름 ID | F-NN만 쓴다 | 원본 표기 대응은 [04_id_conventions.md](./04_id_conventions.md) |
 
 ## 관련 문서

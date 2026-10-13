@@ -2,10 +2,12 @@
 
 > **대상**: db_study api 컨테이너가 바깥에 여는 표면 — REST 규약 · 에러(미러) · 도메인별 엔드포인트 · WebSocket 프로토콜
 > **작성일**: 2026-09-23
+> **개정일**: 2026-10-11 — **D-16 직접 비교 · 센서 데이터 · 설비 가동 · HMI 개요 표면 신설**(사용자 결정 2026-10-11) — API 표면 29 → **35**(06_realtime 2 → **5** · #3 · #4 plant/power · #5 plant/overview / 09_datagen 4 → **7** · #6 runs/latest · #7 data/sensor/stats · #8 data/sensor/purge) · 신설 17 → **23**(D-16 6) · REST JSON 26 → **32** · 에러 코드 10 → **12** · 06 · 09 파일 목차 설명
+> **개정일**: 2026-10-11 — **D-16 알람 · 로그인 · 권한 · 감사 · 작업지시 · 옛 perf 직접 재 보기 · 측정 도구 삭제**(사용자 결정 2026-10-11 · 리드 판정 — WRK 함께 폐지 · 대상 문서 파일 삭제) — 파일 03_auth · 07_alarms · 08_work_orders **삭제**(파일 번호 결번) · 표면 도메인 8 → **5** · API 표면 48 → **29**(03 3 · 07 6 · 08 9 · 09 #1 삭제) · 원본 21 → **12** · 신설 27 → **17** · REST JSON 45 → **26** · 에러 코드 23 → **10종** · 09 행 부하 주입 표면 · EXP-PERF 삭제 · 11 행 첫 메시지 인증 → Host · Origin 검증 · 경로 분리 로그인 → 쓰기
 > **개정일**: 2026-09-28 — 라이브 실행 제어 신설(사용자 요구 2026-09-28 · 리드 판정 4) — 09_datagen #2~#5(POST /api/v1/runs · GET /api/v1/runs/current · GET /api/v1/runs/{runId} · POST /api/v1/runs/{runId}/stop) · API 표면 44 → **48** · 신설 23 → **27** · REST JSON 41 → **45** · GEN 1 → **5** · 에러 코드 22 → **23종**(datagen.run_in_progress/409)
 > **개정일**: 2026-09-27 — D-04 부분 개정 반영(사용자 결정 — 업무 쓰기도 Redis를 거친다) — 명령 조회 표면 GET /api/v1/commands/{cmdId} 신설(01_conventions #1 · 횡단) · API 표면 43 → **44** · 신설 22 → **23** · REST JSON 40 → **41** · 에러 코드 22종 불변
 > **개정일**: 2026-09-24 — W5 완성판 — API 표면 **43**(원본 21 + 신설 22) · 에러 코드 22종 · 도메인별 표면 수 표 신설
-> **원천**: [../README.md](../README.md)(도메인 공백 · 에러 코드 규약) · 원본 architecture.md §11 · §11.1 · §11.2 · 원본 data_flow.md §5 · §6 · §7.2 · §9 · §14.1 · §14.2(커밋 ff66a37)
+> **원천**: D-16(사용자 결정 2026-10-11) · [../README.md](../README.md)(도메인 공백 · 에러 코드 규약) · 원본 architecture.md §11 · §11.1 · §11.2 · 원본 data_flow.md §5 · §6 · §7.2 · §9 · §14.1 · §14.2(커밋 ff66a37)
 
 "바깥에서 어떻게 부르는가"에 답하는 폴더다. 각 도메인 파일이 **문서 지역 표면 번호({문서} #N)를 채번**한다 — 예를 들어 05_timeseries #3이다. 표면 총수의 정본은 W5 이후 이 README의 도메인별 표면 수 표이며, 세는 기준은 도메인 문서의 표면 요약 표 행 수다(최대 번호가 아니다 — 폐지 번호는 결번으로 남는다).
 
@@ -17,17 +19,14 @@
 |------|------|----------|--------|
 | [01_conventions.md](./01_conventions.md) | 경로 버전(/api/v1) · 페이지네이션 · **업무 쓰기 경로(커밋 뒤 응답 · 202 pending · Idempotency-Key) · 명령 조회 표면(횡단)** · 멱등 · 시각·수치 직렬화 · 응답 메타 · 에러 봉투 · 응답 필드 변경 규칙 · BFF 경유 기준 | architecture §11 · data_flow §7.2 · §14.1 5단계 · §14.2 | W5 |
 | [02_errors.md](./02_errors.md) | **미러(채번 금지)** — 에러 코드 정본의 표면별 발생 위치 | 11_glossary/02 미러 | W5 |
-| [03_auth.md](./03_auth.md) | AUT — login · refresh · logout | architecture §11 · §11.2 | W5 |
 | [04_master.md](./04_master.md) | MST — sites · devices · tags 조회와 쓰기 · 캐시 계약 | architecture §11 · data_flow §7 | W5 |
 | [05_timeseries.md](./05_timeseries.md) | TSQ — timeseries/query 요청 스키마 · 해상도 규칙 · export 스트리밍 | architecture §11 · §11.1 · data_flow §6 | W5 |
-| [06_realtime.md](./06_realtime.md) | RLT — 설비 전체 최신값 · 단일 태그 최신값 · STALE 판정 · Redis 불가 시 503 | architecture §11 · data_flow §5 | W5 |
-| [07_alarms.md](./07_alarms.md) | ALM — 알람 이벤트 목록 · 확인(ack) · 규칙 관리 | architecture §11 · data_flow §8 | W5 |
-| [08_work_orders.md](./08_work_orders.md) | WRK — 작업지시 · 생산 실적 | architecture §11 | W5 |
-| [09_datagen.md](./09_datagen.md) | GEN — **부하 주입 표면 /api/v1/ingest/bulk**(기본 비활성 · 환경변수 게이트 + 인증 · 백프레셔 위험 단계에서 503) · **라이브 실행 제어 /api/v1/runs #2~#5**(EXP-PERF · EXP-FLOW 시작 · 현재 · 단건 · 중단 · 실행 객체 · 동시 실행 하나 409) · 생성기(모드 A~D) 실행 제어 표면은 두지 않는다(W5 판정) | architecture §11 · §18 · data_flow §11 | W5 |
+| [06_realtime.md](./06_realtime.md) | RLT — 설비 전체 최신값 · 단일 태그 최신값 · STALE 판정 · Redis 불가 시 503 · **설비 가동 #3 · #4 · HMI 개요 #5(D-16)** | architecture §11 · data_flow §5 | W5 |
+| [09_datagen.md](./09_datagen.md) | GEN — **라이브 실행 제어 /api/v1/runs #2~#5**(EXP-FLOW 흐름 시연 · EXP-LAB 직접 비교의 시작 · 현재 · 단건 · 중단 · 실행 객체 · 동시 실행 하나 409) · **직접 비교 최근 결과 #6 · 센서 데이터 현황 · 지우기 #7 · #8(D-16)** · #1 부하 주입 표면은 D-16 결번 · 생성기(모드 A · B) 실행 제어 표면은 두지 않는다(W5 판정) | architecture §11 · §18 · data_flow §11 | W5 |
 | [10_metrics.md](./10_metrics.md) | OBS — /api/v1/health · /metrics(스위치 상태 레이블 포함) | architecture §11 · §14 · implementation_plan §4.1 | W5 |
-| [11_websocket.md](./11_websocket.md) | 횡단 — /ws/realtime · 첫 메시지 인증 · 구독 · 스로틀 병합 · ping · 재연결 · Origin 검증 | data_flow §9 · architecture §11.2 | W5 |
+| [11_websocket.md](./11_websocket.md) | 횡단 — /ws/realtime · Host · Origin 검증 · 구독 · 스로틀 병합 · ping · 재연결 · 흐름 이벤트 | data_flow §9 · architecture §11.2 | W5 |
 
-검산: 규약 2 + 도메인 8 + 횡단 1 + README 1 = **12**. 도메인 8 = 11 − 표면 없음 3(COL · SIM · ING)
+검산: 규약 2 + 도메인 5 + 횡단 1 + README 1 = **9**. 도메인 5 = 8 − 표면 없음 3(COL · SIM · ING) · 파일 번호 03 · 07 · 08은 D-16으로 삭제한 결번이다(재사용 금지)
 
 ## 고정 기준 (축약)
 
@@ -35,12 +34,12 @@
 
 | 항목 | 기준 |
 |------|------|
-| 표면 도메인 | **8** — AUT · MST · TSQ · RLT · ALM · WRK · GEN · OBS |
-| 표면 없는 도메인 | **COL · SIM · ING** — 내부 모듈이다. **/api/v1/ingest/bulk는 경로 이름과 달리 ING 표면이 아니다** — 호출 주체가 부하 주입(GEN 모드 C)이고 ING은 Stream 뒤에서만 데이터를 받는다. 그래서 GEN 문서가 소유한다 |
-| 에러 코드 | **23종** · {domain}.{snake_case} + HTTP 상태 — 채번 정본 [../11_glossary/02_error_codes.md](../11_glossary/02_error_codes.md) |
-| 경로 분리 | 저빈도 업무 조회 · 로그인은 BFF(Next.js Route Handler) 경유, 최신값 · 시계열 · WebSocket은 브라우저 직결 — 기준 정본 [01_conventions.md](./01_conventions.md) |
-| 원본에 없는 표면 | **신설 27** — W5 판정 22(MST 12 · ALM 4 · WRK 6) + D-04 개정 1(명령 조회 01_conventions #1) + 라이브 실행 제어 4(09_datagen #2~#5 · 사용자 요구 2026-09-28). 두지 않기로 판정한 표면: 생성기(모드 A~D) 실행 제어 · 실행 중 주입 제어 · 태그 재활성화 · 알람 강제 해제 · 계정 · 역할 관리 |
-| API 표면 수 | **48** — 정본은 아래 §도메인별 표면 수 |
+| 표면 도메인 | **5** — MST · TSQ · RLT · GEN · OBS · 옛 AUT · ALM · WRK는 D-16 폐지 |
+| 표면 없는 도메인 | **COL · SIM · ING** — 내부 모듈이다. ING은 Stream 뒤에서만 데이터를 받는다 — 옛 /api/v1/ingest/bulk(GEN 모드 C 부하 주입 표면 · 09_datagen #1)는 D-16으로 지웠다 |
+| 에러 코드 | **12종** · {domain}.{snake_case} + HTTP 상태 — 채번 정본 [../11_glossary/02_error_codes.md](../11_glossary/02_error_codes.md) |
+| 경로 분리 | 저빈도 업무 조회 · 쓰기는 BFF(Next.js Route Handler) 경유, 최신값 · 시계열 · WebSocket은 브라우저 직결 — 기준 정본 [01_conventions.md](./01_conventions.md) |
+| 원본에 없는 표면 | **신설 23** — W5 판정 12(MST 12) + D-04 개정 1(명령 조회 01_conventions #1) + 라이브 실행 제어 4(09_datagen #2~#5 · 사용자 요구 2026-09-28) + D-16 6(06_realtime #3~#5 · 09_datagen #6~#8 · 사용자 결정 2026-10-11) · 옛 신설 ALM 4 · WRK 6은 D-16 폐지. 두지 않기로 판정한 표면: 생성기(모드 A · B) 실행 제어 · 실행 중 주입 제어 · 태그 재활성화 · 계정 · 역할 관리(로그인 · 권한 없음 — D-16) |
+| API 표면 수 | **35** — 정본은 아래 §도메인별 표면 수 |
 
 ## 도메인별 표면 수
 
@@ -49,18 +48,15 @@
 | 문서 | REST JSON | 다운로드 스트림 | 메트릭 텍스트 | WebSocket | 계 | 원본 | 신설 |
 |------|:--:|:--:|:--:|:--:|:--:|:--:|:--:|
 | [01_conventions.md](./01_conventions.md) | 1 | 0 | 0 | 0 | 1 | 0 | 1 |
-| [03_auth.md](./03_auth.md) | 3 | 0 | 0 | 0 | 3 | 3 | 0 |
 | [04_master.md](./04_master.md) | 17 | 0 | 0 | 0 | 17 | 5 | 12 |
 | [05_timeseries.md](./05_timeseries.md) | 1 | 1 | 0 | 0 | 2 | 2 | 0 |
-| [06_realtime.md](./06_realtime.md) | 2 | 0 | 0 | 0 | 2 | 2 | 0 |
-| [07_alarms.md](./07_alarms.md) | 6 | 0 | 0 | 0 | 6 | 2 | 4 |
-| [08_work_orders.md](./08_work_orders.md) | 9 | 0 | 0 | 0 | 9 | 3 | 6 |
-| [09_datagen.md](./09_datagen.md) | 5 | 0 | 0 | 0 | 5 | 1 | 4 |
+| [06_realtime.md](./06_realtime.md) | 5 | 0 | 0 | 0 | 5 | 2 | 3 |
+| [09_datagen.md](./09_datagen.md) | 7 | 0 | 0 | 0 | 7 | 0 | 7 |
 | [10_metrics.md](./10_metrics.md) | 1 | 0 | 1 | 0 | 2 | 2 | 0 |
 | [11_websocket.md](./11_websocket.md) | 0 | 0 | 0 | 1 | 1 | 1 | 0 |
-| **계** | **45** | **1** | **1** | **1** | **48** | **21** | **27** |
+| **계** | **32** | **1** | **1** | **1** | **35** | **12** | **23** |
 
-검산: 형식별 45 + 1 + 1 + 1 = **48** · 출처별 원본 21 + 신설 27 = **48**. 원본 21은 원본 architecture.md §11 API 표 17행 중 여러 메서드를 묶은 행을 메서드별로 푼 수다.
+검산: 형식별 32 + 1 + 1 + 1 = **35** · 출처별 원본 12 + 신설 23 = **35** · 문서별 1 + 17 + 2 + 5 + 7 + 2 + 1 = **35**. 원본 표면은 원본 architecture.md §11 API 표 17행 중 여러 메서드를 묶은 행을 메서드별로 푼 21이었고, 그중 9(03_auth 3 · 07_alarms 2 · 08_work_orders 3 · 09_datagen #1)가 D-16으로 빠져 12다. 삭제 문서의 결번 표면은 [../11_glossary/04_id_conventions.md](../11_glossary/04_id_conventions.md) §폐지 도메인 결번이 갖는다.
 
 ## 관련 문서
 

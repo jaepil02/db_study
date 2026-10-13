@@ -2,12 +2,17 @@
 
 > **대상**: 데이터 단계별 보존 기간 · 기준 시점 · 삭제 방식 · 삭제 단위 · 실제 삭제 시점 · 복구 가능성 · 파티션 단위 변경 원칙 · 보존 변경 절차 · 대조군 보존 정합 — **보존 조정값의 정본**
 > **작성일**: 2026-09-24
+> **개정일**: 2026-10-12 — 리드 판정 — 보존 정책 작업 주기 미확인 → **현행 1일**(timescaledb_information.jobs 확인) — 행 수 불변
+> **개정일**: 2026-10-12 — **D-05 부분 개정 · ADR-32**(직접 비교 비교 사본 TimescaleDB hypertable · 열 압축 · 마이그레이션 009) — #12 비교 사본 삭제 방식 일 파티션 DROP(partman) → **칸 통째 삭제(TimescaleDB 보존 정책 · 작업 주체 app_owner)** · 구간 비우기 기전(통째 칸 drop_chunks · 걸친 칸 구간 DELETE) · 보존 조회 계약 대조군 행 읽는 자리 파티션 정리 작업 → **보존 정책** · 실제 삭제 시점 대조군 행(칸 끝 + 7일 · 정책 작업 주기) · 파티션 단위 원칙 PostgreSQL 허용에 칸 삭제 · 보존 변경 절차 ② · ③ · 대조군 보존 정합 삭제 시점 차 · 지우기 불릿 partman 설정 → 보존 정책 · 미확인 **대조군 파티션 정리 주체 다시 열림 → 닫힘** — 단계 · 조정값 · 대상 · 행 수 불변
+> **개정일**: 2026-10-11 — 웨이브 6 코드 수정 반영(r5-code 검수 M4) — §센서 데이터 지우기 막는 조건에 **끈 직후 수집기 적용 상태 · 대기줄 적체**(reason 3) · 스풀 잔여 불릿에 적체 검사가 스풀 파일을 보지 않는다 — 갈래 · 단계 수 불변
+> **개정일**: 2026-10-11 — **D-16 직접 비교 · 센서 데이터 지우기 · 실행 보관**(사용자 결정 2026-10-11 결정 2 · 5) — 흐름 그림 대조군 → **비교 사본(SW-09 gated)** · 단계 #1 · #2 · #4~#7 · #12~#14 삭제 방식에 직접 비교 구간 비우기 · 지우기 · **#18 실행 보관 run_result 신설**(무기한 · 추가 전용 · 지우기가 남긴다) — 현행 단계 13 → **14** · **§센서 데이터 지우기 신설**(지우는 단계 · 남기는 단계 · 스풀 잔여) · 대조군 보존 정합 어긋남 2 → **3**(직접 비교 구간 비우기의 일 롤업)
+> **개정일**: 2026-10-11 — **D-16 알람 · 감사 · 작업지시 · 측정 도구 삭제**(사용자 결정 2026-10-11 · 리드 판정 — WRK 함께 폐지) — 단계 17 → **13**(결번 #8 alarm_eval · #9 alarm_event · #10 audit_log · #15 업무 대조 계측물 · ClickHouse 6 → **4** · PostgreSQL 5 → **3**) · #11 업무 12 → **마스터 6** 테이블 · #14 rl · auth 삭제 · 보존 조회 계약 7 → **5** · 실제 삭제 시점 6 → **4** · 보존 변경 절차 ② 스냅샷 삭제(5 → **4**단계) · 대조군 보존 정합 4 → **2**(모드 D 백필 · 스냅샷 복원 행 삭제) · 백업 4 → **3**(전체 볼륨 스냅샷 삭제) · 대조군 파티션 정리 미확인 **다시 열림** · alarm_event 아카이브 행 삭제
 > **개정일**: 2026-09-28 — DB 시각 UTC(ADR-27 · 사용자 요구 2026-09-28) — 실제 삭제 시점 표 파티션 폭 KST → **UTC**(D + 8일 00:00 KST → **D + 8일 00:00 UTC = 09:00 KST**) · 자정 불릿을 저장 운영 경계 UTC로 · 대조군 정리 기준 KST 일 → **UTC 일** — 보존 값 · 대상 수 불변
 > **개정일**: 2026-09-28 — 업무 쓰기 Redis 경유 개정(사용자 결정 2026-09-27) — 단계 표 **#16 업무 명령 원장**(biz_command_log · 무기한 · 추가 전용 · 정리 주체 없음 — audit_log와 같은 판정) · **#17 업무 명령 버퍼 · 결과**(stream:biz:cmd MAXLEN · biz:result TTL) 신설 — 단계 15 → **17** · Redis 4 → **5** · PostgreSQL 4 → **5** · #11 업무 12 테이블 산식 업무 14 → **15**
 > **개정일**: 2026-09-26 — W1 검수 반영 — 단계 표 #15 업무 대조 계측물(ClickHouse 3 · TTL 없음 · 실험 스냅샷 수명 · 삭제 = 기준 스냅샷 복원 REQ-TEC-08) 신설 — 단계 14 → **15** · ClickHouse 5 → **6** · PostgreSQL 업무 테이블에 넣은 실험 행 규칙 불릿
 > **개정일**: 2026-09-24 — W7 검수 반영 — 미확인 2행 닫힘(대조군 파티션 정리 · DLQ 재처리 전 보존)
 > **개정일**: 2026-09-24 — W6 판정 반영 — TTL 머지 주기(서버 기본값 유지 · 줄이지 않음) · alarm_event 아카이브 위치(snapshots/archive/alarm_event · 파티션당 덤프 1)를 닫는다 · 파티션 삭제 지연은 미확인 유지
-> **원천**: ADR-27(사용자 요구 2026-09-28) · 원본 data_flow.md §10.1 · §13 · §17(커밋 ff66a37) · 원본 architecture.md §5 · §6 · §7.1 · §7.2 · §7.3 · §15 · §17 · §18(커밋 ff66a37) · 원본 tech_stack.md §10.3(커밋 ff66a37) · 사용자 결정 2026-09-27(업무 쓰기 Redis 경유) · [../README.md](../README.md) 고정 기준 조정값(보존의 정본 지정) · ADR-15 · D-05 · D-10
+> **원천**: D-05 부분 개정(사용자 결정 2026-10-12) · ADR-32 · 마이그레이션 009 · ADR-27(사용자 요구 2026-09-28) · 원본 data_flow.md §10.1 · §13 · §17(커밋 ff66a37) · 원본 architecture.md §5 · §6 · §7.1 · §7.2 · §7.3 · §15 · §17 · §18(커밋 ff66a37) · 원본 tech_stack.md §10.3(커밋 ff66a37) · 사용자 결정 2026-09-27(업무 쓰기 Redis 경유) · [../README.md](../README.md) 고정 기준 조정값(보존의 정본 지정) · ADR-15 · D-05 · D-10
 
 이 문서는 **보존 기간 값의 정본**이다. 보존은 2계층 조정값이라 다른 문서는 값을 박지 않고 이 문서를 인용한다. Redis 키 TTL의 정본은 [05_redis_keyspace.md](./05_redis_keyspace.md), Stream · DLQ MAXLEN의 정본은 [06_redis_memory.md](./06_redis_memory.md)이며, 이 문서는 그 둘을 단계 목록에 인용만 한다.
 
@@ -22,41 +27,56 @@
 ```plain
 생성(DataGen · PLC) → 정규화(Collector) → Stream 버퍼 ─┬→ 원시 tag_raw ─→ 분 롤업 tag_1m ─→ 시간 롤업 tag_1h ─→ 일 롤업 tag_1d
                                           │           │ 7일 파티션 DROP   │ 90일            │ 730일             │ 무기한 · 수동
-                                          │           └→ 대조군(SW-09 on · 실험 단위)
+                                          │           └→ 비교 사본(SW-09 gated · 직접 비교 중 · 7일)
                                           ├→ DLQ(재시도 소진 · MAXLEN)
                                           ├→ 최신값 rt:latest(덮어쓰기)
                                           └→ 스풀 파일(XADD 실패 시 · 재발행 뒤 삭제)
 ```
 
-- **분기 ②의 알람 쓰기는 별도 수명을 가진다.** alarm_eval은 30일, alarm_event는 월 파티션 2년 뒤 분리다 — 원시보다 오래 남는 판정 기록이 있다는 뜻이다.
 - **Stream은 보존 단계가 아니라 통과 단계다.** 소비된 엔트리는 MAXLEN 범위에서 잘리고, 그 내용은 ClickHouse에 있다. Stream을 재처리 저장소로 쓰려면 Kafka 전환(확장 로드맵 4단계)이 필요하다.
 
 | # | 단계 | 저장 위치 | 보존(현행 참고) | 기준 시점 | 삭제 방식 · 단위 | 복구 가능성 |
 |:-:|------|------|------|------|------|------|
-| 1 | 버퍼 | Redis stream:plc:raw | 소비 후 MAXLEN 범위 | 엔트리 순서 | 근사 트리밍 · 노드 | 불가 — 소비 완료분은 ClickHouse에 있다 |
-| 2 | 실패 격리 | Redis stream:plc:dlq | MAXLEN 범위 | 엔트리 순서 | 근사 트리밍 | 불가 — 재처리 전 트리밍은 유실(한계 등재 #12) |
+| 1 | 버퍼 | Redis stream:plc:raw | 소비 후 MAXLEN 범위 | 엔트리 순서 | 근사 트리밍 · 노드 · 지우기 XTRIM MAXLEN 0(그룹 유지) | 불가 — 소비 완료분은 ClickHouse에 있다 |
+| 2 | 실패 격리 | Redis stream:plc:dlq | MAXLEN 범위 | 엔트리 순서 | 근사 트리밍 · 지우기 XTRIM MAXLEN 0 | 불가 — 재처리 전 트리밍 · 지우기는 유실(한계 등재 #12) |
 | 3 | 스풀 | spooldata 볼륨 .msgpack.spool | 재발행 완료까지 | 재발행 완료 | 파일 삭제 | 불가 — 재발행 전 삭제는 유실 |
-| 4 | 원시 | ClickHouse tag_raw | **7일** | ts(측정 시각) | TTL · 일 파티션 통째 | 불가 — 필요하면 보존 연장 · 생성기로 재생성 |
-| 5 | 분 롤업 | tag_1m | **90일** | bucket | TTL · 월 파티션 통째 | 원시가 남은 구간만 재계산 |
-| 6 | 시간 롤업 | tag_1h | **730일** | bucket | TTL · 월 파티션 통째 | 분 롤업이 남은 구간만 재계산 |
-| 7 | 일 롤업 | tag_1d | **무기한** | bucket | 수동 · 년 파티션 | 시간 롤업이 남은 구간만 재계산 |
-| 8 | 판정 전수 | ClickHouse alarm_eval | **30일** | ts | TTL · 일 파티션 통째 | 불가 |
-| 9 | 확정 알람 | PostgreSQL alarm_event | **2년 뒤 분리** | occurred_at | 파티션 DETACH → 덤프 아카이브 | 덤프 파일에서 |
-| 10 | 감사 | PostgreSQL audit_log | **무기한** | acted_at | 없음 — 추가 전용 | 해당 없음 |
-| 11 | 업무 · 마스터 · 계보 | PostgreSQL 업무 12 테이블 | 무기한 | 해당 없음 | 논리 삭제만 | 스냅샷(pg_dump)에서 |
-| 12 | 대조군 | PostgreSQL plc_tag_raw_control | **tag_raw와 같은 기간** | ts | 일 파티션 DROP | 불가 — 실험 단위 재적재 |
-| 13 | 최신값 | Redis rt:latest | 덮어쓰기 | 해당 없음 | 없음 | ClickHouse argMax로 재구성 |
-| 14 | 캐시 · 세션 · 락 · 계수 | Redis cache · lock · rl · auth | 키별 TTL | 쓰기 시 | 만료 · volatile-lru 축출 | 재조회로 복원(auth는 재로그인) |
-| 15 | 업무 대조 계측물 | ClickHouse work_order_control · work_order_control_rmt · production_log_control | **실험 스냅샷 수명** — TTL 없음 | 해당 없음 | 기준 스냅샷 복원(REQ-TEC-08) · 변형마다 비우고 다시 채움 | 불가 — 실행기가 같은 시드 행 벡터로 다시 채운다 |
+| 4 | 원시 | ClickHouse tag_raw | **7일** | ts(측정 시각) | TTL · 일 파티션 통째 · 직접 비교 구간 비우기(통째로 든 날 DROP PARTITION · 걸친 날 동기 변이) · 지우기 TRUNCATE | 불가 — 필요하면 보존 연장 · 생성기 · 직접 비교 넣기로 재생성 |
+| 5 | 분 롤업 | tag_1m | **90일** | bucket | TTL · 월 파티션 통째 · 직접 비교 구간 버킷 동기 삭제 · 지우기 TRUNCATE | 원시가 남은 구간만 재계산 |
+| 6 | 시간 롤업 | tag_1h | **730일** | bucket | TTL · 월 파티션 통째 · 상동 | 분 롤업이 남은 구간만 재계산 |
+| 7 | 일 롤업 | tag_1d | **무기한** | bucket | 수동 · 년 파티션 · 직접 비교 구간이 걸친 **KST 날 버킷 통째** 동기 삭제 · 지우기 TRUNCATE | 시간 롤업이 남은 구간만 재계산 |
+| 8 | **결번(D-16)** — 옛 판정 전수(alarm_eval) | 해당 없음 — 대상 삭제 | 해당 없음 | 해당 없음 | 해당 없음 | 해당 없음 |
+| 9 | **결번(D-16)** — 옛 확정 알람(alarm_event) | 해당 없음 — 대상 삭제 | 해당 없음 | 해당 없음 | 해당 없음 | 해당 없음 |
+| 10 | **결번(D-16)** — 옛 감사(audit_log) | 해당 없음 — 대상 삭제 | 해당 없음 | 해당 없음 | 해당 없음 | 해당 없음 |
+| 11 | 마스터 · 계보 | PostgreSQL 마스터 6 테이블 | 무기한 | 해당 없음 | 논리 삭제만 | 덤프(pg_dump)에서 |
+| 12 | 비교 사본 | PostgreSQL plc_tag_raw_control | **tag_raw와 같은 기간(7일)** | ts | **칸(1일) 통째 삭제 — TimescaleDB 보존 정책**(작업 주체 app_owner · 009 — ADR-32) · 직접 비교 구간 비우기(control_clear_range — 구간이 통째로 덮은 칸은 drop_chunks · 걸친 칸은 그 구간만 DELETE · 압축 칸은 풀어서 지운다) · 지우기 TRUNCATE(control_purge) | 불가 — 직접 비교 넣기로 다시 싣는다 |
+| 13 | 최신값 | Redis rt:latest | 덮어쓰기 | 해당 없음 | 없음 · 지우기가 전부 UNLINK · 무결성 정리가 시험 설비 키 DEL | ClickHouse argMax로 재구성 |
+| 14 | 캐시 · 락 | Redis cache · lock | 키별 TTL | 쓰기 시 | 만료 · volatile-lru 축출 · 지우기가 cache:q:* DEL | 재조회로 복원 |
+| 15 | **결번(D-16)** — 옛 업무 대조 계측물(work_order_control 등 — 역방향 실행기와 함께 삭제) | 해당 없음 — 대상 삭제 | 해당 없음 | 해당 없음 | 해당 없음 | 해당 없음 |
 | 16 | 업무 명령 원장 | PostgreSQL biz_command_log | **무기한** | applied_at | 없음 — 추가 전용 | 해당 없음 |
 | 17 | 업무 명령 버퍼 · 결과 | Redis stream:biz:cmd · biz:result:{cmdId} | 버퍼는 소비 후 MAXLEN 범위 · 결과는 키별 TTL | 엔트리 순서 · 결과 SET 시 | 근사 트리밍 · 만료 · 축출 | 불가 — 적용된 명령의 판정은 원장(#16)에 있다 · 미적용 명령의 트리밍은 유실(한계 등재 #25) |
+| 18 | **실행 보관** | PostgreSQL run_result | **무기한** | ended_at | 없음 — 추가 전용 · **지우기가 남긴다** | 해당 없음 — 직접 비교를 다시 돌린다 |
 
-- 검산: 단계 = Redis 5(#1 · #2 · #13 · #14 · #17) + 볼륨 파일 1(#3) + ClickHouse 6(#4~#8 · #15) + PostgreSQL 5(#9~#12 · #16) = **17**
-- **#11의 12 테이블** = 업무 15 − alarm_event(#9) − audit_log(#10) − biz_command_log(#16) = 12(site · production_line · device · modbus_config · tag_master · tag_master_history · alarm_rule · user_account · role · user_role · work_order · production_log)
-- **#15 업무 대조 계측물에 TTL을 두지 않는다.** 역방향 대조(EXP-40~44) 실행 안에서만 행이 있고 실험이 끝나면 기준 스냅샷 복원이 지운다(REQ-TEC-08) — TTL을 두면 머지 스케줄의 TTL 삭제가 갱신 · 머지 비용 측정에 섞인다. 테이블 자체는 순번 마이그레이션(009)이 만들어 남는다([10_olap_vs_rdb_control.md](./10_olap_vs_rdb_control.md) §업무 규모 격자와 채우기).
-- **PostgreSQL 업무 테이블에 넣은 실험 행은 #11 · #10의 무기한 보존을 받지 않는다.** 역방향 대조가 work_order에 채운 10^4~10^6행과 실험이 쓴 production_log · audit_log 행은 실험 전용 스냅샷에서만 살고, 실험이 끝나면 기준 스냅샷 복원으로 사라진다(REQ-TEC-08). 논리 삭제 · 추가 전용 규칙은 사람의 쓰기 표면이 만든 행의 규칙이다 — 실험 행을 기준 스냅샷에 남기면 업무 규모 산정과 감사가 실험 행을 사람의 행위로 센다.
-- **#16 biz_command_log를 audit_log와 같은 이유로 무기한 · 비분할 · 정리 주체 없음으로 판정한다.** 행 증가가 업무 쓰기 수에 묶여 작고 판정이 바뀌지 않는다. 보존이 결과 키 TTL(현행 참고 300초)보다 길어야 명령 조회가 결과 키 만료 뒤에도 답한다 — 무기한이면 관계가 늘 성립한다. 부하 실험이 만든 원장 행은 위 실험 행 규칙대로 기준 스냅샷 복원이 지운다. 정리가 필요해지면 app_rw에 DELETE를 주지 않고 app_owner 작업으로 둔다(추가 전용 권한 — [02_postgresql_constraints.md](./02_postgresql_constraints.md)).
-- **#10 audit_log를 무기한 · 비분할로 판정한다.** 행 증가가 사람의 쓰기 표면 호출 수에 묶여 작고(REQ-WRK-07 — 시스템 쓰기는 감사하지 않는다), 수정 · 삭제 표면이 없다(REQ-WRK-09). 분할이 필요해지는 증가율은 이 시스템에서 나오지 않는다 — 보존을 줄여야 하는 날이 오면 월 파티션 도입이 먼저다.
+- 검산: 현행 단계 = Redis 5(#1 · #2 · #13 · #14 · #17) + 볼륨 파일 1(#3) + ClickHouse 4(#4~#7) + PostgreSQL 4(#11 · #12 · #16 · #18) = **14** · 결번 #8 · #9 · #10 · #15(알람 2 · 감사 · 업무 대조 계측물 — D-16 · 재사용 금지)
+- **#11의 6 테이블** = 업무 7 − biz_command_log(#16) = 6(site · production_line · device · modbus_config · tag_master · tag_master_history)
+- **#16 biz_command_log를 무기한 · 비분할 · 정리 주체 없음으로 판정한다.** 행 증가가 업무 쓰기 수에 묶여 작고 판정이 바뀌지 않는다. 보존이 결과 키 TTL(현행 참고 300초)보다 길어야 명령 조회가 결과 키 만료 뒤에도 답한다 — 무기한이면 관계가 늘 성립한다. 정리가 필요해지면 app_rw에 DELETE를 주지 않고 app_owner 작업으로 둔다(추가 전용 권한 — [02_postgresql_constraints.md](./02_postgresql_constraints.md)).
+
+## 센서 데이터 지우기
+
+**보존 경계를 기다리지 않고 쌓인 센서 데이터만 지우는 사람의 동작이다**(GEN-14 · D-16 결정 5 · 표면 [../07_api/09_datagen.md](../07_api/09_datagen.md) #8). 실행 진행 중 · 설비 가동 중(끈 직후 수집기가 아직 도는 동안 포함) · 대기줄에 적재 안 된 엔트리가 남았으면 막는다(data.purge_blocked/409 — reason 3) — 지우는 동안 새 행이 들어오면 지운 결과가 거짓이 된다. 지우는 동안은 실행 시작 · 설비 켜기를 거절한다(프로세스 안 잠금 — 한계 등재 [02_postgresql_constraints.md](./02_postgresql_constraints.md) #30).
+
+| 갈래 | 단계(§단계별 보존 번호) | 수단 |
+|------|------|------|
+| 지운다 | #1 · #2 버퍼 · 실패 격리 | XTRIM MAXLEN 0 — 엔트리만 · 키와 소비 그룹은 남긴다 |
+| 지운다 | #4~#7 원시 · 롤업 3 | TRUNCATE TABLE — MV · Dictionary는 그대로 |
+| 지운다 | #12 비교 사본 | control_purge()(app_owner SECURITY DEFINER — [02_postgresql_constraints.md](./02_postgresql_constraints.md) §비교 사본 함수) |
+| 지운다 | #13 최신값 | SCAN rt:latest:* → UNLINK |
+| 지운다(일부) | #14 캐시 | 조회 사본 cache:q:*만 SCAN → DEL — 마스터 사본 · 락은 남긴다 |
+| 남긴다 | #11 마스터 · 계보 · #16 업무 명령 원장 · #17 업무 명령 버퍼 · 결과 · #18 실행 보관 | 지우기가 닿지 않는다 |
+| 남긴다 — 잔여 | #3 스풀 파일 | 지우기가 닿지 않는다 — Collector가 XADD 실패로 스풀을 쓰고 있었다면 재발행이 지운 뒤에 옛 센서 행을 다시 싣는다 |
+
+- 검산: 갈래 행 = 지운다 4 + 일부 1 + 남긴다 2 = **7** · 현행 단계 14 = 지우는 단계 9(#1 · #2 · #4~#7 · #12 · #13 · #14 일부) + 남기는 단계 5(#3 · #11 · #16 · #17 · #18)
+- **스풀 잔여는 설비 가동이 꺼져 있으면 생기지 않는다.** 스풀은 수집기(설비 가동이 켠 폴링)의 XADD 실패에서만 쓰이고, 지우기는 가동이 꺼져 있을 때만 돈다 — 가동을 끈 뒤 남은 스풀이 재발행 중이면 잔여가 된다(재발행 완료까지는 수 초 · [../06_pipeline/11_backpressure_failure.md](../06_pipeline/11_backpressure_failure.md)). 대기줄 적체 검사(stream_backlog)는 이미 실린 엔트리만 보고 스풀 파일은 보지 않는다.
+- **지우기는 보존 기간을 바꾸지 않는다.** TTL · TimescaleDB 보존 정책 · 파티션 · 칸 경계는 그대로이고, 다음 적재는 같은 보존 규칙으로 쌓인다.
 
 ## 보존 조회 계약
 
@@ -68,29 +88,25 @@
 | 분 롤업 보존 | tag_1m TTL 절 | bucket | 행 단위 DELETE | 무기한 | 90일 |
 | 시간 롤업 보존 | tag_1h TTL 절 | bucket | 상동 | 무기한 | 730일 |
 | 일 롤업 보존 | 없음 — 수동 | 해당 없음 | TTL 추가 | 무기한(현행) | 무기한 |
-| 판정 전수 보존 | alarm_eval TTL 절 | ts | 행 단위 DELETE | 무기한 | 30일 |
-| 확정 알람 분리 | pg_partman 보존 설정 | occurred_at 월 | 행 단위 DELETE | 분리하지 않음 | 2년 |
-| 대조군 보존 | 파티션 정리 작업 | ts 일 | tag_raw와 다른 기간 · 행 단위 DELETE | tag_raw와 행 집합이 어긋난다 | tag_raw와 같다 |
+| 대조군 보존 | 비교 사본의 TimescaleDB 보존 정책(drop_after · 009) | ts 칸(1일) | tag_raw와 다른 기간 · 행 단위 DELETE | tag_raw와 행 집합이 어긋난다 | tag_raw와 같다 |
 
-- 검산: 조정값 = **7**
+- 검산: 조정값 = **5** · 옛 판정 전수 보존 · 확정 알람 분리는 D-16 폐지
 - **ingested_at으로 보존을 자르지 않는다.** 백프레셔 소진이나 백필로 늦게 들어온 과거 ts 행이 "방금 들어온 행"으로 오래 남아 파티션(ts 기준)과 보존 경계가 어긋난다 — 전역 불변식 "ts와 ingested_at을 서로 대체하지 않는다".
 - **부재 시 무기한이 기본값인 것이 위험이다.** TTL 절이 빠진 채 테이블이 만들어지면 오류 없이 디스크가 찬다 — 디스크 포화 시나리오의 대응은 TTL 축소 또는 파티션 수동 DROP이다(원본 architecture.md §17).
 
 ## 실제 삭제 시점
 
-보존 기간은 하한이다. 파티션 단위 삭제(ClickHouse ttl_only_drop_parts · PostgreSQL 파티션 DROP)는 파티션의 **마지막 행**이 만료돼야 파티션을 지운다.
+보존 기간은 하한이다. 파티션 단위 삭제(ClickHouse ttl_only_drop_parts · PostgreSQL 비교 사본의 칸 통째 삭제)는 파티션 · 칸의 **마지막 행**이 만료돼야 그것을 지운다.
 
 | 대상 | 파티션 폭 | 보존 | 실제로 지워지는 때 | 최대 초과 보존 |
 |------|------|------|------|------|
 | tag_raw | 일(UTC) | 7일 | 파티션 날짜 D의 마지막 행이 7일을 지난 뒤 = D + 8일 00:00 UTC(= 09:00 KST) 이후 TTL 머지 | 약 1일 + TTL 머지 주기 |
-| alarm_eval | 일(UTC) | 30일 | D + 31일 00:00 UTC 이후 | 상동 |
 | tag_1m | 월(UTC) | 90일 | 그 달 마지막 버킷 + 90일 이후 | 약 1개월 |
 | tag_1h | 월(UTC) | 730일 | 그 달 마지막 버킷 + 730일 이후 | 약 1개월 |
-| alarm_event | 월(UTC) | 2년 | 분리 작업 주기에 맞춰 | 약 1개월 + 작업 주기 |
-| 대조군 | 일(UTC) | tag_raw와 같다 | 정리 작업 주기에 맞춰 | 작업 주기 |
+| 대조군(비교 사본) | 칸 1일(UTC 자정 — epoch 하루 배수) | tag_raw와 같다 | 날짜 D 칸(D 00:00 ~ D + 1일 00:00 UTC)의 범위 전체가 7일을 지난 뒤 = D + 8일 00:00 UTC 이후 보존 정책 작업이 돌 때 | 약 1일 + 정책 작업 주기(현행 1일 — add_retention_policy가 만든 작업의 schedule_interval · timescaledb_information.jobs 리드 확인 2026-10-12 · 2계층 조정값 · 공식 참조 [../03_requirements/16_official_references.md](../03_requirements/16_official_references.md)) |
 
-- 검산: 대상 = **6**
-- **"자정에 지워진다"를 말할 때 어느 자정인지 밝힌다.** 모든 파티션 경계가 **UTC**라(ADR-27 · 저장 운영 경계) 원시와 롤업 · 판정 전수 · 확정 알람 · 대조군이 같은 달력으로 잘리고, 그 자정은 KST 09:00이다. tag_1d 버킷의 하루(KST 자정)는 달력 의미 경계라 보존과 무관하다(tag_1d는 TTL이 없다 · [../11_glossary/05_units_and_time.md](../11_glossary/05_units_and_time.md) §버킷 경계 · 파티션 경계와 시간대). 서버 시간대에 의존하던 원본 구성에서는 tag_raw는 KST 날짜, tag_1m은 서버 시간대 월로 잘렸고, ADR-27 전에는 전부 KST 달력이었다.
+- 검산: 대상 = **4**
+- **"자정에 지워진다"를 말할 때 어느 자정인지 밝힌다.** 모든 파티션 경계가 **UTC**라(ADR-27 · 저장 운영 경계) 원시와 롤업 · 대조군이 같은 달력으로 잘리고, 그 자정은 KST 09:00이다. tag_1d 버킷의 하루(KST 자정)는 달력 의미 경계라 보존과 무관하다(tag_1d는 TTL이 없다 · [../11_glossary/05_units_and_time.md](../11_glossary/05_units_and_time.md) §버킷 경계 · 파티션 경계와 시간대). 서버 시간대에 의존하던 원본 구성에서는 tag_raw는 KST 날짜, tag_1m은 서버 시간대 월로 잘렸고, ADR-27 전에는 전부 KST 달력이었다.
 - **TTL 삭제 검증은 "파티션 자동 DROP 확인"이다**(원본 data_flow.md §17 TTL 삭제). 검증 시점은 보존 + 파티션 폭 + 머지 주기 뒤여야 한다 — 보존 기간 직후에 확인하면 거짓 실패다.
 
 ## 파티션 단위 원칙
@@ -99,7 +115,7 @@
 |------|------|------|------|
 | ClickHouse | TTL(ttl_only_drop_parts = 1) · ALTER TABLE … DROP PARTITION | ALTER TABLE … DELETE · 경량 DELETE | 비동기 mutation이 파트 전체를 다시 쓴다 — 삽입 부하와 머지 풀을 두고 경합한다 |
 | ClickHouse | TTL 변경은 기존 파트 재구체화 없이(materialize_ttl_after_modify 끔) | 기본 설정으로 MODIFY TTL | 기본은 모든 기존 파트에 TTL을 다시 적용하는 mutation을 건다 — 보존 하나 바꾸는 데 테이블 전체를 다시 쓴다 |
-| PostgreSQL | 파티션 DETACH · DROP(app_owner) | 행 단위 DELETE(app_rw에 권한 없음) | 대량 DELETE는 죽은 튜플 · WAL을 만들어 VACUUM이 따라온다 — 대조군이면 비교 축 VACUUM/WAL 증폭을 오염시킨다 |
+| PostgreSQL | 파티션 DETACH · DROP · 비교 사본은 칸 통째 삭제(보존 정책 · drop_chunks — app_owner) | 행 단위 DELETE(app_rw에 권한 없음) | 대량 DELETE는 죽은 튜플 · WAL을 만들어 VACUUM이 따라온다 — 대조군이면 비교 축 VACUUM/WAL 증폭을 오염시킨다 |
 | Redis | MAXLEN · TTL · 축출 | 수동 DEL로 Stream 비우기 | 미소비 엔트리가 조용히 사라진다 |
 
 - 검산: 행 = **4** · 저장소 3(ClickHouse 2행)
@@ -110,13 +126,13 @@
 보존 값을 바꿀 때의 순서다. 한 단계라도 빠지면 대조군과 원시의 행 집합이 경계에서 어긋난다.
 
 ```plain
-① 변경 사유 기록          디스크 · 실험 요구 · 용량 티어              측정 기록 조건 칸
-② 스냅샷                  task snapshot — 되돌릴 자리                REQ-TEC-08
-③ 정의 변경               TTL 절 · pg_partman 보존 · 정리 작업       재구체화 끔(ClickHouse)
-④ 경계 밖 파티션 정리     DROP PARTITION · 파티션 DROP               원시 · 대조군은 같은 경계로
-⑤ 검증                    남은 최소 파티션 = 새 경계 · count 대조      롤업은 원시가 지워진 구간의 유일 기록
+① 변경 사유 기록          디스크 · 실험 요구                         측정 기록 조건 칸
+② 정의 변경               TTL 절 · TimescaleDB 보존 정책             재구체화 끔(ClickHouse)
+③ 경계 밖 파티션 정리     DROP PARTITION · drop_chunks               원시 · 대조군은 같은 경계로
+④ 검증                    남은 최소 파티션 = 새 경계 · count 대조      롤업은 원시가 지워진 구간의 유일 기록
 ```
 
+- **옛 ② 스냅샷 단계(task snapshot)는 D-16으로 지웠다.** 볼륨 스냅샷 작업이 없으므로 되돌릴 자리는 마스터 덤프(§백업과 보존의 관계)뿐이고, 시계열은 되돌리지 않는다 — 보존을 줄이는 변경은 되돌릴 수 없는 변경으로 다룬다.
 - **원시와 대조군은 같은 변경 단위에서 바꾼다.** 한쪽만 바꾸면 두 저장소의 행 집합이 경계 구간에서 어긋나 대조 실험이 그 구간에서 무효가 된다(§대조군 보존 정합).
 - **롤업 보존을 줄이기 전에 상위 롤업이 그 구간을 이미 가졌는지 본다.** tag_1m을 줄여도 tag_1h · tag_1d가 남으면 장기 추이는 유지된다 — 연쇄는 삽입 시점에 이미 상위를 채웠다.
 - 보존 변경은 스키마 변경이 아니라 조정값 변경이다. 순번 마이그레이션으로 기록하되([09_migrations_seed.md](./09_migrations_seed.md)) 측정 기록의 조건 칸에 변경 사실을 적는다(D-10).
@@ -127,12 +143,11 @@
 
 | 어긋남 | 원인 | 결과 | 대응 |
 |------|------|------|------|
-| 삭제 시점 차 | tag_raw는 TTL 머지 시점 · 대조군은 정리 작업 주기 | 경계 파티션에서 한쪽만 행이 있다 | 대조 쿼리는 두 저장소 모두에 온전히 남은 구간만 쓴다 |
-| 보존 기간 차 | 한쪽만 변경 | 경계 밖 구간 불일치 | §보존 변경 절차 ④ — 같은 경계로 |
-| 백필 창 밖 ts | 모드 D가 원시 보존 창 밖을 채움 | tag_raw는 TTL 머지에서 곧 사라지고 대조군만 남는다 | 백필은 원시 보존 창 안으로([04_clickhouse_rollup.md](./04_clickhouse_rollup.md) §백필 절차) |
-| 스냅샷 복원 뒤 | 두 저장소를 다른 시점으로 복원 | 행 집합이 다른 두 스냅샷 | 볼륨 스냅샷은 한 번에 함께 뜨고 함께 복원한다 |
+| 삭제 시점 차 | tag_raw는 TTL 머지 시점 · 대조군은 보존 정책 작업 주기 | 경계 파티션 · 칸에서 한쪽만 행이 있다 | 대조 쿼리는 두 저장소 모두에 온전히 남은 구간만 쓴다 |
+| 보존 기간 차 | 한쪽만 변경 | 경계 밖 구간 불일치 | §보존 변경 절차 ③ — 같은 경계로 |
+| 직접 비교 구간 비우기의 일 롤업 | tag_1d는 날 단위 합이라 구간만 덜어 낼 수 없다 — 구간이 걸친 KST 날 버킷을 통째로 지운다 | 그 날의 다른 데이터(가동 · 다른 시험 창)의 일 롤업도 사라지고 원본은 남는다 | 일 롤업 대조는 직접 비교 창의 날을 빼고 한다 · 필요하면 원시에서 재계산([04_clickhouse_rollup.md](./04_clickhouse_rollup.md)) |
 
-- 검산: 어긋남 = **4**
+- 검산: 어긋남 = **3** · 옛 모드 D 백필 · 스냅샷 복원 행은 실행 도구와 함께 D-16 삭제
 - 대조 실험의 전제 확인 — 구간별 두 저장소 count 정확 일치(REQ-ING-15 · REQ-NFR-18)는 보존 경계에서 가장 자주 깨진다. 확인 절차의 정본은 [10_olap_vs_rdb_control.md](./10_olap_vs_rdb_control.md)다.
 
 ## 백업과 보존의 관계
@@ -144,26 +159,24 @@
 | PostgreSQL | pg_dump를 로컬 snapshots/에 | 스키마 · 시드 보존이 목적 |
 | ClickHouse 원시 | 하지 않는다 | 생성기로 재생성한다(시드 고정 · GEN-03) |
 | Redis | 하지 않는다 | Stream은 재생 가능한 버퍼 · 캐시는 휘발 · 최신값은 ClickHouse에서 재구성 |
-| 전체 볼륨 | 실험 전 task snapshot · 실험 후 task restore | 같은 조건의 재측정(D-10) |
 
-- 검산: 대상 = **4**
-- snapshots/는 git 추적 밖이다. 스냅샷과 마이그레이션 이력의 관계는 [09_migrations_seed.md](./09_migrations_seed.md)가 정한다.
+- 검산: 대상 = **3** · 옛 전체 볼륨 스냅샷(task snapshot · restore)은 D-16 삭제
+- snapshots/는 git 추적 밖이다. 마이그레이션 이력의 정본은 [09_migrations_seed.md](./09_migrations_seed.md)다.
 
 ## 미확인 · 미설계 등재
 
 | 항목 | 상태 | 확정 자리 |
 |------|------|------|
 | TTL 머지 주기 · 파티션 삭제 지연 | **W6 판정** — 머지 주기는 서버 기본값 유지 · 줄이지 않는다 · 파티션 삭제 지연은 3계층 미확인 — 확정 전 임의 값 고정 금지 | [../09_tech_stack/03_data_infra.md](../09_tech_stack/03_data_infra.md) §TTL 머지 주기 |
-| 대조군 파티션 정리 작업의 주기 · 실행 주체 | 닫힘 — GEN 실험 도구가 tag_raw에 실제로 남은 일 파티션 목록(ADR-27 뒤 UTC 일) 기준으로 DETACH · DROP · 대조 실험 착수 전과 SW-09 on 운전 중 매일 — [../06_pipeline/10_datagen_inject.md](../06_pipeline/10_datagen_inject.md) | [10_olap_vs_rdb_control.md](./10_olap_vs_rdb_control.md) · [../06_pipeline/10_datagen_inject.md](../06_pipeline/10_datagen_inject.md)(W4) |
-| 분리된 alarm_event 파티션의 아카이브 위치 · 형식 | **W6 판정** — snapshots/archive/alarm_event/ · 파티션 하나당 덤프 파일 하나 · 파일 이름 = 파티션 이름(월) · Git 제외 | [../09_tech_stack/04_local_environment.md](../09_tech_stack/04_local_environment.md) §스냅샷 · 아카이브 위치 |
+| 대조군 파티션 정리 작업의 주기 · 실행 주체 | **닫힘(ADR-32 · 2026-10-12)** — 마이그레이션 009의 TimescaleDB 보존 정책 7일이 정리 주체다(칸 통째 삭제 · 작업 주체 app_owner · 서버 안 작업 워커가 돈다 — 애플리케이션 타이머 아님). 옛 D-16 상태(GEN 실험 도구가 지워져 정리 주체 미설계)는 이 정책이 대체한다 · 정책 작업 주기 현행 1일(리드 확인 2026-10-12) | [10_olap_vs_rdb_control.md](./10_olap_vs_rdb_control.md) · [../09_tech_stack/03_data_infra.md](../09_tech_stack/03_data_infra.md) §PostgreSQL 확장 |
 | 티어별 정상 상태 디스크 | 원본 예상치(S 약 1 GB · M 약 39 GB · M+ 약 259 GB) — 3계층 미확인 | [../04_architecture/07_capacity_planning.md](../04_architecture/07_capacity_planning.md) |
 | DLQ 재처리 전 보존 보장 | 닫힘 — 보장하지 않는다(한계 등재 #12 유지) · dlq_count와 DLQ 길이를 대조해 트리밍 전에 재처리하는 운영 절차 — [../06_pipeline/11_backpressure_failure.md](../06_pipeline/11_backpressure_failure.md) | [../06_pipeline/11_backpressure_failure.md](../06_pipeline/11_backpressure_failure.md)(W4) |
 
 ## 관련 문서
 
-- [03_clickhouse_schema.md](./03_clickhouse_schema.md) — tag_raw · alarm_eval TTL 절
+- [03_clickhouse_schema.md](./03_clickhouse_schema.md) — tag_raw TTL 절
 - [04_clickhouse_rollup.md](./04_clickhouse_rollup.md) — 롤업 TTL · 백필 창
-- [02_postgresql_constraints.md](./02_postgresql_constraints.md) — alarm_event 월 파티션 · 한계 등재
+- [02_postgresql_constraints.md](./02_postgresql_constraints.md) — 한계 등재
 - [05_redis_keyspace.md](./05_redis_keyspace.md) — Redis 키 TTL 정본
 - [06_redis_memory.md](./06_redis_memory.md) — MAXLEN 정본
 - [10_olap_vs_rdb_control.md](./10_olap_vs_rdb_control.md) — 대조군 행 집합 정합

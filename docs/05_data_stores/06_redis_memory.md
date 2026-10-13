@@ -2,6 +2,8 @@
 
 > **대상**: Redis 단일 인스턴스의 Stream 엔트리 단위 설계 · 엔트리 크기와 용량 티어 · maxmemory 산정 · 프로파일별 산정(부하 실험 · 개발 · 중간) · volatile-lru 축출 대상 · **축출 연쇄** · MAXLEN과 maxmemory의 관계(ADR-21) · 컨테이너 상한 여유 · 메모리 측정 계약 · **업무 명령 스트림 · 결과 키의 크기(관계 · 현행 참고)** — MAXLEN · maxmemory 조정값 정본
 > **작성일**: 2026-09-24
+> **개정일**: 2026-10-11 — **D-16 설비 가동 키 · 동시 적재 게이트**(사용자 결정 2026-10-11) — maxmemory 산정 표에 **제어 · 게이트 행**(ctl:plant:power 봉인 · cache:dual:active 캐시 — 각 1키 · 바이트 단위라 여유에 포함 · 합계 불변) · 축출 대상 표 8 → **9**행(rt:latest 행에 ctl:plant:power — 아니다 · cache:dual:active 후보 — 축출되면 그 배치들이 비교 사본에서 빠진다)
+> **개정일**: 2026-10-11 — **D-16 알람 · 로그인 · 권한 · 작업지시 · 측정 도구 삭제**(사용자 결정 2026-10-11 · 리드 판정 — WRK 함께 폐지) — 축출 대상 표 11 → **8**행(alarm:state · cache:alarmrules · perm · alarmevents · workorders · rl · auth:refresh 삭제 · 봉인 5 → **4** 패턴 · 캐시 14 → **8** 패턴) · 로그아웃 B형 · rl 보안 잔여 불릿 삭제 · 산정 표의 알람 상태 · 세션 · rl · auth 항 삭제(메모리 합계 불변) · 적체 검사 503(datagen.stream_full 폐지) 삭제 · 연쇄 도식의 rl · auth · 로그아웃 삭제 · EXP-18 · 39 · 46 폐지(D-16) 표기 · 스냅샷 복원 조건 삭제
 > **개정일**: 2026-09-28 — 웨이브 1 검수 반영(B-M7) — 축출 증상 표에 **lock:biz:writer** 행(갱신 실패 → 소비 중단 · 재획득 · 이어받기) — 행 10 → **11** · 후보 8 → **9**행(캐시 패턴 13 → **14**) — 메모리 예산 불변
 > **개정일**: 2026-09-28 — 흐름 구독 표지 반영 — 축출 대상 표에 cache:flow:subscribed(후보 · 축출되면 다음 갱신까지 흐름 요약이 멈춘다) — 9 → **10**행
 > **개정일**: 2026-09-28 — 업무 쓰기 Redis 경유 개정(사용자 결정 2026-09-27) — maxmemory 산정에 **업무 명령 버퍼 · 결과 행**(stream:biz:cmd MAXLEN 10000 현행 참고 · 관계 MAXLEN ≥ 명령 유효 창 × 최대 업무 쓰기율 · biz:result는 캐시 예산 안) — 합계 불변 · 프로파일 표 업무 명령 MAXLEN 행 · 축출 대상 8 → **9**행 · MAXLEN 관계 불릿(업무 명령 스트림에는 발행자 적체 검사가 없다)
@@ -11,7 +13,7 @@
 > **개정일**: 2026-09-24 — W6 실험 채번 반영 — S6 스풀 도달 문구 정정 · Pub/Sub 한도 소유 · EXP 번호(정본 10_observability/01 · 06)
 > **원천**: 원본 architecture.md §8 · §8.4 · §9.3 · §13 · §15 · §17 · §19(커밋 ff66a37) · 원본 tech_stack.md §5.3 · §10.2(커밋 ff66a37) · 원본 data_flow.md §12.1 · §14.1(커밋 ff66a37) · 원본 implementation_plan.md §2.1 · §2.3(커밋 ff66a37) · ADR-05 · ADR-21 · [05_redis_keyspace.md](./05_redis_keyspace.md) 키 패턴 · [../04_architecture/06_backpressure_failure.md](../04_architecture/06_backpressure_failure.md) 백프레셔 임계
 
-단일 인스턴스의 메모리는 **봉인 계열(축출 불가)과 캐시 계열(축출 가능)의 합**으로 산정한다. 봉인 계열의 상한을 캐시 예산 바깥에 먼저 떼어 두면 수집이 폭주해도 세션 · 조회 캐시가 밀려나지 않고, 그 상한을 넘기 전에 애플리케이션이 백프레셔를 건다(ADR-21). 이 문서는 그 산정과, 산정이 깨졌을 때 한 인스턴스 안에서 벌어지는 **축출 연쇄**를 고정한다.
+단일 인스턴스의 메모리는 **봉인 계열(축출 불가)과 캐시 계열(축출 가능)의 합**으로 산정한다. 봉인 계열의 상한을 캐시 예산 바깥에 먼저 떼어 두면 수집이 폭주해도 조회 캐시가 밀려나지 않고, 그 상한을 넘기 전에 애플리케이션이 백프레셔를 건다(ADR-21). 이 문서는 그 산정과, 산정이 깨졌을 때 한 인스턴스 안에서 벌어지는 **축출 연쇄**를 고정한다.
 
 **아래 수치는 원본 산정이다.** 캐시 예산은 원본의 어림값이고 실측 전 3계층 미확인이다. 엔트리 크기는 인코딩 부분만 S1에서 실측했다(태그 500 RANDOM_WALK 7,051 B — 기록 009 · 019e54d · 부하 실험 · L · 스위치 기본값) — Redis 안 오버헤드는 미확인이다. MAXLEN · maxmemory는 2계층 조정값이며 **이 문서가 값의 정본**이다. 백프레셔 임계 · 판정량의 정본은 [../04_architecture/06_backpressure_failure.md](../04_architecture/06_backpressure_failure.md), 컨테이너 메모리 상한의 정본은 [../09_tech_stack/04_local_environment.md](../09_tech_stack/04_local_environment.md)다(현행 인용 [../04_architecture/03_execution_topology.md](../04_architecture/03_execution_topology.md)).
 
@@ -54,15 +56,16 @@ Stream 엔트리를 포인트 단위가 아니라 **스캔 사이클 단위**로
 |------|------|------|------|
 | Stream 본체 | MAXLEN 200000 × 약 7 KB | 약 1.4 GB | 봉인 |
 | **DLQ** | **DLQ MAXLEN 10000 × 원 엔트리 약 7 KB** | **약 0.07 GB** | 봉인 — **신설 항** |
-| 최신값 · 알람 상태 | rt:latest 태그 수만큼 · alarm:state 규칙 수만큼 | 캐시 예산에 포함(수 MB) | 봉인 |
+| 최신값 | rt:latest 태그 수만큼 | 캐시 예산에 포함(수 MB) | 봉인 |
 | **업무 명령 버퍼** | stream:biz:cmd MAXLEN 10000(현행 참고) × 봉투 약 1 KB 이하(도출 — 원본 산정 없음) | 여유에 포함(약 0.01 GB 이하) | 봉인 — **신설 항**(사용자 결정 2026-09-27) |
-| 캐시 · 세션 · 락 · 계수 · 결과 | cache · lock · rl · auth · biz(결과 키 — TTL 300초 × 업무 쓰기율 × 결과 크기 · 수 MB 이하) | 약 0.4 GB(최신값 포함) | 캐시 |
+| 캐시 · 락 · 결과 | cache · lock · biz(결과 키 — TTL 300초 × 업무 쓰기율 × 결과 크기 · 수 MB 이하) | 약 0.4 GB(최신값 포함) | 캐시 |
+| 제어 · 게이트(D-16) | ctl:plant:power(Hash 필드 2) · cache:dual:active(runId 36자) — 각 키 1 · 수백 바이트 | 여유에 포함 — 합계 불변 | 봉인 1 · 캐시 1 |
 | 여유 | 단편화 · 버퍼 | 약 0.2 GB → DLQ 뒤 약 0.13 GB | 없음 |
 | **합계 = maxmemory** | 위 행의 합(포함 표기 행은 따로 더하지 않는다) | **2.0 GB** | 해당 없음 |
 
 - 검산: 1.4 + 0.07 + 0.4 + 0.13 = **2.0 GB** · 정상 구성 봉인 + 캐시 = 1.4 + 0.07 + 0.4 = 1.87 GB < 2.0 GB → 축출 없음
 - **DLQ 항이 없던 이유는 DLQ 엔트리가 배치 통째였기 때문이다.** 배치 하나(최대 수만 행)를 엔트리 하나로 두면 MAXLEN 10000이 수 GB가 되어 산정 자체가 불가능했다 — 원 엔트리 단위 판정([05_redis_keyspace.md](./05_redis_keyspace.md))이 이 항을 닫는다.
-- **봉인 계열의 합이 먼저 떼어진다.** 캐시 예산 0.4 GB는 봉인 합 1.47 GB를 뺀 나머지에서 잡혔다 — Stream 상한을 maxmemory 안쪽에 두어 Stream이 캐시 · 세션 예산을 침범하지 않는다(ADR-21). Stream은 정상 운전에서 상한까지 차므로 이 산정은 여유가 아니라 **상시 점유의 산정**이다.
+- **봉인 계열의 합이 먼저 떼어진다.** 캐시 예산 0.4 GB는 봉인 합 1.47 GB를 뺀 나머지에서 잡혔다 — Stream 상한을 maxmemory 안쪽에 두어 Stream이 캐시 예산을 침범하지 않는다(ADR-21). Stream은 정상 운전에서 상한까지 차므로 이 산정은 여유가 아니라 **상시 점유의 산정**이다.
 
 ## 프로파일별 산정
 
@@ -75,7 +78,7 @@ Stream 엔트리를 포인트 단위가 아니라 **스캔 사이클 단위**로
 | Stream MAXLEN | **200000** | **50000** | **150000** |
 | Stream 상한 메모리(태그 500 기준) | 약 1.4 GB | 약 0.35 GB | 약 1.05 GB |
 | DLQ(원 엔트리 × 10000) | 약 0.07 GB | 상동 | 상동 |
-| 캐시 · 세션 · 최신값 예산 | 약 0.4 GB | 약 0.3 GB | 약 0.35 GB |
+| 캐시 · 최신값 예산 | 약 0.4 GB | 약 0.3 GB | 약 0.35 GB |
 | 여유 | 약 0.13 GB | 약 0.28 GB | **약 0.03 GB** |
 | 업무 명령 MAXLEN(stream:biz:cmd) | 10000 | 상동 | 상동 |
 | 위험 임계(스풀 전환 · 참고) | 180,000 | 45,000 | 135,000 |
@@ -93,20 +96,16 @@ maxmemory-policy는 **volatile-lru**다(ADR-05). TTL이 있는 키 가운데 최
 | 키 | 축출 후보 | 축출되면 | 복구 경로 | 누가 먼저 알아채나 |
 |------|:------:|------|------|------|
 | stream:plc:raw · dlq · biz:cmd | 아니다 | 해당 없음 | 해당 없음 | 해당 없음 |
-| rt:latest · alarm:state | 아니다 | 해당 없음 | 해당 없음 | 해당 없음 |
+| rt:latest · ctl:plant:power | 아니다 | 해당 없음 | 해당 없음 | 해당 없음 |
 | cache:q | 후보 | 조회 캐시 미스 → ClickHouse 집계 증가 | 다음 조회가 다시 채움 | 조회 p95 · 히트율 |
-| cache:tagmeta · devlist · alarmrules · perm | 후보 | PostgreSQL 조회 증가 | 다음 조회가 다시 채움 | pg_stat_statements 호출 수 |
-| cache:alarmevents · workorders | 후보 | 목록 조회가 PostgreSQL로 | 상동 | 상동 |
-| cache:flow:subscribed | 후보 | 흐름 요약 발행이 다음 갱신(현행 참고 5초)까지 멈춘다 — 적재 · 판정 · 업무 쓰기는 영향 없다 | 게이트웨이 갱신 | EXP-FLOW 화면의 점 공백 |
+| cache:tagmeta · devlist | 후보 | PostgreSQL 조회 증가 | 다음 조회가 다시 채움 | pg_stat_statements 호출 수 |
+| cache:flow:subscribed | 후보 | 흐름 요약 발행이 다음 갱신(현행 참고 5초)까지 멈춘다 — 적재 · 업무 쓰기는 영향 없다 | 게이트웨이 갱신 | EXP-FLOW 화면의 점 공백 |
 | lock:rebuild:* | 후보 | **락이 풀려 스탬피드가 다시 열린다** | 없음 — 만료와 같다 | ClickHouse 동일 쿼리 동시 수 |
 | lock:biz:writer | 후보 | 쥔 워커의 다음 갱신이 실패해 소비를 멈추고 다시 쥔다 — 그 사이 다른 워커가 쥐면 이어받아 PEL부터 소진한다 · 겹친 명령의 이중 적용은 원장 UNIQUE가 막는다 | 재획득(재시도 주기) | biz_stream_lag 순간 상승 |
-| rl:* | 후보 | **계수가 0부터 다시 센다 — 레이트 리밋이 느슨해진다** | 다음 분 창 | 레이트 리밋 거절 계수의 급감 |
 | biz:result:* | 후보 | 결과 키 미스 — api · 명령 조회가 원장(biz_command_log)을 읽는다 · **적용은 영향 없다** | 원장이 원천 · 다시 채우지 않는다 | 명령 조회의 원장 조회 수 |
-| auth:refresh:* | 후보 | **사용자가 로그아웃된다** — 원천이 없다 | 재로그인 | 사용자 |
+| cache:dual:active | 후보 | 직접 비교 중이면 게이트가 닫혀 **다음 갱신(2초)까지의 배치가 PostgreSQL 비교 사본에서 빠진다** — flusher는 마지막 확인의 열림을 읽기 실패에만 믿고 "키 없음"은 즉시 닫힘으로 읽는다 | 실행의 다음 갱신이 다시 연다 | 넣기 결과의 rows 차(ClickHouse > PostgreSQL) |
 
-- 검산: 행 = **11** · 축출 후보 아님 2행(봉인 5 패턴) + 후보 9행(캐시 14 패턴)
-- **B형 — 사용자가 로그아웃되는 것이 Stream 적체의 증상일 수 있다.** 결론 — auth:refresh는 TTL 키라 메모리 압박에서 밀려난다. 반대 시나리오 — MAXLEN을 maxmemory보다 먼저 걸리게 산정하지 않으면 수집 폭주가 전원을 로그아웃시킨다. 파생 지침 — 로그아웃 신고가 들어오면 evicted_keys와 Stream 점유 메모리를 먼저 본다([../02_features/01_auth.md](../02_features/01_auth.md)).
-- **rl 축출은 보안 잔여다.** 메모리 압박 중에는 레이트 리밋이 약해진다 — 로컬 전용이라 외부 공격 경로는 없지만, 부하 실험에서 "레이트 리밋이 동작했다"는 측정이 메모리 상태에 따라 달라진다([../12_security/03_api_surface_defense.md](../12_security/03_api_surface_defense.md)).
+- 검산: 행 = **9** · 축출 후보 아님 2행(봉인 5 패턴) + 후보 7행(캐시 9 패턴 — cache 5 · lock 3 · biz 1) · 옛 alarm:state · cache:alarmrules · perm · alarmevents · workorders · rl · auth:refresh는 D-16 폐지
 
 ## 축출 연쇄
 
@@ -119,8 +118,8 @@ flowchart TB
     C{"미확인 적체가<br/>위험 임계 초과?"}
     D["Collector 스풀 전환<br/>1차 신호 · 애플리케이션"]
     E{"used_memory가<br/>maxmemory 도달?"}
-    F["volatile-lru 축출<br/>cache · lock · rl · auth"]
-    G["히트율 하락 · 원천 부하 증가<br/>스탬피드 재개 · 로그아웃"]
+    F["volatile-lru 축출<br/>cache · lock · biz"]
+    G["히트율 하락 · 원천 부하 증가<br/>스탬피드 재개"]
     H{"TTL 키 소진?"}
     I["쓰기 OOM · XADD 실패<br/>2차 안전망"]
     J["MAXLEN 트리밍<br/>검사 우회 발행자의 최후 안전장치"]
@@ -137,7 +136,7 @@ flowchart TB
 - **정상 구성에서는 E가 참이 되지 않는다.** Stream이 MAXLEN까지 차도 봉인 + 캐시 합이 maxmemory 안쪽이고, 적체는 발행자의 적체 검사(C)가 먼저 막는다(ADR-21). C의 판정량은 XLEN이 아니라 **미확인 적체(그룹 lag + pending)**다 — XLEN은 정상 운전에서도 MAXLEN 근처라 판정량이 되지 못한다(정본 [../04_architecture/06_backpressure_failure.md](../04_architecture/06_backpressure_failure.md)). E가 참이 되는 것은 캐시가 예산을 넘어 팽창했거나 maxmemory를 낮춘 실험뿐이다.
 - **G의 증상 순서가 선행 지표다.** 조회 지연 상승 · 히트율 하락이 수집 적체보다 먼저 화면에 드러난다. 운영 중 히트율과 **Stream 점유 메모리**의 역상관이 나타나면 Redis 인스턴스 분리(확장 로드맵 3단계)의 진입 근거다([../04_architecture/08_scaling_roadmap.md](../04_architecture/08_scaling_roadmap.md)) — 연쇄를 모는 것은 적체가 아니라 Stream 충전량이다.
 - **I까지 가도 Stream 엔트리의 조용한 유실은 없다.** OOM은 새 쓰기를 거절할 뿐 기존 봉인 키를 지우지 않는다 — XADD 실패가 스풀 전환으로 이어져 명시적 실패가 된다. 조용한 유실 경로는 J(MAXLEN 트리밍)뿐이며 그것이 결함 계수를 두는 이유다.
-- 실험 재현 조건 — 부하 실험 프로파일에서 maxmemory 1.6 GB로 낮추고 **태그 500 설비로 생성**한다(§엔트리 크기와 용량 티어). 태그 200 설비면 Stream이 MAXLEN에 닿아도 약 0.56 GB라 연쇄가 시작되지 않는다. 관찰은 스냅샷 복원 직후(Stream이 빈 상태)부터 충전 곡선을 따라 한다.
+- 실험 재현 조건 — 부하 실험 프로파일에서 maxmemory 1.6 GB로 낮추고 **태그 500 설비로 생성**한다(§엔트리 크기와 용량 티어). 태그 200 설비면 Stream이 MAXLEN에 닿아도 약 0.56 GB라 연쇄가 시작되지 않는다. 관찰은 Stream이 빈 상태부터 충전 곡선을 따라 한다. 이 조건을 만들던 축출 연쇄 실험 EXP-18은 실행 도구(스냅샷 · 모드 B · 태그 500 구성) 삭제로 폐지(D-16)됐다 — 조건은 연쇄의 구조로 남긴다.
 
 ## MAXLEN과 maxmemory의 관계
 
@@ -145,14 +144,14 @@ ADR-21의 메모리 쪽 계약이다. 세 장치가 서로 다른 순서로 걸�
 
 | 순서 | 장치 | 걸리는 조건 | 성격 | 조용한가 | 계측 |
 |:-:|------|------|------|:------:|------|
-| 1 | 적체 검사(발행자) | 미확인 적체(그룹 lag + pending) > 위험 임계 | **1차 신호** — 발행자가 XADD와 같은 파이프라인에 그룹 상태 조회를 싣는다 | 아니다 — 스풀 전환 · 503 | spool_active · 적체 게이지 |
+| 1 | 적체 검사(발행자) | 미확인 적체(그룹 lag + pending) > 위험 임계 | **1차 신호** — 발행자가 XADD와 같은 파이프라인에 그룹 상태 조회를 싣는다 | 아니다 — 스풀 전환 | spool_active · 적체 게이지 |
 | 2 | MAXLEN 트리밍 | XLEN > MAXLEN — 정상 운전에서 상시 | 확인분 정리 · 검사를 우회한 발행자의 **최후 안전장치** | **조용하다** — 오래된 엔트리를 버린다 | stream_trimmed_unacked(미확인분이 잘리면 결함) |
 | 3 | maxmemory OOM | used_memory ≥ maxmemory이고 TTL 키 소진 | **2차 안전망** — 캐시가 함께 팽창했을 때 | 아니다 — XADD 오류 | evicted_keys · XADD 오류 |
 
 - 검산: 장치 = **3** · 조용한 장치 1(MAXLEN)
 - **순서 계약** — 위험 임계 < MAXLEN이고, MAXLEN × 엔트리 크기 + DLQ + 캐시 예산 < maxmemory다(관계의 정본 [../04_architecture/06_backpressure_failure.md](../04_architecture/06_backpressure_failure.md) §MAXLEN과 maxmemory · 이 문서는 값을 갖는다). 한쪽 조정값을 바꾸면 두 부등식을 다시 검산한다.
 - **MAXLEN ~ 는 근사 트리밍이다.** 정확한 길이가 아니라 노드 단위로 잘라 비용이 낮다. 결함 판정은 "잘렸다"가 아니라 "미확인(PEL에 남은) 엔트리가 잘렸다"로 한다 — 이미 소비된 엔트리의 트리밍은 정상이다.
-- **업무 명령 스트림에는 1차 신호(발행자 적체 검사)가 없고 MAXLEN이 유일한 크기 장치다.** 업무 쓰기는 사람 규모라 적체의 원인은 발행 폭주가 아니라 워커 정지다 — 관계는 **MAXLEN ≥ 명령 유효 창(현행 참고 300초) × 최대 업무 쓰기율**이며 10000은 초당 약 33건까지 워커 정지 중에도 미적용 명령을 자르지 않는다. 넘으면 202를 받은 명령이 잘린다 — 한계 등재 [02_postgresql_constraints.md](./02_postgresql_constraints.md) #25 · 감시 biz_stream_lag. 부하 실험의 쓰기율이 이 값을 넘으면 MAXLEN을 같은 관계로 올린다.
+- **업무 명령 스트림에는 1차 신호(발행자 적체 검사)가 없고 MAXLEN이 유일한 크기 장치다.** 업무 쓰기는 사람 규모라 적체의 원인은 발행 폭주가 아니라 워커 정지다 — 관계는 **MAXLEN ≥ 명령 유효 창(현행 참고 300초) × 최대 업무 쓰기율**이며 10000은 초당 약 33건까지 워커 정지 중에도 미적용 명령을 자르지 않는다. 넘으면 202를 받은 명령이 잘린다 — 한계 등재 [02_postgresql_constraints.md](./02_postgresql_constraints.md) #25 · 감시 biz_stream_lag. 업무 쓰기율이 이 값을 넘으면 MAXLEN을 같은 관계로 올린다.
 - DLQ의 MAXLEN도 같은 성격이다. DLQ 트리밍은 재처리 전 실패 엔트리를 조용히 버린다 — 한계 등재 [02_postgresql_constraints.md](./02_postgresql_constraints.md) #12.
 
 ## 컨테이너 상한과 maxmemory의 차
@@ -179,7 +178,7 @@ ADR-21의 메모리 쪽 계약이다. 세 장치가 서로 다른 순서로 걸�
 | 엔트리 실제 크기 | MEMORY USAGE stream:plc:raw ÷ XLEN · 태그 수별 | 태그당 약 14 B 도출값의 실측 교체 |
 | 계열별 점유 | 접두별 표본 MEMORY USAGE 합 | 캐시 예산 0.4 GB의 실측 교체 |
 | 축출 | evicted_keys · 접두별 키 수 변화 | 연쇄의 순서와 시작 시점 |
-| 히트율 | 접두별 히트 · 미스 계수(cache:q 단독) | keyspace 전체 히트율은 rl · auth 조회가 섞여 쓰지 않는다(REQ-NFR-10) |
+| 히트율 | 접두별 히트 · 미스 계수(cache:q 단독) | keyspace 전체 히트율은 lock · biz 조회가 섞여 쓰지 않는다(REQ-NFR-10) |
 | 트리밍 결함 | stream_trimmed_unacked | 0이어야 한다 |
 | 단편화 | mem_fragmentation_ratio · RSS | 컨테이너 상한 여유의 실측 |
 
@@ -190,12 +189,12 @@ ADR-21의 메모리 쪽 계약이다. 세 장치가 서로 다른 순서로 걸�
 
 | 항목 | 상태 | 확정 자리 |
 |------|------|------|
-| 엔트리 실제 크기 · 태그당 바이트 | **인코딩 부분 확정(S1 · 기록 009 · 019e54d · 부하 실험 · L · 스위치 기본값 — S · M 구성은 기록 007 · 008)** — 태그 500 엔트리 RANDOM_WALK 7,051 B(원본 산정 약 7 KB와 일치) · 혼합 5,455 B · 포인트당 약 14 B(RANDOM_WALK) · 약 11 B(혼합) — 태그 수에 비례. **Redis 안 노드 · 리스트팩 오버헤드는 미확인**(7 KB 엔트리의 노드당 엔트리 수) | S5 실측 · EXP-39 · [../10_observability/06_experiment_catalog.md](../10_observability/06_experiment_catalog.md) |
+| 엔트리 실제 크기 · 태그당 바이트 | **인코딩 부분 확정(S1 · 기록 009 · 019e54d · 부하 실험 · L · 스위치 기본값 — S · M 구성은 기록 007 · 008)** — 태그 500 엔트리 RANDOM_WALK 7,051 B(원본 산정 약 7 KB와 일치) · 혼합 5,455 B · 포인트당 약 14 B(RANDOM_WALK) · 약 11 B(혼합) — 태그 수에 비례. **Redis 안 노드 · 리스트팩 오버헤드는 미확인**(7 KB 엔트리의 노드당 엔트리 수) | EXP-39(폐지(D-16) — 모드 B · 태그 500 구성 삭제 · 노드 오버헤드 미확인으로 남는다) · [../10_observability/06_experiment_catalog.md](../10_observability/06_experiment_catalog.md) |
 | 캐시 계열 실제 점유 | 원본 산정 약 0.4 GB | 상동 |
-| 업무 명령 봉투 · 결과 실제 크기 · 업무 명령 MAXLEN 검증 | 도출값(봉투 약 1 KB 이하) · 현행 참고 10000 — EXP-46의 쓰기율로 관계를 검산한다 | 이 문서 · EXP-46 |
+| 업무 명령 봉투 · 결과 실제 크기 · 업무 명령 MAXLEN 검증 | 도출값(봉투 약 1 KB 이하) · 현행 참고 10000 — 업무 쓰기율 실측으로 관계를 검산한다(옛 EXP-46은 k6 · 모드 B 삭제로 폐지(D-16)) | 이 문서 |
 | DLQ MAXLEN의 프로파일별 값 | 원본 한 값(10000)뿐 | 이 문서 — S3 DLQ 실험 뒤 |
 | Pub/Sub 출력 버퍼 한도 | 값 소유 이전(W6) — S4 확정 | [../09_tech_stack/03_data_infra.md](../09_tech_stack/03_data_infra.md) · 메트릭 [../10_observability/01_metrics_catalog.md](../10_observability/01_metrics_catalog.md) |
-| 축출 시작 시점 · 히트율 하락 곡선 | 3계층 미확인 — 확정 전 임의 값 고정 금지 | 축출 연쇄 실험 EXP-18 |
+| 축출 시작 시점 · 히트율 하락 곡선 | 3계층 미확인 — 확정 전 임의 값 고정 금지 | 축출 연쇄 실험 EXP-18(폐지(D-16)) — 실행 도구 없음 |
 | 백프레셔 하강 히스테리시스 | 닫힘 — ADR-23 · 메모리 쪽 영향 없음 | [../04_architecture/06_backpressure_failure.md](../04_architecture/06_backpressure_failure.md) |
 
 ## 관련 문서

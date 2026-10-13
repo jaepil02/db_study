@@ -2,6 +2,8 @@
 
 > **대상**: db_study의 기술 선택과 버전 — 프론트엔드 · 백엔드 · 데이터 인프라 · 로컬 실행 환경 · 개발 도구 · 선정 근거
 > **작성일**: 2026-09-23
+> **개정일**: 2026-10-12 — **D-05 부분 개정 · ADR-32**(직접 비교 비교 사본 TimescaleDB) — 버전 고정표 37 → **38**행(버전 고정 26 → **27** — TimescaleDB 2.30)
+> **개정일**: 2026-10-11 — **D-16 알람 · 로그인 · 측정 도구 삭제**(사용자 결정 2026-10-11) — 환경변수 40 → **36**(DATAGEN_BULK_ENABLED · ALARM_ACK_ACTOR_EMAIL · JWT_SIGNING_KEY · SEED_USER_PASSWORD 삭제 · 비밀 9 → **7**) · 버전 고정표 39 → **37**행(hash-wasm · k6 삭제 · 버전 고정 28 → **26**) · 파일 목차 05 행 Taskfile 작업 — 정본 04_local_environment · 03_data_infra 개정일 줄 · 루트 고정 기준 갱신은 리드
 > **개정일**: 2026-10-03 — 센서 자동 생성 게이트 반영(사용자 결정 2026-10-03) — 환경변수 39 → **40**(SENSOR_AUTOGEN · 스위치 밖 27 → **28**) — 정본 04_local_environment 개정일 줄
 > **개정일**: 2026-10-03 — UI/UX 다듬기(사용자 지시 2026-10-03) — 버전 고정표 38 → **39**행(Pretendard 버전 고정) · 버전 고정 27 → **28** — 정본 03_data_infra 개정일 줄
 > **개정일**: 2026-09-28 — DB 시각 UTC(ADR-27 · 사용자 요구 2026-09-28) — 파일 목차 03 행에 서버 timezone UTC(W6 판정 Asia/Seoul 대체) — 문서 수 불변
@@ -31,7 +33,7 @@
 | [02_backend.md](./02_backend.md) | NestJS + Fastify 어댑터 · 단일 런타임 · 데이터 평면 라이브러리(@clickhouse/client · ioredis · pg · pg-copy-streams · modbus-serial · jsmodbus · msgpackr · piscina · prom-client) | tech_stack §2 · §3 | W6 |
 | [03_data_infra.md](./03_data_infra.md) | PostgreSQL · ClickHouse · Redis 이미지와 확장 · 서버 timezone UTC(ADR-27 — W6 판정 대체) · observability 프로파일 구성원(판정) · **버전 고정표** | tech_stack §5 · §9 · §12 · architecture §14 | W6 |
 | [04_local_environment.md](./04_local_environment.md) | 머신 요구사항 · 실측 환경(WSL2 · 20스레드 · 가용 RAM) · 메모리 프로파일 · 중간 프로파일 · **컨테이너 메모리 상한 · 환경변수 정본** · cpuset · networkingMode=mirrored | tech_stack §10.2 · implementation_plan §2 | W6 |
-| [05_tooling_devops.md](./05_tooling_devops.md) | pnpm workspace · Biome · tsc strict · Vitest · Testcontainers · Taskfile(migrate · seed · snapshot · restore · bench) · 리포지터리 구조 · 착수 체크리스트의 도구 항목 · 마이그레이션 도구 판정(node-pg-migrate) · SIM 주입 계획 형식 · docs:lint 편입 | tech_stack §11 · implementation_plan §6 · §9 | W6 |
+| [05_tooling_devops.md](./05_tooling_devops.md) | pnpm workspace · Biome · tsc strict · Vitest · Testcontainers · Taskfile(migrate · seed · docs:lint + 보조 3) · 리포지터리 구조 · 착수 체크리스트의 도구 항목 · 마이그레이션 도구 판정(node-pg-migrate) · SIM 주입 계획 형식 · docs:lint 편입 | tech_stack §11 · implementation_plan §6 · §9 | W6 |
 | [06_decisions_rationale.md](./06_decisions_rationale.md) | 선정 근거 · NestJS vs Python 비교 · 감수 비용과 완화책 · 전환 조건 · **채택하지 않은 기술과 버린 대안의 실패 시나리오** | tech_stack §3.2~§3.4 · §4.1 · §5.2 · §13 | W6 |
 
 검산: 본문 6 + README 1 = **7**
@@ -46,8 +48,8 @@
 | 버전 고정 | 정확 버전은 [03_data_infra.md](./03_data_infra.md)의 버전 고정표 한 자리에만 적는다 |
 | 메모리 프로파일 | **2** — 부하 실험 · 개발. 중간 프로파일은 WSL2 메모리 상향이 불가능할 때의 조건부 대안이다 |
 | 관측 프로파일 | 선택 기동 · 구성원 **2**(prometheus · grafana). alertmanager 채택하지 않음 · tempo 조건부(현 범위 밖). 판정 정본 [03_data_infra.md](./03_data_infra.md) |
-| 환경변수 | **40**(스위치 12 + 스위치 밖 28 — 비밀 9 포함) — 정본 [04_local_environment.md](./04_local_environment.md) §환경변수 |
-| 버전 고정표 | **39행**(태그 고정 4 · 버전 고정 28 · 재확인 대기 5 · 미고정 1 · 해당 없음 1 = 39) — 착수 시점 공식 릴리스 노트 재확인 전까지 확정 태그가 아니다 · 정본 [03_data_infra.md](./03_data_infra.md) |
+| 환경변수 | **36**(스위치 12 + 스위치 밖 24 — 비밀 7 포함) — 정본 [04_local_environment.md](./04_local_environment.md) §환경변수 |
+| 버전 고정표 | **38행**(태그 고정 4 · 버전 고정 27 · 재확인 대기 5 · 미고정 1 · 해당 없음 1 = 38) — 착수 시점 공식 릴리스 노트 재확인 전까지 확정 태그가 아니다 · 정본 [03_data_infra.md](./03_data_infra.md) |
 
 ## 관련 문서
 

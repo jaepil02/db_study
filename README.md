@@ -8,7 +8,7 @@ Redis, PostgreSQL, ClickHouse를 활용하여 대용량 PLC 데이터와 업무 
 | 계층 | 선택 | 실행 |
 |---|---|---|
 | 프론트엔드 | Next.js (App Router) + TypeScript | 호스트에서 `pnpm dev` → http://localhost:13001 |
-| 백엔드 | NestJS 단일 애플리케이션 (API + Collector·PlcSim·Ingest·Alarm·DataGen·Metrics 모듈) | Docker 컨테이너 `api` → 127.0.0.1:13000(컨테이너 3000) |
+| 백엔드 | NestJS 단일 애플리케이션 (API + Collector·PlcSim·Ingest·DataGen·Metrics 모듈) | Docker 컨테이너 `api` → 127.0.0.1:13000(컨테이너 3000) |
 | OLTP | PostgreSQL 18 | Docker 컨테이너 `postgres` → 127.0.0.1:5432 |
 | OLAP | ClickHouse 26.8 | Docker 컨테이너 `clickhouse` → 127.0.0.1:8123 |
 | 버퍼·캐시 | Redis 8 (Stream + 캐시 + Pub/Sub, 단일 인스턴스) | Docker 컨테이너 `redis` → 127.0.0.1:6379 |
@@ -18,6 +18,8 @@ Docker Compose로 컨테이너 4개(`api`, `postgres`, `clickhouse`, `redis`)를
 
 ## 문서
 
-설계 문서는 [docs/README.md](docs/README.md)에서 시작한다. 12개 폴더(개요 · 기능 · 요구사항 · 아키텍처 · 저장소 · 데이터 흐름 · API · 화면 · 기술 스택 · 관측과 실험 · 용어 · 보안) 123개 문서로 구성되며, 문서 지도 · 고정 기준 · 읽는 순서는 docs/README.md가, 작성 규약은 [docs/CLAUDE.md](docs/CLAUDE.md)가 갖는다.
+설계 문서는 [docs/README.md](docs/README.md)에서 시작한다. 12개 폴더(개요 · 기능 · 요구사항 · 아키텍처 · 저장소 · 데이터 흐름 · API · 화면 · 기술 스택 · 관측과 실험 · 용어 · 보안) 105개 문서로 구성되며, 문서 지도 · 고정 기준 · 읽는 순서는 docs/README.md가, 작성 규약은 [docs/CLAUDE.md](docs/CLAUDE.md)가 갖는다.
 
-기존 설계서 4본(architecture.md · data_flow.md · tech_stack.md · implementation_plan.md)은 docs/로 흡수하고 삭제했다. 원문은 커밋 ff66a37에서 볼 수 있다.
+기존 설계서 4본(architecture.md · data_flow.md · tech_stack.md · implementation_plan.md)은 docs/로 흡수하고 삭제했다. 원문은 커밋 ff66a37에서 볼 수 있다. 구축 계획 docs_plan.md는 형식 사양을 docs/CLAUDE.md로 흡수한 뒤 삭제했다(원문 커밋 28c0cc9).
+
+알람 · 로그인 · 권한 · 감사 기록 · 작업지시 · 측정 도구 · 스냅샷은 사용자 결정 D-16(2026-10-11)으로 코드 · 저장소 · 문서에서 지웠다. 측정 기록(docs/measurements)은 화면의 근거라 남긴다.

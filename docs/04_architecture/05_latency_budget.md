@@ -1,7 +1,8 @@
 # 지연 예산
 
-> **대상**: 수집 → 조회 가능까지의 구간별 p95 예산 · 구간 경계(측정 시작 · 끝 시각) · 지배 구간과 플러시 주기 트레이드오프 · **ADR-09 반영 시 구간 변화** · 조회 경로 예산 · **알람 판정 구간 신설** · **업무 쓰기 명령 경로 구간 신설(F-05 · B1~B5)** · 측정 지점 · 로컬 해석 규칙
+> **대상**: 수집 → 조회 가능까지의 구간별 p95 예산 · 구간 경계(측정 시작 · 끝 시각) · 지배 구간과 플러시 주기 트레이드오프 · **ADR-09 반영 시 구간 변화** · 조회 경로 예산 · **업무 쓰기 명령 경로 구간 신설(F-05 · B1~B5)** · 측정 지점 · 로컬 해석 규칙
 > **작성일**: 2026-09-24
+> **개정일**: 2026-10-11 — **D-16 알람 · 감사 · 측정 도구 삭제**(사용자 결정 2026-10-11) — **§알람 판정 구간 — 신설 삭제**(A1~A6 · 판정 구간 7행 · 기록 054 인용은 측정 기록에 남는다) · 구간 #1 불릿의 모드 C · D 삭제 · B3 audit_log 삭제 · EXP-46 폐지 표기 · 이벤트 루프 경합 4 → **3** · 측정 지점 8 → **7** · 모드 D 백필 창 불릿 → 과거 ts 창 불릿 · 로컬 해석의 부하 생성기 삭제 · 미확인 알람 2행 삭제 · 관련 문서 08_alarm · ADR-11 삭제
 > **개정일**: 2026-09-28 — 업무 쓰기 Redis 경유 개정(사용자 결정 2026-09-27) — **§업무 쓰기 명령 경로 구간 신설**(B1~B5 + 쓰기 대기 = 6행 · 전 행 미확인) · 조회 경로 표 업무 CRUD 행 지배 요인 · 스위치 칸(쓰기는 SW-12 direct 대 stream) — 조회 경로 수 불변
 > **개정일**: 2026-09-27 — W6 EXP-33 실측 반영(기록 054) — §알람 판정 구간 A1~A6 · 판정 구간 행 현행 칸 미확인 → **p50 실측(판정 구간 판정 · A1~A6 참고)** · 구조 관계 불릿에 실측 성립 · ClickHouse trace 로그 한계 불릿 · §미확인 등재 알람 판정 구간 행 갱신(알람 통지 지연은 미확인 유지) — 행 수 불변
 > **개정일**: 2026-09-25 — S2 실측 반영(EXP-30 기록 011 폐기 · 012 · d32b09a) — 6a · 6b · 6c 미확인 행에 S2 기록 · 지배 구간 6c 실측 성립
@@ -32,7 +33,7 @@ M 티어 정상 상태의 원본 구간이다. 누적은 원본 목표를 더한
 
 - 검산: 구간 **9** + E2E 1 = **10**행 · 원본 누적 2 + 30 + 5 + 3 + 3 + 400 + 250 + 100 + 0 = **793** ms · 원본 E2E 목표 1,500 ms와의 차 707 ms가 원본의 "여유"다
 - **E2E는 ingested_at − ts로만 계산한다**(REQ-GLB-01). ts는 모드 A에서 Collector 폴링 시점, 생성 모드에서 생성기 시점이고 ingested_at은 ClickHouse 서버의 DEFAULT가 채운다 — 적재 코드가 채우면 #6 · #7이 E2E에서 빠진다.
-- **구간 #1은 모드 A에만 있다.** 모드 B · C는 #1~#4 대신 생성기의 인코딩 · 발행이 앞에 오고, 모드 D는 파이프라인을 건너뛰어 E2E 집계에서 뺀다(REQ-NFR-03).
+- **구간 #1은 모드 A에만 있다.** 모드 B(흐름 시연 실행의 발행)는 #1~#4 대신 생성기의 인코딩 · 발행이 앞에 온다. 옛 모드 C · D는 측정 도구와 함께 D-16으로 지웠다.
 
 ### 구간 경계 판정 — Stream 대기의 시작점
 
@@ -76,31 +77,11 @@ M 티어 정상 상태의 원본 구간이다. 누적은 원본 목표를 더한
 | 시계열 조회 — 캐시 히트 | 15 ms(성능 목표 20 ms) | gzip 해제 + 직렬화 — 워커 격리 대상 | 압축 레벨 조정 | SW-03 on/off | 미확인 |
 | 시계열 조회 — 1일 · 캐시 미스 | 250 ms(성능 목표 300 ms) | ClickHouse 스캔 | 롤업 해상도 상향 | SW-03 off | 미확인 |
 | Pub/Sub → WebSocket 도달 | 150 ms | 스로틀 창(현행 참고 100 ms) | 스로틀 창 조정 | SW-06 · SW-07 | 미확인 |
-| 업무 데이터 CRUD | 80 ms(성능 목표 100 ms) | 읽기 — PostgreSQL · 캐시 · 쓰기 — 명령 대기 + PostgreSQL 커밋(직렬 · §업무 쓰기 명령 경로 구간) | 인덱스 점검 · 적용 트랜잭션 단축 | 읽기는 수집 부하 on/off · 쓰기는 SW-12 direct 대 stream(EXP-46) | 미확인 |
+| 업무 데이터 CRUD | 80 ms(성능 목표 100 ms) | 읽기 — PostgreSQL · 캐시 · 쓰기 — 명령 대기 + PostgreSQL 커밋(직렬 · §업무 쓰기 명령 경로 구간) | 인덱스 점검 · 적용 트랜잭션 단축 | 읽기는 수집 부하 on/off · 쓰기는 SW-12 direct 대 stream(옛 EXP-46 — 폐지(D-16)) | 미확인 |
 
 - 검산: 조회 경로 = **5**
 - **원본에는 목표가 두 벌이다** — 지연 예산표(원본 data_flow.md §15)의 구간 값과 성능 목표표(원본 architecture.md §16)의 합격 값. 구간 값이 합격 값보다 작은 것은 여유를 둔 것이며, 둘 다 원본 목표로만 인용한다.
 - **Pub/Sub → WebSocket 150 ms는 스로틀 창이 대부분이다.** 창 100 ms로 병합하면 평균 대기가 창 절반이고 최악이 창 하나다 — 스로틀을 끄면(SW-07 off) 이 구간은 줄지만 프레임 수가 폭증한다.
-
-## 알람 판정 구간 — 신설
-
-원본 지연 예산표에는 **알람 판정 구간이 없다**(원본 implementation_plan.md §7.3). 판정이 Ingest 배치의 후처리로 수집 경로에서 도는데(ADR-11) 예산이 없으면, S7에서 E2E가 늘어도 어느 구간 탓인지 가를 자리가 없다. 이 절이 구간을 신설하고 값은 **미확인 — 확정 전 임의 값 고정 금지**로 등재한다.
-
-| 하위 구간 | 시작 시각 | 끝 시각 | 지배 요인 | 원본 목표 | 현행 |
-|------|------|------|------|------|------|
-| A1 규칙 조회 | 판정 호출(ING-09) | 규칙 목록 확보 | cache 계열 히트 · 미스 시 PostgreSQL | 없음 | p50 0.252 ms(참고 · 첫 칸 양자화 · 기록 054) |
-| A2 상태 조회 | 규칙 확보 | 관련 rule_id 상태 확보 | **배치당 파이프라인 1회**(ADR-11) — 행당 왕복이면 행 수에 비례 | 없음 | p50 0.729 ms(참고 · 기록 054) |
-| A3 조건 평가 · 전이 | 상태 확보 | 전이 목록 완료 | 배치 행 수 · 규칙 수 | 없음 | p50 0.25 ms(참고 · 첫 칸 양자화 · 기록 054) |
-| A4 확정 쓰기 | 전이 목록 완료 | alarm_event 커밋 · 핫 상태 갱신 | 전이가 있을 때만 — PostgreSQL 커밋 | 없음 | p50 2.137 ms(참고 · 기록 054) |
-| A5 판정 전수 기록 | 전이 목록 완료 | alarm_eval 삽입 응답 | ClickHouse 삽입 — 원시 배치와 같은 재시도 정책 | 없음 | p50 4.192 ms(참고 · 기록 054) |
-| A6 발행 | 확정 쓰기 완료 | ch:alarm 발행 완료 | Redis 왕복 | 없음 | p50 0.25 ms(참고 · 확정이 있는 배치에서만 관측 · 기록 054) |
-| 판정 구간 | 판정 호출 | A4 · A5 · A6 중 마지막 완료 | 위 합계 | **없음 — 신설** | **p50 6.726 ms**(판정 · 한 칸 보간 · p95 9.552 ms 참고 · 기록 054) — 목표는 미확인 |
-
-- 검산: 하위 구간 **6** + 판정 구간 1 = **7**행
-- **판정 구간은 E2E(ingested_at − ts) 밖이다.** 판정은 삽입 확정 뒤에 돌므로 ingested_at에 들어가지 않는다. 그래서 E2E만 재면 판정이 느려져도 드러나지 않는다 — 판정 구간을 따로 두는 이유다.
-- **구조 관계 — 판정 구간은 플러시 주기 안에 머물러야 한다.** 판정이 flusher의 다음 플러시와 같은 흐름에서 돈다면 판정 시간이 6c에 더해져 다음 배치의 Stream 대기를 늘리고, 판정 구간이 플러시 주기를 넘으면 적체가 판정 쪽에 쌓인다. W4 판정 — flusher는 판정을 기다리지 않되 인계 깊이를 1로 제한한다(직렬 판정기). 판정이 플러시 주기보다 계속 느리면 flusher가 인계를 기다려 적체가 Stream lag로 드러난다 — [../06_pipeline/08_alarm.md](../06_pipeline/08_alarm.md)(W4). 이 관계는 1계층 구조값(두 주기의 대소)이라 값이 정해지지 않아도 판정 조건으로 쓴다. **실측 성립(기록 054 · 05b237a · 부하 실험 · M · 스위치 기본값)** — 판정 구간 ≤ 1초 비율 1.0 × 3 · 창 안 전 배치 ≤ 15 ms · 인계 대기 표본 전부 첫 칸(≤ 0.5 ms)이라 플러시 주기 1,000 ms 대비 여유가 66배 이상이다(창 안 전 배치 기준).
-- **판정 구간 값의 조건과 한계(기록 054 · 05b237a · 부하 실험 · M · 스위치 기본값 · 모드 B SPIKE 10,000 pps · 규칙 41 · 플러시 주기 1,000 ms).** 판정 구간 p50만 판정 지표이고 A1~A6은 분해 참고값이다(04_experiment_protocol §반복과 폐기 — 버킷 보간 분위수). A5 · 판정 구간에는 ClickHouse 서버 로그 수준 trace의 쓰기 부하가 들어 있어 A4 대 A5의 크기 비교에 그 몫을 가르지 않았다([../10_observability/07_measurement_limits.md](../10_observability/07_measurement_limits.md) §공정성 · 측정 한계). 규칙 수 · 태그 빈도가 크면 A3 · A4가 커지므로 이 값에서 외삽하지 않는다.
-- **알람 통지 지연 = E2E + 판정 구간 + Pub/Sub → WebSocket.** 운영자가 체감하는 알람 지연은 이 합이며 원본 목표가 없다. 디바운스(debounce_ms)는 예산이 아니라 의도된 지연이라 합에서 뺀다.
 
 ## 업무 쓰기 명령 경로 구간 — 신설
 
@@ -110,28 +91,27 @@ M 티어 정상 상태의 원본 구간이다. 누적은 원본 목표를 더한
 |------|------|------|------|------|------|
 | B1 검증 · 적재 | api 요청 수신 | XADD 응답 | 스키마 검증 · Redis 왕복 1 | 없음 — api 쪽 | 미확인 |
 | B2 스트림 대기 | 봉투 requestedAt | 워커 XREADGROUP 수신 | **직렬 소비자 1의 앞 명령들** — 적체면 대기가 선형으로 는다 | queueWaitMs | 미확인 |
-| B3 트랜잭션 | BEGIN | COMMIT 또는 롤백 | 업무 행 · audit_log · biz_command_log 쓰기 | txMs | 미확인 |
+| B3 트랜잭션 | BEGIN | COMMIT 또는 롤백 | 업무 행 · biz_command_log 쓰기 | txMs | 미확인 |
 | B4 무효화 | 커밋 | 체인 ②③ 완료 | cache 계열 DEL · ch:cacheinv 발행 | invalidateMs | 미확인 |
 | B5 결과 · 알림 | 체인 ③ 완료 | api가 알림을 받아 결과를 읽은 시각 | 결과 SET · ch:bizreply · 결과 GET | replyMs(워커 쪽 SET + 발행) | 미확인 |
-| 쓰기 대기 | api 요청 수신 | api 응답 송신 | B1~B5 합 · 상한 5초에서 202 | biz_command_seconds | 미확인 — EXP-46 |
+| 쓰기 대기 | api 요청 수신 | api 응답 송신 | B1~B5 합 · 상한 5초에서 202 | biz_command_seconds | 미확인 — 재던 EXP-46은 폐지(D-16) |
 
 - 검산: 하위 구간 **5** + 쓰기 대기 1 = **6**행
-- **옛 경로(SW-12 direct)는 B3 · B4만 있다.** B1의 XADD · B2 · B5가 명령 경로의 대가이고, 그 합이 direct 대 stream의 지연 차다 — EXP-46이 이 차를 잰다. 원본 목표 80 ms를 합격선으로 쓰지 않는다(§로컬 해석 규칙).
+- **옛 경로(SW-12 direct)는 B3 · B4만 있다.** B1의 XADD · B2 · B5가 명령 경로의 대가이고, 그 합이 direct 대 stream의 지연 차다 — 이 차를 재던 EXP-46은 측정 도구 삭제로 폐지(D-16)됐다. 원본 목표 80 ms를 합격선으로 쓰지 않는다(§로컬 해석 규칙).
 - **B2가 지배 구간 후보다.** 소비자 1 · 직렬이라 사람 규모의 쓰기에서는 거의 0이지만 부하 실험의 쓰기 동시성이 올라가면 앞 명령의 B3 합이 뒤 명령의 대기가 된다 — 병목 후보 #15([../06_pipeline/01_flow_inventory.md](../06_pipeline/01_flow_inventory.md)).
 - **B4가 B5보다 앞인 순서가 read-your-writes의 기전이다** — 구간 예산을 줄이려고 둘을 병렬로 돌리지 않는다.
 
 ## 단일 이벤트 루프 공유
 
-api는 한 프로세스라 수집 · 적재 · 판정 · 조회가 같은 이벤트 루프를 다툰다. 이 위험은 구간이 아니라 **모든 구간에 곱해지는 계수**다.
+api는 한 프로세스라 수집 · 적재 · 조회가 같은 이벤트 루프를 다툰다. 이 위험은 구간이 아니라 **모든 구간에 곱해지는 계수**다.
 
 | 경합 원인 | 영향받는 구간 | 격리 수단 | 판정 지표 | 넘으면 |
 |------|------|------|------|------|
 | 디코딩 · MessagePack 해제 | 6b · 조회 전 경로 | piscina 워커(ADR-25) | nodejs_eventloop_lag_p95_seconds | 역할 분리 진입 조건 검토 |
 | LTTB 다운샘플 · gzip | 시계열 조회 | 상동 | 상동 | 상동 |
-| 판정 조건 평가 | A3 · 조회 전 경로 | 배치 단위 평가 · 필요 시 워커 | 상동 | 상동 |
 | WebSocket 팬아웃 | Pub/Sub → WebSocket | 스로틀 병합(SW-07) | 상동 | 스로틀 창 확대 → 역할 분리 후 api 증설 |
 
-- 검산: 경합 원인 = **4**
+- 검산: 경합 원인 = **3** · 옛 알람 판정 조건 평가 행은 D-16 삭제
 - 원본 진입 임계는 이벤트 루프 지연 p95 100 ms(원본 목표 · 4 vCPU 가정)이며 현행은 미확인이다. 임계의 정본은 [08_scaling_roadmap.md](./08_scaling_roadmap.md)다.
 
 ## 측정 지점
@@ -143,11 +123,10 @@ api는 한 프로세스라 수집 · 적재 · 판정 · 조회가 같은 이벤
 | fan-in 버퍼 대기 | 플러시 시작 시각 − 행 배열 완료 시각(배치 내 최고 · 최저) | Ingest flusher 히스토그램 | 6c |
 | 삽입 지연 | INSERT 전후 시각 차 | Ingest flusher 히스토그램 | #7 |
 | **E2E 지연** | **ClickHouse에서 ingested_at − ts의 분위수** | 주기 쿼리 → 게이지(OBS-04) | E2E |
-| 알람 판정 | 판정 호출 · 마지막 쓰기 완료 시각 차 | Alarm 히스토그램 | 판정 구간 · A1~A6 |
 | API 지연 | 요청 · 응답 시각 차 | 미들웨어 히스토그램 | 조회 경로 5 |
 | 이벤트 루프 지연 | nodejs_eventloop_lag_seconds · p95는 nodejs_eventloop_lag_p95_seconds | /metrics 기본 메트릭 + p95 게이지 | 전 구간 계수 |
 
-- 검산: 측정 지점 = **8**
+- 검산: 측정 지점 = **7** · 옛 알람 판정 행은 D-16 삭제
 - **E2E를 두 컬럼의 차로 설계한 것이 이 예산의 핵심이다.** 별도 추적 시스템 없이 SQL 한 줄로 파이프라인 전체의 건강을 본다 — 이 컬럼 차가 없으면 E2E를 한 번에 잴 방법이 분산 추적뿐이고, 그것은 선택 프로파일이다.
 
 E2E 게이지가 주기적으로 도는 쿼리의 모양은 아래와 같다. 창 길이는 2계층 조정값이다.
@@ -163,7 +142,7 @@ WHERE ts > now() - INTERVAL 5 MINUTE
 ```
 
 - **창을 ts로 자른다.** ingested_at으로 자르면 백프레셔로 늦게 들어온 행이 최근 창에 몰려 p99가 튄다 — 지연의 원인과 창의 기준이 같은 컬럼이 되어 측정이 자기 자신을 왜곡한다.
-- 모드 D 백필 행은 ts가 과거라 창 밖에 떨어진다 — 모드 D를 E2E에서 빼는 규칙(REQ-NFR-03)이 창 조건으로 자동 성립한다.
+- **과거 ts로 들어온 행은 창 밖에 떨어진다.** 수동 백필([../05_data_stores/04_clickhouse_rollup.md](../05_data_stores/04_clickhouse_rollup.md) §백필 절차)처럼 과거 구간을 채운 행은 ts 기준 창에 들지 않아 E2E 분위수에 섞이지 않는다 — 그 행의 ingested_at − ts는 지연이 아니라 경과 시간이다.
 
 ## 로컬 해석 규칙
 
@@ -172,7 +151,7 @@ WHERE ts > now() - INTERVAL 5 MINUTE
 | 전 구간 루프백 · Docker 브리지 | #2 · #5 · #7 · 조회 경로 | 지연이 **낙관적**이다 — 실제 망을 가정하면 망 지연을 가산해 해석한다 |
 | WSL2 mirrored 루프백 | 조회 경로 | NAT 모드보다 한 단계 짧아 더 낙관적이다 |
 | P · E 코어 혼합 스케줄링 | 전 구간 | 단일 실행 수치를 쓰지 않는다 — 3회 중앙값(D-10) |
-| 부하 생성기 · 관측 스택 동거 | 조회 경로 · 이벤트 루프 | cpuset 배치 · 정밀 세션은 관측 프로파일 off([03_execution_topology.md](./03_execution_topology.md)) |
+| 관측 스택 동거 | 조회 경로 · 이벤트 루프 | cpuset 배치 · 정밀 세션은 관측 프로파일 off([03_execution_topology.md](./03_execution_topology.md)) |
 
 - 검산: 한계 = **4**. 한계 전수의 정본은 [../10_observability/07_measurement_limits.md](../10_observability/07_measurement_limits.md)다.
 
@@ -181,18 +160,15 @@ WHERE ts > now() - INTERVAL 5 MINUTE
 | 항목 | 상태 | 확정 자리 |
 |------|------|------|
 | 구간 #1~#9 · E2E · 조회 경로 5의 현행 목표 | 3계층 미확인 — 미확인 · 확정 전 임의 값 고정 금지 | EXP-30 · [../10_observability/06_experiment_catalog.md](../10_observability/06_experiment_catalog.md) · [../03_requirements/13_nonfunctional.md](../03_requirements/13_nonfunctional.md) |
-| 알람 판정 구간 · A1~A6 · 알람 통지 지연 | 판정 구간 · A1~A6 — **S7 기록(p50): 판정 구간 6.726 ms(판정) · A1~A6 참고값**(기록 054 · 05b237a · 부하 실험 · M · 스위치 기본값 · §알람 판정 구간) · 목표 미확인 · 알람 통지 지연은 미확인 유지 | 상동 |
 | 6a · 6b · 6c 분할 목표 | 신설 · 목표 미확인 — **S2 기록(p50): 6a 0.55 · 6b 0.73 · 6c 575 ms(버킷 보간 — 평균 약 600 ms(설계값 600)) · #7 10.7 ms · E2E p50 608 · p95 1,011 ms**(기록 012 · d32b09a · 부하 실험 · S · 스위치 기본값) — "지배 구간은 6c로 옮겨 간다"가 실측으로 성립했다. 6c는 시간 트리거 W와 폴링 시작 위상이 정한다([../06_pipeline/02_collect.md](../06_pipeline/02_collect.md) §폴링과 레지스터 블록 병합 시작 위상 행) | 상동 · S3 배치 세 안 비교 |
-| 업무 쓰기 명령 경로 B1~B5 · 쓰기 대기 | 3계층 미확인 — 확정 전 임의 값 고정 금지 | EXP-46 · [../10_observability/06_experiment_catalog.md](../10_observability/06_experiment_catalog.md) |
-| 판정을 flusher와 같은 흐름에서 기다리는가 | **W4 판정** — 직렬 판정기 · 인계 깊이 1 | [../06_pipeline/08_alarm.md](../06_pipeline/08_alarm.md)(W4) |
-| 히스토그램 · 게이지 메트릭 이름 | **W6 판정** — col_modbus_rtt_seconds · ing_stream_residence_seconds · ing_decode_seconds · ing_fanin_wait_seconds · insert_duration · alm_eval_duration_seconds{phase} · e2e_latency | [../10_observability/01_metrics_catalog.md](../10_observability/01_metrics_catalog.md) |
+| 업무 쓰기 명령 경로 B1~B5 · 쓰기 대기 | 3계층 미확인 — 확정 전 임의 값 고정 금지 · 재던 EXP-46은 폐지(D-16)라 지금 확정 수단이 없다 | [../10_observability/06_experiment_catalog.md](../10_observability/06_experiment_catalog.md) |
+| 히스토그램 · 게이지 메트릭 이름 | **W6 판정** — col_modbus_rtt_seconds · ing_stream_residence_seconds · ing_decode_seconds · ing_fanin_wait_seconds · insert_duration · e2e_latency | [../10_observability/01_metrics_catalog.md](../10_observability/01_metrics_catalog.md) |
 
 ## 관련 문서
 
 - [../03_requirements/13_nonfunctional.md](../03_requirements/13_nonfunctional.md) — 성능 목표치 정본(REQ-NFR-03 · 04)
 - [../06_pipeline/03_ingest_batch.md](../06_pipeline/03_ingest_batch.md) — 플러시 트리거 · fan-in 기전
-- [../06_pipeline/08_alarm.md](../06_pipeline/08_alarm.md) — 알람 판정 기전
 - [06_backpressure_failure.md](./06_backpressure_failure.md) — 적체와 단계 반응
 - [08_scaling_roadmap.md](./08_scaling_roadmap.md) — 이벤트 루프 지연과 역할 분리
 - [../11_glossary/05_units_and_time.md](../11_glossary/05_units_and_time.md) — ts · ingested_at 의미론
-- [09_decision_records.md](./09_decision_records.md) — ADR-09 · ADR-11 · ADR-25
+- [09_decision_records.md](./09_decision_records.md) — ADR-09 · ADR-25

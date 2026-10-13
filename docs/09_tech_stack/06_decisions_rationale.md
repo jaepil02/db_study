@@ -2,12 +2,14 @@
 
 > **대상**: 기술 선정의 근거 상세 — 원본 비교 표 흡수(NestJS 대 Python · Next.js 대 React + Vite · 차트 라이브러리 · 시계열 저장소 · 수집 버퍼) · 단일 런타임의 감수 비용과 완화책 · 전환 조건 · **채택하지 않은 기술과 버린 대안의 실패 시나리오**(원본 §13 전 행 + W6 판정분) · ADR과의 경계
 > **작성일**: 2026-09-24
+> **개정일**: 2026-10-12 — **D-05 부분 개정 · ADR-32**(직접 비교 비교 사본 TimescaleDB hypertable · 열 압축 · 마이그레이션 009) — 시계열 저장소 비교 표 · 채택하지 않은 기술 표의 TimescaleDB 판정 채택하지 않음 → **주 시계열 엔진은 그대로 채택하지 않음 · 직접 비교 비교 사본에는 채택**(결정 자리 ADR-03 · **ADR-32**) · PostgreSQL 단독 판정 칸 · 대조군 불릿에 비교 사본의 엔진 변경 · 판정별 검산에 TimescaleDB 세는 기준 · Prisma 행의 런타임 자식 표(판정 당시 pg_partman · 009 뒤 TimescaleDB 칸) — 판정 · 후보 수 불변
+> **개정일**: 2026-10-11 — **D-16 로그인 · 측정 도구 삭제**(사용자 결정 2026-10-11) — 제어 평면 열거의 인증 삭제 · BFF 계층 행의 리프레시 토큰 은닉 → 오리진 통합 · 서버 측 파일 판독 · **BFF 이유 ① 소멸 불릿 신설**(Next.js 선택 유지 근거 — 측정 기록 판독기) · GEN-09 결번 표기 · EXP-21 · 22 · 35 · 37 폐지 표기 — 판정 · 후보 수 불변 · D-16 정리(d4) — 지운 절을 가리키던 § 참조 교정(§역방향 대조 — 업무 워크로드 → §역방향 대조표 — EXP-40~45)
 > **개정일**: 2026-09-26 — W1 검수 반영 — 시계열 저장소 비교 표 UPDATE · DELETE 행 ClickHouse 칸에 **경량 DELETE** 추가 · 경량 UPDATE에 Beta 표기(정본 05_data_stores/10) — 판정 · 후보 수 불변
 > **개정일**: 2026-09-26 — 목적 적합성 실증 W1 — 시계열 저장소 비교 표 UPDATE · DELETE 행의 ClickHouse 칸 "비동기 mutation — 사실상 비권장" → **ALTER 비동기 mutation · 26.8 경량 UPDATE(patch 파트 · 즉시 보임) — 업무 갱신 적합성은 검증 대상(EXP-40 · 42 · 43)** — 판정 · 후보 수 불변
 > **개정일**: 2026-09-24 — S1 실측 반영(EXP-21 기록 006 · 410a146 · EXP-39 기록 007~009 · 019e54d) — 전환 조건 ①의 판정값 미확인 → **약 590만 pps(워커 1) · 전환하지 않음**
 > **개정일**: 2026-09-24 — W7 검수 반영 — 미확인 표 웨이브 표지 (W7) 제거
 > **개정일**: 2026-09-24 — W6 실험 채번 반영 — 실험 자리 반영(정본 10_observability/01 · 06)
-> **원천**: 원본 tech_stack.md §1 · §3.1 · §3.2 · §3.3 · §3.4 · §4.1 · §4.2 · §5.2 · §5.3 · §13(커밋 ff66a37) · 원본 implementation_plan.md §2.3(커밋 ff66a37) · ADR-01 · ADR-02 · ADR-03 · ADR-04 · ADR-05 · ADR-19 · ADR-20 · D-01 · D-02 · [../04_architecture/09_decision_records.md](../04_architecture/09_decision_records.md) · [../04_architecture/08_scaling_roadmap.md](../04_architecture/08_scaling_roadmap.md) · [03_data_infra.md](./03_data_infra.md) §observability 프로파일 구성원 판정 · [05_tooling_devops.md](./05_tooling_devops.md) §마이그레이션 도구 판정
+> **원천**: D-05 부분 개정(사용자 결정 2026-10-12) · ADR-32 · 원본 tech_stack.md §1 · §3.1 · §3.2 · §3.3 · §3.4 · §4.1 · §4.2 · §5.2 · §5.3 · §13(커밋 ff66a37) · 원본 implementation_plan.md §2.3(커밋 ff66a37) · ADR-01 · ADR-02 · ADR-03 · ADR-04 · ADR-05 · ADR-19 · ADR-20 · D-01 · D-02 · [../04_architecture/09_decision_records.md](../04_architecture/09_decision_records.md) · [../04_architecture/08_scaling_roadmap.md](../04_architecture/08_scaling_roadmap.md) · [03_data_infra.md](./03_data_infra.md) §observability 프로파일 구성원 판정 · [05_tooling_devops.md](./05_tooling_devops.md) §마이그레이션 도구 판정
 
 **결정은 ADR이 갖고, 이 문서는 근거를 갖는다.** ADR은 맥락 · 결정 · 버린 대안 · 파급 4항목으로 결론만 고정한다([../04_architecture/09_decision_records.md](../04_architecture/09_decision_records.md)). 이 문서는 그 결론에 이른 **비교 표와 실패 시나리오 전수**를 갖는다 — 결정을 다시 논증하지 않고, 각 절의 첫 줄에 결정 자리를 링크한다. 이식 패턴 "버린 대안의 실패 시나리오"의 공동 소유처다([../CLAUDE.md](../CLAUDE.md) 이식 패턴 3종).
 
@@ -39,7 +41,7 @@
 
 | 축 | 요구 | NestJS 단일에서의 대응 | 대응이 실패하는 지점 |
 |------|------|------|------|
-| 제어 평면(REST · WebSocket · 인증 · CRUD) | 타입 안전성 · 프론트와 계약 공유 · IO 바운드 동시성 | Fastify 어댑터 · DI · 모듈 · 이벤트 루프 | CPU 바운드 작업이 같은 루프에 들어오는 순간 — 워커 격리(ADR-25)가 막는다 |
+| 제어 평면(REST · WebSocket · CRUD) | 타입 안전성 · 프론트와 계약 공유 · IO 바운드 동시성 | Fastify 어댑터 · DI · 모듈 · 이벤트 루프 | CPU 바운드 작업이 같은 루프에 들어오는 순간 — 워커 격리(ADR-25)가 막는다 |
 | 데이터 평면(Modbus 폴링 · 배치 적재 · 생성) | Modbus 라이브러리 성숙도 · 수치 벡터화 · 배열 직렬화 | 라이브러리 2개 조합 · 워커 + TypedArray · msgpackr · Stream 경계 | 생성기 처리량이 목표 3배에 못 미치는 순간 — §전환 조건 |
 
 - 검산: 축 = **2** — 런타임을 합쳐도 이 구분은 모듈 경계로 남는다(ADR-01)
@@ -62,7 +64,7 @@
 
 - 검산: 항목 = **9** — NestJS 우위 3 + Python 우위 4 + 무승부 2 = **9** · 감수 목록 = Python 우위 중 데이터 평면 3 + 무승부 1 = **4**
 - **결정을 가른 것은 비교 표가 아니라 메모리 예산이다.** 표만 보면 데이터 평면은 Python이 낫다. 그러나 런타임을 하나 더 띄우면 컨테이너가 늘어 그만큼 ClickHouse 몫이 준다(원본 tech_stack.md §3.3 근거 1) — 학습 목표 ①을 재는 엔진이 예산에서 밀린다.
-- **HTTP 처리량 수치는 3계층 미확인이다** — 미확인 · 확정 전 임의 값 고정 금지. 확정 자리 [../10_observability/06_experiment_catalog.md](../10_observability/06_experiment_catalog.md) — 프레임워크 교체 비교는 미채번 · 이 스택의 상한은 EXP-22 · EXP-37.
+- **HTTP 처리량 수치는 3계층 미확인이다** — 미확인 · 확정 전 임의 값 고정 금지. 확정 자리 [../10_observability/06_experiment_catalog.md](../10_observability/06_experiment_catalog.md) — 프레임워크 교체 비교는 미채번 · 이 스택의 상한을 재던 EXP-22 · EXP-37은 실행 도구 삭제로 폐지(D-16)됐다.
 
 ### 감수 비용과 완화책
 
@@ -82,7 +84,7 @@
 
 | # | 조건 | 판정 근거 | 분리 대상 | 절차 | 재판정이 필요한 것 |
 |------|------|------|------|------|------|
-| ① | 생성기가 목표 pps의 3배를 내지 못함 | S1 생성기 단독 처리량(GEN-09) | 생성기 | Python 생성기가 같은 Stream에 발행(모드 B) | 생성기 CPU 기록 · SIMULATED 표기 유지 |
+| ① | 생성기가 목표 pps의 3배를 내지 못함 | S1 생성기 단독 처리량(옛 GEN-09 — D-16 결번 · 기록 006) | 생성기 | Python 생성기가 같은 Stream에 발행(모드 B) | 생성기 CPU 기록 · SIMULATED 표기 유지 |
 | ② | jsmodbus 시뮬레이터 기능 부족 | 다중 유닛 ID · 예외 응답 · 지연 주입을 실험 항목으로 표현 못 함 | PlcSim | pymodbus 프로세스로 분리 · Collector는 접속 주소만 변경 | **COL의 SIMULATED 판정(루프백 규칙)** — 분리하면 host가 서비스명이 된다(02_features/03) |
 | ③ | 적재가 Arrow 직삽입을 요구 | JSONCompactEachRow 삽입이 ClickHouse 상한에 못 미침이 실측 | Ingest | 같은 컨슈머 그룹을 소비하는 Python 워커 | 배치 토큰 결정성 · XACK 규칙(ADR-09 · ADR-14) |
 
@@ -98,7 +100,7 @@
 | 항목 | Next.js App Router | React + Vite | 판정에 쓴 축 |
 |------|------|------|------|
 | 서버 런타임 | Node 서버로 동작 · 서버 측 코드 가능 | 정적 SPA · 서버 측 코드 없음 | **결정적** — BFF의 전제 |
-| BFF 계층 | Route Handler로 리프레시 토큰 은닉 · 오리진 통합 | 없음 — 브라우저가 api 직접 호출 | **결정적** |
+| BFF 계층 | Route Handler로 오리진 통합 · 서버 측 파일 판독(측정 기록) — 옛 리프레시 토큰 은닉은 로그인과 함께 D-16 삭제 | 없음 — 브라우저가 api 직접 호출 | **결정적** |
 | SSR · RSC | 지원 | 없음 | 무시 — 차트는 클라이언트 컴포넌트 |
 | 실시간 대시보드 적합성 | SSR 이점 제한적 | 동등 | 무시 |
 | 개발 서버 속도 | 보통 | 매우 빠름 | 감수 — 호스트 프로세스라 HMR은 충분 |
@@ -107,6 +109,7 @@
 
 - 검산: 항목 = **7** — 결정적 2 · 무시 2 · 감수 2 · 보조 1
 - **BFF를 두는 이유 셋의 순위** — ① 리프레시 토큰을 서버에서만 다룬다(가장 중요) ② 요청 오리진이 하나로 모인다 ③ 저빈도 조회를 짧게 흡수한다(원본 tech_stack.md §4.1). ①이 없으면 Vite가 이긴다.
+- **D-16으로 ①이 사라졌다(로그인 삭제).** 옛 순위대로면 판정이 흔들리지만, 웹에는 서버 측 코드가 필요한 다른 일이 남는다 — 측정 기록 파일(docs/measurements)을 BFF가 읽어 화면에 내는 판독기다(api 표면이 없다 — [../07_api/10_metrics.md](../07_api/10_metrics.md) 판정). 정적 SPA는 그 파일을 읽을 자리가 없어 Next.js 선택은 그대로다 — 남은 근거의 무게는 순위 ②③과 이 판독기다.
 
 ### 차트 라이브러리
 
@@ -131,16 +134,16 @@
 | 압축률 | 원본 예상치 10~30배 | 원본 예상치 5~15배 | 원본 예상치 10~20배 | 원본 예상치 1~3배 |
 | 대규모 범위 집계 | 최상 | 중상 | 상 | 하 |
 | SQL | 방언(표준 근접) | 완전 PostgreSQL 호환 | SQL + InfluxQL | 표준 |
-| UPDATE · DELETE | ALTER 비동기 mutation · 26.8 경량 UPDATE(patch 파트 · SELECT에 즉시 보임 · 물리 반영은 머지 · 공식 문서상 **Beta** — 정본 [../05_data_stores/10_olap_vs_rdb_control.md](../05_data_stores/10_olap_vs_rdb_control.md)) · 경량 DELETE(DELETE FROM — 행을 마스크로 지우고 물리 삭제는 머지) — 업무 갱신 적합성은 **검증 대상**(EXP-40 · 42 · 43 · [../05_data_stores/10_olap_vs_rdb_control.md](../05_data_stores/10_olap_vs_rdb_control.md) §역방향 대조 — 업무 워크로드) | 완전 지원 | 제한적 | 완전 지원 |
+| UPDATE · DELETE | ALTER 비동기 mutation · 26.8 경량 UPDATE(patch 파트 · SELECT에 즉시 보임 · 물리 반영은 머지 · 공식 문서상 **Beta** — 정본 [../05_data_stores/10_olap_vs_rdb_control.md](../05_data_stores/10_olap_vs_rdb_control.md)) · 경량 DELETE(DELETE FROM — 행을 마스크로 지우고 물리 삭제는 머지) — 업무 갱신 적합성은 **검증 대상**(EXP-40 · 42 · 43 · [../05_data_stores/10_olap_vs_rdb_control.md](../05_data_stores/10_olap_vs_rdb_control.md) §역방향 대조표 — EXP-40~45) | 완전 지원 | 제한적 | 완전 지원 |
 | 사전 집계 | MV + AggregatingMergeTree | 연속 집계 | 다운샘플링 태스크 | 수동 |
 | 운영 복잡도 | 중 | 낮음(PG 확장) | 중 | 낮음 |
 | 학습 가치 | 컬럼형 · 머지트리 · 코덱 · MV 전반 | PG 심화 | 시계열 DB 특화 | 낮음 |
-| 판정 | **채택** | 채택하지 않음 | 채택하지 않음 | **대조군으로만**(ADR-17) |
+| 판정 | **채택** | 주 시계열 엔진으로는 채택하지 않음 · **직접 비교 비교 사본에는 채택**(ADR-32 · D-05 부분 개정 2026-10-12) | 채택하지 않음 | **대조군으로만**(ADR-17 · 옛 대조군 기록 035~053) |
 
 - 검산: 후보 = **4** · 비교 항목 = **8** · 판정 행 1
-- **PostgreSQL 단독은 버린 것이 아니라 대조군으로 남았다.** 목표 ①은 "왜 RDB가 아니라 컬럼형인가"를 측정으로 아는 것이라, 버린 후보 하나를 같은 데이터로 돌려야 답이 나온다(D-05 · [../05_data_stores/10_olap_vs_rdb_control.md](../05_data_stores/10_olap_vs_rdb_control.md)).
+- **PostgreSQL 단독은 버린 것이 아니라 대조군으로 남았다.** 목표 ①은 "왜 RDB가 아니라 컬럼형인가"를 측정으로 아는 것이라, 버린 후보 하나를 같은 데이터로 돌려야 답이 나온다(D-05 · [../05_data_stores/10_olap_vs_rdb_control.md](../05_data_stores/10_olap_vs_rdb_control.md)). 일반 PostgreSQL의 답은 옛 대조군 기록 035~053이 갖고, **직접 비교의 비교 사본은 D-05 부분 개정(사용자 결정 2026-10-12)으로 TimescaleDB hypertable · 열 압축이 됐다** — 비교의 질문이 "PostgreSQL에 시계열 확장을 붙여도 어디서 갈리는가"로 바뀌었고, 시계열 엔진 판정(ClickHouse · ADR-03)은 그대로다. 결정과 근거는 [../04_architecture/09_decision_records.md](../04_architecture/09_decision_records.md) ADR-32다.
 - **삽입 처리량의 헤드룸이 판정에 들어간 이유** — 이 시스템은 삽입 한계에 닿는 지점을 재려 한다. 헤드룸이 좁은 엔진이면 한계가 엔진에서 먼저 와 Redis 백프레셔 · 스풀 경로(목표 ②)를 관찰하기 전에 실험이 끝난다.
-- 처리량 · 압축률은 3계층 미확인이다 — 확정 자리 [../03_requirements/13_nonfunctional.md](../03_requirements/13_nonfunctional.md) REQ-NFR · [../10_observability/06_experiment_catalog.md](../10_observability/06_experiment_catalog.md)(EXP-21 · 35 · 22).
+- 처리량 · 압축률은 3계층 미확인이다 — 확정 자리 [../03_requirements/13_nonfunctional.md](../03_requirements/13_nonfunctional.md) REQ-NFR · [../10_observability/06_experiment_catalog.md](../10_observability/06_experiment_catalog.md)(EXP-21 · 35 · 22 — 실행 도구 삭제로 모두 폐지(D-16) · 기록만 남는다).
 
 ## 수집 버퍼 — Redis Streams
 
@@ -171,7 +174,7 @@
 | Redis 인스턴스 2개 분리 | 유예 | 원본 §13 | 컨테이너가 늘어 메모리 예산을 잠식하고, 스트림 적체가 캐시를 밀어내는 현상 — 한 인스턴스에서만 관찰되는 학습 포인트 — 이 구조적으로 사라진다 | 그 현상이 실측된 뒤(확장 3단계) | ADR-05 |
 | 관측 스택 상시 기동 | 채택하지 않음 | 원본 §13 | Prometheus · Grafana가 측정 대상과 같은 CPU를 쓰고, 켠 채 얻은 수치와 끈 채 얻은 수치가 같은 기록 형식 아래 섞인다 | 없음 — 선택 프로파일 유지 | ADR-20 |
 | Kafka | 보류 | 원본 §13 | 12 GB 예산에서 브로커 메모리가 ClickHouse 몫을 잠식하고, Kafka 엔진이 워커를 없애 Stream 뒤 3계층 분기의 기전(목표 ②)이 엔진 안으로 숨는다 | 확장 로드맵 마지막 단계의 전환 실험 | ADR-04 |
-| TimescaleDB | 채택하지 않음 | 원본 §13 | PostgreSQL 하나만 배우게 되어 이종 DB 분리 운용이라는 학습 목표와 어긋난다 — 대조군과 시계열 엔진이 같은 엔진이라 목표 ①의 비교가 확장 유무의 비교로 바뀐다 | 없음 | ADR-03 |
+| TimescaleDB | 채택하지 않음(주 시계열 엔진) · **직접 비교 비교 사본에는 채택**(ADR-32) | 원본 §13 | PostgreSQL 하나만 배우게 되어 이종 DB 분리 운용이라는 학습 목표와 어긋난다 — 대조군과 시계열 엔진이 같은 엔진이라 목표 ①의 비교가 확장 유무의 비교로 바뀐다 | 주 시계열 엔진 자리는 없음 · 비교 사본 자리는 사용자 결정으로 되살렸다(D-05 부분 개정 2026-10-12 — 센서는 여전히 ClickHouse에만 산다) | ADR-03 · ADR-32 |
 | InfluxDB | 채택하지 않음 | 원본 §13 | SQL 학습 전이성이 낮고 집계 성능이 ClickHouse보다 열위라, 대조 쿼리 5종을 두 방언으로 따로 써야 한다 | 없음 | ADR-03 |
 | 관리형 DB 서비스 | 채택하지 않음 | 원본 §13 | 파라미터 튜닝이 막혀 머지 풀 · 메모리 비율 실험을 할 수 없고, 로컬 전용(D-02)을 어겨 원격 접속이 실행 구성에 들어온다 | 없음 — 로컬 전용 | D-02 |
 | Kubernetes | 채택하지 않음 | 원본 §13 | 단일 머신에 오케스트레이션 계층이 들어와 제어 평면 자체가 메모리 · CPU를 먹고, 측정 대상 밖 구성요소가 재시작 · 스케줄링으로 결측을 만든다 | 없음 — 로컬 전용 | D-02 |
@@ -181,13 +184,13 @@
 | OPC UA | 범위 외 | 원본 §13 | 현장 요구가 Modbus이고, 두 번째 프로토콜이 들어오면 모드 A의 E2E 지연이 어느 프로토콜 계층을 쟀는지 기록이 갈린다 | 확장 시 수집 모듈 어댑터 추가 | 확장 로드맵 밖 |
 | alertmanager | 채택하지 않음 | **W6 판정**(보정 #17) | 알림 라우팅만 하는데 로컬 전용이라 수신처가 없다 — 외부 통보 채널을 두는 순간 D-02를 어기고, 두지 않으면 메모리만 먹는 빈 구성요소다 | 없음 — 규칙 평가 · 발화 표시는 Prometheus · Grafana | [03_data_infra.md](./03_data_infra.md) · ADR-20 |
 | tempo(분산 추적) | 현 범위 밖 · 조건부 | **W6 판정**(보정 #17) | 추적 SDK가 api 프로세스에 계측 비용을 더해 측정 대상이 측정 도구를 품는다 · E2E 지연은 두 시각 컬럼의 차로 이미 SQL 한 줄에 잰다 | SQL · 메트릭 구간 분해 불가가 실측될 때 | [03_data_infra.md](./03_data_infra.md) |
-| Prisma(Migrate · 쿼리 계층) | 채택하지 않음 | **W6 판정** | 스키마 원천이 zod와 Prisma 모델 둘이 되고, pg_partman이 런타임에 만든 자식 파티션을 드리프트로 보고 DB 초기화를 제안해 받아들이면 볼륨 데이터가 사라진다 · ORM 쿼리 비용이 업무 CRUD p95에 섞인다 | 없음 | [05_tooling_devops.md](./05_tooling_devops.md) |
+| Prisma(Migrate · 쿼리 계층) | 채택하지 않음 | **W6 판정** | 스키마 원천이 zod와 Prisma 모델 둘이 되고, 런타임에 생긴 자식 표(판정 당시 pg_partman의 자식 파티션 — 009 뒤로는 TimescaleDB 칸)를 드리프트로 보고 DB 초기화를 제안해 받아들이면 볼륨 데이터가 사라진다 · ORM 쿼리 비용이 업무 CRUD p95에 섞인다 | 없음 | [05_tooling_devops.md](./05_tooling_devops.md) |
 | Valkey 대체 | 현 범위에서 대체하지 않음 | **W6 판정**(원본 고정표 비고 "대체 가능") | 엔진이 바뀐 것이라 대체 전후 수치를 한 실험으로 묶을 수 없고, 축출 · Stream 동작 차이가 목표 ② 결과에 섞인다 | 별도 실험으로 엔진 차이를 재는 경우만 | [03_data_infra.md](./03_data_infra.md) |
 | Express 어댑터 | 채택하지 않음 | **W6 판정** | 프레임워크 오버헤드가 커져 조회 p95에 HTTP 계층 비용이 섞이고, 원본 비교의 HTTP 처리량 근거가 전제를 잃는다 | 없음 | [02_backend.md](./02_backend.md) |
 | YAML 주입 계획 | 채택하지 않음 | **W6 판정** | 들여쓰기 한 칸 차이가 항목을 다른 부모로 옮겨도 파싱이 성공해 계획과 실제 주입이 조용히 어긋난다 · 파서 의존성이 는다 | 없음 | [05_tooling_devops.md](./05_tooling_devops.md) |
 
 - 검산: 행 = 원본 §13 13(Python · PgBouncer · Redis 2개 · 관측 상시 · Kafka · TimescaleDB · InfluxDB · 관리형 DB · Kubernetes · gRPC · Socket.IO · Recharts · OPC UA) + W6 판정 6(alertmanager · tempo · Prisma · Valkey · Express 어댑터 · YAML) = **19**
-- 판정별: 채택하지 않음 13(원본 8 · W6 5) + 유예 2 + 보류 1 + 불필요 1 + 범위 외 1 + 현 범위 밖 · 조건부 1(tempo) = **19** — Valkey는 "현 범위에서 대체하지 않음"으로 채택하지 않음에 센다
+- 판정별: 채택하지 않음 13(원본 8 · W6 5) + 유예 2 + 보류 1 + 불필요 1 + 범위 외 1 + 현 범위 밖 · 조건부 1(tempo) = **19** — Valkey는 "현 범위에서 대체하지 않음"으로 채택하지 않음에 센다 · TimescaleDB는 주 시계열 엔진 판정으로 채택하지 않음에 센다(비교 사본 채택은 ADR-32의 결정이라 이 표의 판정 축이 아니다)
 - **Recharts의 판정을 원본에서 바꿨다.** 원본은 "보조 용도만(소형 KPI 카드)"이었고 08_screen/01이 채택 라이브러리를 uPlot · ECharts 둘로 닫았다 — 이 표는 화면 표준의 판정을 따른다.
 - **유예 · 보류는 되살리는 조건이 있고, 채택하지 않음은 대부분 없다.** 되살리는 조건이 "없음"인 행을 되살리려면 학습 목표나 로컬 전용(D-02)이 먼저 바뀌어야 한다.
 
@@ -195,7 +198,7 @@
 
 | 항목 | 상태 | 확정 자리 |
 |------|------|------|
-| 비교 표의 처리량 · 압축률 · RPS | 원본 예상치 — 3계층 미확인 · 확정 전 임의 값 고정 금지 | [../10_observability/06_experiment_catalog.md](../10_observability/06_experiment_catalog.md)(EXP-21 · 22 · 35 · 37) · REQ-NFR |
+| 비교 표의 처리량 · 압축률 · RPS | 원본 예상치 — 3계층 미확인 · 확정 전 임의 값 고정 금지 | [../10_observability/06_experiment_catalog.md](../10_observability/06_experiment_catalog.md)(EXP-21 · 22 · 35 · 37 — 모두 폐지(D-16)) · REQ-NFR |
 | 생성기 처리량(전환 조건 ①의 판정값) | **닫힘(S1 실측 · 기록 006 · 410a146 · 부하 실험 · M · 스위치 기본값)** — 워커 1 약 590만 pps로 M 티어 3배(3만)의 약 197배 · 전환 조건 ① 발동하지 않음 | [../02_features/05_datagen.md](../02_features/05_datagen.md) GEN-09 |
 | Prisma 드리프트 동작 | 버린 대안의 실패 근거 — 공식 참조로 재확인 | [../03_requirements/16_official_references.md](../03_requirements/16_official_references.md) |
 | Kafka 전환 실험 | 확장 로드맵 마지막 단계 | [../04_architecture/08_scaling_roadmap.md](../04_architecture/08_scaling_roadmap.md) |

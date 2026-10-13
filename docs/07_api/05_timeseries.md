@@ -2,6 +2,8 @@
 
 > **대상**: TSQ 도메인 표면 — 시계열 조회(POST /api/v1/timeseries/query) 요청 스키마 · 해상도 규칙의 표면 모양 · meta · points 열 구성 · 다운샘플 모드 · 진행 구간 분할의 호출 모양 · 원시 내보내기 스트림 · **내보내기 스트림 중단 종료 표지 판정** · 태그 상한 · 최대 포인트 수(2계층 소유)
 > **작성일**: 2026-09-24
+> **개정일**: 2026-10-11 — D-16 HMI 설비 현황판 반영(웹 코드 as-built · d5-screen 대조) — #1 호출 화면 화면 없음 → **HMI-PLANT**(설비 상세 최근 10분 · 5초마다 · api 직결) — 표면 수 불변
+> **개정일**: 2026-10-11 — **D-16 로그인 · 권한 · 알람 삭제**(사용자 결정 2026-10-11) — 표면 요약 표 역할 열 → **인증 열(무인증)** · 공통 규약의 인가 · 레이트 리밋 두 행 → **인가 · 한도 한 행(없음 · 범위 상한)**(항목 8 → **7**) · 단계의 인가 S7 · downsample 근거의 알람 분석 화면 · 조회 실패 사건의 429(5 → **4**) · 내보내기 시작 전 실패의 403 · 429 · 토큰 문장 · REQ-TSQ-17(결번) 삭제 — 표면 수 불변 · (리드 판정 — 대상 문서 파일 삭제) 관련 문서의 04_trend_analysis(삭제) 줄 삭제 · D-16 정리(d4) — 지운 절을 가리키던 § 참조 교정(04_routing §생산 카운터 기전 판정 → §분기 판정 트리) · D-16 정리(d4 전역 sweep) — 미확인 등재 내보내기 등급별 한도 → 레이트 리밋 삭제로 대상 없음
 > **개정일**: 2026-10-03 — D-14 2화면 전환(사용자 결정 2026-10-03) — 표면 2의 호출 화면 ANL-TREND · DSH-REALTIME · ALM-RULES → **화면 없음(API 전용)** · 관련 문서 폐지 표기 — 표면 · 기능 · 에러 코드 수 불변(api 표면은 지우지 않는다 — D-14 결정 1)
 > **개정일**: 2026-09-25 — S4 as-built(3e8a46d) — §S2 단계 표면 절 **삭제**(S4에서 해상도 선택 · 상향 · LTTB로 복귀 — 절이 예고한 대로) → §S4 표면(as-built) 신설 · maxPoints 상한 없음 → **현행 참고 10,000**(S4 판정 15 · 검수 L1) · 내보내기 tagIds 범위 밖 400(검수 L2) · 캐시 히트 series 순서 = 요청 순서(검수 L3)
 > **개정일**: 2026-09-25 — S3 구현 반영 — §S2 단계 표면 tagName · unit 행 null → **S3에서 계약으로 복귀**(dictGet(plc.dict_tag) · 사전 조회 실패 시 null · 응답은 성공)
@@ -19,22 +21,21 @@ TSQ 표면은 **요청한 것이 아니라 서버가 고른 것을 돌려주는 
 | 항목 | 규칙 | 근거 |
 |------|------|------|
 | 경로 | 브라우저 → api 직결 — 응답이 크고 사용자별이다 | [01_conventions.md](./01_conventions.md) §BFF 경유와 직결 |
-| 인가 | 조회 전원 · 내보내기 ENGINEER만(대량 스캔 읽기 예외) | REQ-TSQ-17 · 권한 매트릭스 TSQ |
-| 레이트 리밋 | 조회 = 대량 조회 등급 · 내보내기 = 내보내기 등급 — 일반 등급보다 엄격 | 원본 architecture.md §18 · [01_conventions.md](./01_conventions.md) §한도 등급이 갈리는 표면 묶음 |
+| 인가 · 한도 | 없음 — 전 표면 무인증 · 레이트 리밋 없음(D-16) · 내보내기는 범위 상한(1일)이 대량 스캔을 묶는다 | [01_conventions.md](./01_conventions.md) §출처 방어 · REQ-TSQ-15 |
 | 시각 | 요청 from · to = 오프셋 포함 ISO 8601 · 응답 points 첫 열 = epoch ms | [01_conventions.md](./01_conventions.md) §시각 직렬화 |
 | ClickHouse 불가 | 캐시 히트 200 · 캐시 미스 · 내보내기 시작 전 timeseries.clickhouse_unavailable/503 · 대조군 · 최신값으로 대신 답하지 않는다 | REQ-TSQ-16 |
 | Redis 불가 | 에러가 아니다 — ClickHouse 직행 200 · meta.cached false | REQ-TSQ-11 |
 | PostgreSQL 불가 | 영향 없음 — Dictionary가 마지막 적재 값으로 태그명 · 단위를 붙인다 | REQ-TSQ-08 |
-| 단계 | 조회 S2(raw 고정) · 해상도 · 캐시 · 내보내기 S4(**구현** 3e8a46d) · 인가 S7 | [../02_features/07_timeseries.md](../02_features/07_timeseries.md) |
+| 단계 | 조회 S2(raw 고정) · 해상도 · 캐시 · 내보내기 S4(**구현** 3e8a46d) | [../02_features/07_timeseries.md](../02_features/07_timeseries.md) |
 
-- 검산: 항목 = **8**
+- 검산: 항목 = **7**
 
 ## 표면 요약
 
-| # | 메서드 | 경로 | 기능 ID | 역할 | 캐시 | 에러 코드 | 호출 화면 | 원본 여부 |
+| # | 메서드 | 경로 | 기능 ID | 인증 | 캐시 | 에러 코드 | 호출 화면 | 원본 여부 |
 |:-:|------|------|------|------|------|------|------|------|
-| 1 | POST | /api/v1/timeseries/query | TSQ-01 · 02 · 06 · 07 · 08 | 전원 | cache:q:{sha1} · lock:rebuild:q:{sha1} | common.validation_failed/400 · timeseries.too_many_tags/400 · timeseries.clickhouse_unavailable/503 | 화면 없음(API 전용) — 폐지 화면 ANL-TREND · DSH-REALTIME · ALM-RULES(D-14) | 원본 |
-| 2 | GET | /api/v1/timeseries/export | TSQ-09 | ENGINEER | 없음 — 캐시하지 않는다 | common.validation_failed/400 · timeseries.too_many_tags/400 · timeseries.clickhouse_unavailable/503 | 화면 없음(API 전용) — 폐지 화면 ANL-TREND(D-14) | 원본 |
+| 1 | POST | /api/v1/timeseries/query | TSQ-01 · 02 · 06 · 07 · 08 | 무인증 | cache:q:{sha1} · lock:rebuild:q:{sha1} | common.validation_failed/400 · timeseries.too_many_tags/400 · timeseries.clickhouse_unavailable/503 | **HMI-PLANT**(고른 설비의 최근 10분 · 5초마다 · 브라우저 직결 — D-16) · 폐지 화면 ANL-TREND · DSH-REALTIME · ALM-RULES(D-14) | 원본 |
+| 2 | GET | /api/v1/timeseries/export | TSQ-09 | 무인증 | 없음 — 캐시하지 않는다 | common.validation_failed/400 · timeseries.too_many_tags/400 · timeseries.clickhouse_unavailable/503 | 화면 없음(API 전용) — 폐지 화면 ANL-TREND(D-14) | 원본 |
 
 - 검산: 표면 = **2** · REST JSON 1 + 다운로드 스트림 1 = **2** · 원본 2 + 신설 0
 - 표면 있는 기능 6(TSQ-01 · 02 · 06 · 07 · 08 · 09)이 두 표면에 앉는다 — 02 · 06 · 07 · 08은 #1의 동작이다. TSQ-03 · 04 · 05는 표면 없는 내부 단계다.
@@ -53,7 +54,7 @@ TSQ 표면은 **요청한 것이 아니라 서버가 고른 것을 돌려주는 
 | downsample | 문자열 | 아니오 | lttb(기본) · minmax — minmax는 극값 보존 | 400 |
 
 - 검산: 필드 = **6** · 원본 5(원본 architecture.md §11.1) + 신설 1(downsample)
-- **downsample을 더한 이유** — 극값을 보존하는 min · max 쌍은 알람 분석 화면의 요구다(REQ-TSQ-06 · 원본 data_flow.md §6.3). 서버가 호출 화면을 알 수 없으므로 요청이 모드를 말해야 한다. 기본값 lttb는 원본 기본 조합과 같아 요청 선택 필드 추가 규칙(기본값 = 기존 동작)을 지킨다.
+- **downsample을 더한 이유** — 극값을 보존하는 min · max 쌍은 이상 구간 분석의 요구다(REQ-TSQ-06 · 원본 data_flow.md §6.3). 서버가 호출 화면을 알 수 없으므로 요청이 모드를 말해야 한다. 기본값 lttb는 원본 기본 조합과 같아 요청 선택 필드 추가 규칙(기본값 = 기존 동작)을 지킨다.
 - **존재하지 않는 tag_id는 거절하지 않는다.** 그 태그의 series가 빈 points로 나온다 — ClickHouse에는 tag_id만 있고 존재 확인을 위해 PostgreSQL을 읽으면 "PostgreSQL 중단 중에도 조회는 계속"(REQ-TSQ-08)이 깨진다. 비활성 태그도 같다 — 과거 구간이 그대로 조회된다.
 
 ### 서버가 요청을 바꾸는 자리
@@ -143,9 +144,8 @@ S2의 부분 집합 표면(raw 고정 · 예상 포인트 초과 거절 · 메�
 | 허용값 밖 · 오프셋 없는 시각 · from ≥ to | 400 common.validation_failed | REQ-TSQ-02 | F-04 |
 | 캐시 미스 · ClickHouse 불가 | 503 timeseries.clickhouse_unavailable | REQ-TSQ-16 | F-04 · F-10 |
 | 캐시 계열 실패 · 락 실패 · 대기 소진 | 200 — 느려질 뿐 | REQ-TSQ-11 · 12 | F-04 |
-| 대량 조회 등급 한도 초과(S7) | 429 common.rate_limited | REQ-TSQ-17 | F-04 |
 
-- 검산: 사건 = **5**
+- 검산: 사건 = **4**
 
 ## #2 GET /api/v1/timeseries/export
 
@@ -156,12 +156,12 @@ S2의 부분 집합 표면(raw 고정 · 예상 포인트 초과 거절 · 메�
 | 응답 200 | 청크 스트림 · Content-Type text/csv 또는 application/vnd.apache.parquet · Content-Disposition attachment |
 | 열 | ts(epoch ms) · device_id · tag_id · value · quality — tag_raw 원시 열 그대로 · ingested_at · scan_seq는 싣지 않는다 |
 | 원천 | tag_raw — 해상도를 줄이지 않고 캐시하지 않는다 · ClickHouse FORMAT 응답을 그대로 중계 |
-| 시작 전 실패 | 400 · 403(ENGINEER 밖) · 429(내보내기 등급) · 503 clickhouse_unavailable — 에러 봉투 |
+| 시작 전 실패 | 400 · 503 clickhouse_unavailable — 에러 봉투 |
 | 도중 실패 | §내보내기 스트림 중단 종료 표지 판정 |
-| 관련 REQ | REQ-TSQ-15 · 16 · 17 |
+| 관련 REQ | REQ-TSQ-15 · 16 |
 | 흐름 | F-04 |
 
-- **GET인 이유** — 부수효과가 없고 브라우저가 링크로 파일을 받는다. 그러나 토큰을 쿼리에 싣지 않는다 — 화면은 Authorization 헤더를 실은 fetch로 받아 파일로 저장한다([01_conventions.md](./01_conventions.md) §인증 헤더).
+- **GET인 이유** — 부수효과가 없고 브라우저가 링크로 파일을 받는다.
 - **태그명 · 단위를 싣지 않는다.** FORMAT 중계라 dictGet 열을 붙이면 원시 행마다 문자열이 반복돼 파일이 커진다. 메타는 [04_master.md](./04_master.md) #8로 따로 읽는다.
 - ingested_at을 빼는 이유 — 내보내기의 목적은 측정값의 원시 분석이다. E2E 지연 분석은 ClickHouse 직접 SQL(OBS-04)의 몫이다.
 
@@ -185,9 +185,9 @@ S2의 부분 집합 표면(raw 고정 · 예상 포인트 초과 거절 · 메�
 | 항목 | 상태 | 확정 자리 |
 |------|------|------|
 | 태그 배열 상한 · 최대 포인트 수 | 2계층 · 현행 참고 50 · 2000 · 상한 10,000 — 소유 이 문서 · S4 실측(기록 022~024)은 태그 4 · 1일 범위라 상한 값의 적정성은 S5 부하 계단에서 본다 | 이 문서 |
-| 내보내기 범위 상한 · 등급별 한도 | **W7 닫힘** — 범위 상한 현행 참고 1일 · class export(≤ bulk_read 한도) · 한도 값 2계층 미정 | [../12_security/03_api_surface_defense.md](../12_security/03_api_surface_defense.md) |
+| 내보내기 범위 상한 · 등급별 한도 | **닫힘** — 범위 상한 현행 참고 1일(W7) · 등급별 한도는 레이트 리밋과 함께 D-16 삭제 | [../12_security/03_api_surface_defense.md](../12_security/03_api_surface_defense.md) |
 | 조회 p95 · 히트율 | 3계층 미확인 — 원본 목표 히트 20 ms · 미스 300 ms · 80% | [../03_requirements/13_nonfunctional.md](../03_requirements/13_nonfunctional.md) REQ-NFR-08 · 10 |
-| COUNTER 랩어라운드 구간 증가량 | 조회 시점 몫 — 이 표면은 max − min을 계산하지 않는다 · 증가량 집계 요청 필드 없음 | [../06_pipeline/04_routing.md](../06_pipeline/04_routing.md) §생산 카운터 기전 판정 |
+| COUNTER 랩어라운드 구간 증가량 | 조회 시점 몫 — 이 표면은 max − min을 계산하지 않는다 · 증가량 집계 요청 필드 없음 | [../06_pipeline/04_routing.md](../06_pipeline/04_routing.md) §분기 판정 트리 |
 | 내보내기 중단 계수 이름 | **W6 판정** — tsq_export_aborted_total | [../10_observability/01_metrics_catalog.md](../10_observability/01_metrics_catalog.md) |
 
 ## 관련 문서
@@ -198,4 +198,3 @@ S2의 부분 집합 표면(raw 고정 · 예상 포인트 초과 거절 · 메�
 - [../03_requirements/08_timeseries.md](../03_requirements/08_timeseries.md) — REQ-TSQ 계약
 - [../06_pipeline/06_timeseries_read.md](../06_pipeline/06_timeseries_read.md) — 판정 트리 · 캐시 · 스탬피드 기전
 - [../06_pipeline/12_data_contract.md](../06_pipeline/12_data_contract.md) — 5단계 API 응답
-- [../08_screen/04_trend_analysis.md](../08_screen/04_trend_analysis.md) — ANL-TREND 화면(폐지 · D-14 — 폐지 전 원문 보존)

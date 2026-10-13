@@ -2,6 +2,8 @@
 
 > **대상**: F-02 적재 흐름의 기전 정본 — 소비 루프 · 단일 flusher fan-in(ADR-09) · **배치 트리거 산술 보정** · 창 정렬 배치와 결정적 토큰(fan-in · SW-01 off 토큰 재료) · 배치 행 수 상한 · flusher 메모리 경계 · 중복 제거 윈도우 관계식 · 재시도 · DLQ(원 엔트리 단위) · XAUTOCLAIM 주기 회수 · 소진 모드 · SW-08 · 확인 뒤 후속 단계 순서 · 적재 행 조합 검증 · MV 재실행 판별(닫힘 — S0 실측)
 > **작성일**: 2026-09-24
+> **개정일**: 2026-10-11 — **D-16 SW-09 gated**(ADR-28) — ⑧ 성공 후속의 대조군 COPY(SW-09) → **SW-09 on · gated의 게이트 열림** — 순서 불변
+> **개정일**: 2026-10-11 — **D-16 알람 · 측정 도구 삭제**(사용자 결정 2026-10-11) — 적재 체인 ⑧의 판정 인계 · 배치 요약의 판정기 발행 갈래 · 토큰의 alarm_eval 재사용 불릿 · flusher 메모리 표의 판정 인계 슬롯 · 판정 중 행 삭제 — 최대 배치 4 → **2** · R 100,000 메모리 경계 40만 → **20만** 행 · 모드 C 표현 · 관련 문서 08_alarm 삭제 · (리드 판정 — 대상 문서 파일 삭제) 08_alarm 링크 삭제 · D-16 정리(d4 전역 sweep) — 폐지 실험을 확정 수단으로 가리키던 자리 교정(EXP-34 · 26)
 > **개정일**: 2026-09-28 — 흐름 이벤트 반영(EXP-FLOW · 정본 07_api/11 §흐름 이벤트) — ⑧ 성공 후속 끝에 **배치 요약 발행(ch:flow · event batch · 구독 중 표지가 있을 때만)** — 인계 없는 배치는 flusher가 최신값 쓰기 뒤 · 인계 배치는 판정기 ⑦ 뒤(08_alarm) · 단계 수 불변
 > **개정일**: 2026-09-25 — S3 실측 반영(기록 020) — 미확인 "B · C안 비교" **닫힘**(파트 생성률 · E2E 수치 · A안 유지)
 > **개정일**: 2026-09-25 — S3 통합 확인 반영 — 회수 부등식이 요청 타임아웃 10초 경로에서 성립하지 않음 등재(최악 91초 > idle 60초 · 보유 집합이 이중 조립을 막음) · 배치 안은 PEL이 빈 상태에서만 바꾼다(W가 바뀌면 토큰이 바뀐다) · SW-08 off 설정 insert_deduplicate 0 → **deduplicate_insert disable**(26.8에서 insert_deduplicate를 대체 — 0만 주면 무시된다)
@@ -14,7 +16,7 @@
 
 F-02는 **Stream 엔트리가 ClickHouse 행으로 확정되고 XACK되기까지**다. 원본은 컨슈머마다 독립 플러시였지만 그 구성은 파트 생성률을 컨슈머 수만큼 곱해 배치 정책을 무효화했다(보정 7.1). ADR-09가 **읽기와 삽입을 갈랐다** — 컨슈머 N개는 XREADGROUP · 디코딩만 하고, 디코딩된 행은 **단일 flusher**로 모여 한 곳에서 삽입 · XACK된다. 이 문서는 그 구조를 기전으로 풀고, ADR-09가 남긴 세 질문(fan-in 배치의 토큰 재료 · 행 수 상한 · flusher 메모리)을 판정한다.
 
-**이 문서가 조정값의 소유처다** — 배치 트리거 · 백오프 · 재시도 횟수 · 회수 주기 · idle 기준 · 소진 배치(REQ-GLB-06 · REQ-ING-03 · 08 · 09 · 17). 값은 조회 계약으로 쓰고 현행 참고로 적는다. 대조군 동시 적재의 기전은 [04_routing.md](./04_routing.md), 최신값 갱신은 [05_realtime_read.md](./05_realtime_read.md), 판정 인계 뒤는 [08_alarm.md](./08_alarm.md), DLQ 재처리 · 적체 소진의 장애 흐름은 [11_backpressure_failure.md](./11_backpressure_failure.md)다.
+**이 문서가 조정값의 소유처다** — 배치 트리거 · 백오프 · 재시도 횟수 · 회수 주기 · idle 기준 · 소진 배치(REQ-GLB-06 · REQ-ING-03 · 08 · 09 · 17). 값은 조회 계약으로 쓰고 현행 참고로 적는다. 대조군 동시 적재의 기전은 [04_routing.md](./04_routing.md), 최신값 갱신은 [05_realtime_read.md](./05_realtime_read.md), DLQ 재처리 · 적체 소진의 장애 흐름은 [11_backpressure_failure.md](./11_backpressure_failure.md)다.
 
 ## 적재 한 배치
 
@@ -28,13 +30,13 @@ F-02는 **Stream 엔트리가 ClickHouse 행으로 확정되고 XACK되기까지
 ⑤ 배치 확정     창이 닫히면 ID 순 정렬 · 행 수 · 페이로드 분할 · 결정적 토큰
 ⑥ 삽입          INSERT plc.tag_raw(JSONCompactEachRow · 요청 압축 · insert_deduplication_token)
 ⑦ 실패 처리     같은 토큰 · 지수 백오프 재시도 → 소진 시 원 엔트리 단위 DLQ → XACK
-⑧ 성공 후속     대조군 COPY(SW-09) → XACK → 최신값 조건부 쓰기 · ch:rt(SW-11 ingest) → 판정 인계 → 배치 요약 ch:flow(표지 있을 때만)
+⑧ 성공 후속     대조군 COPY(SW-09 on · gated의 게이트 열림) → XACK → 최신값 조건부 쓰기 · ch:rt(SW-11 ingest) → 배치 요약 ch:flow(표지 있을 때만)
 ⑨ 회수          주기 타이머 XAUTOCLAIM — idle 기준 초과 PEL을 인수해 ④로
 ```
 
 - **XACK는 ⑥ 성공 뒤 또는 ⑦ 격리 뒤에만 한다**(REQ-GLB-05). 그 사이 엔트리는 PEL에 있고, 적체 판정량(lag + pending)에 잡혀 백프레셔 단계를 올린다(ADR-21).
-- **⑧의 순서가 계약이다.** 대조군이 XACK 앞인 것은 크래시 재전달 창을 한 곳(대조군 COPY와 XACK 사이)으로 좁히기 위해서이고([04_routing.md](./04_routing.md) §대조군 동시 적재), 최신값 · 판정이 XACK 뒤인 것은 확정되지 않은 값으로 최신값 · 알람이 서지 않게 하기 위해서다(REQ-ING-07).
-- **배치 요약은 배치당 1건 · 구독 중 표지가 있을 때만 낸다(EXP-FLOW · 정본 [../07_api/11_websocket.md](../07_api/11_websocket.md) §흐름 이벤트 — flow).** 판정 인계가 없는 배치는 flusher가 최신값 쓰기를 마친 뒤, 인계가 있는 배치는 판정기가 ⑦을 마친 뒤 낸다([08_alarm.md](./08_alarm.md) §판정 한 배치) — 두 번 내면 점이 둘로 갈라진다. 표지(cache:flow:subscribed)는 최대 5초 간격으로 확인해 기억하고 배치마다 읽지 않는다(키 [../05_data_stores/05_redis_keyspace.md](../05_data_stores/05_redis_keyspace.md)) — 배치마다 읽으면 Redis 왕복이 하나 는다. 발행 실패는 계수하고 삼키며 XACK · 재시도에 닿지 않는다.
+- **⑧의 순서가 계약이다.** 대조군이 XACK 앞인 것은 크래시 재전달 창을 한 곳(대조군 COPY와 XACK 사이)으로 좁히기 위해서이고([04_routing.md](./04_routing.md) §대조군 동시 적재), 최신값이 XACK 뒤인 것은 확정되지 않은 값으로 최신값이 서지 않게 하기 위해서다(REQ-ING-07).
+- **배치 요약은 배치당 1건 · 구독 중 표지가 있을 때만 낸다(EXP-FLOW · 정본 [../07_api/11_websocket.md](../07_api/11_websocket.md) §흐름 이벤트 — flow).** flusher가 최신값 쓰기를 마친 뒤 한 번 낸다 — 두 번 내면 점이 둘로 갈라진다. 표지(cache:flow:subscribed)는 최대 5초 간격으로 확인해 기억하고 배치마다 읽지 않는다(키 [../05_data_stores/05_redis_keyspace.md](../05_data_stores/05_redis_keyspace.md)) — 배치마다 읽으면 Redis 왕복이 하나 는다. 발행 실패는 계수하고 삼키며 XACK · 재시도에 닿지 않는다.
 - 상태 전이의 정본은 상태 머신 1(수신 · 누적 · 삽입시도 · 재시도대기 · 확인 · 격리 · 회수)이며 이 체인은 그 전이를 모듈 단위로 푼 것이다.
 
 ## 구성 요소와 책임
@@ -112,7 +114,6 @@ F-02는 **Stream 엔트리가 ClickHouse 행으로 확정되고 XACK되기까지
 
 - 검산: 구성 = **5**
 - **SW-01 off에는 엔트리 ID가 없다.** (d · s)는 Collector 사이클마다 유일하므로 같은 배치의 재시도에 같은 토큰을 준다. 재시작 뒤에는 미처리 배치가 큐와 함께 사라지므로 재전달 멱등이 애초에 성립할 대상이 없다 — 이것이 SW-01 off가 원칙을 증명하는 방식이다(유실로 드러난다).
-- **토큰은 테이블마다 따로 기억된다.** 같은 배치 토큰을 alarm_eval 삽입에 다시 써도 tag_raw와 간섭하지 않는다([../05_data_stores/03_clickhouse_schema.md](../05_data_stores/03_clickhouse_schema.md) §중복 제거).
 
 ## 중복 제거 윈도우와 재전달 관계식
 
@@ -131,18 +132,16 @@ ClickHouse는 테이블마다 최근 N개 삽입 블록의 토큰만 기억한�
 
 ## 행 수 상한과 flusher 메모리
 
-**판정 — 배치 행 상한은 행 트리거 R이다. flusher가 메모리에 쥐는 배치는 최대 4개이고, 넘으면 컨슈머가 읽기를 멈춘다.** 적체를 프로세스 메모리가 아니라 Stream에 두는 것이 목적이다 — Stream에 남은 적체는 백프레셔 판정량(lag)에 잡히지만 프로세스 메모리의 적체는 아무 지표에도 잡히지 않는다.
+**판정 — 배치 행 상한은 행 트리거 R이다. flusher가 메모리에 쥐는 배치는 최대 2개이고, 넘으면 컨슈머가 읽기를 멈춘다.** 적체를 프로세스 메모리가 아니라 Stream에 두는 것이 목적이다 — Stream에 남은 적체는 백프레셔 판정량(lag)에 잡히지만 프로세스 메모리의 적체는 아무 지표에도 잡히지 않는다.
 
 | 자리 | 최대 배치 수 | 차면 | 근거 |
 |------|:------:|------|------|
 | 창 버퍼(조립 중 · 닫혀 대기) | 1 | 컨슈머가 XREADGROUP을 멈춘다 — 엔트리는 그룹에 미배달로 남아 lag가 된다 | ClickHouse 중단 중 컨슈머가 계속 읽으면 적체가 메모리로 옮겨 가 OOM이 백프레셔보다 먼저 온다 |
 | 삽입 중(재시도 포함) | 1 | flusher 직렬 — 다음 배치는 대기 | 재시도 동안 윈도우를 전진시키지 않기 위해서다(§중복 제거 윈도우) |
-| 판정 인계 슬롯 | 1 | flusher가 인계를 기다린다 | 판정 직렬성 · 인계 깊이 1([08_alarm.md](./08_alarm.md)) |
-| 판정 중 | 1 | 해당 없음 — 판정기가 쥔다 | 상동 |
 
-- 검산: 최대 배치 = 1 + 1 + 1 + 1 = **4** · flusher 메모리 상한 ≈ 4 × R × 행당 메모리(행당 메모리는 3계층 미확인)
-- **S3 as-built 정지 셈** — 보유 배치 = 대기 조각 수 + ⌊조립 중 행 ÷ R⌋ + 삽입 중이고, 이 값이 2(창 버퍼 1 + 삽입 중 1)에 닿으면 컨슈머가 읽기를 멈춘다. 판정 두 칸은 알람 판정기가 생기는 S7에 셈에 들어간다. 정지 시간은 벽시계로 한 번만 센다(ing_consumer_paused_seconds_total) — 컨슈머 N개가 동시에 멈춘 1초를 N초로 세면 정지 비율이 컨슈머 수에 따라 부풀어 안끼리 비교가 안 된다.
-- **M+ · L에서 R을 올리면 메모리 경계가 같은 배수로 오른다.** R 100,000이면 최대 40만 행이 프로세스 안에 있다 — 부하 실험 프로파일의 api 메모리 상한과의 관계는 S5 실측이다(용량 산정 미확인 행 — [../04_architecture/07_capacity_planning.md](../04_architecture/07_capacity_planning.md)).
+- 검산: 최대 배치 = 1 + 1 = **2** · flusher 메모리 상한 ≈ 2 × R × 행당 메모리(행당 메모리는 3계층 미확인) · 옛 판정 인계 두 칸은 알람과 함께 폐지(D-16)
+- **S3 as-built 정지 셈** — 보유 배치 = 대기 조각 수 + ⌊조립 중 행 ÷ R⌋ + 삽입 중이고, 이 값이 2(창 버퍼 1 + 삽입 중 1)에 닿으면 컨슈머가 읽기를 멈춘다. 정지 시간은 벽시계로 한 번만 센다(ing_consumer_paused_seconds_total) — 컨슈머 N개가 동시에 멈춘 1초를 N초로 세면 정지 비율이 컨슈머 수에 따라 부풀어 안끼리 비교가 안 된다.
+- **M+ · L에서 R을 올리면 메모리 경계가 같은 배수로 오른다.** R 100,000이면 최대 20만 행이 프로세스 안에 있다 — 부하 실험 프로파일의 api 메모리 상한과의 관계는 S5 실측이다(용량 산정 미확인 행 — [../04_architecture/07_capacity_planning.md](../04_architecture/07_capacity_planning.md)).
 - **B형 — 컨슈머가 읽기를 멈추는 것은 적재 정지가 아니다.** 결론 — ClickHouse가 느리면 컨슈머가 멈추고 lag가 오른다. 반대 시나리오 — 멈추지 않고 읽으면 적체 판정량이 낮게 보여 발행자가 스풀로 가지 않고, api가 메모리로 죽는 순간 PEL만 남고 재시작 회수까지 수집 · 조회가 함께 멈춘다. 파생 지침 — 컨슈머 정지 시간을 계측해 "삽입 병목"과 "디코딩 병목"을 가른다.
 
 ## 재시도 · 격리 · DLQ
@@ -203,7 +202,7 @@ ClickHouse가 복구된 직후 적체를 빼는 동안의 배치 규칙이다(RE
 | ② **발행자 책임 + 사후 대조** | 발행자(Collector · 생성기)는 마스터에서 온 태그만 발행 · 적재는 검증하지 않는다 · 주기 대조 쿼리가 tag_raw의 조합을 dict_tag와 대조 | 생성기 태그 집합이 시드와 어긋나면 적재 뒤에야 드러난다 | **채택** |
 
 - 검산: 안 = **2**
-- **드러나는 자리는 조회다** — dictGet 기본값(빈 문자열)이 이름 없는 태그를 보이게 한다([../05_data_stores/07_cross_store_consistency.md](../05_data_stores/07_cross_store_consistency.md)). 모드 B · C의 태그 집합은 시드와 같은 집합이어야 한다([10_datagen_inject.md](./10_datagen_inject.md)).
+- **드러나는 자리는 조회다** — dictGet 기본값(빈 문자열)이 이름 없는 태그를 보이게 한다([../05_data_stores/07_cross_store_consistency.md](../05_data_stores/07_cross_store_consistency.md)). 모드 B의 태그 집합은 시드와 같은 집합이어야 한다([10_datagen_inject.md](./10_datagen_inject.md)).
 
 ## 미확인 · 미설계 등재
 
@@ -214,7 +213,7 @@ ClickHouse가 복구된 직후 적체를 빼는 동안의 배치 규칙이다(RE
 | **SW-08 off의 재시도 중복 재현 수단** | **닫힘(S3 판정)** — off = NoBatchToken + 삽입 설정 **deduplicate_insert 'disable'** — 26.8은 이 설정(기본 enable)이 insert_deduplicate · async_insert_deduplicate를 대체해 **insert_deduplicate 0만 주면 무시되고 중복 제거가 그대로 돈다**(S3 통합 확인 — query_log DuplicatedInsertedBlocks 8 · 중복 0 → disable 뒤 중복 250). ClickHouse 26.8은 토큰 없는 같은 내용 재전송도 중복 제거해(기록 004) 토큰만 빼면 EXP-13이 재현되지 않는다 — 실측은 EXP-13 | S3 · EXP-13 · [../02_features/13_switch_matrix.md](../02_features/13_switch_matrix.md) |
 | M+ · L에서 R 값(시간 트리거 지배 여부) | 2계층 — 현행 50,000은 M+에서 행 트리거 지배 | S3 · S5 · 리드 제안 |
 | 창 버퍼 상한의 셈 | **닫힘(S3)** — 조립 중 행을 R 단위로 셈에 넣었다 · 교착은 확정 접두 선배출이 막는다(§창 정렬 배치와 결정적 토큰) · S2 차이(조립 중 제외) 해소 | S3 · 이 문서 §행 수 상한과 flusher 메모리 |
-| 창 닫힘 유예 · 행당 메모리 · flusher 메모리 상한 | 유예 2계층 **현행 참고 100 ms(S2 판정)** · 나머지 3계층 미확인 | S3 · S5 · EXP-34(유예 재판정) · EXP-26(flusher 메모리) |
+| 창 닫힘 유예 · 행당 메모리 · flusher 메모리 상한 | 유예 2계층 **현행 참고 100 ms(S2 판정)** · 나머지 3계층 미확인 | 확정 수단 없음(유예 재판정 EXP-34 · flusher 메모리 EXP-26 D-16 폐지) · 유예는 S2 판정 현행 참고 |
 | 소진 모드 전환 중 크래시 재전달 중복 | 잔여 — 검출만 | [../05_data_stores/02_postgresql_constraints.md](../05_data_stores/02_postgresql_constraints.md) 한계 등재 #15(W4 반영) |
 | Stream 체류 · fan-in 대기 · 컨슈머 정지 · 쓰인 행 수 0 메트릭 이름 | **W6 판정** — ing_stream_residence_seconds · ing_fanin_wait_seconds · ing_consumer_paused_seconds_total · ing_dedup_ignored_batches_total — **마지막 하나는 S3 미구현**: @clickhouse/client 1.23의 삽입 응답 요약(X-ClickHouse-Summary)에 ProfileEvents가 없고 written_rows는 중복 제거된 재시도에도 첫 시도와 같다(기록 001). 0으로 내보내면 "중복 없음"으로 읽혀 등록하지 않는다 · 판별은 system.query_log 사후 조회로 한다 | [../10_observability/01_metrics_catalog.md](../10_observability/01_metrics_catalog.md) |
 
@@ -224,6 +223,5 @@ ClickHouse가 복구된 직후 적체를 빼는 동안의 배치 규칙이다(RE
 - [../11_glossary/03_enums_state_machines.md](../11_glossary/03_enums_state_machines.md) — 상태 머신 1 배치 재시도
 - [../05_data_stores/03_clickhouse_schema.md](../05_data_stores/03_clickhouse_schema.md) — 중복 제거 윈도우 · 삽입 설정
 - [04_routing.md](./04_routing.md) — 대조군 동시 적재 · 분기 기전
-- [08_alarm.md](./08_alarm.md) — 판정 인계 뒤
 - [11_backpressure_failure.md](./11_backpressure_failure.md) — DLQ 재처리 · 적체 소진
 - [12_data_contract.md](./12_data_contract.md) — 엔트리 · DLQ 엔트리 계약

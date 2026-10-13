@@ -1,7 +1,9 @@
 # 로컬 실행 환경
 
-> **대상**: 로컬 머신 1대의 요구사항 · 원본 실측 환경(WSL2 · 20스레드 · 가용 RAM) · WSL2 메모리 조정 · **컨테이너 메모리 상한(정본)** · 메모리 프로파일 2 + 조건부 중간 · 대조 실험 메모리 조건 · networkingMode=mirrored · **환경변수 목록(정본)** · 기동 · 정지 · 스냅샷 명령 · 아카이브 위치 · 착수 전 조정
+> **대상**: 로컬 머신 1대의 요구사항 · 원본 실측 환경(WSL2 · 20스레드 · 가용 RAM) · WSL2 메모리 조정 · **컨테이너 메모리 상한(정본)** · 메모리 프로파일 2 + 조건부 중간 · networkingMode=mirrored · **환경변수 목록(정본)** · 기동 · 정지 명령 · 덤프 · 기록 위치 · 착수 전 조정
 > **작성일**: 2026-09-24
+> **개정일**: 2026-10-11 — **D-16 설비 가동 · SW-09 gated · 카드 라인 시드**(사용자 결정 2026-10-11 · ADR-28 · ADR-29) — 환경변수 표 SENSOR_AUTOGEN 계열 센서 자동 생성 게이트 → **설비 가동 기동 기본값**(실행 중 상태는 Redis ctl:plant:power · HMI 스위치) · B형 파생 지침 직접 보내 보기 → 설비 가동 스위치 · **SW-09 기본 gated 불릿 신설**(견본 .env.example은 off로 남아 있다) · 기동 순서 시드 --slice s2 → **--card-line(로컬 기본)** · **⑥ 설비 가동 켜기 단계 신설**(단계 8 → 9) — 표 행 · 이름 수 불변
+> **개정일**: 2026-10-11 — **D-16 알람 · 로그인 · 측정 도구 삭제**(사용자 결정 2026-10-11) — **§대조 실험 메모리 조건 삭제**(대조 자원 오버레이 삭제) · 환경변수 표 18 → **16**행 · 이름 40 → **36**(DATAGEN_BULK_ENABLED · ALARM_ACK_ACTOR_EMAIL · JWT_SIGNING_KEY · SEED_USER_PASSWORD 삭제 · 비밀 9 → **7**) · APP_ROLE 값 datagen 삭제 · SENSOR_AUTOGEN 실험 러너(scripts/lab) 서술 삭제 · INGEST_LAB_FAULT의 EXP-13 폐지 표기 · 기동 ③ seed --tier S → **--slice s2** · down -v 규칙 스냅샷 → 덤프 · **§스냅샷 · 아카이브 위치 → §덤프 · 기록 위치**(4 → **2**) · 미확인 대조 조건 행 삭제 · 현행 측정 머신 부하 도구 CPU 고정 행 · 메모리 기준 문단의 k6 삭제 · D-16 정리(d4 전역 sweep) — 폐지 실험을 확정 수단으로 가리키던 자리 교정(EXP-34) · D-16 정리(d4 전역 sweep) — 원본 메모리 예산의 k6 몫에 옛 부하 생성기 표지(산술은 원본 예산 그대로)
 > **개정일**: 2026-10-05 — 웹 · api 호스트 포트 이동(같은 머신의 다른 프로젝트가 호스트 3000 · 3001을 점유 · 사용자 결정 2026-10-05) — 웹 3001 → **13001** · api 호스트 3000 → **13000**(컨테이너 3000 · 서비스명 그대로) · CORS 허용 오리진 http://localhost:3001 → **http://localhost:13001** — 오리진 수 · 바인드 규칙 불변
 > **개정일**: 2026-10-05 — 센서 자동 생성 게이트 2차 수정(검수 반영 · 리드 판정 L1 · L2 · M1 · M3 — restore 설계는 사용자 결정 2026-10-05) — SENSOR_AUTOGEN 행의 실험 러너 출처 scripts/lab/s3/_lib.sh → **s3/_lib.sh(s4 · s5가 상속) · s2 러너 3개는 각자 export** · health 칸 → **실효값(게이트 × 역할)** · 기동 명령 ⑤ run 5필드 → **개수 없이**(run · switches 확인) · B형 불릿 파생 지침에 **러너 뒤에는 task up으로 api를 다시 만든다**(restore는 api를 지우기만 한다 — 05_tooling_devops) — 표 행 · 이름 수 불변
 > **개정일**: 2026-10-03 — 센서 자동 생성 게이트 신설(사용자 결정 2026-10-03 · 스위치 밖 운영 게이트 — DATAGEN_BULK_ENABLED와 같은 결) — 환경변수 1행 신설(SENSOR_AUTOGEN · 앱 기본 on · 로컬 Compose 기본 off · 실험 러너 on) — 표 행 17 → **18** · 이름 39 → **40**(스위치 12 + 스위치 밖 27 → **28**) · 검산 불릿 괄호 목록의 끝 수 38 → **28**(괄호 안 항목 수 27과 어긋나 있던 것 교정 후 신설 반영) · 기동 명령 ⑤ run 4필드 → **5필드** · 같은 줄 switches 11(SW-12 반영 때 남은 옛 수) → **개수 없이**(수는 정본 02_features/13이 센다) · 기본값이 갈린 이유 B형 불릿
@@ -23,7 +25,7 @@
 
 ## 머신 요구사항
 
-기준은 **Docker에 할당한 메모리**다. 머신 RAM이 전부 Docker로 가지 않는다 — OS · 브라우저 · IDE · 호스트 웹 개발 서버 · k6가 바깥에서 따로 먹는다(원본 tech_stack.md §10.2).
+기준은 **Docker에 할당한 메모리**다. 머신 RAM이 전부 Docker로 가지 않는다 — OS · 브라우저 · IDE · 호스트 웹 개발 서버가 바깥에서 따로 먹는다(원본 tech_stack.md §10.2 — 원본의 k6 몫은 측정 도구와 함께 D-16 삭제).
 
 | 항목 | 부하 실험 프로파일 | 개발 프로파일 | 근거 | 미달이면 |
 |------|------|------|------|------|
@@ -46,7 +48,7 @@
 | 머신 CPU · RAM | 14코어 · 48 GB | 부하 실험 32 GB 이상 | 충분 | 없음 |
 | Docker VM vCPU | 14 | cpuset 배치의 전제 | 배치 합 14 | 없음 |
 | **Docker VM 메모리 할당** | 약 7.75 → **15.6 GB**(2026-09-24 사용자 상향) | 부하 실험 12 GB · 개발 8 GB(§머신 요구사항) | 부하 실험 프로파일이 들어간다 — 상한 합 11.5 + 여유 0.5 · 저장소는 부하 실험 프로파일로 둔다(S0 회귀 재확인 · docs/measurements 기록 003) | 없음 — 상향 완료 |
-| 부하 도구 CPU 고정 | macOS에 taskset 없음 | k6 · 벤치마크 도구를 측정 대상과 다른 CPU 집합에 | 호스트 프로세스로 띄우면 격리가 사라진다 | **k6 · 네이티브 벤치마크는 컨테이너로 띄워 cpuset 11-12에 고정한다** |
+| 부하 도구 CPU 고정 | macOS에 taskset 없음 | 옛 k6 · 벤치마크 도구를 측정 대상과 다른 CPU 집합에 | 호스트 프로세스로 띄우면 격리가 사라진다 | **부하 도구는 D-16으로 지웠다** — 그 집합(11-12)은 미배정으로 남는다([../04_architecture/03_execution_topology.md](../04_architecture/03_execution_topology.md) §cpuset 배치) |
 | 레지스트리 자격 증명 | Docker Desktop 자격 증명 도우미가 응답하지 않아 이미지 풀이 멈춘 이력 | 해당 없음 | 공개 이미지 풀 불가 | 공개 이미지는 익명 풀로 받는다 · 도우미 문제는 Docker Desktop 쪽에서 푼다 |
 
 - 검산: 항목 = **6**
@@ -68,7 +70,7 @@
 | Docker 데몬 | 기동 | 미기동 | S0 불가 | 데몬 기동 확인 |
 
 - 검산: 항목 = **8**
-- **가장 중요한 행은 가용 RAM이다.** 15 GB VM에서 Docker 12 GB + 웹 개발 서버 1.5 GB + k6 0.5 GB + Linux 1 GB = 15 GB로 여유가 0이다 — 부하 실험 프로파일을 올리면 VM 안에서 무엇이든 먼저 죽는다.
+- **가장 중요한 행은 가용 RAM이다.** 15 GB VM에서 Docker 12 GB + 웹 개발 서버 1.5 GB + k6 0.5 GB(옛 부하 생성기 — D-16 삭제 · 원본 예산 그대로 둔다) + Linux 1 GB = 15 GB로 여유가 0이다 — 부하 실험 프로파일을 올리면 VM 안에서 무엇이든 먼저 죽는다.
 - **WSL2는 P코어 · E코어 구분을 노출하지 않는다.** 균일한 10코어 × 2스레드로 보고되어 cpuset 번호가 어느 물리 코어인지 매 실행 달라질 수 있다 — 3회 중앙값이 필수 규칙인 이유다(D-10 · REQ-TEC-11).
 
 ## WSL2 메모리 조정
@@ -90,7 +92,7 @@ swap=8GB
 | 대상 | 할당 | 산정 | 넘치면 |
 |------|------|------|------|
 | Windows 호스트 | 11 GB | OS 4 + 브라우저 3~4 + IDE 1~2 · 브라우저는 Windows에서 띄운다 | 호스트 스왑이 WSL2 VM의 메모리 회수를 부른다 |
-| WSL2 VM | 20 GB | Docker 12 + 웹 개발 서버 1.5 + k6 0.5 + Linux 1 = 15 · 여유 5 | VM 안 OOM |
+| WSL2 VM | 20 GB | Docker 12 + 웹 개발 서버 1.5 + k6 0.5(옛 부하 생성기 — D-16 삭제) + Linux 1 = 15 · 여유 5 | VM 안 OOM |
 
 - 검산: 11 + 20 = **31** = 호스트 RAM · VM 내부 12 + 1.5 + 0.5 + 1 = **15** · 20 − 15 = 여유 **5**
 
@@ -123,22 +125,6 @@ swap=8GB
 - **판정 — 중간 프로파일은 정식 프로파일로 올리지 않는다.** 원본 판단(원본 implementation_plan.md §2.3)을 승계한다 — WSL2 설정을 20 GB로 올려 부하 실험 프로파일을 쓰고, 중간은 조정이 불가능할 때의 조건부 대안으로만 둔다. 채택하는 순간 루트 README 고정 기준(메모리 프로파일 2)과 이 표를 같은 변경 단위에서 고친다.
 - **중간 프로파일의 축출 연쇄는 결함이 아니라 관찰 기회다.** 원본이 "maxmemory를 1.6 GB로 낮춰 강제 유발하는 실험"이라 한 현상이 인위 조작 없이 나타난다. 다만 그 수치를 목표와 비교하면 히트율 미달이 결함으로 오독된다.
 
-### 대조 실험 메모리 조건
-
-[../05_data_stores/10_olap_vs_rdb_control.md](../05_data_stores/10_olap_vs_rdb_control.md)가 대조 실험에 **두 컨테이너의 메모리 상한을 같게 둔 조건**을 요구한다. 이 표는 그 조건을 부하 실험 프로파일 위에 덧씌우는 값이다. 프로파일 수에 세지 않는다 — 부하 실험 프로파일의 변형이며 기록 조건 칸에 적는다.
-
-| 컨테이너 | 부하 실험 | 대조 조건 | 파생 설정 |
-|------|------|------|------|
-| clickhouse | 5.0 GB | **3.5 GB** | 서버 메모리 비율 그대로 — 절대값이 비율만큼 준다 |
-| postgres | 2.0 GB | **3.5 GB** | shared_buffers · effective_cache_size를 산정 규칙(05_data_stores/01)으로 다시 산다 |
-| redis | 2.5 GB | 2.5 GB | 변경 없음 |
-| api | 2.0 GB | 2.0 GB | 변경 없음 |
-| 합계 | 11.5 GB | 11.5 GB | Docker 12 GB 안 |
-
-- 검산: 3.5 + 3.5 + 2.5 + 2.0 = **11.5** · 부하 실험의 clickhouse + postgres 5.0 + 2.0 = 7.0을 둘로 나눈 값 3.5
-- **값은 W6 초기 판정이다** — 대조 정본(05_data_stores/10)이 동일화 값을 정하면 그 값으로 이 표를 고친다. CPU 집합 동일화는 [../04_architecture/03_execution_topology.md](../04_architecture/03_execution_topology.md) §대조 실험 자원 조건이 갖는다.
-- **대조 조건으로 잰 수치를 목표 ②의 적재 실험과 섞지 않는다.** ClickHouse 몫이 5.0 → 3.5 GB로 줄어 적재 · 머지 수치가 부하 실험 프로파일과 다른 조건이 된다.
-
 ## WSL2 mirrored 네트워킹
 
 원본 implementation_plan.md §2.5의 영향이다. 보안 쪽 함의의 정본은 [../12_security/05_local_exposure.md](../12_security/05_local_exposure.md)다.
@@ -154,14 +140,13 @@ swap=8GB
 
 ## 환경변수 (정본)
 
-**이 표가 환경변수 이름의 정본이다.** 07_api/10(run 필드) · 07_api/09(게이트) · 08_screen/07(재기동 명령)이 이 문서를 가리킨다. 스위치 12종의 이름 · 기본값 · 값 형식의 정본은 [../02_features/13_switch_matrix.md](../02_features/13_switch_matrix.md)이고 여기서는 계열로만 센다. 비밀(접속 자격 증명 · 토큰 서명 키)의 취급은 [../12_security/02_secrets_config.md](../12_security/02_secrets_config.md)(W7)가 갖는다.
+**이 표가 환경변수 이름의 정본이다.** 07_api/10(run 필드) · 07_api/09(실행 표면)가 이 문서를 가리킨다(옛 08_screen/07 재기동 명령 안내는 D-14 폐지 · D-16 파일 삭제). 스위치 12종의 이름 · 기본값 · 값 형식의 정본은 [../02_features/13_switch_matrix.md](../02_features/13_switch_matrix.md)이고 여기서는 계열로만 센다. 비밀(접속 자격 증명 · 토큰 서명 키)의 취급은 [../12_security/02_secrets_config.md](../12_security/02_secrets_config.md)(W7)가 갖는다.
 
 | 계열 | 이름 | 값 | 기본 | 읽는 시점 | 읽는 자리 · 노출 | 잘못 주면 |
 |------|------|------|------|------|------|------|
-| 기동 역할 | **APP_ROLE** | all · api · worker · collector · datagen | all | 기동 시 1회 | 모듈 초기화 범위(ADR-22) | 허용값 밖이면 기동 거부 — 조용히 all로 돌면 역할 분리 실험이 분리 없이 기록된다 |
+| 기동 역할 | **APP_ROLE** | all · api · worker · collector | all | 기동 시 1회 | 모듈 초기화 범위(ADR-22) | 허용값 밖이면 기동 거부 — 조용히 all로 돌면 역할 분리 실험이 분리 없이 기록된다 |
 | 역할 스위치 | SW-01~SW-12의 12개 | 정본 02_features/13 | 정본 02_features/13 | 기동 시 1회 | DI 포트 구현 선택(ADR-08) · health switches · /metrics 레이블 | 허용값 밖이면 기본 구현이 주입되고 health가 실제 구현을 보여 준다(07_api/10 A형) |
-| 부하 주입 게이트 | **DATAGEN_BULK_ENABLED** | true · false | false | 기동 시 1회 | 모드 C 표면 라우트 존재 여부(07_api/09) · 스위치 목록에 넣지 않는다 | true로 둔 채 잊으면 부하 주입 표면이 상시 열린다 — 레이트 리밋 등급의 방어만 남는다 |
-| 센서 자동 생성 게이트 | **SENSOR_AUTOGEN** | on · off | 앱 설정 on · 로컬 Compose **off**(infra/compose/compose.yml) · 실험 러너 on(scripts/lab/s3/_lib.sh — s4 · s5가 상속 · s2 러너 3개는 각자 export) | 기동 시 1회 | SIM 포트 · GEN 모드 A 틱 · COL 폴링 시작 여부(기동 · 마스터 변경 재로드 · 재연결 대조 모두) · health run.sensorAutogen(실효값 — 게이트 × 역할 · 07_api/10) · off면 기동 로그 1줄 · 스위치 목록에 넣지 않는다 · 직접 보내 보기(07_api/09 flow 실행)는 끄지 않는다 | 허용값 밖이면 기동 거부 — 오타가 조용히 on이 되면 배경 적재가 멈추지 않고, off가 되면 실험 러너의 측정 조건이 바뀐다 |
+| 설비 가동 기동 기본값 | **SENSOR_AUTOGEN** | on · off | 앱 설정 on · 로컬 Compose **off**(infra/compose/compose.yml) | 기동 시 1회 — Redis 키 ctl:plant:power가 없을 때만 쓰인다 | **설비 가동의 기동 기본값**(D-16) — 실행 중 상태는 Redis ctl:plant:power이고 HMI 화면의 설비 가동 스위치(07_api/06 #4)가 바꾼다 · collector 역할이 기동 때 키를 지워 이 값부터 시작한다(ADR-29) · health run.sensorAutogen은 이 값이 아니라 지금 실제로 만드는지(실효값 · 07_api/10) · 스위치 목록에 넣지 않는다 · 직접 보내 보기(07_api/09 flow 실행)와 무관하다 | 허용값 밖이면 기동 거부 — 오타가 조용히 on이 되면 배경 적재가 멈추지 않고, off가 되면 수집이 조용히 멈춘다 |
 | 측정 조건 | **MEMORY_PROFILE** | load · dev · mid | 없음(null) | 기동 시 1회 | health run.memoryProfile | 없으면 null — 그 기록은 4요소가 빠져 인용할 수 없다 |
 | 측정 조건 | **CAPACITY_TIER** | S · M · M+ · L | 없음(null) | 기동 시 1회 | health run.capacityTier | 상동 |
 | 측정 조건 | **COMMIT_HASH** | 빌드된 커밋 해시 | 없음(null) | 이미지 빌드 인자 → 컨테이너 환경변수 | health run.commitHash | 빌드 인자를 빼면 null — 손으로 적는 순간 커밋과 이미지가 어긋날 수 있다 |
@@ -169,57 +154,55 @@ swap=8GB
 | Node 런타임 | UV_THREADPOOL_SIZE | 정수 | 프로파일 파일이 준다 | 프로세스 시작 | libuv 스레드 풀 | 해당 없음 — 현행 참고 값의 소유는 04_architecture/03 |
 | 워커 풀 | **WORKER_POOL_SIZE** | 정수 1 이상 | 프로파일 파일이 준다 | 기동 시 1회 | piscina 풀 크기(ADR-25) | 워커 수가 기록에 없으면 S1 워커 1 · 2 · 4 비교가 섞인다 |
 | SIM 주입 계획 | **SIM_FAULT_PLAN** | 주입 계획 파일 경로 | 없음 — 주입 없음 | 기동 시 1회 | SIM 지연 · 오류 주입(06_pipeline/10) · 형식 [05_tooling_devops.md](./05_tooling_devops.md) | 파일이 형식 검증에 실패하면 기동 거부 — 일부만 적용되면 계획과 실제 주입이 어긋난다 |
-| 적재 조정값 | **INGEST_BATCH_PLAN** | A · B · C | A | 기동 시 1회 | 배치 안(ADR-09 · EXP-34) — A 컨슈머 3 · 창 1초 · B 컨슈머 1 · 창 5초 · C 컨슈머 3 · 창 1초 · async_insert 대기형 · 스위치가 아니다(코드 경로 동일 · 조건 칸 batchPlan) | 허용값 밖이면 기동 거부 · **PEL이 남은 채 안을 바꾸지 않는다** — 창 폭이 달라 재전달 배치의 토큰이 바뀌어 SW-08 on에서도 중복이 난다(S3 통합 확인) |
-| 실험 결함 주입 | **INGEST_LAB_FAULT** | crash-after-insert:n | 없음 — 비활성 | 기동 시 1회 | n번째 배치 삽입 성공 뒤 XACK 전 종료(EXP-13) · 1회만 발동(표지 /app/spool/lab-fault-fired) · health SW-08 warning | 켠 채 잊으면 부하 실험 중 api가 한 번 죽는다 — health warning이 드러낸다 |
+| 적재 조정값 | **INGEST_BATCH_PLAN** | A · B · C | A | 기동 시 1회 | 배치 안(ADR-09 · 옛 EXP-34 — D-16 폐지 · 결과 기록 020) — A 컨슈머 3 · 창 1초 · B 컨슈머 1 · 창 5초 · C 컨슈머 3 · 창 1초 · async_insert 대기형 · 스위치가 아니다(코드 경로 동일 · 조건 칸 batchPlan) | 허용값 밖이면 기동 거부 · **PEL이 남은 채 안을 바꾸지 않는다** — 창 폭이 달라 재전달 배치의 토큰이 바뀌어 SW-08 on에서도 중복이 난다(S3 통합 확인) |
+| 실험 결함 주입 | **INGEST_LAB_FAULT** | crash-after-insert:n | 없음 — 비활성 | 기동 시 1회 | n번째 배치 삽입 성공 뒤 XACK 전 종료(옛 EXP-13 — 폐지(D-16) · 결함 주입 훅은 남는다) · 1회만 발동(표지 /app/spool/lab-fault-fired) · health SW-08 warning | 켠 채 잊으면 부하 실험 중 api가 한 번 죽는다 — health warning이 드러낸다 |
 | 생성 조건 | **GEN_PROFILE** | mixed · all · 신호 프로파일 8 단독 | SINE | 기동 시 1회 | 모드 A 태그별 프로파일 배정(EXP-14) | 허용값 밖이면 기동 거부 — 프로파일이 기록 조건과 다르면 데드밴드 전송률이 다른 신호의 값이 된다 |
-| 알람 확인 행위자(인증 전) | **ALARM_ACK_ACTOR_EMAIL** | 시드 학습자 계정 email | 없음 | 기동 시 1회 | 알람 확인(07_api/07 #2)의 acked_by — 확인 트랜잭션이 이 email의 활성 · OPERATOR 계정을 조회한다 · 인증 도입(S7 ②)에서 폐기 · 판정 정본 [../07_api/07_alarms.md](../07_api/07_alarms.md) §인증 전 확인 행위자 판정 | 없거나 계정이 없으면 **확인만 401** — 기동 거부가 아니다(계정 없는 옛 스냅샷에서 측정까지 막지 않는다) |
 | 저장소 접속 | **POSTGRES_URL · CLICKHOUSE_URL · REDIS_URL** | 서비스명 DNS 기반 접속 문자열 — **비밀번호 자리는 아래 비밀 변수를 Compose 변수 치환으로 참조한다** | .env.example의 로컬 값(호스트 · 포트 · DB 이름 · 계정 이름) · 비밀번호 자리는 치환식 | 기동 시 1회 | 각 클라이언트 | 자격 증명이 들어 있어 .env를 커밋하지 않는다(REQ-TEC-14) · 비밀번호를 문자열에 직접 적으면 같은 비밀이 두 변수에 나뉘어 바꿀 때 한쪽이 남는다 |
-| 비밀 | **JWT_SIGNING_KEY · POSTGRES_ADMIN_PASSWORD · APP_OWNER_PASSWORD · APP_RW_PASSWORD · CH_READER_PASSWORD · CLICKHOUSE_PASSWORD · REDIS_PASSWORD · SEED_USER_PASSWORD · GRAFANA_ADMIN_PASSWORD** | 비밀 값 — 비밀 목록 정본 [../12_security/02_secrets_config.md](../12_security/02_secrets_config.md)의 9종과 1:1 | 없음 — .env.example에는 자리표시만 | 기동 시 1회(migrate · seed는 실행 시 1회) | 서명 키 api · 관리자 비밀번호 postgres 이미지 초기화 · app_owner migrate · app_rw 접속 문자열 치환과 migrate 역할 생성 · ch_reader ClickHouse 설정 파일과 migrate · ClickHouse · Redis 비밀번호 이미지 초기화와 접속 문자열 치환 · 학습자 seed · Grafana 이미지 | 비었거나 자리표시와 같으면 **기동 거부** — 허용하면 모든 환경이 같은 서명 키 · 같은 저장소 비밀번호로 돈다 · 서명 키는 256비트 무작위 미만이면 거부 · 공개 접두(NEXT_PUBLIC_) 이름을 쓰지 않는다 |
+| 비밀 | **POSTGRES_ADMIN_PASSWORD · APP_OWNER_PASSWORD · APP_RW_PASSWORD · CH_READER_PASSWORD · CLICKHOUSE_PASSWORD · REDIS_PASSWORD · GRAFANA_ADMIN_PASSWORD** | 비밀 값 — 비밀 목록 정본 [../12_security/02_secrets_config.md](../12_security/02_secrets_config.md)의 7종과 1:1 | 없음 — .env.example에는 자리표시만 | 기동 시 1회(migrate는 실행 시 1회) | 관리자 비밀번호 postgres 이미지 초기화 · app_owner migrate · app_rw 접속 문자열 치환과 migrate 역할 생성 · ch_reader ClickHouse 설정 파일과 migrate · ClickHouse · Redis 비밀번호 이미지 초기화와 접속 문자열 치환 · Grafana 이미지 | 비었거나 자리표시와 같으면 **기동 거부** — 허용하면 모든 환경이 같은 저장소 비밀번호로 돈다 · 공개 접두(NEXT_PUBLIC_) 이름을 쓰지 않는다 |
 | 웹 | **API_BASE_URL · NEXT_PUBLIC_API_BASE_URL** | BFF 서버 측 · 브라우저 직결 api 주소 | http://127.0.0.1:13000 · http://localhost:13000 | 웹 기동 시 | BFF fetch · 브라우저 직결(ADR-02) | 브라우저 쪽을 BFF 주소로 두면 고빈도 요청이 1홉 늘어난다 |
 
-- 검산: 표 행 = **18** · 이름 수 = 1 + 12 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 3 + 9 + 2 = **40** — 스위치 12 + 스위치 밖 28(APP_ROLE · DATAGEN_BULK_ENABLED · SENSOR_AUTOGEN · MEMORY_PROFILE · CAPACITY_TIER · COMMIT_HASH · NODE_OPTIONS · UV_THREADPOOL_SIZE · WORKER_POOL_SIZE · SIM_FAULT_PLAN · INGEST_BATCH_PLAN · INGEST_LAB_FAULT · GEN_PROFILE · ALARM_ACK_ACTOR_EMAIL · POSTGRES_URL · CLICKHOUSE_URL · REDIS_URL · 비밀 9 · API_BASE_URL · NEXT_PUBLIC_API_BASE_URL) = **28**
-- **이 표에서 이름을 새로 정한 것은 이 문서의 판정이다** — MEMORY_PROFILE · CAPACITY_TIER · COMMIT_HASH(health run 주입 · 인계 W5 07_api 행) · WORKER_POOL_SIZE · SIM_FAULT_PLAN · 접속 3 · 웹 2. 원본 이름은 APP_ROLE · NODE_OPTIONS · UV_THREADPOOL_SIZE이고, DATAGEN_BULK_ENABLED는 07_api/09가, 비밀 9는 W7 보안 리뷰([../12_security/02_secrets_config.md](../12_security/02_secrets_config.md))가, SENSOR_AUTOGEN은 2026-10-03 사용자 결정(자동 생성 끄기)을 받은 리드 판정이 정했다.
-- **B형 — SENSOR_AUTOGEN의 기본값이 앱 설정(on)과 로컬 Compose(off)에서 갈린 것은 결함이 아니다.** 결론 — 앱 설정 기본 on은 요구 · 시험 · 실험 조건(모드 A와 수집기가 늘 돈다)을 지키고, 로컬 Compose 기본 off는 띄워 두기만 해도 센서 데이터가 쌓이는 일을 막는다(사용자 결정 2026-10-03). 반대 시나리오 — 앱 기본을 off로 두면 Compose를 거치지 않는 실행이 조용히 수집 없이 돌아 시험 · 실험이 빈 스트림을 재고, Compose 기본을 on으로 두면 task up만으로 시드 설비 전부의 폴링이 상시 ClickHouse에 쌓인다. 파생 지침 — 실험 러너는 on을 고정해 기존 측정 조건을 지키고(scripts/lab/s3/_lib.sh — s4 · s5가 상속 · s2 러너 3개는 각자 export), 기록의 조건은 health run.sensorAutogen으로 대조한다. **러너 뒤에는 task up으로 api를 다시 만든다** — 러너가 만든 api 컨테이너에는 on이 박혀 있어 docker compose start와 Docker 재시작(재시작 정책 unless-stopped · 떠 있던 컨테이너)이 그대로 되살린다. task up은 env가 바뀐 api를 다시 만들고, task restore는 api를 지우기만 한다(만드는 길은 task up — [05_tooling_devops.md](./05_tooling_devops.md) §Taskfile 작업). 화면에서 센서 데이터가 필요하면 직접 보내 보기를 쓴다.
+- 검산: 표 행 = **16** · 이름 수 = 1 + 12 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 3 + 7 + 2 = **36** — 스위치 12 + 스위치 밖 24(APP_ROLE · SENSOR_AUTOGEN · MEMORY_PROFILE · CAPACITY_TIER · COMMIT_HASH · NODE_OPTIONS · UV_THREADPOOL_SIZE · WORKER_POOL_SIZE · SIM_FAULT_PLAN · INGEST_BATCH_PLAN · INGEST_LAB_FAULT · GEN_PROFILE · POSTGRES_URL · CLICKHOUSE_URL · REDIS_URL · 비밀 7 · API_BASE_URL · NEXT_PUBLIC_API_BASE_URL) = **24** · 옛 DATAGEN_BULK_ENABLED · ALARM_ACK_ACTOR_EMAIL · JWT_SIGNING_KEY · SEED_USER_PASSWORD는 D-16 삭제
+- **이 표에서 이름을 새로 정한 것은 이 문서의 판정이다** — MEMORY_PROFILE · CAPACITY_TIER · COMMIT_HASH(health run 주입 · 인계 W5 07_api 행) · WORKER_POOL_SIZE · SIM_FAULT_PLAN · 접속 3 · 웹 2. 원본 이름은 APP_ROLE · NODE_OPTIONS · UV_THREADPOOL_SIZE이고, 비밀 7(옛 9에서 토큰 서명 키 · 학습자 비밀번호를 로그인과 함께 D-16으로 뺐다)은 W7 보안 리뷰([../12_security/02_secrets_config.md](../12_security/02_secrets_config.md))가, SENSOR_AUTOGEN은 2026-10-03 사용자 결정(자동 생성 끄기)을 받은 리드 판정이 정했다.
+- **B형 — SENSOR_AUTOGEN의 기본값이 앱 설정(on)과 로컬 Compose(off)에서 갈린 것은 결함이 아니다.** 결론 — 앱 설정 기본 on은 요구 · 시험 · 실험 조건(모드 A와 수집기가 늘 돈다)을 지키고, 로컬 Compose 기본 off는 띄워 두기만 해도 센서 데이터가 쌓이는 일을 막는다(사용자 결정 2026-10-03). 반대 시나리오 — 앱 기본을 off로 두면 Compose를 거치지 않는 실행이 조용히 수집 없이 돌아 시험이 빈 스트림을 재고, Compose 기본을 on으로 두면 task up만으로 시드 설비 전부의 폴링이 상시 ClickHouse에 쌓인다. 파생 지침 — 기록의 조건은 health run.sensorAutogen으로 대조한다(옛 실험 러너의 on 고정은 scripts/lab과 함께 D-16 삭제). 화면에서 센서 데이터가 필요하면 HMI 화면의 설비 가동 스위치를 켠다(D-16 — 재기동 없이) · 직접 보내 보기도 센서 원천이 된다.
+- **SW-09 CONTROL_TABLE_ENABLED의 기본은 gated다**(코드 기본 · Compose 기본 · D-16 · ADR-28) — 직접 비교 실행 동안만 PostgreSQL 비교 사본에 싣는다. **저장소 루트의 견본 .env.example은 아직 off다** — 견본을 그대로 복사한 환경은 직접 비교 넣기 · 무결성이 400(SW-09 off)이고, 고치는 자리는 .env의 CONTROL_TABLE_ENABLED=gated 한 줄 · api 재생성이다(⑧).
 - **접속 문자열의 로컬 값(판정 2026-09-24)** — PostgreSQL DB 이름 plc(ClickHouse 데이터베이스 plc와 같은 이름) · PostgreSQL 관리자 계정은 이미지 기본 postgres · ClickHouse 계정 이름 app. 셋 다 비밀이 아닌 설계 값이다([../12_security/02_secrets_config.md](../12_security/02_secrets_config.md) §비밀이 아닌 것).
 - **비밀 하나 = 변수 하나다.** migrate는 app_owner 비밀번호를 치환한 접속으로 돌고(api는 이 값을 읽지 않는다 — 런타임이 DDL 권한을 갖지 않게), 역할을 만들 때 APP_RW_PASSWORD · CH_READER_PASSWORD를 읽는다. 저장소 이미지의 초기화 변수 이름은 이미지가 정하므로 Compose 파일이 이 이름을 이미지 변수로 옮긴다.
 - **환경변수는 전부 기동 시 1회만 읽는다.** 전환은 환경변수 변경과 재기동뿐이다(D-06 · ADR-08). 실행 중에 다시 읽는 변수를 하나라도 두면 "재기동 없이 바뀌는 조건"이 생겨 기록의 조건 칸이 실제 실행과 어긋난다.
 - **MEMORY_PROFILE의 값은 프로파일 Compose 파일이 함께 준다.** 사람이 따로 적지 않는다 — 상한과 이름이 한 파일에서 나와야 둘이 어긋나지 않는다(§기동 · 정지 명령).
 - **memoryLimitMb는 환경변수가 아니다.** cgroup의 실제 상한을 읽는다(07_api/10) — 환경변수로 받으면 프로파일 이름과 같은 출처가 되어 대조가 무의미하다.
-- 대조 실험 · 관측 프로파일 on/off · 생성기 CPU는 환경변수가 아니라 **기록 조건 칸**에 적는다([../10_observability/04_experiment_protocol.md](../10_observability/04_experiment_protocol.md)).
+- 관측 프로파일 on/off는 환경변수가 아니라 **기록 조건 칸**에 적는다([../10_observability/04_experiment_protocol.md](../10_observability/04_experiment_protocol.md)).
 
 ## 기동 · 정지 명령
 
 작업 정의(Taskfile)의 정본은 [05_tooling_devops.md](./05_tooling_devops.md)이고, 기동 순서의 정본은 [../04_architecture/03_execution_topology.md](../04_architecture/03_execution_topology.md)다. 여기는 사람이 치는 명령의 순서다. 셸 명령은 plain으로 적는다.
 
 ```plain
-① 전 구성 기동      task up PROFILE=load SEED="--slice s2"                      ← 저장소 → migrate → seed → api · 개발은 PROFILE=dev · 중간은 mid
+① 전 구성 기동      task up PROFILE=load SEED="--card-line"                     ← 저장소 → migrate → seed → api · 개발은 PROFILE=dev · 중간은 mid
 ② 상태 확인         docker compose ps                                              ← 4개 모두 healthy
-③ 스키마 · 시드     ①이 api 앞에서 돈다 · 따로 칠 때 task migrate → task seed -- --tier S   ← 시드는 빈 볼륨일 때만
+③ 스키마 · 시드     ①이 api 앞에서 돈다 · 따로 칠 때 task migrate → task seed(카드 라인 30대)  ← 빈 볼륨일 때만 · 시험용 설비 1은 task seed -- --slice s2
 ④ 웹               pnpm dev(웹 패키지 · 호스트 이름 127.0.0.1 · 13001)                ← 호스트 이름 인자 필수
 ⑤ 확인             curl 127.0.0.1:13000/api/v1/health                              ← run · switches 확인
-⑥ 관측(선택)        docker compose --profile observability up -d
-⑦ 스위치 전환       .env 수정 → docker compose up -d api                           ← api만 재생성 · 저장소 유지
-⑧ 정지             docker compose down                                             ← 볼륨 유지
+⑥ 설비 가동         HMI 화면의 설비 가동 스위치 켜기                                  ← 기동 기본 꺼짐 — 켜기 전에는 센서 데이터가 없다
+⑦ 관측(선택)        docker compose --profile observability up -d
+⑧ 스위치 전환       .env 수정 → docker compose up -d api                           ← api만 재생성 · 저장소 유지 · 설비 가동은 꺼짐으로 돌아간다
+⑨ 정지             docker compose down                                             ← 볼륨 유지
 ```
 
 - **프로파일은 Compose 덮어쓰기 파일 하나로 고른다.** 파일 하나가 컨테이너 상한 · 컨테이너 안 설정 포함 파일 · MEMORY_PROFILE · WORKER_POOL_SIZE · NODE_OPTIONS를 함께 준다 — 값이 파일 셋에 흩어지면 프로파일 전환이 한 값을 빠뜨린다.
 - **④의 호스트 이름 인자가 웹 13001의 127.0.0.1 바인드를 강제하는 유일한 자리다.** 웹은 Compose 밖의 호스트 프로세스라 ports 규칙이 닿지 않는다 — 인자 없이 띄우면 개발 서버가 모든 인터페이스에 뜰 수 있고, LAN 기기가 BFF를 거쳐 127.0.0.1:13000의 api에 닿는다([../12_security/05_local_exposure.md](../12_security/05_local_exposure.md) §웹 개발 서버의 바인드). 인자는 웹 패키지의 개발 스크립트에 박아 사람이 매번 치지 않게 한다.
-- **⑦은 api만 재생성한다.** 저장소까지 재시작하면 Redis AOF 재생 · ClickHouse 파트 적재가 스위치 전환 측정에 섞인다. 전환 절차의 화면 쪽 안내는 [../08_screen/07_experiment_console.md](../08_screen/07_experiment_console.md)다.
-- **볼륨을 지우는 정지 명령(down -v)은 task snapshot 뒤에만 쓴다**(REQ-TEC-08). 데이터를 전부 지우므로 실험 편의로 쓰면 기준 데이터셋이 사라진다.
+- **⑧은 api만 재생성한다.** 저장소까지 재시작하면 Redis AOF 재생 · ClickHouse 파트 적재가 스위치 전환 측정에 섞인다. 화면에서는 스위치 상태가 각주 툴팁으로 보인다([../08_screen/08_evidence_screens.md](../08_screen/08_evidence_screens.md)).
+- **볼륨을 지우는 정지 명령(down -v)은 되돌릴 수 없다 — PostgreSQL 덤프 뒤에만 쓴다.** 데이터를 전부 지우고 옛 task snapshot · restore는 D-16으로 지웠다([../04_architecture/03_execution_topology.md](../04_architecture/03_execution_topology.md) §볼륨 초기화와 덤프).
 - 덮어쓰기 파일 이름은 설계 계약이며 파일 이름 형식은 구현이 정한다.
 
-## 스냅샷 · 아카이브 위치
+## 덤프 · 기록 위치
 
 | 대상 | 위치 | 형식 | Git | 소유 · 근거 |
 |------|------|------|------|------|
-| 볼륨 스냅샷 | snapshots/ 아래 볼륨별 아카이브 | 볼륨 하나당 압축 tar 하나 | 제외 | task snapshot · restore([05_tooling_devops.md](./05_tooling_devops.md)) · REQ-TEC-08 |
 | PostgreSQL 덤프 | snapshots/ 아래 | 덤프 도구의 사용자 지정 형식 | 제외 | 스키마 · 시드 보존(원본 tech_stack.md §10.3) |
-| **분리된 alarm_event 파티션** | **snapshots/archive/alarm_event/** | **파티션 하나당 덤프 파일 하나 · 파일 이름 = 파티션 이름(월)** | 제외 | 이 문서 판정 · 보존 정본 [../05_data_stores/08_retention_lifecycle.md](../05_data_stores/08_retention_lifecycle.md) |
 | 측정 기록 | docs/measurements/ | 기록 템플릿 | **포함** | [../10_observability/04_experiment_protocol.md](../10_observability/04_experiment_protocol.md) |
 
-- 검산: 대상 = **4** · Git 제외 3 · 포함 1
-- **인계 "분리된 alarm_event 파티션의 아카이브 위치 · 형식"을 닫는다.** 파티션 단위 파일로 두는 이유 — 달 하나를 되살릴 때 전체 덤프를 풀지 않는다. snapshots/ 아래에 두는 이유 — 스냅샷과 같은 Git 제외 규칙 · 같은 디스크 예산을 쓴다.
-- **아카이브는 볼륨 밖이다.** 볼륨 스냅샷을 복원해도 아카이브는 되돌아가지 않는다 — 복원 뒤 분리 이전 상태로 돌아간 DB와 이미 만든 아카이브 파일이 같은 달을 두 번 가질 수 있다. 되살리기 전에 대상 달의 파티션이 DB에 있는지 확인한다.
+- 검산: 대상 = **2** · Git 제외 1 · 포함 1 · 옛 볼륨 스냅샷(task snapshot · restore)과 분리된 alarm_event 파티션 아카이브 행은 D-16 삭제(측정 도구 · 알람)
+- **snapshots/ 폴더에 옛 볼륨 아카이브가 남아 있어도 되살리는 작업이 없다.** 이 문서는 덤프 위치만 고정한다 — 되살리기는 볼륨을 비우고 migrate → seed 뒤 덤프를 넣는 수동 절차다.
 
 ## 착수 전 조정
 
@@ -240,10 +223,9 @@ swap=8GB
 | 항목 | 상태 | 확정 자리 |
 |------|------|------|
 | 착수 시점 머신 실측값 | 원본 2026-09-20 실측 인용 — 착수 시 재측정 | 이 문서 · 착수 체크리스트 |
-| 대조 조건 메모리 3.5 GB · 3.5 GB | W6 초기 판정 — 대조 정본과 정합 필요 | [../05_data_stores/10_olap_vs_rdb_control.md](../05_data_stores/10_olap_vs_rdb_control.md) |
 | 역할 분리 시 컨테이너별 상한 | 미설계 — 원본은 all 기준으로만 산정 | [../04_architecture/08_scaling_roadmap.md](../04_architecture/08_scaling_roadmap.md) 1단계 진입 시 |
 | WSL 설정 지시자 · Compose 리소스 제한 문법 | 공식 참조 재확인 대기 | [../03_requirements/16_official_references.md](../03_requirements/16_official_references.md) |
-| 비밀 환경변수(토큰 서명 키 등)의 이름 | **W7 닫힘** — 비밀 9 등재 · 이 문서 §환경변수 | [../12_security/02_secrets_config.md](../12_security/02_secrets_config.md) |
+| 비밀 환경변수의 이름 | **W7 닫힘 · D-16 갱신** — 비밀 7 등재(토큰 서명 키 · 학습자 비밀번호는 로그인과 함께 삭제) · 이 문서 §환경변수 | [../12_security/02_secrets_config.md](../12_security/02_secrets_config.md) |
 
 ## 관련 문서
 
@@ -252,6 +234,6 @@ swap=8GB
 - [05_tooling_devops.md](./05_tooling_devops.md) — Taskfile 작업 정의 · 주입 계획 형식
 - [../02_features/13_switch_matrix.md](../02_features/13_switch_matrix.md) — 스위치 환경변수 정본
 - [../07_api/10_metrics.md](../07_api/10_metrics.md) — health run 필드
-- [../07_api/09_datagen.md](../07_api/09_datagen.md) — DATAGEN_BULK_ENABLED 게이트
+- [../07_api/09_datagen.md](../07_api/09_datagen.md) — 라이브 실행 표면(옛 DATAGEN_BULK_ENABLED 게이트는 D-16 삭제)
 - [../05_data_stores/06_redis_memory.md](../05_data_stores/06_redis_memory.md) — maxmemory · MAXLEN
 - [../12_security/05_local_exposure.md](../12_security/05_local_exposure.md) — 127.0.0.1 바인드 · mirrored

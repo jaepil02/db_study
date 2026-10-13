@@ -1,7 +1,9 @@
 # REQ-TSQ — 시계열 조회 요구사항
 
-> **대상**: 시계열 조회(TSQ)의 동작 계약 — 요청 검증 · 해상도 자동 선택과 보정 · 응답 형태 · 롤업 읽기 · 태그 메타 부착 · 캐시 키 정규화 · 캐시 적재와 degrade · 스탬피드 방지 · 진행 구간 분할 · 원시 내보내기 · ClickHouse 불가 시 응답 · 인가와 레이트 리밋 — REQ-TSQ-NN 채번 정본
+> **대상**: 시계열 조회(TSQ)의 동작 계약 — 요청 검증 · 해상도 자동 선택과 보정 · 응답 형태 · 롤업 읽기 · 태그 메타 부착 · 캐시 키 정규화 · 캐시 적재와 degrade · 스탬피드 방지 · 진행 구간 분할 · 원시 내보내기 · ClickHouse 불가 시 응답 — REQ-TSQ-NN 채번 정본
 > **작성일**: 2026-09-24
+> **개정일**: 2026-10-11 — REQ-TSQ-16 근거 칸 SW-09 off(기본) → **기본 gated — 비교 사본에는 직접 비교 구간뿐**(검수 r6 L1)
+> **개정일**: 2026-10-11 — **D-16 로그인 · 권한 · 알람 삭제**(사용자 결정 2026-10-11) — **REQ-TSQ-17(역할 인가 · 분당 한도) 폐지 · 결번** · REQ-TSQ-06 알람 분석 화면 → 극값 보존 요청 · 15 레이트 리밋 별도 한도 삭제(범위 상한은 유지) · 조정값 표 내보내기 행의 레이트 리밋 키 삭제 · 실패 전수 9 → **7**(forbidden · rate_limited 삭제) · 절 제목 내보내기 · 실패 · 인가 → **내보내기 · 실패** — REQ-TSQ 17 → **16**(결번 1) · D-16 정리(d4 전역 sweep) — 폐지 실험을 확정 수단으로 가리키던 자리 교정(EXP-08 · 09 · 31)
 > **개정일**: 2026-09-24 — 최종 정밀 검수 — p95 롤업 대조 미확인 행에 확정 수단 EXP-31 연결 · 스탬피드 대기 소진 행 기전 확정 대기 → 닫힘(06_pipeline/06) · 성능 미확인 행에 확정 실험 번호 연결(EXP-08 · 09 · 10)
 > **개정일**: 2026-09-24 — W7 검수 반영 — 키 표기 cache:q:{hash} · lock:rebuild:{hash} → **cache:q:{sha1} · lock:rebuild:q:{sha1}**(정본 05_data_stores/05) · 미확인 1행 닫힘(내보내기 끊김 표지) — REQ 수 불변
 > **개정일**: 2026-09-24 — W7 보안 판정 반영 — 내보내기 범위 상한 현행 참고 **1일** · class export 반영 — REQ 수 불변(정본 12_security/03)
@@ -23,7 +25,7 @@
 | **REQ-TSQ-03** | interval 미지정이면 서버가 범위 길이(to − from)로 테이블을 고른다 — 1시간 이하 tag_raw · 1시간 초과 7일 이하 tag_1m · 7일 초과 90일 이하 tag_1h · 90일 초과 tag_1d. 경계는 1계층 구조값이다 | 원본 data_flow.md §6.1 · 원본 architecture.md §11.1 · TSQ-02 | 규칙이 없으면 1년 범위 원시 조회 한 건이 수천억 행 스캔으로 ClickHouse를 메모리 한계에 몰아 적재 삽입까지 멈춘다 | 경계 양쪽(1시간 · 1시간 + 1분 · 7일 · 7일 + 1분 · 90일 · 90일 + 1분) 요청 → meta.interval 대조 · ClickHouse 쿼리 로그의 대상 테이블 대조 | TSQ-02 | F-04 | 해당 없음 |
 | **REQ-TSQ-04** | 선택되거나 지정된 해상도의 예상 포인트 수가 최대 포인트 수를 넘으면 한 단계 상향한다. **거절하지 않는다** — 사용자가 raw를 지정한 긴 범위도 같다. 실제 해상도는 meta.interval이 말한다 | 원본 architecture.md §11.1 · TSQ-02 · [../11_glossary/02_error_codes.md](../11_glossary/02_error_codes.md) "에러 코드가 아닌 것" | 거절하면 클라이언트가 범위를 잘게 나눠 같은 스캔을 여러 번 보내 보호가 무력해진다 · 조용히 상향하고 meta에 드러내지 않으면 "원시로 요청했는데 1m이 왔다"가 버그로 신고된다 | raw 지정 · 3일 범위 요청 → 200 · meta.interval ≠ raw · pointCount ≤ 최대 포인트 수 | TSQ-02 | F-04 | 해당 없음 |
 | **REQ-TSQ-05** | 응답은 meta(interval · pointCount · downsampled · cached)와 태그별 points로 구성하고 points는 **배열의 배열**(시각 · 집계값 순의 열 위치 고정)이다 | 원본 architecture.md §11.1 · TSQ-01 | 객체 배열로 내면 응답 크기가 약 3배가 되어 긴 범위 조회의 직렬화 비용이 이벤트 루프를 점유한다 · cached가 없으면 캐시 히트율 측정을 응답 단위로 가를 수 없다 | 응답 스키마 대조 · 같은 요청 2회 연속 → 둘째 응답 meta.cached 참 | TSQ-01 | F-04 | 해당 없음 |
-| **REQ-TSQ-06** | 롤업 1차 축소 뒤에도 포인트가 최대치를 넘으면 LTTB로 2차 축소하고 meta.downsampled를 참으로 둔다. LTTB 계산은 이벤트 루프 밖 워커에서 한다. **n번째 추출을 쓰지 않는다.** 알람 분석 화면 요청은 min · max 쌍을 보존한다 | 원본 data_flow.md §6.3 · TSQ-06 | n번째 추출은 스파이크를 잃어 알람 원인 구간이 차트에서 사라진다 · 이벤트 루프에서 계산하면 같은 프로세스의 수집 · 적재 지연이 조회 부하에 비례해 늘어난다 | SPIKE 프로파일 데이터로 최대치 초과 조회 → 원시 최대값이 응답에 남음 · 조회 중 nodejs_eventloop_lag_p95_seconds 대조 | TSQ-06 | F-04 | 해당 없음 |
+| **REQ-TSQ-06** | 롤업 1차 축소 뒤에도 포인트가 최대치를 넘으면 LTTB로 2차 축소하고 meta.downsampled를 참으로 둔다. LTTB 계산은 이벤트 루프 밖 워커에서 한다. **n번째 추출을 쓰지 않는다.** 극값 보존 요청은 min · max 쌍을 보존한다 | 원본 data_flow.md §6.3 · TSQ-06 | n번째 추출은 스파이크를 잃어 이상 구간이 차트에서 사라진다 · 이벤트 루프에서 계산하면 같은 프로세스의 수집 · 적재 지연이 조회 부하에 비례해 늘어난다 | SPIKE 프로파일 데이터로 최대치 초과 조회 → 원시 최대값이 응답에 남음 · 조회 중 nodejs_eventloop_lag_p95_seconds 대조 | TSQ-06 | F-04 | 해당 없음 |
 | **REQ-TSQ-07** | 롤업 테이블은 -Merge 조합자로 읽는다 — 집계 상태 컬럼을 일반 집계로 읽지 않는다. 롤업 해상도의 p95는 TDigest **근사값**이며 원시 정확 분위수와 동등하다고 약속하지 않는다 | 원본 data_flow.md §6 · 원본 architecture.md §7.2 · [../11_glossary/05_units_and_time.md](../11_glossary/05_units_and_time.md) 부동소수와 오차 허용 비교 | 상태 컬럼을 -Merge 없이 읽으면 머지 전 파트의 부분 상태가 그대로 합산되어 머지 시점마다 값이 달라진다 | 롤업 구간 조회 결과를 원시 집계와 오차 허용 비교 — 판정 기준은 [14_acceptance_criteria.md](./14_acceptance_criteria.md) 롤업 정합성 | TSQ-01 · TSQ-06 | F-04 · F-08 | 해당 없음 |
 | **REQ-TSQ-08** | 태그명 · 단위는 조회 시점에 dict_tag에서 붙이고 ClickHouse 행을 고치지 않는다. 마스터 변경의 Dictionary 재적재가 끝난 뒤의 첫 조회는 새 값을 붙인다. PostgreSQL이 중단돼도 조회는 마지막 적재 값으로 성공한다 | 원본 architecture.md §12 · §17 · TSQ-07 · [../02_features/02_master.md](../02_features/02_master.md) MST-08 | 행에 이름을 저장하면 태그명 변경이 과거 파티션 전체의 mutation이 된다 · 재적재를 기다리면 LIFETIME만큼 옛 이름이 보인다 | 태그명 변경 후 첫 조회 → 새 이름 · postgres 컨테이너 정지 중 조회 → 200 | TSQ-07 | F-04 · F-05 | 해당 없음 |
 
@@ -44,16 +46,14 @@
 - 검산: 이 표의 REQ = REQ-TSQ-09~14 = **6**
 - **SW-03 off에서 SW-04 · SW-05를 비교하지 않는다.** 캐시가 없으면 키도 락도 쓰이지 않아 차이가 0이다 — 조합 제약 정본 [../02_features/13_switch_matrix.md](../02_features/13_switch_matrix.md).
 
-## 요구사항 — 내보내기 · 실패 · 인가
+## 요구사항 — 내보내기 · 실패
 
 | ID | 요구 | 근거 | 위반 시 실패 | 검증 방법 | 관련 기능 | 관련 흐름 | 관련 에러 코드 |
 |------|------|------|------|------|------|------|------|
-| **REQ-TSQ-15** | 원시 내보내기는 CSV · Parquet로 스트리밍하며 ClickHouse가 FORMAT으로 직렬화한 응답을 그대로 중계한다. 해상도를 줄이지 않고 캐시하지 않으며, 레이트 리밋은 조회 표면보다 엄격한 별도 한도를 쓴다(한도 소유 [../12_security/03_api_surface_defense.md](../12_security/03_api_surface_defense.md)) | 원본 architecture.md §11 · §11.1 · §18 · TSQ-09 | 애플리케이션이 행을 모아 직렬화하면 긴 범위 내보내기 한 건이 api 힙을 채워 같은 프로세스의 적재가 GC 압박을 받는다 · 캐시하면 대용량 원시 사본이 캐시 예산을 밀어낸다 | 1일 원시 내보내기 → api 힙 증가폭이 행 수에 비례하지 않음 · cache:q 키 증가 0 | TSQ-09 | F-04 | common.rate_limited/429 |
-| **REQ-TSQ-16** | ClickHouse에 접속할 수 없으면 캐시 히트는 200으로 응답하고 **캐시 미스는 거절한다.** 대조군 plc_tag_raw_control이나 Redis 최신값으로 대신 답하지 않는다. 내보내기도 거절한다 — 판정 §ClickHouse 불가 시 응답 판정 | 원본 architecture.md §17 · 원본 data_flow.md §12.2 · 11_glossary/02 채번 보류 · 이 문서 판정 | 대조군으로 우회하면 SW-09 off(기본)에서 빈 결과가 200으로 나가 "데이터 없음"과 "저장소 불가"가 같아진다 · 캐시 히트까지 막으면 캐시가 살아 있는데도 대시보드가 멈춘다 | clickhouse 컨테이너 정지 → 캐시된 요청 200 · 새 요청 거절 · 대조군 테이블 조회 0건 | TSQ-01 · TSQ-04 · TSQ-09 | F-04 · F-10 | timeseries.clickhouse_unavailable/503 |
-| **REQ-TSQ-17** | S7 이후 조회 표면은 인증 사용자 전원에게, 원시 내보내기는 ENGINEER에게만 연다. 한도를 넘은 요청은 다음 창까지 거절한다. S2~S6은 무인증이며 이 요구가 적용되지 않는다 | [../02_features/12_permission_matrix.md](../02_features/12_permission_matrix.md) TSQ · 원본 architecture.md §18 · D-07 | 내보내기를 전원에게 열면 대량 스캔 읽기가 레이트 리밋 축과 어긋나 OPERATOR 화면 하나가 ClickHouse를 점유할 수 있다 | OPERATOR 토큰으로 내보내기 → 403 · 한도 + 1회 조회 → 429 | TSQ-01 · TSQ-09 | F-04 | auth.forbidden/403 · common.rate_limited/429 |
+| **REQ-TSQ-15** | 원시 내보내기는 CSV · Parquet로 스트리밍하며 ClickHouse가 FORMAT으로 직렬화한 응답을 그대로 중계한다. 해상도를 줄이지 않고 캐시하지 않으며, 요청 범위는 상한(현행 1일 · 소유 [../12_security/03_api_surface_defense.md](../12_security/03_api_surface_defense.md))을 넘지 않는다 | 원본 architecture.md §11 · §11.1 · §18 · TSQ-09 | 애플리케이션이 행을 모아 직렬화하면 긴 범위 내보내기 한 건이 api 힙을 채워 같은 프로세스의 적재가 GC 압박을 받는다 · 캐시하면 대용량 원시 사본이 캐시 예산을 밀어낸다 | 1일 원시 내보내기 → api 힙 증가폭이 행 수에 비례하지 않음 · cache:q 키 증가 0 · 상한 초과 범위 → 400 | TSQ-09 | F-04 | common.validation_failed/400 |
+| **REQ-TSQ-16** | ClickHouse에 접속할 수 없으면 캐시 히트는 200으로 응답하고 **캐시 미스는 거절한다.** 대조군 plc_tag_raw_control이나 Redis 최신값으로 대신 답하지 않는다. 내보내기도 거절한다 — 판정 §ClickHouse 불가 시 응답 판정 | 원본 architecture.md §17 · 원본 data_flow.md §12.2 · 11_glossary/02 채번 보류 · 이 문서 판정 | 대조군으로 우회하면 비교 사본에는 직접 비교 구간밖에 없어(SW-09 기본 gated) 빈 결과가 200으로 나가 "데이터 없음"과 "저장소 불가"가 같아진다 · 캐시 히트까지 막으면 캐시가 살아 있는데도 대시보드가 멈춘다 | clickhouse 컨테이너 정지 → 캐시된 요청 200 · 새 요청 거절 · 대조군 테이블 조회 0건 | TSQ-01 · TSQ-04 · TSQ-09 | F-04 · F-10 | timeseries.clickhouse_unavailable/503 |
 
-- 검산: 이 표의 REQ = REQ-TSQ-15~17 = **3** · 문서 전체 REQ = 8 + 6 + 3 = **17**(REQ-TSQ-01~17 · 결번 없음)
-- 인증 기전(토큰 · Guard · 레이트 리밋 키)의 계약은 [02_auth.md](./02_auth.md)가 갖고, 이 문서는 TSQ 표면에 무엇이 적용되는지만 적는다.
+- 검산: 이 표의 현행 REQ = REQ-TSQ-15 · 16 = **2** · 문서 전체 현행 REQ = 8 + 6 + 2 = **16** · 결번 1(REQ-TSQ-17 역할 인가 · 분당 한도 — D-16 · 재사용 금지) · 채번 16 + 1 = **17**(REQ-TSQ-01~17)
 
 ## 조회 계약 — 2계층 조정값
 
@@ -67,7 +67,7 @@
 | TTL 지터 | 캐시 계열 래퍼가 가산 | 쓰기 시 | 호출자별 지터 계산 | 래퍼 기본 동작 | ±20% · [../05_data_stores/05_redis_keyspace.md](../05_data_stores/05_redis_keyspace.md) |
 | 캐시 호출 타임아웃 | 캐시 계열 래퍼 | 호출마다 | 무기한 대기 · 예외 전파 | 래퍼 기본 동작 | 50 ms · 상동 |
 | 재구성 락 만료 · 대기 간격 · 재시도 횟수 | lock:rebuild:q:{sha1} | 미스 시 | 만료 없는 락 · 무한 대기 | 기동 거부 | 5000 ms · 50 ms × 3회 · [../06_pipeline/06_timeseries_read.md](../06_pipeline/06_timeseries_read.md) |
-| 내보내기 한도 · 범위 상한 | 레이트 리밋 키 rl:export:{user_id}:{unix_minute} · 범위는 요청 to − from | 분 창 · 요청 수신 시 | 조회 표면 한도 공유 · 범위를 잘라 내보내기 | 기동 거부 | 범위 1일 · 한도 미정(관계식 R1) · [../12_security/03_api_surface_defense.md](../12_security/03_api_surface_defense.md) |
+| 내보내기 범위 상한 | 범위는 요청 to − from | 요청 수신 시 | 범위를 잘라 내보내기 | 기동 거부 | 범위 1일 · [../12_security/03_api_surface_defense.md](../12_security/03_api_surface_defense.md) |
 
 - 검산: 조정값 = 태그 상한 · 최대 포인트 · TTL 구간 · 지터 · 타임아웃 · 락 · 내보내기 = **7**
 - **해상도 경계(1시간 · 7일 · 90일)는 이 표에 없다.** 1계층 구조값이라 REQ-TSQ-03이 평문으로 고정하고, 바뀌면 캐시 키 정규화와 롤업 보존 기간이 함께 움직인다.
@@ -104,10 +104,8 @@ W1이 채번 보류로 넘긴 자리다(11_glossary/02 · 02_features/07). 캐�
 | 락 획득 실패 | 200 · 대기 후 재조회 | 락 대기 메트릭 | REQ-TSQ-12 |
 | ClickHouse 불가(캐시 미스) | 503 | timeseries.clickhouse_unavailable/503 | REQ-TSQ-16 |
 | PostgreSQL 불가 | 200 · 마지막 적재 메타 | 없음 | REQ-TSQ-08 |
-| 역할 밖 내보내기(S7 이후) | 403 | auth.forbidden/403 | REQ-TSQ-17 |
-| 분당 한도 초과(S7 이후) | 429 | common.rate_limited/429 | REQ-TSQ-15 · 17 |
 
-- 검산: 상황 = **9** · 이 중 코드를 내는 행 5(too_many_tags · validation_failed · clickhouse_unavailable · forbidden · rate_limited) + 코드 없는 행 4 = **9**
+- 검산: 상황 = **7** · 이 중 코드를 내는 행 3(too_many_tags · validation_failed · clickhouse_unavailable) + 코드 없는 행 4 = **7**
 
 ## 기능 → REQ 대응 검산
 
@@ -115,7 +113,7 @@ W1이 채번 보류로 넘긴 자리다(11_glossary/02 · 02_features/07). 캐�
 
 | 기능 ID | 기능명 | 대응 REQ |
 |------|------|------|
-| TSQ-01 | 시계열 조회 | REQ-TSQ-01 · 02 · 05 · 07 · 16 · 17 |
+| TSQ-01 | 시계열 조회 | REQ-TSQ-01 · 02 · 05 · 07 · 16 |
 | TSQ-02 | 해상도 자동 선택 | REQ-TSQ-03 · 04 |
 | TSQ-03 | 캐시 키 정규화 | REQ-TSQ-09 · 14 |
 | TSQ-04 | 조회 결과 캐시 | REQ-TSQ-10 · 11 · 14 · 16 |
@@ -123,9 +121,9 @@ W1이 채번 보류로 넘긴 자리다(11_glossary/02 · 02_features/07). 캐�
 | TSQ-06 | 다운샘플 | REQ-TSQ-06 · 07 |
 | TSQ-07 | 태그 메타 부착 | REQ-TSQ-08 |
 | TSQ-08 | 진행 구간 분할 | REQ-TSQ-13 |
-| TSQ-09 | 원시 내보내기 | REQ-TSQ-15 · 16 · 17 |
+| TSQ-09 | 원시 내보내기 | REQ-TSQ-15 · 16 |
 
-- 검산: 기능 9 중 대응 REQ 있음 9 · 누락 0 = **9** · 기능에 대응하지 않는 REQ 0(유령 0). REQ 총수를 세는 자리는 §요구사항 — 내보내기 · 실패 · 인가의 검산 하나다
+- 검산: 기능 9 중 대응 REQ 있음 9 · 누락 0 = **9** · 기능에 대응하지 않는 REQ 0(유령 0). REQ 총수를 세는 자리는 §요구사항 — 내보내기 · 실패의 검산 하나다
 
 ## 원본 보정 반영
 
@@ -140,13 +138,13 @@ W1이 채번 보류로 넘긴 자리다(11_glossary/02 · 02_features/07). 캐�
 
 | 항목 | 원본에서 확인되는 것 | 상태 | 확정 자리 |
 |------|------|------|------|
-| 해상도별 응답 시간(캐시 히트 · 미스) | 원본 목표 히트 20 ms · 1일 미스 300 ms 이하(4 vCPU 가정) · 원본 예상치 해상도별 20~150 ms | 미확인 — 확정 전 임의 값 고정 금지 · EXP-08 | [13_nonfunctional.md](./13_nonfunctional.md) · [../10_observability/06_experiment_catalog.md](../10_observability/06_experiment_catalog.md) |
-| 반복 조회 히트율 | 원본 목표 80% 이상 · SW-04 off 시 0% 수렴 | 미확인 — 확정 전 임의 값 고정 금지 · EXP-08 · EXP-09 | 상동 · [14_acceptance_criteria.md](./14_acceptance_criteria.md) |
+| 해상도별 응답 시간(캐시 히트 · 미스) | 원본 목표 히트 20 ms · 1일 미스 300 ms 이하(4 vCPU 가정) · 원본 예상치 해상도별 20~150 ms | 미확인 — 확정 전 임의 값 고정 금지 · 확정 수단 없음(EXP-08 · REQ-NFR-08 D-16 폐지) | [13_nonfunctional.md](./13_nonfunctional.md) · [../10_observability/06_experiment_catalog.md](../10_observability/06_experiment_catalog.md) |
+| 반복 조회 히트율 | 원본 목표 80% 이상 · SW-04 off 시 0% 수렴 | 미확인 — 확정 전 임의 값 고정 금지 · 확정 수단 없음(EXP-08 · 09 · REQ-NFR-10 D-16 폐지 · S4 기록 023) | 상동 · [14_acceptance_criteria.md](./14_acceptance_criteria.md) |
 | 스탬피드 on/off 쿼리 횟수 | 원본 예상치 동시 100요청 시 100회 → 1회 | 미확인 — 확정 전 임의 값 고정 금지 · EXP-10 | [../10_observability/06_experiment_catalog.md](../10_observability/06_experiment_catalog.md) |
 | ClickHouse 불가 에러 코드 | 이 문서가 503 · timeseries 네임스페이스로 판정 | **채번 완료** — timeseries.clickhouse_unavailable/503 | [../11_glossary/02_error_codes.md](../11_glossary/02_error_codes.md)(리드) |
 | 내보내기 스트리밍 도중 끊김의 표지 | 원본에 없다 | 닫힘 — 본문에 표지를 넣지 않는다 · 중단은 종결 청크 없는 비정상 종료 · 완결은 종결 청크 — [../07_api/05_timeseries.md](../07_api/05_timeseries.md) | [../07_api/05_timeseries.md](../07_api/05_timeseries.md)(W5) |
 | 스탬피드 대기 소진 후 원천 직접 조회 | 원본은 "최대 3회"까지만 적었다 — 이 문서가 "요청자는 실패를 보지 않는다"(11_glossary/02)의 귀결로 판정 | 닫힘 — 기전 확정(W4): 락 없이 ClickHouse 직접 조회 · 결과는 NX 쓰기 · 소진 수 계수 | [../06_pipeline/06_timeseries_read.md](../06_pipeline/06_timeseries_read.md) |
-| p95 롤업 대조의 근사 허용 범위 | TDigest 근사 · 부동소수 허용 오차로 비교하지 않는다(W1) | 미확인 — 확정 수단은 원시 내 순위 오차 측정(EXP-31) | [14_acceptance_criteria.md](./14_acceptance_criteria.md) §미확인 등재 |
+| p95 롤업 대조의 근사 허용 범위 | TDigest 근사 · 부동소수 허용 오차로 비교하지 않는다(W1) | 미확인 · 확정 수단 없음(원시 내 순위 오차 측정 EXP-31 D-16 폐지) | [14_acceptance_criteria.md](./14_acceptance_criteria.md) §미확인 등재 |
 
 ## 관련 문서
 

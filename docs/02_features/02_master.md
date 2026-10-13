@@ -2,6 +2,8 @@
 
 > **대상**: 마스터 데이터(MST · NestJS master 모듈) 기능 목록 · 기능별 경계 · 의존 도메인 · 실패 시 보이는 것 — 기능 ID MST-NN 채번 정본
 > **작성일**: 2026-09-24
+> **개정일**: 2026-10-11 — **D-16 카드 라인 · 태그 종류**(사용자 결정 2026-10-11 결정 3 · 마이그레이션 006) — MST-04에 태그 종류 tag_kind(8 · 시드가 채운다 · 마스터 표면 계약 밖 · 새 태그 발급은 옛 태그의 종류를 잇는다) — 기능 수 불변
+> **개정일**: 2026-10-11 — **D-16 알람 · 로그인 · 권한 · 감사 기록 삭제**(사용자 결정 2026-10-11) — MST-04 감사 로그 동시 쓰기 · 저장소 열 audit_log 삭제 · 무효화 체인 펜스의 INSERT audit_log → **INSERT biz_command_log(명령 원장)** · 기능별 경계 MST-04 감사 행 · 의존 도메인 WRK(감사) · ALM · AUT 행 · 미확인 "비활성 태그를 가리키는 알람 규칙" 행 · 관련 문서 감사 · 권한 행 삭제 — 기능 수 불변
 > **개정일**: 2026-09-27 — D-04 부분 개정 반영(사용자 결정 — 업무 쓰기도 Redis를 거친다 · 동기 응답) — 도입 단락 ③계층 인용 "Stream을 타지 않는다" → **명령 스트림 경유 · 커밋 뒤 응답** — 기능 수 불변
 > **개정일**: 2026-09-24 — 최종 정밀 검수 — "표면 번호는 W5 몫" → 각 API 문서가 채번(W5 완료)
 > **개정일**: 2026-09-24 — W7 검수 반영 — §무효화 체인 펜스 · 불릿 · 보정 표의 5단 번호 → **6단 번호**(① 커밋 · ⑤ ⑥ 보정 7.4 · 정본 06_pipeline/07) — 기능 수 불변
@@ -23,7 +25,7 @@ MST는 **시스템 전체의 메타 원천**이다. 사이트 · 라인 · 설�
 | **MST-01** | 사이트 · 라인 관리 | 사이트 목록을 조회하고(캐시 현행 600초) 사이트 · 라인을 등록 · 수정한다. S2는 시드 최소분(설비 1대가 속할 사이트 · 라인 1개)이다. **라인 쓰기 표면은 원본 API 표에 없다** — S4 마스터 CRUD 범위(site · line · device · tag)에서 파생했다 | S2(시드) · S4 | F-05 | 해당 없음 | 07_api/04_master | PostgreSQL site · production_line · Redis cache 계열 |
 | **MST-02** | 설비 관리 | 설비 목록을 조회하고(cache:devlist:{site_id} · 현행 600초) 설비를 등록 · 수정 · 비활성화한다. BFF를 거친다 — 저빈도라 Next.js 서버 fetch 캐시가 한 번 더 흡수한다 | S2(시드) · S4 | F-05 | 해당 없음 | 07_api/04_master | PostgreSQL device · Redis cache:devlist |
 | **MST-03** | Modbus 접속 설정 관리 | 설비 1:1의 modbus_config(host · port · unit_id · timeout_ms · retry_count · max_regs_per_request)를 관리한다. Collector가 기동 시 PostgreSQL에서 읽고, 실행 중 변경은 커밋 뒤 ch:cacheinv 신호(cache:devlist:{site_id})로 다음 사이클 경계에 다시 읽는다(COL-01 · W4 판정). **host가 컨테이너 루프백이면 그 설비는 시뮬레이션 설비**이며 모드 A의 SIMULATED 표지가 이 값에서 나온다([03_collector.md](./03_collector.md) §모드 A의 SIMULATED 표지 판정) | S2(시드) · S4 | F-01 · F-05 | 해당 없음 | 07_api/04_master | PostgreSQL modbus_config |
-| **MST-04** | 태그 마스터 관리 | 태그를 조회 · 등록 · 수정한다. Modbus 매핑(function_code · address · data_type · word_order) · 공학 단위(scale · offset_value · unit) · deadband · scan_rate_ms · 범위(range_min · range_max)를 갖는다. tag_code는 유일하다. 쓰기는 한 트랜잭션에서 태그 변경과 **감사 로그 before · after를 함께** 쓰고(WRK-04), 커밋 뒤에만 MST-08을 부른다 | S2(시드) · S4 | F-05 | 해당 없음 | 07_api/04_master | PostgreSQL tag_master · audit_log(WRK 소유) |
+| **MST-04** | 태그 마스터 관리 | 태그를 조회 · 등록 · 수정한다. Modbus 매핑(function_code · address · data_type · word_order) · 공학 단위(scale · offset_value · unit) · deadband · scan_rate_ms · 범위(range_min · range_max) · 태그 종류 tag_kind(온도 · 압력 · 속도 · 전류 · 진동 · 수량 · 상태 · 기타 8 — NULL 허용 · 카드 라인 시드가 채운다 · **마스터 표면 계약 밖**이라 표면으로 바꾸지 않고 새 태그 발급은 옛 태그의 종류를 잇는다 · D-16)를 갖는다. tag_code는 유일하다. 쓰기는 명령 워커가 한 트랜잭션에서 태그 변경과 명령 원장 행을 함께 쓰고, 커밋 뒤에만 MST-08을 부른다 | S2(시드) · S4 | F-05 | 해당 없음 | 07_api/04_master | PostgreSQL tag_master · biz_command_log(명령 원장) |
 | **MST-05** | 태그 논리 삭제 | 태그를 물리 삭제하지 않고 is_active를 false로 바꾼다. tag_id는 시퀀스로만 발급하고 **영구 보존 · 재사용 금지**다 — 물리 삭제하면 ClickHouse의 과거 행이 고아 tag_id를 갖고, 재사용하면 과거 행이 다른 태그의 이름을 얻는다(원본 architecture.md §12) | S4 | F-05 | 해당 없음 | 07_api/04_master | PostgreSQL tag_master |
 | **MST-06** | 스케일 변경 시 새 태그 발급 | scale · offset_value가 바뀌면 기존 태그를 고치지 않고 **새 tag_id를 발급**하고 이전 태그를 비활성화하며 tag_master_history에 이력을 남긴다. 기존 행을 고치면 과거 값의 공학 단위 의미가 조용히 바뀐다 — 시계열은 불변 사실 기록이다(전역 불변식). 기존 태그 PATCH가 스케일을 바꾸려 할 때의 응답은 채번 보류 | S4 | F-05 | 해당 없음 | 07_api/04_master | PostgreSQL tag_master · tag_master_history |
 | **MST-07** | 태그 메타 캐시 | 태그 메타 사본을 cache:tagmeta에 둔다(현행 600초). Collector가 기동 시 한 번 읽고(COL-01), 최신값 응답이 태그명 · 단위를 붙일 때 읽는다(RLT-03). 미스면 PostgreSQL에서 읽어 채운다. **캐시 계열이라 축출될 수 있다** — 축출돼도 PostgreSQL 우회로 동작한다 | S2 | F-01 · F-03 | 해당 없음 | 표면 없음 — 다른 기능의 내부 조회 | Redis cache:tagmeta |
@@ -39,7 +41,7 @@ MST는 **시스템 전체의 메타 원천**이다. 사이트 · 라인 · 설�
 MST-08의 순서다. 체인 확장의 기전 정본은 [../06_pipeline/07_business_crud.md](../06_pipeline/07_business_crud.md)다.
 
 ```plain
-BEGIN → UPDATE tag_master → INSERT audit_log(before · after)
+BEGIN → UPDATE tag_master → INSERT biz_command_log(명령 원장)
   → ① COMMIT                                        (트랜잭션 확정)
     → ② DEL cache:tagmeta · cache:devlist            (Redis 사본)
       → ③ PUBLISH ch:cacheinv                       (다른 api 인스턴스의 로컬 캐시)
@@ -60,7 +62,6 @@ BEGIN → UPDATE tag_master → INSERT audit_log(before · after)
 | MST-01 · 02 | 설비의 수집 상태(연결 · 폴링 성공)를 저장하지 않는다 | 수집 메트릭 [11_metrics.md](./11_metrics.md) · STALE 판정 RLT-03 |
 | MST-03 | Modbus 연결을 열지 않는다 · 시뮬레이터 포트를 띄우지 않는다 | COL-02 · SIM-01 |
 | MST-04 | 레지스터 디코딩을 하지 않는다 — 규칙을 저장할 뿐이다 | COL-04 |
-| MST-04 | **감사 로그 테이블을 소유하지 않는다** — 같은 트랜잭션에서 쓸 뿐이다 | WRK-04 · 한계 등재 [../05_data_stores/02_postgresql_constraints.md](../05_data_stores/02_postgresql_constraints.md) |
 | MST-05 | ClickHouse의 과거 행을 지우거나 고치지 않는다 | 보존 TTL [../05_data_stores/08_retention_lifecycle.md](../05_data_stores/08_retention_lifecycle.md) |
 | MST-06 | 과거 값을 새 스케일로 재계산하지 않는다 | 해당 없음 — 불변 사실 기록 |
 | MST-07 | 최신값을 캐시하지 않는다 — 태그 **메타**만 담는다 | ING-08(rt:latest) |
@@ -74,9 +75,6 @@ BEGIN → UPDATE tag_master → INSERT audit_log(before · after)
 | COL | MST → COL | 저장소 경유 | 태그 정의 · 접속 설정을 Collector가 기동 시 읽는다. 마스터를 바꿔도 **Collector 재기동 전까지 폴링 대상은 그대로다**(원본에 재적재 신호 없음 — §미확인 · 미설계 등재) |
 | TSQ | MST → TSQ | 저장소 경유 | dict_tag로 태그명 · 단위를 붙인다 |
 | RLT | MST → RLT | 저장소 경유 | cache:tagmeta로 최신값에 메타를 붙인다 |
-| WRK | MST → WRK | 트랜잭션 공유 | 마스터 쓰기가 같은 트랜잭션에서 audit_log에 쓴다. 테이블 소유는 WRK다 |
-| ALM | MST → ALM | 저장소 경유 | alarm_rule이 tag_id를 참조한다. 비활성 태그의 규칙 처리는 미정이다 |
-| AUT | AUT → MST | 인가 | 쓰기는 관리자 역할만 한다([12_permission_matrix.md](./12_permission_matrix.md)) |
 
 ## 실패 시 보이는 것
 
@@ -111,7 +109,6 @@ BEGIN → UPDATE tag_master → INSERT audit_log(before · after)
 | 비활성 태그의 과거 행 태그명 | dict_tag 적재 쿼리가 WHERE is_active다(원본 architecture.md §7.4) · 태그는 논리 삭제한다(원본 architecture.md §12) | 닫힘 — dict_tag가 tag_master 전 행(비활성 포함)을 싣고 is_active를 속성으로 둔다 — [../05_data_stores/07_cross_store_consistency.md](../05_data_stores/07_cross_store_consistency.md) | [../05_data_stores/07_cross_store_consistency.md](../05_data_stores/07_cross_store_consistency.md)(W3) |
 | 라인 · 사이트 쓰기 · 접속 설정 쓰기 표면 | API 표에 sites(GET) · devices(GET) · tags(GET · POST · PATCH)만 있다(원본 architecture.md §11) | 닫힘 — 기능 근거로 표면 12 신설 — [../07_api/04_master.md](../07_api/04_master.md) | [../07_api/04_master.md](../07_api/04_master.md)(W5) |
 | 마스터 변경의 Collector 반영 | Collector는 기동 시 1회 로드한다(원본 data_flow.md §3) | **W4 판정** — ch:cacheinv 구독으로 해당 설비만 다음 사이클 경계 재로드 · Redis 재연결 시 전체 대조 | [../06_pipeline/02_collect.md](../06_pipeline/02_collect.md) |
-| 비활성 태그를 가리키는 알람 규칙 | alarm_rule.tag_id FK(원본 architecture.md §6) | 닫힘 — §비활성 태그 규칙 판정 — [../06_pipeline/08_alarm.md](../06_pipeline/08_alarm.md) | [../06_pipeline/08_alarm.md](../06_pipeline/08_alarm.md)(W4) |
 | cache:tagmeta 모양 | 단일 Hash(원본 data_flow.md §3 · §5) vs 태그별 키(원본 architecture.md §8.2) | 닫힘 — 태그별 키 cache:tagmeta:{tag_id} — [../05_data_stores/05_redis_keyspace.md](../05_data_stores/05_redis_keyspace.md) | [../05_data_stores/05_redis_keyspace.md](../05_data_stores/05_redis_keyspace.md)(W3) |
 | site.timezone 용도 | 컬럼만 있다 | 닫힘 — site.timezone은 CHECK = 'Asia/Seoul'로 표시 · 달력 경계와 같은 값만 허용 — [../05_data_stores/01_postgresql_schema.md](../05_data_stores/01_postgresql_schema.md) | [../05_data_stores/01_postgresql_schema.md](../05_data_stores/01_postgresql_schema.md)(W3) |
 
@@ -121,6 +118,4 @@ BEGIN → UPDATE tag_master → INSERT audit_log(before · after)
 - [../07_api/04_master.md](../07_api/04_master.md) — sites · devices · tags 표면
 - [../06_pipeline/07_business_crud.md](../06_pipeline/07_business_crud.md) — F-05 · 무효화 체인 기전
 - [../05_data_stores/07_cross_store_consistency.md](../05_data_stores/07_cross_store_consistency.md) — Dictionary · tag_id 불변 · 스케일 변경
-- [10_work_orders.md](./10_work_orders.md) — audit_log 소유
 - [03_collector.md](./03_collector.md) — 태그 정의의 소비자
-- [12_permission_matrix.md](./12_permission_matrix.md) — 마스터 쓰기 권한

@@ -2,6 +2,8 @@
 
 > **대상**: 설계 문서군이 인용하는 외부 공식 문서 · 릴리스 노트 · 표준의 URL 전수 — 런타임 · 저장소 · 저장소 확장 · 백엔드 라이브러리 · 프론트엔드 · 도구 · 부하 · 관측 · 실행 환경 · 프로토콜 표준 · 보안 참고 · 인용처 · 재확인 규칙
 > **작성일**: 2026-09-24
+> **개정일**: 2026-10-12 — **D-05 부분 개정 · ADR-32**(직접 비교 비교 사본 TimescaleDB hypertable · 열 압축 · 마이그레이션 009) — 저장소 확장에 **TimescaleDB 14행 신설**(릴리스 · create_hypertable · ALTER TABLE(hypercore) · convert_to_columnstore(compress_chunk 2.18.0 deprecated) · add_retention_policy · drop_chunks · chunks_detailed_size · hypertable_size · hypertable_detailed_size · approximate_row_count · timescaledb_information.chunks · 원격 보고 · GUC · 설정 개요 — 전부 WebFetch로 실재 확인 · 확인일 2026-10-12) — 등재 74 → **88** · 저장소 확장 4 → **18** · 확인 16 → **30** · 미확인 58 불변 · 버전 고정표 대응 37 → **38**행 · 원천 줄의 고정표 행 수 인용 삭제(셈은 03_data_infra 한 자리)
+> **개정일**: 2026-10-11 — **D-16 로그인 · 권한 · 측정 도구 삭제**(사용자 결정 2026-10-11) — 등재 6행 삭제(k6 · JWT RFC 7519 · OWASP Password Storage · Argon2 RFC 9106 · PHC 문자열 형식 · 쿠키 SameSite rfc6265bis — 인용처 12_security/01 · 10_observability/05 폐지) — 등재 80 → **74**(도구 · 부하 · 관측 14 → **13** · 프로토콜 표준 4 → **3** · 보안 참고 10 → **6**) · 미확인 64 → **58** · 확인 16 불변 · 버전 고정표 대응 39 → **37**행
 > **개정일**: 2026-10-03 — UI/UX 다듬기(사용자 지시 2026-10-03) — 프론트엔드 행 1(Pretendard 공식 저장소 — 버전 고정표 Pretendard 행 신설 38 → **39**행 대응) 신설 · 미확인 — 등재 79 → **80** · 프론트엔드 10 → **11** · 미확인 63 → **64** · 확인 16 불변
 > **개정일**: 2026-09-28 — DB 시각 UTC(ADR-27) 근거 등재 — 저장소 행 8(ClickHouse DateTime · ALTER COLUMN · 사용자 정의 파티션 키 · 서버 설정 timezone · 세션 설정 session_timezone · PostgreSQL 18 날짜 · 시각 타입 · 함수 · ALTER DATABASE) · 저장소 확장 행 1(pg_partman 문서) 신설 · 전부 확인일 2026-09-28 — 등재 70 → **79** · 저장소 10 → **18** · 저장소 확장 3 → **4** · 확인 7 → **16** · 미확인 63 불변
 > **개정일**: 2026-09-26 — 마지막 검수 반영 — 부분 확인 항목 수는 표 셀 한 자리에서만 센다(검산 불릿은 셀을 가리킴)
@@ -14,7 +16,7 @@
 > **개정일**: 2026-09-24 — ClickHouse 26.8 LTS 전환(사용자 결정 · 25.x 보안 지원 종료) — ClickHouse 변경 이력 행의 확인 대상 25.8 → **26.8** LTS 패치 태그
 > **개정일**: 2026-09-24 — 착수 체크리스트 7 반영 — 저장소 6행 확인일 채움(릴리스 · 레지스트리 대조) · ClickHouse 보안 정책 행 신설(25.x 지원 종료 확인) · Python 행 신설(버전 고정표 36 → **37**행 대응) — 등재 68 → **70** · 저장소 9 → **10** · 도구 · 부하 · 관측 13 → **14** · 미확인 68 → **63**
 > **개정일**: 2026-09-24 — W7 검수 반영 — 보안 참고 10 · Compose 변수 치환 1 추가 57 → **68** · 버전 고정표 35 → **36**행 대응 · 도입문의 역링크 서술을 인용처 열 기준으로
-> **원천**: [../09_tech_stack/03_data_infra.md](../09_tech_stack/03_data_infra.md) 버전 고정표 39행 · 각 문서의 "공식 참조로 재확인" 등재 행 · 원본 tech_stack.md §12 · 원본 implementation_plan.md §9 착수 체크리스트 7번(커밋 ff66a37) · 신설
+> **원천**: [../09_tech_stack/03_data_infra.md](../09_tech_stack/03_data_infra.md) 버전 고정표 · ADR-32(TimescaleDB 문서 — 2026-10-12 WebFetch · context7 대조) · 각 문서의 "공식 참조로 재확인" 등재 행 · 원본 tech_stack.md §12 · 원본 implementation_plan.md §9 착수 체크리스트 7번(커밋 ff66a37) · 신설
 
 이 문서는 **외부 URL의 유일한 등재처**다. 다른 문서는 URL을 쓰지 않고 무엇을 확인해야 하는지만 적으며, 그 사실이 어느 URL로 확인되는지는 이 문서의 인용처 열이 역으로 잇는다([../CLAUDE.md](../CLAUDE.md) 외부 URL 규칙). URL을 한 자리에 모으는 이유는 하나다 — 공식 문서의 주소는 버전마다 바뀌고, 여러 문서에 흩어진 URL은 한 번에 고칠 수 없어 낡은 주소가 조용히 남는다.
 
@@ -75,8 +77,22 @@
 | pg_stat_statements | PostgreSQL 동봉 모듈 문서 | [https://www.postgresql.org/docs/current/pgstatstatements.html](https://www.postgresql.org/docs/current/pgstatstatements.html) | 공유 라이브러리 적재 설정 | [../10_observability/02_instrumentation.md](../10_observability/02_instrumentation.md) | 미확인 |
 | auto_explain | PostgreSQL 동봉 모듈 문서 | [https://www.postgresql.org/docs/current/auto-explain.html](https://www.postgresql.org/docs/current/auto-explain.html) | 계획 로깅 문턱 설정 | [../10_observability/02_instrumentation.md](../10_observability/02_instrumentation.md) | 미확인 |
 | pg_partman | 공식 문서(pg_partman.md) | [https://github.com/pgpartman/pg_partman/blob/master/doc/pg_partman.md](https://github.com/pgpartman/pg_partman/blob/master/doc/pg_partman.md) | DB와 유지 작업 클라이언트를 UTC로 둘 것 · create_partition_time은 주어진 시각으로 자식 생성 · create_parent p_start_partition · infinite_time_partitions 기본 false | [../05_data_stores/09_migrations_seed.md](../05_data_stores/09_migrations_seed.md) · [../05_data_stores/02_postgresql_constraints.md](../05_data_stores/02_postgresql_constraints.md) · [../09_tech_stack/03_data_infra.md](../09_tech_stack/03_data_infra.md) | 2026-09-28 |
+| **TimescaleDB** | 릴리스 | [https://github.com/timescale/timescaledb/releases](https://github.com/timescale/timescaledb/releases) | 2.30의 현행 패치 · 태그 소스 tarball | [../09_tech_stack/03_data_infra.md](../09_tech_stack/03_data_infra.md) | 2026-10-12 |
+| TimescaleDB | create_hypertable 문서 | [https://www.tigerdata.com/docs/reference/timescaledb/hypertables/create_hypertable/](https://www.tigerdata.com/docs/reference/timescaledb/hypertables/create_hypertable/) | by_range 차원 · create_default_indexes(기본 켬 — 시각 · 분할 열 기본 인덱스) · 새 표는 CREATE TABLE이 공식 권장(이 함수는 지원 유지) | [../04_architecture/09_decision_records.md](../04_architecture/09_decision_records.md) ADR-32 · [../05_data_stores/10_olap_vs_rdb_control.md](../05_data_stores/10_olap_vs_rdb_control.md) | 2026-10-12 |
+| TimescaleDB | ALTER TABLE(hypercore) 문서 | [https://www.tigerdata.com/docs/reference/timescaledb/hypercore/alter_table/](https://www.tigerdata.com/docs/reference/timescaledb/hypercore/alter_table/) | timescaledb.enable_columnstore · segmentby · orderby | [../04_architecture/09_decision_records.md](../04_architecture/09_decision_records.md) ADR-32 · [../05_data_stores/10_olap_vs_rdb_control.md](../05_data_stores/10_olap_vs_rdb_control.md) | 2026-10-12 |
+| TimescaleDB | convert_to_columnstore 문서 | [https://www.tigerdata.com/docs/reference/timescaledb/hypercore/convert_to_columnstore/](https://www.tigerdata.com/docs/reference/timescaledb/hypercore/convert_to_columnstore/) | 칸 하나를 열 저장으로 바꾸기 · **compress_chunk(009가 부르는 이름)는 2.18.0부터 deprecated — 이 함수가 대체** · 이미 바뀐 칸의 오류 · 경고 선택 | [../09_tech_stack/03_data_infra.md](../09_tech_stack/03_data_infra.md) §미확인 · 미설계 등재 · [../05_data_stores/10_olap_vs_rdb_control.md](../05_data_stores/10_olap_vs_rdb_control.md) | 2026-10-12 |
+| TimescaleDB | add_retention_policy 문서 | [https://www.tigerdata.com/docs/reference/timescaledb/data-retention/add_retention_policy/](https://www.tigerdata.com/docs/reference/timescaledb/data-retention/add_retention_policy/) | drop_after · 정책이 돌 때 범위 전체가 기준보다 오래된 칸만 지운다 · schedule_interval 기본값(문서상 NULL — 실제 주기는 미확인) | [../05_data_stores/08_retention_lifecycle.md](../05_data_stores/08_retention_lifecycle.md) · [../04_architecture/09_decision_records.md](../04_architecture/09_decision_records.md) ADR-32 | 2026-10-12 |
+| TimescaleDB | drop_chunks 문서 | [https://www.tigerdata.com/docs/reference/timescaledb/hypertables/drop_chunks/](https://www.tigerdata.com/docs/reference/timescaledb/hypertables/drop_chunks/) | older_than · newer_than 경계로 칸 통째 삭제 | [../05_data_stores/08_retention_lifecycle.md](../05_data_stores/08_retention_lifecycle.md) · [../05_data_stores/10_olap_vs_rdb_control.md](../05_data_stores/10_olap_vs_rdb_control.md) | 2026-10-12 |
+| TimescaleDB | chunks_detailed_size 문서 | [https://www.tigerdata.com/docs/reference/timescaledb/hypertables/chunks_detailed_size/](https://www.tigerdata.com/docs/reference/timescaledb/hypertables/chunks_detailed_size/) | 칸별 table · index · toast · total 바이트 · 압축 칸 포함 여부는 이 문서에 서술이 없다(as-built 판단 ADR-32) | [../04_architecture/09_decision_records.md](../04_architecture/09_decision_records.md) ADR-32 · [../05_data_stores/10_olap_vs_rdb_control.md](../05_data_stores/10_olap_vs_rdb_control.md) | 2026-10-12 |
+| TimescaleDB | hypertable_size 문서 | [https://www.tigerdata.com/docs/reference/timescaledb/hypertables/hypertable_size/](https://www.tigerdata.com/docs/reference/timescaledb/hypertables/hypertable_size/) | 표 · 칸 · 인덱스 · TOAST를 합한 전체 크기 · 압축 데이터 포함 여부는 서술이 없다 | [../04_architecture/09_decision_records.md](../04_architecture/09_decision_records.md) ADR-32 · [../05_data_stores/10_olap_vs_rdb_control.md](../05_data_stores/10_olap_vs_rdb_control.md) | 2026-10-12 |
+| TimescaleDB | hypertable_detailed_size 문서 | [https://www.tigerdata.com/docs/reference/timescaledb/hypertables/hypertable_detailed_size/](https://www.tigerdata.com/docs/reference/timescaledb/hypertables/hypertable_detailed_size/) | table · index · toast · total 바이트 | [../10_observability/01_metrics_catalog.md](../10_observability/01_metrics_catalog.md) · [../10_observability/02_instrumentation.md](../10_observability/02_instrumentation.md) | 2026-10-12 |
+| TimescaleDB | approximate_row_count 문서 | [https://www.tigerdata.com/docs/api/latest/hyperfunctions/approximate_row_count](https://www.tigerdata.com/docs/api/latest/hyperfunctions/approximate_row_count) | 통계 기반 행 수 추정 — 통계가 낡으면 추정도 낡는다 | [../10_observability/01_metrics_catalog.md](../10_observability/01_metrics_catalog.md) · [../04_architecture/09_decision_records.md](../04_architecture/09_decision_records.md) ADR-32 | 2026-10-12 |
+| TimescaleDB | timescaledb_information.chunks 문서 | [https://www.tigerdata.com/docs/reference/timescaledb/informational-views/chunks/](https://www.tigerdata.com/docs/reference/timescaledb/informational-views/chunks/) | 칸 스키마 · 이름 · range_start · range_end · is_compressed | [../05_data_stores/10_olap_vs_rdb_control.md](../05_data_stores/10_olap_vs_rdb_control.md) · [../10_observability/02_instrumentation.md](../10_observability/02_instrumentation.md) | 2026-10-12 |
+| TimescaleDB | 원격 보고 · 버전 확인 문서 | [https://www.tigerdata.com/docs/self-hosted/latest/configuration/telemetry](https://www.tigerdata.com/docs/self-hosted/latest/configuration/telemetry) | 설정 파일 timescaledb.telemetry_level = off · 끄면 버전 확인도 꺼진다 | [../09_tech_stack/03_data_infra.md](../09_tech_stack/03_data_infra.md) | 2026-10-12 |
+| TimescaleDB | GUC 설정 문서 | [https://www.tigerdata.com/docs/reference/timescaledb/configuration/gucs](https://www.tigerdata.com/docs/reference/timescaledb/configuration/gucs) | timescaledb.max_tuples_decompressed_per_dml_transaction(압축 칸 DML이 한 트랜잭션에 푸는 행 상한 · 넘으면 롤백 · 0이면 무제한) · telemetry_level | [../05_data_stores/08_retention_lifecycle.md](../05_data_stores/08_retention_lifecycle.md) · [../05_data_stores/10_olap_vs_rdb_control.md](../05_data_stores/10_olap_vs_rdb_control.md) · [../09_tech_stack/03_data_infra.md](../09_tech_stack/03_data_infra.md) | 2026-10-12 |
+| TimescaleDB | 설정 개요 문서 | [https://www.tigerdata.com/docs/self-hosted/latest/configuration/about-configuration](https://www.tigerdata.com/docs/self-hosted/latest/configuration/about-configuration) | timescaledb.max_background_workers · max_worker_processes는 작업 워커와 병렬 워커의 합 이상 | [../09_tech_stack/03_data_infra.md](../09_tech_stack/03_data_infra.md) | 2026-10-12 |
 
-- 검산: 저장소 확장 = **4**
+- 검산: 저장소 확장 = pg_partman 2 + PostgreSQL 동봉 2 + TimescaleDB 14 = **18**
 
 ## 백엔드 라이브러리
 
@@ -131,11 +147,10 @@
 | Python | 릴리스 목록 | [https://www.python.org/downloads/](https://www.python.org/downloads/) | 3.14의 현행 부 버전 | [../09_tech_stack/03_data_infra.md](../09_tech_stack/03_data_infra.md) · [../09_tech_stack/05_tooling_devops.md](../09_tech_stack/05_tooling_devops.md) | 미확인 |
 | Docker Compose | 공식 문서 | [https://docs.docker.com/compose/](https://docs.docker.com/compose/) | v2 부 버전 · 리소스 제한(deploy.resources) · cpuset · healthcheck · profiles 문법 | [../04_architecture/03_execution_topology.md](../04_architecture/03_execution_topology.md) · [../09_tech_stack/04_local_environment.md](../09_tech_stack/04_local_environment.md) | 미확인 |
 | Docker Compose 변수 치환 | 공식 문서 | [https://docs.docker.com/compose/how-tos/environment-variables/variable-interpolation/](https://docs.docker.com/compose/how-tos/environment-variables/variable-interpolation/) | .env 값의 접속 문자열 치환 · 미설정 변수 처리 | [../09_tech_stack/04_local_environment.md](../09_tech_stack/04_local_environment.md) · [../12_security/02_secrets_config.md](../12_security/02_secrets_config.md) | 미확인 |
-| k6 | 공식 문서 | [https://grafana.com/docs/k6/latest/](https://grafana.com/docs/k6/latest/) | v1.x · 시나리오 실행기 · Prometheus 원격 쓰기 출력 | [../10_observability/05_load_scenarios.md](../10_observability/05_load_scenarios.md) | 미확인 |
 | Prometheus | 공식 문서 | [https://prometheus.io/docs/](https://prometheus.io/docs/) | 3.x · 규칙 파일 · 원격 쓰기 수신 기능 | [../09_tech_stack/03_data_infra.md](../09_tech_stack/03_data_infra.md) · [../10_observability/03_dashboards_alerts.md](../10_observability/03_dashboards_alerts.md) | 미확인 |
 | Grafana | 공식 문서 | [https://grafana.com/docs/grafana/latest/](https://grafana.com/docs/grafana/latest/) | 12.x · 대시보드 프로비저닝 형식 | [../09_tech_stack/03_data_infra.md](../09_tech_stack/03_data_infra.md) · [../10_observability/03_dashboards_alerts.md](../10_observability/03_dashboards_alerts.md) | 미확인 |
 
-- 검산: 도구 · 부하 · 관측 = **14**
+- 검산: 도구 · 부하 · 관측 = **13**
 
 ## 실행 환경
 
@@ -152,19 +167,14 @@
 |------|------|------|------|------|------|
 | Modbus | 공식 규격 목록 | [https://modbus.org/specs.php](https://modbus.org/specs.php) | 응용 프로토콜 · TCP 규격 — 기능 코드 · 레지스터 영역 | [../06_pipeline/02_collect.md](../06_pipeline/02_collect.md) · [05_plc_sim.md](./05_plc_sim.md) | 미확인 |
 | MessagePack | 규격 | [https://msgpack.org/](https://msgpack.org/) | 형식 규격 · 확장 타입 | [../06_pipeline/02_collect.md](../06_pipeline/02_collect.md) | 미확인 |
-| JWT | RFC 7519 | [https://www.rfc-editor.org/rfc/rfc7519](https://www.rfc-editor.org/rfc/rfc7519) | 등록 클레임 · 만료 | [../12_security/01_authn_authz.md](../12_security/01_authn_authz.md) | 미확인 |
 | WebSocket | RFC 6455 | [https://www.rfc-editor.org/rfc/rfc6455](https://www.rfc-editor.org/rfc/rfc6455) | 종료 코드 영역(4000~4999 응용 사용) · Origin 헤더 | [../07_api/11_websocket.md](../07_api/11_websocket.md) · [../12_security/03_api_surface_defense.md](../12_security/03_api_surface_defense.md) | 미확인 |
 
-- 검산: 프로토콜 표준 = **4**
+- 검산: 프로토콜 표준 = **3**
 
 ## 보안 참고
 
 | 대상 | 종류 | URL | 확인할 것 | 인용처 | 확인일 |
 |------|------|------|------|------|------|
-| OWASP Password Storage Cheat Sheet | 보안 참고 | [https://cheatsheetseries.owasp.org/cheatsheets/Password_Storage_Cheat_Sheet.html](https://cheatsheetseries.owasp.org/cheatsheets/Password_Storage_Cheat_Sheet.html) | Argon2id 채택 근거 · 비용 파라미터 하한 | [../12_security/01_authn_authz.md](../12_security/01_authn_authz.md) | 미확인 |
-| Argon2 | RFC 9106 | [https://www.rfc-editor.org/rfc/rfc9106](https://www.rfc-editor.org/rfc/rfc9106) | Argon2id 매개변수 정의 | [../12_security/01_authn_authz.md](../12_security/01_authn_authz.md) | 미확인 |
-| PHC 문자열 형식 | 규격 | [https://github.com/P-H-C/phc-string-format/blob/master/phc-sf-spec.md](https://github.com/P-H-C/phc-string-format/blob/master/phc-sf-spec.md) | 해시 저장 형식 | [../12_security/01_authn_authz.md](../12_security/01_authn_authz.md) | 미확인 |
-| 쿠키 · SameSite | IETF 초안 rfc6265bis | [https://datatracker.ietf.org/doc/draft-ietf-httpbis-rfc6265bis/](https://datatracker.ietf.org/doc/draft-ietf-httpbis-rfc6265bis/) | same-site 판정이 포트를 보지 않는다는 점 · SameSite 속성 | [../12_security/01_authn_authz.md](../12_security/01_authn_authz.md) · [../12_security/03_api_surface_defense.md](../12_security/03_api_surface_defense.md) | 미확인 |
 | CORS | Fetch 표준 | [https://fetch.spec.whatwg.org/#http-cors-protocol](https://fetch.spec.whatwg.org/#http-cors-protocol) | 사전 요청 · 자격 증명 동반 요청의 허용 오리진 규칙 | [../12_security/03_api_surface_defense.md](../12_security/03_api_surface_defense.md) | 미확인 |
 | Next.js CLI | 공식 문서 | [https://nextjs.org/docs/app/api-reference/cli/next](https://nextjs.org/docs/app/api-reference/cli/next) | 개발 서버 호스트 이름 인자 · 기본 바인드 인터페이스 | [../12_security/05_local_exposure.md](../12_security/05_local_exposure.md) · [../09_tech_stack/04_local_environment.md](../09_tech_stack/04_local_environment.md) | 미확인 |
 | Next.js 환경변수 | 공식 문서 | [https://nextjs.org/docs/app/guides/environment-variables](https://nextjs.org/docs/app/guides/environment-variables) | NEXT_PUBLIC_ 접두 변수의 번들 포함 | [../12_security/02_secrets_config.md](../12_security/02_secrets_config.md) | 미확인 |
@@ -172,13 +182,13 @@
 | Redis 보안 | 공식 문서 | [https://redis.io/docs/latest/operate/oss_and_stack/management/security/](https://redis.io/docs/latest/operate/oss_and_stack/management/security/) | requirepass · protected mode · ACL | [../12_security/02_secrets_config.md](../12_security/02_secrets_config.md) · [../12_security/05_local_exposure.md](../12_security/05_local_exposure.md) | 미확인 |
 | ClickHouse Dictionary 소스 | 공식 문서 | [https://clickhouse.com/docs/sql-reference/dictionaries](https://clickhouse.com/docs/sql-reference/dictionaries) | PostgreSQL 소스 자격 증명 설정 방식 | [../12_security/02_secrets_config.md](../12_security/02_secrets_config.md) · [../05_data_stores/03_clickhouse_schema.md](../05_data_stores/03_clickhouse_schema.md) | 미확인 |
 
-- 검산: 보안 참고 = **10**
+- 검산: 보안 참고 = **6**
 
 ## 검산
 
-- 검산: 등재 = 런타임 4 + 저장소 18 + 저장소 확장 4 + 백엔드 라이브러리 13 + 프론트엔드 11 + 도구 · 부하 · 관측 14 + 실행 환경 2 + 프로토콜 표준 4 + 보안 참고 10 = **80**
-- **버전 고정표 39행이 모두 이 문서의 행 하나 이상에 닿는다**(Fastify 어댑터는 NestJS 문서 행 · 비밀번호 해시 라이브러리는 라이브러리 미선정이라 Argon2 RFC 9106 행 — 선정 시 그 공식 저장소 행을 더한다) — 고정표의 묶음 행(Zustand · React Hook Form · Tailwind CSS · Biome · Vitest · Supertest · Testcontainers)은 구성요소마다 한 행씩 나눠 등재했다. 해당 없음 행(shadcn/ui)도 복사 절차 확인을 위해 등재한다. pg_stat_statements · auto_explain은 엔진을 따르므로 버전이 아니라 적재 설정을 확인한다.
-- **등재했지만 대부분 확인하지 않았다** — 확인일 열 확인 16(저장소 릴리스 · 이미지 · ClickHouse 보안 정책 7 — 착수 체크리스트 7번 · 2026-09-24 + DB 시간대 전환 근거 9 — ADR-27 · 2026-09-28) + 미확인 64 = **80**. 미확인 64에는 부분 확인 1행(ClickHouse 문서 — 그 행 확인일 칸이 적은 역방향 대조 근거 항목만 대조 · 나머지 확인할 것은 미대조)이 들어 있다 — 행 전체를 확인으로 세면 대조하지 않은 기본값 항목(merge_with_ttl_timeout 등)까지 확인된 것으로 읽힌다. 나머지 대조는 각 구성요소를 쓰는 단계의 착수 때 한다.
+- 검산: 등재 = 런타임 4 + 저장소 18 + 저장소 확장 18 + 백엔드 라이브러리 13 + 프론트엔드 11 + 도구 · 부하 · 관측 13 + 실행 환경 2 + 프로토콜 표준 3 + 보안 참고 6 = **88**
+- **버전 고정표 38행이 모두 이 문서의 행 하나 이상에 닿는다**(Fastify 어댑터는 NestJS 문서 행) — 고정표의 묶음 행(Zustand · React Hook Form · Tailwind CSS · Biome · Vitest · Supertest · Testcontainers)은 구성요소마다 한 행씩 나눠 등재했다. 해당 없음 행(shadcn/ui)도 복사 절차 확인을 위해 등재한다. pg_stat_statements · auto_explain은 엔진을 따르므로 버전이 아니라 적재 설정을 확인한다.
+- **등재했지만 대부분 확인하지 않았다** — 확인일 열 확인 30(저장소 릴리스 · 이미지 · ClickHouse 보안 정책 7 — 착수 체크리스트 7번 · 2026-09-24 + DB 시간대 전환 근거 9 — ADR-27 · 2026-09-28 + TimescaleDB 14 — ADR-32 · 2026-10-12) + 미확인 58 = **88**. 미확인 58에는 부분 확인 1행(ClickHouse 문서 — 그 행 확인일 칸이 적은 역방향 대조 근거 항목만 대조 · 나머지 확인할 것은 미대조)이 들어 있다 — 행 전체를 확인으로 세면 대조하지 않은 기본값 항목(merge_with_ttl_timeout 등)까지 확인된 것으로 읽힌다. 나머지 대조는 각 구성요소를 쓰는 단계의 착수 때 한다.
 
 ## 재확인 규칙
 
