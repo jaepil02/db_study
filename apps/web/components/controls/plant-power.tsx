@@ -1,10 +1,9 @@
 'use client';
-// 설비 가동 스위치(공용 컨트롤 — ⑤ /lab · ⑥ /monitoring · ⑦ /hmi 머리) — 정본 docs/08_screen/10_lab_screen.md §공용 컨트롤 · 표면 docs/07_api/06_realtime.md #3 · #4
+// 설비 가동 스위치(공용 컨트롤 — ⑤ /lab · ⑦ /hmi 머리) — 정본 docs/08_screen/10_lab_screen.md §공용 컨트롤 · 표면 docs/07_api/06_realtime.md #3 · #4
 // 자기완결: GET · POST /bff/plant/power(5초마다 다시 읽음) · 켜짐 · 꺼짐 표시 · 바뀌는 중 잠금 · 실패 문구.
-// 켜고 끄면 health(⑥ 흐름도 꺼짐 안내가 읽는 run.sensorAutogen — 실행 중 실효 상태)와 센서 데이터 현황을 다시 읽게 한다.
+// 켜고 끄면 센서 데이터 현황을 다시 읽게 한다.
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { ApiError } from '../../lib/api';
-import { HEALTH_KEY } from '../../lib/health';
 import type { PlantPowerBody } from '../../lib/shared';
 import { formatKstIso } from '../../lib/time';
 import { cn } from '../../lib/utils';
@@ -25,7 +24,6 @@ export function PlantPowerSwitch({ className }: { className?: string }) {
     mutationFn: (on: boolean) => setPower(on),
     onSuccess: (body) => {
       qc.setQueryData<PlantPowerBody>(controlKeys.power, body);
-      void qc.invalidateQueries({ queryKey: HEALTH_KEY });
       void qc.invalidateQueries({ queryKey: controlKeys.stats });
     },
   });

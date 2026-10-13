@@ -31,7 +31,8 @@ export default defineConfig({
     // next를 직접 exec한다 — pnpm start를 거치면 종료 신호가 next-server에 닿지 않아 teardown이 멈추고 13001에 고아가 남는다
     command:
       'node node_modules/next/dist/bin/next build && exec node node_modules/next/dist/bin/next start -H 127.0.0.1 -p 13001',
-    url: 'http://127.0.0.1:13001/bff/health',
+    // 준비 판정 — BFF가 api까지 닿는 가벼운 읽기(실행 없음이면 { run: null })
+    url: 'http://127.0.0.1:13001/bff/runs/current',
     reuseExistingServer: false,
     timeout: 300_000,
     env: { API_BASE_URL },
