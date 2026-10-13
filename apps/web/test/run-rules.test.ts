@@ -5,19 +5,13 @@ import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import * as bffRuns from '../app/bff/runs/[[...path]]/route';
-import { RunControlView, type RunControlViewProps } from '../components/runs/run-control';
 import { RunProgressView, type RunProgressViewProps } from '../components/runs/run-progress';
-import { defaultParams, FLOW_PARAM_DEFS } from '../components/runs/run-spec';
 import { nextFailedAt, panelNow, tickOn } from '../components/runs/use-run';
 import { ApiError } from '../lib/api';
 import {
   currentRunQueryOptions,
-  flowProgress,
   formatElapsed,
-  headerLastRun,
   justEndedRunId,
-  lastRunText,
-  lastRunTip,
   liveElapsedMs,
   PANEL_IDLE,
   panelReducer,
@@ -244,7 +238,7 @@ describe('상태 칩과 종결 띠 — 한 줄 쉬운 말', () => {
   });
 });
 
-describe('지난 실행 자리 — 띠는 실행 중 · 방금 끝난 30초만 · 그 뒤 셸 머리 "지난번" 글자(web-ux-polish §2.1)', () => {
+describe('지난 실행 자리 — 띠는 실행 중 · 방금 끝난 30초만(web-ux-polish §2.1)', () => {
   it('방금 끝남 — 같은 실행이 running · stopping → 종결로 바뀐 응답만', () => {
     const done = completedFlow();
     expect(justEndedRunId(snap(flowRun()), snap(done), 'flow')).toBe(FLOW_ID);
@@ -256,35 +250,12 @@ describe('지난 실행 자리 — 띠는 실행 중 · 방금 끝난 30초만 �
     expect(justEndedRunId(snap(flowRun()), snap(null), 'flow')).toBeNull();
   });
 
-  it('띠와 머리 글자는 같은 실행을 동시에 말하지 않는다', () => {
+  it('띠는 진행 중이거나 방금 끝난 실행만 그린다', () => {
     const done = completedFlow();
     expect(stripShowsRun(flowRun(), null)).toBe(true);
     expect(stripShowsRun(done, FLOW_ID)).toBe(true);
     expect(stripShowsRun(done, null)).toBe(false);
     expect(stripShowsRun(null, FLOW_ID)).toBe(false);
-    expect(headerLastRun(done, null)).toBe(done);
-    expect(headerLastRun(done, FLOW_ID)).toBeNull();
-    expect(headerLastRun(flowRun(), null)).toBeNull();
-    for (const [run, id] of [
-      [flowRun(), null],
-      [done, FLOW_ID],
-      [done, null],
-    ] as const)
-      expect(stripShowsRun(run, id) && headerLastRun(run, id) !== null).toBe(false);
-  });
-
-  it('머리 글자 — 완료는 "완료"(보낸 시간은 범위에 있다) · 중단 · 실패는 상태 낱말', () => {
-    const flowDone = flowRun({ status: 'completed', endedAt: '2026-09-28T01:31:05.000Z', elapsedMs: 65_000 });
-    expect(lastRunText(flowDone)).toBe('지난번 초당 10,000개 · 60s · 완료');
-    expect(lastRunText(flowRun({ status: 'stopped', endedAt: '2026-09-28T01:30:50.000Z' }))).toBe(
-      '지난번 초당 10,000개 · 60s · 중단됨',
-    );
-    expect(lastRunText(flowRun({ status: 'failed', endedAt: '2026-09-28T01:30:17.400Z' }))).toBe(
-      '지난번 초당 10,000개 · 60s · 실패',
-    );
-    // 범위를 모르면 머리 낱말로
-    expect(lastRunText({ ...completedFlow(), params: {} })).toBe('지난번 보내 보기 · 완료');
-    expect(lastRunTip(flowDone)).toContain('완료 — 걸린 시간 1m 5.0s');
   });
 });
 
@@ -613,116 +584,6 @@ describe('시작 · 중단 요청 — 409 동기화 · 요청 실패 복귀', ()
 
 // ── 조작부 · 진행 띠 그리기(배치 — 머리 버튼 · 칩 · 팝오버 / 진행 띠 · 중단 · 띠 문구) ──
 
-const FLOW_INTRO =
-  '센서 데이터 · 업무 요청 · 조회 요청을 정한 양만큼 보내 봐요 — 결과는 흐름도가 바로 보여 줘요';
-
-describe('머리 조작부 — 버튼 · 상태 칩 · 팝오버(08_screen/08 §실행 패널 배치 · 버튼 상태)', () => {
-  const render = (over: Partial<RunControlViewProps>) =>
-    renderToStaticMarkup(
-      createElement(RunControlView, {
-        type: 'flow',
-        params: FLOW_PARAM_DEFS,
-        snapshot: snap(null),
-        pollFailed: false,
-        local: PANEL_IDLE,
-        chosen: defaultParams(FLOW_PARAM_DEFS),
-        buttonLabel: '직접 보내 보기',
-        intro: FLOW_INTRO,
-        onChoose: () => {},
-        onStart: () => undefined,
-        defaultOpen: true,
-        ...over,
-      }),
-    );
-
-  it('로딩 — "▶ 직접 보내 보기" 비활성 · 팝오버를 열지 않는다 · 칩 자리만 · aria-expanded 없음', () => {
-    const html = render({ snapshot: undefined });
-    expect(html).toContain('data-testid="run-control-flow"');
-    expect(html).toMatch(
-      /<button[^>]*disabled=""[^>]*><svg[^>]*>(?:<path[^>]*><\/path>)+<\/svg>직접 보내 보기<\/button>/,
-    );
-    expect(html).not.toContain('role="dialog"');
-    expect(html).toContain('data-testid="run-status-pending"');
-    expect(html).not.toContain('data-testid="run-status"');
-    expect(html).not.toContain('aria-expanded');
-  });
-
-  it('실행 없음 — 칩 없음 · 팝오버 안에 쉬운 설명 · 매개변수 쉬운 말 · 아직 안 보내 봄 문구 · 시작 활성', () => {
-    const html = render({});
-    expect(html).not.toContain('data-testid="run-status"');
-    expect(html).toContain(FLOW_INTRO);
-    for (const t of ['센서 데이터(초당)', '보내는 시간', '업무 요청(초당)', '조회 요청(초당)'])
-      expect(html).toContain(`>${t}<`);
-    for (const t of ['10,000', '60s', '1/s', '안 보냄']) expect(html).toContain(t);
-    expect(html).toContain('아직 보내 보지 않았어요(서버가 다시 켜지면 지난 결과는 사라져요)');
-    expect(html).not.toContain('run-large-warning');
-    expect(html).toMatch(
-      /<button type="button" class="[^"]*"><svg[^>]*>(?:<path[^>]*><\/path>)+<\/svg>시작<\/button>/,
-    );
-  });
-
-  it('진행 중 — 칩 "실행 중" · 시작 비활성 · 중단은 머리에 없다(진행 띠 오른쪽)', () => {
-    const html = render({ snapshot: snap(flowRun()) });
-    expect(html).toContain('실행 중');
-    // 칩 점 · 로딩 자리의 깜빡임은 움직임 줄이기 설정이면 멈춘다(R7)
-    expect(html).toContain('motion-safe:animate-pulse');
-    expect(html).not.toMatch(/(?<![\w:])animate-pulse/);
-    expect(render({ snapshot: undefined })).toContain('motion-safe:animate-pulse');
-    expect(html).toMatch(
-      /<button[^>]*disabled=""[^>]*><svg[^>]*>(?:<path[^>]*><\/path>)+<\/svg>시작<\/button>/,
-    );
-    expect(html).not.toContain('중단');
-  });
-
-  it('완료 — 종결 뒤에는 칩을 숨긴다(띠가 같은 말을 한다)', () => {
-    const html = render({ snapshot: snap(completedFlow()), recentEndId: FLOW_ID });
-    expect(html).not.toContain('data-testid="run-status"');
-    expect(html).not.toContain('bg-emerald-100');
-    // 방금 끝나 띠가 결말을 그리는 동안은 머리 "지난번" 글자를 쓰지 않는다(같은 말 두 곳 금지)
-    expect(html).not.toContain('data-testid="run-last"');
-    // 멈추는 중(stopping)은 아직 진행 중이라 칩이 남는다
-    expect(render({ snapshot: snap(flowRun({ status: 'stopping' })) })).toContain('>멈추는 중<');
-  });
-
-  it('지난 실행(띠가 접힌 뒤 · 이미 끝난 실행을 열었을 때) — 머리 버튼 왼쪽 작은 글자 "지난번 …" · 상세는 툴팁 · 키보드 · 낭독기로도 닿는다(R12)', () => {
-    const html = render({ snapshot: snap(completedFlow()), recentEndId: null, defaultOpen: false });
-    expect(html).toMatch(
-      /data-testid="run-last" title="[^"]*" tabindex="0" aria-describedby="[^"]+" class="[^"]*text-xs tabular-nums text-slate-500">지난번 초당 10,000개 · 60s · 완료<\/span><span id="[^"]+" class="sr-only">[^<]*<\/span><button/,
-    );
-    const tip = /data-testid="run-last" title="([^"]*)"/.exec(html)?.[1] ?? '';
-    const lines = [
-      '지난번 보내 보기',
-      '완료 — 걸린 시간 3m 12.4s',
-      '종료 10:23:17 KST',
-      '시작 10:20:05 KST',
-      'prepare done 0.4s',
-      'publish done 0.4s',
-      'drain done 0.4s',
-      '보낸 포인트 600,000 · 엔트리 3,000 · 명령 60 · 조회 0 · 백프레셔 정지 0',
-      '내 측정(참고용) — 라이브 실행 — 앱 경유 · 시연값 · 기록 정본 아님',
-    ];
-    expect(tip.split('\n')).toEqual(lines);
-    // 툴팁과 같은 상세를 sr-only 설명으로 — aria-describedby가 그 id를 가리킨다(키보드 초점 · 낭독기)
-    const described = /aria-describedby="([^"]+)"/.exec(html)?.[1] ?? '';
-    expect(html).toContain(`<span id="${described}" class="sr-only">${lines.join(' · ')}</span>`);
-    // 실패는 빨간 글자 · 진행 중 · 실행 없음이면 글자 없음
-    const failed = render({
-      snapshot: snap(
-        flowRun({
-          status: 'failed',
-          startedAt: EARLY_START,
-          endedAt: '2026-09-28T01:20:17.400Z',
-          elapsedMs: 12_400,
-        }),
-      ),
-      defaultOpen: false,
-    });
-    expect(failed).toMatch(/class="[^"]*text-red-700">지난번 초당 10,000개 · 60s · 실패</);
-    for (const r of [flowRun(), null])
-      expect(render({ snapshot: snap(r), defaultOpen: false })).not.toContain('data-testid="run-last"');
-  });
-});
-
 describe('진행 띠 한 줄 — 상태 · 지금 단계 쉬운 문장 · 진행 막대 · 경과 · 중단 · 종결 띠 · 띠 문구', () => {
   const render = (over: Partial<RunProgressViewProps>) =>
     renderToStaticMarkup(
@@ -742,19 +603,18 @@ describe('진행 띠 한 줄 — 상태 · 지금 단계 쉬운 문장 · 진행
     expect(render({ snapshot: undefined })).toBe('');
   });
 
-  it('진행 중 — 실행 중 · 쉬운 단계 문장(flow는 단계 n/m 대신 진행 막대) · 경과 틱 · 오른쪽 중단 활성 · 서랍 연결 없음', () => {
+  it('진행 중 — 실행 중 · 쉬운 단계 문장 · 단계 n/m · 경과 틱 · 오른쪽 중단 활성 · 서랍 연결 없음', () => {
     const html = render({ snapshot: snap(flowRun(), 1_000), now: 3_900 });
     expect(html).toContain('실행 중');
-    expect(html).toContain('<span data-testid="run-stage" class="text-slate-800">보내는 중</span>');
-    expect(html).not.toContain('단계 ');
+    expect(html).toContain(
+      '<span data-testid="run-stage" class="text-slate-800">보내는 중 · 단계 2/3</span>',
+    );
     // 단계 key · 시작 시각은 띠 툴팁에만(보이는 글자에는 없다)
     const visible = html.replace(/\stitle="[^"]*"/g, '');
     expect(visible).not.toContain('publish');
     expect(visible).not.toContain('KST');
     expect(html).toMatch(/title="시작 10:30:00 KST\nprepare done[^"]*publish running/);
     expect(html).toContain('경과 <span data-testid="run-elapsed">45s</span>'); // 42,570 + 2,900
-    expect(html).toContain('role="progressbar"');
-    expect(html).toContain('44s / 60s'); // publish 42,000 + 2,900
     expect(html).not.toContain('aria-expanded');
     expect(html).toMatch(
       /<button type="button" class="ml-auto[^"]*"><svg[^>]*>(?:<path[^>]*><\/path>)+<\/svg>중단<\/button>/,
@@ -786,7 +646,7 @@ describe('진행 띠 한 줄 — 상태 · 지금 단계 쉬운 문장 · 진행
     expect(html).not.toContain('중단</button>');
   });
 
-  it('30초가 지났거나 이미 끝난 실행을 열었다 — 띠 자체가 없다(셸 머리 "지난번" 글자가 같은 말을 한다)', () => {
+  it('30초가 지났거나 이미 끝난 실행을 열었다 — 띠 자체가 없다', () => {
     expect(render({ snapshot: snap(completedFlow()) })).toBe('');
     expect(render({ snapshot: snap(completedFlow()), recentEndId: 'other-run' })).toBe('');
     // 띠 문구(요청 사건)는 실행 줄과 따로 남는다
@@ -796,6 +656,14 @@ describe('진행 띠 한 줄 — 상태 · 지금 단계 쉬운 문장 · 진행
         local: { ...PANEL_IDLE, notice: { tone: 'neutral', text: VANISHED_TEXT } },
       }),
     ).not.toContain('data-testid="run-band"');
+  });
+
+  it('다른 종류 실행 — 보는 화면이 없는 flow(api로 시작)는 링크 없이 한 줄', () => {
+    const html = render({ type: 'compare', snapshot: snap(flowRun()) });
+    expect(html).toContain(
+      '<p data-testid="run-other" class="text-slate-600">다른 측정이 이미 돌고 있어요</p>',
+    );
+    expect(html).not.toContain('<a ');
   });
 
   it('요청 사건 · 폴링 실패 문구는 띠에 · 409 띠도 띠에', () => {
@@ -813,41 +681,7 @@ describe('진행 띠 한 줄 — 상태 · 지금 단계 쉬운 문장 · 진행
 
 // ── 종류별 조각 ──
 
-describe('flow 진행 막대', () => {
-  it('publish 경과 ÷ durationSec · 틱 · 넘으면 100%', () => {
-    const p = flowProgress(flowRun(), 1_000, 1_000);
-    expect(p).toMatchObject({
-      ratio: 0.7,
-      elapsedSec: 42,
-      durationSec: 60,
-      draining: false,
-      pointsSent: 420000,
-    });
-    expect(flowProgress(flowRun(), 1_000, 100_000)?.ratio).toBe(1);
-  });
-  it('드레인 중이면 막대를 채운 채 쉬운 문장', () => {
-    const r = flowRun({
-      steps: [
-        step('prepare', 'done'),
-        step('publish', 'done', { elapsedMs: 60_000, detail: { pointsSent: 600000 } }),
-        step('drain', 'running'),
-      ],
-    });
-    const html = renderToStaticMarkup(
-      createElement(RunProgressView, {
-        type: 'flow',
-        snapshot: snap(r, 0),
-        pollFailed: false,
-        local: PANEL_IDLE,
-        now: 0,
-        onStop: () => {},
-      }),
-    );
-    expect(html).toContain('aria-valuenow="100"');
-    expect(html).toContain('aria-label="보내는 중"');
-    expect(html).toContain('남은 데이터 처리 기다리는 중(최대 30s)');
-    expect(html).toContain('60s / 60s');
-  });
+describe('멈추는 중 — 한 줄 폭', () => {
   it('멈추는 중 + 드레인 — 단계 문장 · 진행 막대를 빼서 한 줄 폭 안에(띠 문장이 지금 일을 말한다)', () => {
     const r = flowRun({
       status: 'stopping',
