@@ -1,10 +1,11 @@
 'use client';
 // 좌측 내비 — 정본 docs/08_screen/01_standards.md §요청 경로와 공통 셸(레이아웃)
-// 구성(위→아래): 브랜드 + 접기 토글(헤더와 같은 높이) → 화면 2행(섹션 없는 평평한 목록 · 전 행 같은 글자 · 행 높이 · 아이콘) → 스택 표기.
-// 접힘(레일): 화면 아이콘만 · 현재 화면은 좌측 표지 · 이름은 title · 접힘은 이 브라우저에 저장.
+// 구성(위→아래): 브랜드 + 접기 토글(헤더와 같은 높이) → 섹션 4(작은 회색 머리 + 화면 행 · 전 행 같은 글자 · 행 높이 · 아이콘) → 스택 표기.
+// 메뉴 순서 = 발표 순서(lib/nav.ts NAV_SECTIONS · 정본 docs/08_screen/01_standards.md §요청 경로와 공통 셸).
+// 접힘(레일): 화면 아이콘만 · 섹션 사이는 가는 줄 · 현재 화면은 좌측 표지 · 이름은 title · 접힘은 이 브라우저에 저장.
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
-import { NAV, type NavItem, resolveNav } from '../../lib/nav';
+import { HOME_HREF, NAV_SECTIONS, type NavItem, resolveNav } from '../../lib/nav';
 import { cn } from '../../lib/utils';
 import { Icon } from './nav-icon';
 
@@ -60,9 +61,9 @@ export function Sidebar({
   return (
     <div className="flex h-full flex-col bg-sidebar">
       <div className="flex h-[var(--header-height)] shrink-0 items-center gap-2 border-b border-sidebar-line px-4">
-        <Link href="/performance" className="flex items-center gap-2 rounded-sm">
+        <Link href={HOME_HREF} className="flex items-center gap-2 rounded-sm">
           <Brand />
-          <span className="text-base font-semibold tracking-tight text-sidebar-fg-strong">db_study</span>
+          <span className="text-head font-semibold tracking-tight text-sidebar-fg-strong">db_study</span>
         </Link>
         <button
           type="button"
@@ -81,10 +82,15 @@ export function Sidebar({
         <nav
           id="shell-nav"
           aria-label="주 메뉴"
-          className="flex h-full flex-col gap-0.5 overflow-y-auto px-2 py-2"
+          className="flex h-full flex-col gap-2 overflow-y-auto px-2 py-2"
         >
-          {NAV.map((it) => (
-            <ScreenRow key={it.href} item={it} active={current?.href === it.href} />
+          {NAV_SECTIONS.map((sec) => (
+            <div key={sec.title} className="flex flex-col gap-0.5">
+              <p className="px-2.5 pt-1 pb-0.5 text-foot font-semibold text-sidebar-fg-muted">{sec.title}</p>
+              {sec.items.map((it) => (
+                <ScreenRow key={it.href} item={it} active={current?.href === it.href} />
+              ))}
+            </div>
           ))}
         </nav>
         {/* 아래가 더 있다는 표시 — 포인터를 통과시킨다 */}
@@ -94,7 +100,7 @@ export function Sidebar({
         />
       </div>
 
-      <div className="shrink-0 border-t border-sidebar-line px-4 py-3 text-xs leading-relaxed text-sidebar-fg-muted">
+      <div className="shrink-0 border-t border-sidebar-line px-4 py-3 text-foot text-sidebar-fg-muted">
         PLC 시계열 · 업무 데이터 실험실
         <br />
         PostgreSQL · ClickHouse · Redis
@@ -110,13 +116,13 @@ function ScreenRow({ item, active }: { item: NavItem; active: boolean }) {
       href={item.href}
       aria-current={active ? 'page' : undefined}
       className={cn(
-        'flex h-[var(--nav-item-height)] items-center gap-2 rounded-sm px-2.5 text-label font-medium transition-colors',
+        'flex h-[var(--nav-item-height)] items-center gap-2 rounded-sm px-2.5 text-note font-medium transition-colors',
         active
           ? 'bg-sidebar-active text-sidebar-active-fg'
           : 'text-sidebar-fg hover:bg-sidebar-hover hover:text-sidebar-fg-strong',
       )}
     >
-      <Icon name={item.icon} className="size-4 shrink-0" />
+      <Icon name={item.icon} className="size-[1.15em] shrink-0" />
       <span className="truncate">{item.label}</span>
     </Link>
   );
@@ -127,7 +133,7 @@ function Rail({ current, onExpand }: { current: ReturnType<typeof resolveNav>; o
   return (
     <div className="flex h-full w-full flex-col items-center gap-1 bg-sidebar pb-2">
       <div className="flex h-[var(--header-height)] w-full shrink-0 items-center justify-center border-b border-sidebar-line">
-        <Link href="/performance" aria-label="db_study 홈" className="rounded-sm p-1">
+        <Link href={HOME_HREF} aria-label="db_study 홈" className="rounded-sm p-1">
           <Brand />
         </Link>
       </div>
@@ -144,34 +150,41 @@ function Rail({ current, onExpand }: { current: ReturnType<typeof resolveNav>; o
       </button>
       <div aria-hidden className="my-1 h-px w-6 bg-sidebar-line" />
       <nav id="shell-nav" aria-label="주 메뉴" className="flex flex-col items-center gap-1">
-        {NAV.map((it) => {
-          const on = current?.href === it.href;
-          return (
-            <Link
-              key={it.href}
-              href={it.href}
-              aria-label={it.label}
-              title={it.label}
-              aria-current={on ? 'page' : undefined}
-              className={cn(
-                'relative inline-flex size-9 items-center justify-center rounded-sm transition-colors',
-                on
-                  ? 'bg-sidebar-hover text-sidebar-fg-strong'
-                  : 'text-sidebar-fg hover:bg-sidebar-hover hover:text-sidebar-fg-strong',
-              )}
-            >
-              {on ? (
-                <span
-                  aria-hidden
-                  className="absolute top-1/2 left-0 h-4 w-0.5 -translate-y-1/2 rounded-r bg-accent"
-                />
-              ) : null}
-              <Icon name={it.icon} className="size-4" />
-            </Link>
-          );
-        })}
+        {NAV_SECTIONS.map((sec, i) => (
+          <div key={sec.title} className="flex flex-col items-center gap-1">
+            {i > 0 ? <div aria-hidden className="my-0.5 h-px w-5 bg-sidebar-line" /> : null}
+            {sec.items.map((it) => (
+              <RailLink key={it.href} item={it} on={current?.href === it.href} />
+            ))}
+          </div>
+        ))}
       </nav>
     </div>
+  );
+}
+
+function RailLink({ item, on }: { item: NavItem; on: boolean }) {
+  return (
+    <Link
+      href={item.href}
+      aria-label={item.label}
+      title={item.label}
+      aria-current={on ? 'page' : undefined}
+      className={cn(
+        'relative inline-flex size-9 items-center justify-center rounded-sm transition-colors',
+        on
+          ? 'bg-sidebar-hover text-sidebar-fg-strong'
+          : 'text-sidebar-fg hover:bg-sidebar-hover hover:text-sidebar-fg-strong',
+      )}
+    >
+      {on ? (
+        <span
+          aria-hidden
+          className="absolute top-1/2 left-0 h-4 w-0.5 -translate-y-1/2 rounded-r bg-accent"
+        />
+      ) : null}
+      <Icon name={item.icon} className="size-4" />
+    </Link>
   );
 }
 

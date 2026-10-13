@@ -1,5 +1,5 @@
 // /monitoring 화면 문구 — 흐름도 노드 줄 · 숫자 4 · 왜 나눌까 카드 3 · 모아서 vs 하나씩 · 각주의 꺼진 길(그리기는 각 컴포넌트 · 좌표는 diagram-layout.ts)
-// 설계 .omc/plans/web-junior-redesign.md §3 · §4 용어표 — 쉬운 말 먼저 · 숫자는 적게 · 크게("8,838만 행" · "950MB") · 스위치 코드 · 키 이름은 화면에 쓰지 않는다.
+// 정본 docs/08_screen/08_evidence_screens.md §EXP-FLOW · docs/08_screen/01_standards.md §한 화면 원칙(용어표) — 쉬운 말 먼저 · 숫자는 적게 · 크게("8,838만 행" · "950MB") · 스위치 코드 · 키 이름은 화면에 쓰지 않는다.
 // 순수 함수라 test/flow-layout.test.ts가 최악의 값(6자리 초당 값 · 10억 행 누적)으로 노드 폭 안에 드는지 보고, test/flow.test.ts가 문구를 본다.
 // 노드 줄은 줄마다 종류(제목 · 역할 문장 · 숫자)를 스스로 갖는다 — 그리기 모양은 종류가 정한다(diagram-layout NodeLine · R16).
 import type {
@@ -84,10 +84,10 @@ export function koBytes(v: number | null | undefined): string {
   }
 }
 
-/** 간선 라벨 초당 값 — "9,681개/초" · 없으면 null(라벨을 그리지 않는다) */
+/** 간선 라벨 초당 값 — "9,681개/s" · 없으면 null(라벨을 그리지 않는다) */
 export function edgeRate(v: number | null | undefined, unit: string): string | null {
   if (v === null || v === undefined) return null;
-  return `${perSecText(v)}${unit}/초`;
+  return `${perSecText(v)}${unit}/s`;
 }
 
 export function sumOrNull(vals: readonly (number | null)[]): number | null {
@@ -98,19 +98,24 @@ export function sumOrNull(vals: readonly (number | null)[]): number | null {
 // ── 흐름도 노드 줄 ──
 
 /**
- * 발생원 노드 — 공장 센서 · 초당 몇 개(흐름 요약 최근 10초 — 대기줄 · 저장 노드 · 숫자 4와 같은 원천 · 같은 창).
+ * 발생원 노드 — 카드 라인 설비 30대(가상 PLC) + 직접 보내 보기(시연 설비) · 초당 몇 개(흐름 요약 최근 10초 — 대기줄 · 저장 노드 · 숫자 4와 같은 원천 · 같은 창).
  * 메트릭의 보낸 쪽 계수(5초 차분)는 창 · 원천이 달라 같은 줄에 두면 "보낸 수 ≠ 저장 수"로 읽힌다 — 노드 툴팁(sourceTip)에만 둔다(리드 확인 2026-10-03).
  */
 export function sourceLines(rows: number | null): NodeLine[] {
-  return [title('공장 센서'), num(`초당 ${perSecText(rows)}개 보냄`)];
+  // 초당 수는 대기줄에 들어온 전체 — 설비 가동(카드 라인)과 직접 보내 보기(시연 설비) 몫이 함께 든다(몫은 툴팁)
+  return [
+    title('카드 라인 설비 30대'),
+    role('+ 직접 보내 보기 시연'),
+    num(`초당 ${perSecText(rows)}개 보냄`),
+  ];
 }
 
 /** 발생원 노드 툴팁 — 보낸 쪽 계수(메트릭) · 직접 보내 보기 몫 · 숫자 기준 */
 export function sourceTip(pps: number | null, mr: FlowMetricRates | null): string {
   const run = mr?.genPpsByMode.run ?? null;
   return [
-    '화면의 초당 숫자는 모두 최근 10초 흐름 요약 기준이에요',
-    `보낸 쪽 계수(메트릭 5초 차분) 초당 ${perSecText(pps)}개`,
+    '화면의 초당 숫자는 모두 최근 10s 흐름 요약 기준이에요',
+    `보낸 쪽 계수(메트릭 5s 차분) 초당 ${perSecText(pps)}개`,
     run !== null && run > 0 ? `그중 직접 보내 보기 몫 초당 ${perSecText(run)}개` : null,
   ]
     .filter((x): x is string => x !== null)
@@ -139,12 +144,12 @@ export function streamLines(lag: number | null, off: boolean): NodeLine[] {
 }
 
 /**
- * ② 지금 값 · 알람 상태 — 모아서 저장이 초당 고치는 개수(흐름 요약 latestWrites) · 수집기 모드면 그 사실.
+ * ② 지금 값 — 모아서 저장이 초당 고치는 개수(흐름 요약 latestWrites) · 수집기 모드면 그 사실.
  * 한 묶음 안에 같은 태그 값이 여러 번 와도 태그마다 가장 최신 값 1개만 고친다(writeLatestIfNewer) — 그래서 센서 초당 행 수보다 작을 수 있다.
  */
 export function latestLines(r: FlowRates | null, f: Pick<FlowSwitchFlags, 'collectorLatest'>): NodeLine[] {
   return [
-    title('② 지금 값 · 알람 상태'),
+    title('② 지금 값'),
     role('태그마다 가장 최신 값 1개만'),
     f.collectorLatest ? role('센서 수집기가 직접 고쳐요') : num(`초당 ${perSecText(r?.latestWrites)}개 고침`),
   ];
@@ -196,7 +201,7 @@ export function readSrcLines(rr: ReadRates | null): NodeLine[] {
 /** 조회 요청 노드 툴팁 — 숫자의 뜻 · 단위 · 지금 값이 돌려준 점 수(요청 수와 헷갈리지 않게 여기만) */
 export function readSrcTip(rr: ReadRates | null): string {
   return [
-    '초당 건수 = 센서 시계열 + 센서 지금 값 + 업무 목록(설비 목록) 조회 요청 — 숫자는 메트릭 5초 차분',
+    '초당 건수 = 센서 시계열 + 센서 지금 값 + 업무 목록(설비 목록) 조회 요청 — 숫자는 메트릭 5s 차분',
     '조회는 처리기(워커)를 거치지 않아요 — api가 직접 Redis를 먼저 봐요',
     rr && rr.latestPoints !== null && rr.latestPoints > 0
       ? `지금 값 조회가 돌려준 점 초당 ${perSecText(rr.latestPoints)}개(요청 수가 아니에요)`
@@ -290,7 +295,7 @@ function rowsSoFar(v: number | null, approx: boolean): string {
 
 /**
  * DB 노드 2의 줄 — 무엇을 · 초당 몇 개 · 지금까지 몇 행 · 크기(설계 §3 흐름도) · Redis는 기둥(§8 — latestLines · pillarFootText).
- * PostgreSQL은 "무엇을"을 초당 줄에 붙인다(알람 기록 초당 · 업무 기록 초당) — 오른쪽에 조회 선 통로를 두느라 ClickHouse보다 좁다(diagram-layout 배치 근거 ⑧).
+ * PostgreSQL은 "무엇을"을 초당 줄에 붙인다(업무 기록 초당) — 오른쪽에 조회 선 통로를 두느라 ClickHouse보다 좁다(diagram-layout 배치 근거 ⑧).
  */
 export function storeLines(r: FlowRates | null, m: FlowMetrics | null): Record<'ch' | 'pg', NodeLine[]> {
   const chT = Object.values(m?.clickhouse.tables ?? {});
@@ -307,7 +312,6 @@ export function storeLines(r: FlowRates | null, m: FlowMetrics | null): Record<'
     ],
     pg: [
       title('PostgreSQL'),
-      num(`알람 기록 초당 ${perSecText(r?.transitions)}건`),
       num(`업무 기록 초당 ${perSecText(r?.applied)}건`),
       num(`지금까지 ${rowsSoFar(sumOrNull(pgT.map((t) => t.liveTuples)), true)} · ${koBytes(pgSize)}`),
     ],
@@ -329,20 +333,20 @@ export interface Headline {
   tip?: string;
 }
 
-/** e2e 지연(초) — 10초 미만은 소수 1자리 · 그 위는 정수(반올림 뒤 자릿수 — 9.96초는 "10") */
+/** e2e 지연(s) — 10s 미만은 소수 1자리 · 그 위는 정수(반올림 뒤 자릿수 — 9.96s는 "10") */
 function secText(v: number): string {
   const r1 = Math.round(v * 10) / 10;
   return r1 >= 10 ? Math.round(v).toLocaleString('ko-KR') : r1.toFixed(1);
 }
 
 /**
- * 숫자 4 "측정 → 저장까지" 큰 숫자 · 단위 — 60초 미만은 "0.6" + "초" 그대로 · 60초 이상은 사람이 읽는 시간 "46분 28초" 한 덩어리(단위 칸 없음 · §9 P3).
- * 경계는 보이는 정수 초로 정한다 — 59.5초 이상이면 secText가 "60"을 낼 자리라 "1분 0초"로 넘긴다("60 초"가 나오지 않는다).
+ * 숫자 4 "측정 → 저장까지" 큰 숫자 · 단위 — 60s 미만은 "0.6" + "s" 그대로 · 60s 이상은 사람이 읽는 시간 "46m 28s" 한 덩어리(단위 칸 없음 · §9 P3).
+ * 경계는 보이는 정수 초로 정한다 — 59.5초 이상이면 secText가 "60"을 낼 자리라 "1m 0s"로 넘긴다("60 s"가 나오지 않는다).
  */
 export function latencyValue(sec: number): { value: string; unit: string } {
   return Math.round(sec) >= 60
     ? { value: durationText(Math.round(sec) * 1000), unit: '' }
-    : { value: secText(sec), unit: '초' };
+    : { value: secText(sec), unit: 's' };
 }
 
 /**
@@ -351,7 +355,7 @@ export function latencyValue(sec: number): { value: string; unit: string } {
  *   백프레셔면 주황 "처리가 밀리는 중" · 업무 대기줄이 밀리면 "업무 N건"을 덧붙인다(더하지 않는다 · 다른 대기줄의 수다).
  * 측정 → 저장까지: e2e_latency_rows가 0이면 게이지가 빈 것이라 "—"(가짜 0.0초 금지) · 60초 이상은 "46분 28초"(latencyValue).
  * 업무 요청: 0이면 "업무 요청이 없어요" · 거절 · 저장 못 함 · 시간 초과 초당은 0이 아닐 때 툴팁에.
- * 센서 · 측정 → 저장 · 업무 요청의 문장은 큰 숫자(28px) 옆에 잘리지 않는 짧은 고정 문장이다(.omc/plans/web-ux-polish.md §2.3) — 뜻은 이름 · 단위와 함께 읽힌다.
+ * 센서 · 측정 → 저장 · 업무 요청의 문장은 큰 숫자(28px) 옆에 잘리지 않는 짧은 고정 문장이다(docs/08_screen/01_standards.md §글자와 화면 표면) — 뜻은 이름 · 단위와 함께 읽힌다.
  */
 export function headlines(p: {
   rates: FlowRates | null;
@@ -390,7 +394,7 @@ export function headlines(p: {
       key: 'sensor',
       label: '센서 데이터',
       value: perSecText(r?.rows),
-      unit: '개/초',
+      unit: '개/s',
       text: '초당 들어오는 양',
     },
     {
@@ -404,7 +408,7 @@ export function headlines(p: {
     {
       key: 'latency',
       label: '측정 → 저장까지',
-      ...(noE2e ? { value: '—', unit: '초' } : latencyValue(e2eP50)),
+      ...(noE2e ? { value: '—', unit: 's' } : latencyValue(e2eP50)),
       text: noE2e ? '아직 잰 값이 없어요' : '보통 걸리는 시간',
       tip: noE2e ? undefined : '측정 시각에서 저장 시각까지의 중간값이에요',
     },
@@ -412,7 +416,7 @@ export function headlines(p: {
       key: 'biz',
       label: '업무 요청',
       value: perSecText(r?.commands),
-      unit: '건/초',
+      unit: '건/s',
       text: r?.commands === 0 ? '업무 요청이 없어요' : '하나씩 순서대로 처리',
       tip: bizTip || undefined,
     },
@@ -450,7 +454,7 @@ export function whyCards(r: FlowRates | null, f: Pick<FlowSwitchFlags, 'collecto
       store: 'pg',
       name: 'PostgreSQL',
       why: '틀리면 안 되는 기록을 전부 되거나 전부 안 되게 지켜요',
-      now: `지금 초당 알람 ${perSecText(r?.transitions)}건 · 업무 ${perSecText(r?.applied)}건`,
+      now: `지금 초당 업무 ${perSecText(r?.applied)}건`,
     },
   ];
 }
@@ -475,7 +479,7 @@ export const NO_BIZ_TEXT = '업무 요청이 없어요 — 오른쪽 위 버튼�
 
 /**
  * 막대 2 — 센서 1묶음(최근 20묶음 평균 · 묶음당 평균 개수) · 업무 1건(최근 20건 평균).
- * 막대 · 큰 숫자 = 처리 시간(대기 단계 빼고 — 센서 스트림 대기 · 업무 대기) · 대기는 waitLine 한 줄(.omc/plans/web-ux-polish.md §7.1 R17).
+ * 막대 · 큰 숫자 = 처리 시간(대기 단계 빼고 — 센서 스트림 대기 · 업무 대기) · 대기는 waitLine 한 줄(docs/08_screen/08_evidence_screens.md §EXP-FLOW §요소).
  */
 export function compareBars(
   batch: { stages: StageAvg<BatchStageKey>[]; total: number | null; n: number },
@@ -523,17 +527,22 @@ export function waitLine(bars: readonly CompareBar[]): string | null {
 export function offPaths(f: FlowSwitchFlags): string[] {
   return [
     f.streamOff ? '센서 대기줄' : null,
-    f.controlCopyOff ? 'PostgreSQL 비교용 사본' : null,
+    // gated(SW-09 기본)는 꺼진 길이 아니다 — 직접 비교 실험 중에만 싣는다(각주 GATED_COPY_NOTE)
+    f.controlCopyOff && !f.controlCopyGated ? 'PostgreSQL 비교용 사본' : null,
     f.collectorLatest ? '처리기 → Redis 지금 값(수집기가 대신 씀)' : null,
     f.bizDirect ? '업무 대기줄' : null,
   ].filter((x): x is string => x !== null);
 }
 
-/** 각주 한 줄 — 점 속도 · 숫자의 뜻 · 지금 꺼진 길(흐름도에는 그리지 않는다) */
-export function footnoteText(off: readonly string[]): string {
+/** SW-09 gated — PostgreSQL 비교 사본 길은 직접 비교 실험(⑤)이 넣는 동안에만 보인다 */
+export const GATED_COPY_NOTE = 'PostgreSQL 비교 사본 길은 직접 비교 실험 중에만 보여요';
+
+/** 각주 한 줄 — 점 속도 · 숫자의 뜻 · 지금 꺼진 길(흐름도에는 그리지 않는다) · 비교 실험 중에만 보이는 길 */
+export function footnoteText(off: readonly string[], gatedCopyHidden = false): string {
   return [
-    '점은 보기 좋게 느리게 움직여요(조회는 점 없이 숫자로만) · 숫자는 실제 값(최근 10초 평균 · 조회는 5초 · 지연은 중간값)',
+    '점은 보기 좋게 느리게 움직여요(조회는 점 없이 숫자로만) · 숫자는 실제 값(최근 10s 평균 · 조회는 5s · 지연은 중간값)',
     off.length > 0 ? `지금 꺼진 길: ${off.join(' · ')}` : null,
+    gatedCopyHidden ? GATED_COPY_NOTE : null,
     '관찰용 화면이에요(기록 아님)',
   ]
     .filter((x): x is string => x !== null)

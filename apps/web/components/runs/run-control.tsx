@@ -1,8 +1,8 @@
 'use client';
-// 실행 조작부 머리 — "지난번 …" 작은 글자 · "{재생 아이콘} {buttonLabel}" 버튼 · 상태 칩 (셸 머리 동작 자리에 놓는다) → 매개변수 팝오버(쉬운 설명 · 매개변수 · 시작 · 큰 규모 경고 · 다른 실행 링크 · 역할 안내 · 아직 안 재 봄)
-// "지난번" 글자는 진행 띠가 종결 실행을 그리지 않을 때만(종결 뒤 30초가 지났거나 이미 끝난 실행을 열었을 때 — .omc/plans/web-ux-polish.md §2.1) · 상세는 툴팁.
+// 실행 조작부 머리 — "지난번 …" 작은 글자 · "{재생 아이콘} {buttonLabel}" 버튼 · 상태 칩 (셸 머리 동작 자리에 놓는다) → 매개변수 팝오버(쉬운 설명 · 매개변수 · 시작 · 선택지 경고 · 다른 실행 링크 · 아직 안 해 봄)
+// "지난번" 글자는 진행 띠가 종결 실행을 그리지 않을 때만(종결 뒤 30초가 지났거나 이미 끝난 실행을 열었을 때 — docs/08_screen/08_evidence_screens.md §실행 패널 §상태 칩과 종결 표시) · 상세는 툴팁.
 // 중단 · 요청 사건 띠(409 · 404 · 요청 실패 · 폴링 실패)는 진행 띠(RunProgress)가 갖는다 — 정본 docs/08_screen/08_evidence_screens.md §실행 패널 — 두 화면 공통 규칙 §배치.
-// 상태 · 폴링 · 경과 · 409 · 404 · 권한은 RunProvider(useRunPanel) · 버튼 상태 규칙은 lib/runs.ts(runControls)를 그대로 쓴다.
+// 상태 · 폴링 · 경과 · 409 · 404는 RunProvider(useRunPanel) · 버튼 상태 규칙은 lib/runs.ts(runControls)를 그대로 쓴다.
 import Link from 'next/link';
 import { useEffect, useId, useRef, useState } from 'react';
 import {
@@ -34,18 +34,16 @@ const CHIP: Record<'running' | 'stopping', string> = {
 };
 
 export interface RunControlProps {
-  /** 매개변수 정의 — run-spec.ts의 PERF_PARAM_DEFS · FLOW_PARAM_DEFS */
+  /** 매개변수 정의 — run-spec.ts의 FLOW_PARAM_DEFS 등 */
   params: readonly RunParamDef[];
-  /** 머리 버튼 글자(재생 아이콘은 조각이 붙인다) — 화면마다 쉬운 말("내 컴퓨터에서 직접 재 보기") */
+  /** 머리 버튼 글자(재생 아이콘은 조각이 붙인다) — 화면마다 쉬운 말("직접 보내 보기") */
   buttonLabel: string;
   /** 팝오버 맨 위 쉬운 설명 한 줄 — 무엇을 하고 결과가 어디에 나오는지 */
   intro?: string;
-  /** S7 ② 뒤 ENGINEER · ADMIN — 인증 도입 전에는 무인증이라 true */
-  canControl?: boolean;
   className?: string;
 }
 
-export function RunControl({ params, buttonLabel, intro, canControl = true, className }: RunControlProps) {
+export function RunControl({ params, buttonLabel, intro, className }: RunControlProps) {
   const { type, snapshot, pollFailed, local, start, recentEndId } = useRunContext();
   const [chosen, setChosen] = useState<Record<string, number>>(() => defaultParams(params));
   return (
@@ -58,7 +56,6 @@ export function RunControl({ params, buttonLabel, intro, canControl = true, clas
       pollFailed={pollFailed}
       local={local}
       recentEndId={recentEndId}
-      canControl={canControl}
       chosen={chosen}
       onChoose={(k, v) => setChosen((p) => ({ ...p, [k]: v }))}
       onStart={() => start(buildRunParams(params, chosen))}
@@ -120,7 +117,6 @@ export function RunControlView(p: RunControlViewProps) {
     snapshot,
     starting: local.starting,
     stopRequested: local.stopRequested,
-    canControl: p.canControl ?? true,
   });
   const ready = snapshot !== undefined;
   const run = panelRun(snapshot, type);

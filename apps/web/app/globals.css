@@ -1,5 +1,10 @@
 @import "tailwindcss";
 
+/* 반응형 규칙(정본 docs/08_screen/01_standards.md §반응형 규칙) — 1280×720 ~ 2560×1440은 페이지 스크롤 0("맞춤 보기").
+   fit: = 맞춤 보기(가로 1280 이상 · 세로 720 이상) — 화면 틀이 본문 높이에 꼭 맞고 덩어리가 칸으로 나뉜다.
+   그보다 작으면 fit:이 꺼져 한 줄로 쌓고 본문만 세로로 스크롤한다(가로 스크롤은 어디서도 없다). */
+@custom-variant fit (@media (min-width: 80rem) and (min-height: 45rem));
+
 /* 셸 색 · 치수 토큰 — 사이드바는 시맨틱 이름으로만 칠한다(원시 색을 컴포넌트에 직접 쓰지 않는다)
    값은 밝은 중립 사이드바 + 파랑 강조(대비 실측: sidebar-fg #333d4d · 사이드바 바탕 위 10.5:1 · 강조 fg #1d4ed8 · 강조 바탕 위 6.2:1 · muted #636e7e · 사이드바 바탕 4.9:1 · canvas 4.7:1) */
 @theme {
@@ -13,12 +18,30 @@
     sans-serif
   );
 
-  /* 글자 단계(rem 고정) 12 · 13 · 14 · 16 · 20 · 28 — 화면 안 최소 12px(.omc/plans/web-ux-polish.md §2.1)
+  /* 글자 단계(rem 고정) 12 · 13 · 14 · 16 · 20 · 28 — 화면 안 최소 12px(docs/08_screen/01_standards.md §글자와 화면 표면)
      xs 12 · sm 14 · base 16 · xl 20은 Tailwind 기본값을 그대로 쓰고, 빠진 두 단계만 더한다 */
   --text-label: 0.8125rem; /* 13 — 그림 머리 · 축 머리 · "왜?" 줄 */
   --text-label--line-height: 1.125rem;
   --text-answer: 1.75rem; /* 28 — 결론 숫자 */
   --text-answer--line-height: 2rem;
+
+  /* 늘고 주는 글자 단계 — 화면 크기 S = min(가로, 세로 × 16/9)가 1280 → 2560일 때 왼쪽 값 → 오른쪽 값(바닥 12px · 그 밖은 고정).
+     --fs(아래 :root)는 S가 1280일 때 0px · 2560일 때 1px인 길이라 "N * var(--fs)"가 0 → Npx로 는다.
+     foot 12→15 각주 · 축 · note 13→16 보조 글 · body 14→18 본문 · head 16→22 칸 제목 · title 20→30 화면 제목 · big 26→40 큰 숫자 · hero 34→56 한 화면 대표 숫자 */
+  --text-foot: clamp(0.75rem, calc(0.75rem + 3 * var(--fs)), 0.9375rem);
+  --text-foot--line-height: 1.4;
+  --text-note: clamp(0.8125rem, calc(0.8125rem + 3 * var(--fs)), 1rem);
+  --text-note--line-height: 1.4;
+  --text-body: clamp(0.875rem, calc(0.875rem + 4 * var(--fs)), 1.125rem);
+  --text-body--line-height: 1.45;
+  --text-head: clamp(1rem, calc(1rem + 6 * var(--fs)), 1.375rem);
+  --text-head--line-height: 1.35;
+  --text-title: clamp(1.25rem, calc(1.25rem + 10 * var(--fs)), 1.875rem);
+  --text-title--line-height: 1.3;
+  --text-big: clamp(1.625rem, calc(1.625rem + 14 * var(--fs)), 2.5rem);
+  --text-big--line-height: 1.15;
+  --text-hero: clamp(2.125rem, calc(2.125rem + 22 * var(--fs)), 3.5rem);
+  --text-hero--line-height: 1.1;
 
   --color-canvas: #f1f4f7;
   --color-surface: #ffffff;
@@ -48,9 +71,16 @@
 }
 
 :root {
-  --header-height: 56px;
-  --nav-item-height: 34px;
-  --sidebar-width: 248px;
+  /* 화면 크기 비율 — S = min(100vw, 177.78vh)가 1280px이면 0px · 2560px이면 1px(그 밖은 각 토큰의 clamp가 막는다) */
+  --fs: calc((min(100vw, 177.78vh) - 1280px) / 1280);
+  /* 머리 높이 44 → 64 · 본문 바깥 여백 12 → 20(상한 20 — /monitoring 틀이 100dvh − 머리 − 40을 쓴다) · 칸 사이 8 → 20 · 칸 안 여백 10 → 24 */
+  --header-height: clamp(44px, calc(44px + 20 * var(--fs)), 64px);
+  --shell-pad: clamp(12px, calc(12px + 8 * var(--fs)), 20px);
+  --gap: clamp(8px, calc(8px + 12 * var(--fs)), 20px);
+  --pad: clamp(10px, calc(10px + 14 * var(--fs)), 24px);
+  /* 내비 — 행 높이 34 → 44 · 폭 248 → 320(넓은 화면에서 글자 토큰과 같이 는다) */
+  --nav-item-height: clamp(34px, calc(34px + 10 * var(--fs)), 44px);
+  --sidebar-width: clamp(248px, calc(248px + 72 * var(--fs)), 320px);
   --sidebar-rail-width: 56px;
   /* 스크롤 막대 — 중립 선 색(브라우저 기본 회색 대신 화면 색에서) */
   scrollbar-color: #c3cad5 transparent;
@@ -64,7 +94,7 @@ body {
   /* 고정 폭 숫자(tabular-nums)는 숫자 자리에만 클래스로 — 본문에 걸면 Pretendard '1'이 넓어져 "센서 1개"의 1 둘레가 벌어진다 */
 }
 
-/* 브라우저 표면 — 선택 · 포커스 · 밑줄 · 커서도 화면 색에서(.omc/plans/web-ux-polish.md §2.1) */
+/* 브라우저 표면 — 선택 · 포커스 · 밑줄 · 커서도 화면 색에서(docs/08_screen/01_standards.md §글자와 화면 표면) */
 ::selection {
   background-color: var(--color-accent-soft);
   color: inherit;

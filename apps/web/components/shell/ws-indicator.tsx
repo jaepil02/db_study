@@ -1,6 +1,6 @@
 'use client';
 // 실시간 연결 표지 — 셸이 /monitoring에서만 그린다(08_screen/01 §요청 경로와 공통 셸 WS 표지 행).
-// 연결 · 흐름 구독 상태를 쉬운 말 한 점 · 한 문구로 보인다(설계 .omc/plans/web-junior-redesign.md §4 — "● 실시간 연결됨 · 마지막 데이터 0.4초 전").
+// 연결 · 흐름 구독 상태를 쉬운 말 한 점 · 한 문구로 보인다(docs/08_screen/01_standards.md §한 화면 원칙 용어표 — "● 실시간 연결됨 · 마지막 데이터 0.4초 전").
 // 화면은 statusSlot에 덧붙일 문구(마지막 데이터 나이)를 넣는다. 종료 코드 · 프로토콜 이름은 툴팁(tip)에만 둔다.
 import { type Ref, useEffect, useState } from 'react';
 import { type ConnStatus, type FlowSubState, useConnectionStore } from '../../lib/realtime-socket';
@@ -32,9 +32,7 @@ export function wsLabel(
       return {
         dot: 'bg-amber-400',
         label:
-          sec === null || sec === 0
-            ? '연결이 끊겨 다시 연결하는 중'
-            : `연결이 끊겨 ${sec}초 뒤 다시 연결해요`,
+          sec === null || sec === 0 ? '연결이 끊겨 다시 연결하는 중' : `연결이 끊겨 ${sec}s 뒤 다시 연결해요`,
         tip: `${BASE_TIP}${lastCloseCode === null ? '' : ` · 종료 코드 ${lastCloseCode}`}`,
       };
     }
@@ -54,7 +52,6 @@ export function wsLabel(
 const CLOSE_REASON: Record<number, string> = {
   4403: '허용되지 않은 주소에서 접속했어요',
   4400: '서버가 받을 수 없는 메시지였어요',
-  4401: '로그인이 필요해요',
 };
 
 /** 끊김 문구 — "연결이 끊겼어요 — 허용되지 않은 주소에서 접속했어요" · 사유를 모르면 "연결이 끊겼어요" */

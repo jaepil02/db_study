@@ -1,26 +1,22 @@
-// 글자 바닥 — 화면 안 최소 12px · 글자 단계 12 · 13 · 14 · 16 · 20 · 28만(.omc/plans/web-ux-polish.md §2.1 · §3)
-// 대상: 성능 비교 · 모니터링(components/experiments/flow — §7.1 R14) · 셸 · 실행 패널 · 공통 조각 · app. 흐름도 SVG 배율을 곱한 실제 크기는 test/flow-layout이 따로 본다.
-// ① 소스 — 임의 px 글자 크기(text-[11px] 등) · 단계 밖 Tailwind 크기(text-lg · text-2xl …) · 12 미만 fontSize(SVG · 캔버스 옵션) 금지 ·
+// 글자 바닥 — 화면 안 최소 12px · 글자 단계 12 · 13 · 14 · 16 · 20 · 28만(docs/08_screen/01_standards.md §글자와 화면 표면)
+// 대상: 모니터링(components/experiments/flow — §7.1 R14) · 차트 래퍼 · 셸 · 실행 패널 · 공통 조각 · app. 흐름도 SVG 배율을 곱한 실제 크기는 test/flow-layout이 따로 본다.
+// 늘고 주는 글자 토큰(text-foot · note · body · head · title · big · hero — app/globals.css)은 clamp 바닥이 12px 이상이라 단계 밖 크기 검사에 걸리지 않는다(아래 "글자 토큰 바닥" 시험).
+// 소스 — 임의 px 글자 크기(text-[11px] 등) · 단계 밖 Tailwind 크기(text-lg · text-2xl …) · 12 미만 fontSize(SVG · 캔버스 옵션) 금지 ·
 //    1px 넘는 테두리(Tailwind 단계 border-2 · border-l-4 · 임의 값 border-[3px] · 인라인 style borderWidth · borderLeft: '4px …' · CSS border: 2px) 금지(craft floor)
-// ② 그림 2 차트 옵션 — 실제로 내려가는 모든 fontSize가 12 이상(캔버스는 CSS 배율이 없어 옵션 값이 곧 화면 px)
-// ③ 왜? ① 그림 SVG — viewBox가 실제 픽셀과 1:1이라 fontSize 12가 화면에서도 12px
-// ④ 넓고 높은 화면 변형(perf/roomy.ts — 가로 ≥ 1680 · 세로 ≥ 1000) — 글자는 단계 안에서 한 단계씩만 커진다(§9 P1)
 import { readdirSync, readFileSync, statSync } from 'node:fs';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { curveOption } from '../components/experiments/perf/options';
-import { ROOMY, ROOMY_MEDIA } from '../components/experiments/perf/roomy';
-import { curveLines, findRange, readPerf } from '../lib/perf';
 
 const ROOT = path.resolve(__dirname, '..');
 const TARGETS = [
-  'components/experiments/perf',
   'components/experiments/flow',
   'components/experiments/echart.tsx',
-  'components/experiments/evidence.tsx',
   'components/shell',
   'components/runs',
   'components/ui',
+  'components/lab',
+  'components/hmi',
+  'components/controls',
   'app',
 ];
 
@@ -78,12 +74,12 @@ describe('글자 바닥 — 소스', () => {
   it('대상 파일을 실제로 읽었다', () => {
     expect(SOURCES.map((s) => s.name)).toEqual(
       expect.arrayContaining([
-        'components/experiments/perf/sensor-column.tsx',
-        'components/experiments/perf/business-column.tsx',
+        'components/experiments/echart.tsx',
         'components/experiments/flow/flow-screen.tsx',
         'components/experiments/flow/flow-diagram.tsx',
         'components/shell/sidebar.tsx',
         'components/runs/run-progress.tsx',
+        'components/lab/lab-screen.tsx',
         'app/layout.tsx',
       ]),
     );
@@ -112,6 +108,16 @@ describe('글자 바닥 — 소스', () => {
     expect(bad).toEqual([]);
   });
 
+  it('글자 토큰 바닥 — globals.css의 늘고 주는 글자 토큰은 clamp 바닥이 12px(0.75rem) 이상', () => {
+    const css = SOURCES.find((s) => s.name === 'app/globals.css')?.text ?? '';
+    const tokens = [...css.matchAll(/--text-([a-z]+):\s*clamp\(([\d.]+)rem/g)].map((m) => [
+      m[1],
+      Number(m[2]) * 16,
+    ]);
+    expect(tokens.map((t) => t[0])).toEqual(['foot', 'note', 'body', 'head', 'title', 'big', 'hero']);
+    expect(tokens.filter((t) => (t[1] as number) < 12)).toEqual([]);
+  });
+
   it('금지 패턴 — 1px 넘는 테두리 없음(단계 · 임의 값 · 인라인 style · CSS)', () => {
     expect(SOURCES.flatMap((s) => wideBorders(s.text).map((m) => `${s.name}: ${m}`))).toEqual([]);
   });
@@ -135,89 +141,5 @@ describe('글자 바닥 — 소스', () => {
     ];
     expect(samples.filter((t) => wideBorders(t).length === 0)).toEqual([]);
     expect(ok.flatMap(wideBorders)).toEqual([]);
-  });
-});
-
-describe('글자 바닥 — 그림 2 차트 옵션(실제 값)', () => {
-  const DIR = path.join(__dirname, 'fixtures', 'real');
-  const view = readPerf(
-    readdirSync(DIR)
-      .filter((n) => n.endsWith('.md'))
-      .map((name) => ({ name, text: readFileSync(path.join(DIR, name), 'utf8') })),
-  );
-
-  /** 옵션 트리 안 모든 fontSize */
-  function sizes(o: unknown, out: number[] = []): number[] {
-    if (Array.isArray(o)) for (const x of o) sizes(x, out);
-    else if (o && typeof o === 'object')
-      for (const [k, v] of Object.entries(o)) {
-        if (k === 'fontSize' && typeof v === 'number') out.push(v);
-        else sizes(v, out);
-      }
-    return out;
-  }
-
-  it('범례(모양 범례 — 속 빈 점 · 삼각형 항목 포함) · 축 이름 · 눈금 · 역전 표지 모두 12px 이상 · 축 이름에 "눈금마다 10배"', () => {
-    // 10^8 점 하나를 결과 불일치로(메모리에서만) — 삼각형 범례까지 그려지게
-    const lines = curveLines(view.points, 'Q2', 'warm')
-      .filter((l) => l.key !== 'I1')
-      .map((l) => ({
-        ...l,
-        points: l.points.map((p) => (Math.abs(p.exponent - 8) < 1e-6 ? { ...p, resultMatch: false } : p)),
-      }));
-    const opt = curveOption({
-      lines,
-      range: findRange(view.ranges, 'Q2', 'warm', 'I2'),
-      live: { ch: [], pg: [] },
-      undetermined: [7],
-    }) as unknown as {
-      yAxis: { name: string };
-      legend: { left?: number; right?: number; top: number; data: unknown[] }[];
-    };
-    const all = sizes(opt);
-    expect(all.length).toBeGreaterThanOrEqual(6);
-    expect(Math.min(...all)).toBeGreaterThanOrEqual(12);
-    expect(opt.yAxis.name).toBe('걸린 시간(밀리초) · 눈금마다 10배');
-    // 색 범례는 그림 위 왼쪽(기준선과 겹치지 않게 — 세로 축 이름은 그 아래 줄) · 모양 범례는 둘째 줄 오른쪽
-    expect(opt.legend[0]).toMatchObject({ left: 0, top: 0 });
-    expect(opt.legend[1]).toMatchObject({ right: 0, top: 17 });
-    expect(opt.legend[1]?.data).toHaveLength(2);
-  });
-});
-
-describe('글자 바닥 — 왜? ① 그림 SVG는 1:1', () => {
-  it('width · height가 viewBox 크기와 같다(배율 1 — fontSize 12 = 화면 12px)', () => {
-    const src = SOURCES.find((s) => s.name.endsWith('sensor-column.tsx'))?.text ?? '';
-    const m = /width=\{(\d+)\}\s+height=\{(\d+)\}\s+viewBox="0 0 (\d+) (\d+)"/.exec(src);
-    expect(m).not.toBeNull();
-    if (!m) return;
-    expect([m[1], m[2]]).toEqual([m[3], m[4]]);
-  });
-});
-
-describe('글자 바닥 — 넓고 높은 화면 변형(성능 비교 두 구역 · §9 P1)', () => {
-  const STEPS = ['text-xs', 'text-label', 'text-sm', 'text-base', 'text-xl', 'text-answer'];
-  const PREFIX = '[@media(min-width:1680px)_and_(min-height:1000px)]:';
-
-  it('미디어는 가로 1680 그리고 세로 1000 하나 — 모든 변형 클래스가 같은 머리로 시작한다(1440 × 900 · 1280 × 800은 꺼짐)', () => {
-    expect(ROOMY_MEDIA).toBe('(min-width:1680px) and (min-height:1000px)');
-    expect(PREFIX.slice(7, -2).replaceAll('_', ' ')).toBe(ROOMY_MEDIA);
-    for (const [k, c] of Object.entries(ROOMY)) expect(c.startsWith(PREFIX), k).toBe(true);
-    // 성능 비교 소스의 미디어 변형은 roomy.ts 밖에 직접 적지 않는다(조건이 한곳에서만 바뀐다)
-    const outside = SOURCES.filter((s) => s.name.startsWith('components/experiments/perf/'))
-      .filter((s) => !s.name.endsWith('roomy.ts'))
-      .flatMap((s) => [...s.text.matchAll(/\[@media/g)].map(() => s.name));
-    expect(outside).toEqual([]);
-  });
-
-  it('글자 클래스는 단계 안에서 바로 한 단계 위 — 12 → 13 · 13 → 14 · 14 → 16 · 16 → 20', () => {
-    const pairs = { xs: 'text-xs', label: 'text-label', sm: 'text-sm', base: 'text-base' } as const;
-    for (const [k, from] of Object.entries(pairs)) {
-      const to = ROOMY[k as keyof typeof pairs].slice(PREFIX.length);
-      expect(STEPS.indexOf(to), `${from} → ${to}`).toBe(STEPS.indexOf(from) + 1);
-    }
-    // 그 밖의 변형은 글자 크기를 바꾸지 않는다(높이 · 폭 · 틈만)
-    const others = Object.entries(ROOMY).filter(([k]) => !(k in pairs));
-    for (const [k, c] of others) expect(c.slice(PREFIX.length).startsWith('text-'), k).toBe(false);
   });
 });

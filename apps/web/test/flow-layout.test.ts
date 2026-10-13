@@ -2,7 +2,7 @@
 // 최악의 문구: 6자리 초당 값(999,999) · 10억 행 누적 · 999GB 크기 · 꺼진 노드 문구 · 수집기 모드 · 업무 결과 표지.
 // 배치는 설계 §8 · §9 — 노드 12(출처 3 · Redis 기둥 칸 5 · 처리 2 · DB 2) · 기둥 머리 · 바닥 · 업무 줄 옆 한 줄도 겹침 검사에 든다.
 // 조회 줄(§9.2)은 점이 없다 — 대신 조회 선이 처리기 노드를 지나지 않는지(api가 직접 Redis를 먼저 본다) · 라벨이 겹치지 않는지 본다.
-// 다듬기(.omc/plans/web-ux-polish.md §2.3): 화면 안 글자 최소 12(1440 × 900 배율 × viewBox 글자) · ⑤ → DB 두 번 이하 꺾기 · ClickHouse 오른쪽 끝 우회 없음 ·
+// 글자 바닥(docs/08_screen/01_standards.md §글자와 화면 표면): 화면 안 글자 최소 12(1440 × 900 배율 × viewBox 글자) · ⑤ → DB 두 번 이하 꺾기 · ClickHouse 오른쪽 끝 우회 없음 ·
 //   선끼리 교차 수 기록(옛 배치 1 · 3 · 3 → 0) · 선이 라벨 · 글자를 지나지 않는다.
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
@@ -10,7 +10,6 @@ import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
 import {
-  ALARM_AT,
   BATCH_AT,
   BIZ_AT,
   BIZ_NOTE,
@@ -82,7 +81,6 @@ const rates: FlowRates = {
   chRows: BIG,
   controlCopyRows: BIG,
   latestWrites: BIG,
-  transitions: BIG,
   commands: BIG,
   commandsWriter: BIG,
   commandsDirect: BIG,
@@ -113,6 +111,7 @@ const READS_NONE: ReadRates = {
 };
 const flags = (over: Partial<FlowSwitchFlags> = {}): FlowSwitchFlags => ({
   controlCopyOff: false,
+  controlCopyGated: false,
   collectorLatest: false,
   streamOff: false,
   directGateway: false,
@@ -149,7 +148,6 @@ const WORST_LABELS: Partial<Record<EdgeId, string[][]>> = {
   'src-stream': [[edgeRate(BIG, '개') as string]],
   'stream-worker': [[edgeRate(BIG, '개') as string]],
   'worker-latest': [['지금 값 씀']],
-  'worker-pg-alarm': [['알람이 켜지고', '꺼질 때만']],
   'worker-pg-copy': [['비교용 사본', edgeRate(BIG, '개') as string], ['비교용 사본']],
   'biz-stream': [[edgeRate(BIG, '건') as string]],
   'biz-pg': [['업무 기록']],
@@ -338,7 +336,6 @@ const DRAWN_BASE: EdgeId[] = [
   'stream-worker',
   'worker-ch',
   'worker-latest',
-  'worker-pg-alarm',
   'biz-stream',
   'biz-worker',
   'biz-pg',
@@ -361,8 +358,8 @@ const DRAWN_SETS: [string, EdgeId[]][] = [
 ];
 
 describe('흐름도 배치 — 선 교차(다듬기 §2.3)', () => {
-  // 옛 배치(viewBox 1132 × 474): 기본 1(ClickHouse 선 × 알람 버스) · 사본 켬 3(+ ClickHouse 선 × 사본 버스 · 업무 기록 × 사본 버스) ·
-  //   바로 저장 + 사본 3 — 알람 · 사본 선이 처리기 오른쪽에서 나와 세로 버스를 탔다. 지금은 처리기 바닥에서 내려와 한 번 꺾여 든다.
+  // 옛 배치(viewBox 1132 × 474): 기본 1 · 사본 켬 3(+ ClickHouse 선 × 사본 버스 · 업무 기록 × 사본 버스) · 바로 저장 + 사본 3 —
+  //   PostgreSQL로 드는 선이 처리기 오른쪽에서 나와 세로 버스를 탔다. 지금은 처리기 바닥에서 내려와 한 번 꺾여 든다.
   const BEFORE: Record<string, number> = {
     '기본(비교용 사본 꺼짐)': 1,
     '비교용 사본 켬': 3,
@@ -411,9 +408,7 @@ describe('흐름도 배치 — 노드 글자', () => {
     const routes: [string, Pt[]][] = [
       [
         '배치',
-        (['src', 'stream', 'worker', 'ch', 'pgCopy', 'xack', 'latest', 'alarm'] as const).map(
-          (k) => BATCH_AT[k],
-        ),
+        (['src', 'stream', 'worker', 'ch', 'pgCopy', 'xack', 'latest'] as const).map((k) => BATCH_AT[k]),
       ],
       [
         '업무',
@@ -503,7 +498,6 @@ describe('흐름도 배치 — 간선 라벨', () => {
       ['worker-latest', pillarR, BOX.worker],
       ['biz-notice', pillarR, BOX.worker],
       ['biz-reply', BOX.bizSrc, pillarL],
-      ['worker-pg-alarm', BOX.worker, BOX.ch],
       ['worker-pg-copy', BOX.worker, BOX.ch],
       ['biz-pg', BOX.worker, BOX.ch],
       // 대기줄 없이 바로 저장 라벨은 꺼진 업무 처리 노드 바로 아래 — 처리 열 왼쪽 가장자리 ~ PostgreSQL 사이
@@ -523,23 +517,15 @@ describe('흐름도 배치 — 간선 라벨', () => {
     }
   });
 
-  it('업무 표지 · 알람 표지 자리 — 표지(그린 기호 12 + 틈 3 + 쉬운 말)마다 노드 제목 · 서로와 겹치지 않고 노드 안에 있다', () => {
+  it('업무 표지 자리 — 표지(그린 기호 12 + 틈 3 + 쉬운 말)마다 노드 글자와 겹치지 않고 노드 안에 있다', () => {
     const labels = [...Object.values(OUTCOME_MARK), DUPLICATE_MARK].map((s) => markText({ symbol: s }));
     expect(labels).toHaveLength(4);
-    const alarm = '알람 켜짐 999 · 꺼짐 999';
-    const aw = textWidth(alarm, FONT.mark);
-    const alarmBox = { x: ALARM_AT.x - aw, y: ALARM_AT.y - 7, w: aw, h: 14 };
     for (const label of labels) {
       const pgMark = markBox(MARK_AT.pgTx, label);
       expect(pgMark.w).toBe(MARK_ICON + MARK_ICON_GAP + textWidth(label, FONT.mark));
-      for (const lines of worstNodeLines().pg) {
-        const title = nodeTextBoxes('pg', lines)[0] as Box;
-        expect(overlaps(pgMark, title), label).toBe(false);
-        expect(overlaps(alarmBox, title)).toBe(false);
-      }
-      expect(overlaps(pgMark, alarmBox), label).toBe(false);
+      for (const lines of worstNodeLines().pg)
+        for (const t of nodeTextBoxes('pg', lines)) expect(overlaps(pgMark, t), label).toBe(false);
       expect(inside(pgMark, BOX.pg), label).toBe(true);
-      expect(inside(alarmBox, BOX.pg)).toBe(true);
       // 처리 노드 안 표지 — 점 길 오른쪽 · 노드 오른쪽 가장자리 안
       expect(inside(markBox(MARK_AT.bizWorker, label), BOX.bizWorker), label).toBe(true);
       // 요청 노드 표지 — 노드 바로 아래 · 어느 노드 · 간선 라벨과도 겹치지 않는다
@@ -570,8 +556,8 @@ describe('흐름도 배치 — 간선 라벨', () => {
         seq: 1,
         at: 1,
         cmdId: '3f1c9a2e-8b7d-4c1e-9f0a-2d6b5e4c3a10',
-        kind: 'alarm.rule.patch',
-        result: 'alarm.rule_not_found',
+        kind: 'master.tag.patch',
+        result: 'master.scale_change_forbidden',
         duplicate: false,
         stages: { queueWaitMs: 2, txMs: 4.2, invalidateMs: 1.1, replyMs: 0.6 },
         invalidatedKeys: 0,
@@ -582,7 +568,7 @@ describe('흐름도 배치 — 간선 라벨', () => {
     engine.tick(1_300); // 트랜잭션 노드 도착(약 1,177) 뒤 · 점이 끝나기 전
     const html = renderToStaticMarkup(createElement(FlowDiagram, { ...diagramProps(), engine }));
     expect(html).toContain('data-mark="거절됨"');
-    expect(html).toContain('<title>거절됨 · alarm.rule_not_found</title>');
+    expect(html).toContain('<title>거절됨 · master.scale_change_forbidden</title>');
     expect(html).toMatch(/<g data-mark="거절됨">.*<path d="M18 6 6 18"/);
     expect(html).not.toMatch(GLYPH);
   });
@@ -653,27 +639,21 @@ describe('흐름도 글자 크기 — 화면 안 최소 12px(다듬기 §2.1 · 
     expect(scale).toBe(1);
   });
 
-  it('1280 × 800(새로 열면 레일 56) — 흐름도 최소 높이가 세로 배율을 1.0으로 받친다(바닥이 없으면 0.895)', () => {
-    // flow-screen.tsx의 클래스에서 읽는다 — 화면 최소 높이 · 흐름도 최소 높이가 이 셈과 같아야 한다
+  it('맞춤 보기(1280×720 ~ 2560×1440)는 화면 틀이 본문 높이에 맞고 · 세로 820px 미만이면 아래 줄(124)을 빼 흐름도 배율 1을 지킨다', () => {
+    // flow-screen.tsx의 클래스에서 읽는다 — 옛 고정 최소 높이(750 · 흐름도 454)는 페이지 스크롤을 만들어 지웠다(지침 §반응형 규칙)
     const src = readFileSync(
       path.resolve(__dirname, '../components/experiments/flow/flow-screen.tsx'),
       'utf8',
     );
-    const screenMin = Number(/min-h-\[(\d+)px\] flex-col gap-2/.exec(src)?.[1]);
-    const diagramMin = Number(/min-h-\[(\d+)px\] flex-1/.exec(src)?.[1]);
-    expect(diagramMin - 14, '흐름도 최소 높이 = viewBox 높이 + 테두리 · 세로 여백 14').toBe(VIEW_H);
-    expect(
-      screenMin,
-      '화면 최소 높이 = 제목 52 + 숫자 4 64 + 흐름도 + 아래 줄 124 + 각주 24 + 칸 사이 8 × 4',
-    ).toBe(52 + 64 + diagramMin + 124 + 24 + 8 * 4);
-    const w = 1280 - 56 - 40 - 2 - 24;
-    const room = Math.max(800 - 56 - 40, screenMin) - 52 - 64 - 124 - 24 - 8 * 4;
-    expect(room).toBe(diagramMin);
-    expect(Math.min(w / VIEW_W, (room - 14) / VIEW_H)).toBeGreaterThanOrEqual(1);
-    // 바닥이 없을 때(옛 400) — 세로 704에 흐름도 408 → 0.895배 · 글자 12가 10.7px
-    expect(Math.min(w / VIEW_W, (408 - 14) / VIEW_H)).toBeCloseTo(0.895, 3);
-    // 1440 × 900은 이 바닥에 닿지 않는다(흐름도 466 ~ 508 · 스크롤 0 그대로)
-    expect(804 - 52 - 34 - 64 - 124 - 24 - 8 * 5).toBeGreaterThanOrEqual(diagramMin);
+    expect(src).not.toMatch(/min-h-\[750px\]/);
+    expect(src).toContain('fit:min-h-0 fit:flex-1');
+    expect(src).toContain('[@media(min-width:80rem)_and_(min-height:45rem)_and_(max-height:51.2rem)]:hidden');
+    // 1280 × 720(레일 56 · 셸 머리 44 · 본문 여백 12): 흐름도 가로 1280 − 56 − 24 − 2 − 24 = 1174 → 가로 배율 1.04 —
+    //   세로는 아래 줄을 뺐을 때 흐름도 칸이 viewBox 440보다 높다(ego-browser 실측 배율 1.043 · 2026-10-11)
+    const w = 1280 - 56 - 24 - 2 - 24;
+    expect(w / VIEW_W).toBeGreaterThanOrEqual(1);
+    // 아래 줄을 그대로 두면(옛 배치) 1280 × 720 흐름도 칸 ≈ 652 − 제목 50 − 숫자 4 64 − 아래 줄 124 − 각주 17 − 칸 사이 8 × 4 = 365 → 0.80배(글자 12가 9.6px)
+    expect((652 - 50 - 64 - 124 - 17 - 8 * 4 - 14) / VIEW_H).toBeLessThan(0.81);
   });
 
   it('글자 크기 표 — 노드 제목 14 · 숫자 줄 13 · 역할 줄 12 · 간선 라벨 · 표지 12 · 단 머리 13 · 모두 배율을 곱해 12 이상', () => {
@@ -747,7 +727,7 @@ describe('흐름도 줄 모양 — 줄 종류가 정한다(R16) · 숫자 자리
     const tnum = (t: { attrs: string }) => t.attrs.includes('font-variant-numeric:tabular-nums');
     expect(texts.find((t) => t.text === '초당 9,681개 보냄' && tnum(t))).toBeDefined();
     expect(texts.find((t) => t.text.startsWith('Redis 메모리') && tnum(t))).toBeDefined();
-    expect(texts.find((t) => t.text === '9,681개/초' && tnum(t))).toBeDefined();
+    expect(texts.find((t) => t.text === '9,681개/s' && tnum(t))).toBeDefined();
     for (const t of texts.filter((x) =>
       ['공장 센서', '태그마다 가장 최신 값 1개만', '응답'].includes(x.text),
     ))
@@ -763,7 +743,6 @@ function diagramProps(): Parameters<typeof FlowDiagram>[0] {
     chRows: 9_681,
     controlCopyRows: null,
     latestWrites: 4_800,
-    transitions: 0.3,
     commands: 1,
     commandsWriter: 1,
     commandsDirect: null,
@@ -942,7 +921,6 @@ describe('흐름도 글자 폭 어림 — Pretendard 실측(굵기 · 고정 폭
         (s) =>
           [markText({ symbol: s }), FONT.mark, 600 as Weight, false] as [string, number, Weight, boolean],
       ),
-      ['알람 켜짐 999 · 꺼짐 999', FONT.mark, 400, true],
     ];
     for (const [t, size, w, tn] of cases) {
       const real = PRETENDARD[w].width(t, size, tn);
@@ -1026,14 +1004,14 @@ describe('두 줄 칸 — 1440 · 1280에서 두 줄 안(R3 · Pretendard 실측
         ),
       );
       const numCol = Math.max(
-        ...['9,999ms', '59.9초', '59분 59초', '23시간 59분'].map((t) => PRETENDARD[700].width(t, 16, true)),
+        ...['9,999ms', '59.9s', '59m 59s', '23h 59m'].map((t) => PRETENDARD[700].width(t, 16, true)),
       );
       expect(inner - labelCol - numCol - 16, '막대 칸 80 이상').toBeGreaterThanOrEqual(80);
       const wait = waitLine([
         { key: 'batch', label: '', ms: 1, wait: 86_340_000, samples: 1, frac: 1 },
         { key: 'biz', label: '', ms: 1, wait: 3_599_400, samples: 1, frac: 1 },
       ]);
-      expect(wait).toBe('대기줄에서 기다린 시간 — 센서 23시간 59분 · 업무 59분 59초');
+      expect(wait).toBe('대기줄에서 기다린 시간 — 센서 23h 59m · 업무 59m 59s');
       expect(PRETENDARD[400].width(wait ?? '', 12, true), wait ?? '').toBeLessThanOrEqual(inner);
       expect(PRETENDARD[400].width(COMPARE_NOTE, 12)).toBeLessThanOrEqual(inner);
       expect(PRETENDARD[600].width('모아서 vs 하나씩 — 한 번 처리에 걸린 시간', 14)).toBeLessThanOrEqual(

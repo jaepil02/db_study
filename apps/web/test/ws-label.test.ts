@@ -1,4 +1,4 @@
-// /monitoring 실시간 연결 표지 문구 — 설계 .omc/plans/web-junior-redesign.md §4 용어표(쉬운 말) · 08_screen/01 §에러 코드별 사용자 표시 WebSocket 종료 코드 행
+// /monitoring 실시간 연결 표지 문구 — docs/08_screen/01_standards.md §한 화면 원칙 용어표(쉬운 말) · 08_screen/01 §에러 코드별 사용자 표시 WebSocket 종료 코드 행
 import { describe, expect, it } from 'vitest';
 import { closedLabel, wsLabel } from '../components/shell/ws-indicator';
 
@@ -15,7 +15,7 @@ describe('실시간 연결 표지 — 쉬운 말 · 코드는 툴팁에만', () 
 
   it('재연결 중 — 다음 시도까지 초 · 종료 코드는 툴팁', () => {
     const l = wsLabel('reconnecting', 'requesting', 4_200, 1006, 1_000);
-    expect(l.label).toBe('연결이 끊겨 4초 뒤 다시 연결해요');
+    expect(l.label).toBe('연결이 끊겨 4s 뒤 다시 연결해요');
     expect(l.tip).toContain('종료 코드 1006');
     expect(wsLabel('reconnecting', 'requesting', null, 1006, 1_000).label).toBe(
       '연결이 끊겨 다시 연결하는 중',

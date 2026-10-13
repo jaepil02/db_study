@@ -1,5 +1,6 @@
 // EXP-FLOW 직접 보내 보기 — 실제 api로 flow 실행(pps 1000 · 30초 · 업무 1/초 · 조회 20/초) 시작 → 진행 띠 · 흐름도 · 숫자 · 조회 줄에 보임 → 중단
-// 설계 .omc/plans/web-junior-redesign.md §3 직접 보내 보기 행(머리 버튼 → 보낼 양 → 진행 띠 한 줄 · 결과는 흐름도가 바로 보여 준다 · 서랍 없음)
+// 정본 docs/08_screen/08_evidence_screens.md §EXP-FLOW §요소 직접 보내 보기 행(머리 버튼 → 보낼 양 → 진행 띠 한 줄 · 결과는 흐름도가 바로 보여 준다 · 서랍 없음)
+// ⑥ 분산 처리 모니터링(정본 docs/08_screen/08_evidence_screens.md §EXP-FLOW) — 설비 가동이 꺼져 있어도 직접 보내 보기는 따로 센서 데이터를 보낸다
 import { expect, test } from '@playwright/test';
 import { currentRun, settleRuns, shot } from './support';
 
@@ -20,13 +21,13 @@ test('pps 1000 · 30초 · 업무 1/초 · 조회 20/초 시작 → 진행 증�
   const start = pop.getByRole('button', { name: '시작', exact: true });
   await expect(start).toBeEnabled();
   // 조회 요청(초당) 선택지 — 0 · 5 · 20(기본) · 50 · 쉬운 말(0은 "안 보냄")
-  for (const v of ['안 보냄', '5/초', '20/초', '50/초'])
+  for (const v of ['안 보냄', '5/s', '20/s', '50/s'])
     await expect(pop.getByRole('button', { name: v, exact: true })).toBeVisible();
-  await expect(pop.getByRole('button', { name: '20/초', exact: true })).toHaveAttribute(
+  await expect(pop.getByRole('button', { name: '20/s', exact: true })).toHaveAttribute(
     'aria-pressed',
     'true',
   );
-  for (const v of ['1,000', '30초', '1/초', '20/초']) {
+  for (const v of ['1,000', '30s', '1/s', '20/s']) {
     await pop.getByRole('button', { name: v, exact: true }).click();
     await expect(pop.getByRole('button', { name: v, exact: true })).toHaveAttribute('aria-pressed', 'true');
   }
@@ -83,7 +84,7 @@ test('pps 1000 · 30초 · 업무 1/초 · 조회 20/초 시작 → 진행 증�
   const m = await body.evaluate((el) => ({ sh: el.scrollHeight, ch: el.clientHeight }));
   expect(m.sh).toBeLessThanOrEqual(m.ch + 1);
   await expect(page.getByTestId('flow-footnote')).toBeInViewport({ ratio: 1 });
-  // 띠가 있어도 흐름도 배율 1.0(가로가 먼저 찬다 — viewBox 1126 × 440 · 안쪽 1126 × 452) — 노드 글자 12 ~ 14px가 화면 크기 그대로
+  // 띠가 있어도 흐름도 배율 1.0(가로가 먼저 찬다 — viewBox 1126 × 440 · 띠가 있을 때 안쪽 약 1130 × 462 · ego-browser 실측 2026-10-11) — 노드 글자 12 ~ 14px가 화면 크기 그대로
   const scale = await diagram.evaluate((el) => {
     const svg = el as SVGSVGElement;
     const r = svg.getBoundingClientRect();

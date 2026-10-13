@@ -1,19 +1,19 @@
 // /monitoring 흐름도 좌표 — 노드 12 · Redis 기둥 · 간선 · 라벨 자리 · 점이 머무는 자리를 한 곳에 둔다(그리기는 flow-diagram.tsx).
-// 설계 .omc/plans/web-junior-redesign.md §8 — Redis를 "서버와 DB 사이 한 기둥"으로 그린다. 오른쪽 저장 열은 진짜 DB 2(ClickHouse · PostgreSQL)뿐.
+// 정본 docs/08_screen/08_evidence_screens.md §EXP-FLOW — Redis를 "서버와 DB 사이 한 기둥"으로 그린다. 오른쪽 저장 열은 진짜 DB 2(ClickHouse · PostgreSQL)뿐.
 // §9 — 세 번째 줄 "조회 요청": 조회 요청 → 기둥 ⑤ 조회 사본(캐시) → 있으면 바로 응답 · 없으면 ClickHouse · PostgreSQL에서 읽어 와 ⑤에 사본 담고 응답.
 //   조회는 워커가 처리하지 않는다(api가 직접 Redis를 먼저 본다) — 조회 줄에는 "누가 처리하나" 노드가 없고, DB로 가는 선은 처리기 노드 아래로 지난다.
 //   조회는 flow 프레임 요약이 없어 점을 그리지 않는다(선 굵기 · 숫자로만) — 조회 줄 노드에는 점 길을 비워 두지 않는다.
-// 노드 12 = 어디서 오나 3 + Redis 기둥 칸 5(① 센서 대기줄 · ② 지금 값 · 알람 상태 · ③ 업무 대기줄 · ④ 옛 사본 지움 · 결과 알림 · ⑤ 조회 사본) + 누가 처리하나 2 + DB 2.
+// 노드 12 = 어디서 오나 3 + Redis 기둥 칸 5(① 센서 대기줄 · ② 지금 값 · ③ 업무 대기줄 · ④ 옛 사본 지움 · 결과 알림 · ⑤ 조회 사본) + 누가 처리하나 2 + DB 2.
 // 브라우저 없이 겹침을 막으려고 글자 폭을 보수적으로 어림하는 함수(textWidth)와 상자 계산(labelBox · nodeTextBoxes)을 함께 두고,
 // test/flow-layout.test.ts가 최악의 문구(6자리 초당 값 · 10억 행 누적)로 라벨 ↔ 노드 · 라벨 ↔ 라벨 · 노드 글자 ↔ 점 자리의 겹침 0을 검사한다.
 //
 // 배치 근거(viewBox 1126 × 440 — 1440 × 900에서 흐름도 안쪽 1,126 × 452(진행 띠 있음) ~ 494(없음) → 가로가 먼저 차서 배율 1.0 · viewBox 단위 = CSS px)
-//   그래서 글자 크기는 화면 크기 그대로다: 노드 제목 14 굵게 · 숫자 줄 13 · 역할 줄 12 · 간선 라벨 · 표지 12 · 단 머리 13 — 화면 안 최소 12(.omc/plans/web-ux-polish.md §2.1 · §2.3).
+//   그래서 글자 크기는 화면 크기 그대로다: 노드 제목 14 굵게 · 숫자 줄 13 · 역할 줄 12 · 간선 라벨 · 표지 12 · 단 머리 13 — 화면 안 최소 12(docs/08_screen/01_standards.md §글자와 화면 표면).
 // ① 맨 위 y 13에 단 머리 넷 — 기둥 틀은 y 20부터 · 기둥 머리 한 줄 · 칸은 y 42부터.
 // ② 기둥 칸 높이 74 · 칸 사이 4 — 글자 3줄(14 · 12 · 13 · 줄 간격 16)이 위 여백 4와 아래 점 길(13 + 점 반지름 7) 사이에 드는 가장 작은 높이.
 //    ⑤ 조회 사본은 점 길이 없어 60. 센서 줄은 ①, 업무 줄은 ③, 조회 줄은 ⑤ 높이에 맞춘다.
 // ③ 노드 사이 틈 86 이상 — 간선 라벨 "999,999개/초"(12px 어림 84.3)가 틈 안에 들어간다.
-// ④ 처리기 → DB 통로 90 · ClickHouse 선은 점 길 높이 그대로 · 알람 · 비교용 사본 선은 모아서 저장 노드 바닥에서 내려와 한 번 꺾여 PostgreSQL로 든다
+// ④ 처리기 → DB 통로 90 · ClickHouse 선은 점 길 높이 그대로 · 비교용 사본 선은 모아서 저장 노드 바닥에서 내려와 한 번 꺾여 PostgreSQL로 든다
 //    (옛 배치는 노드 오른쪽에서 나와 세로 버스를 타 ClickHouse 선 · 업무 기록 선과 교차했다 — 교차 수는 test/flow-layout.test.ts).
 // ⑤ 줄 노드 · 기둥 칸은 아래 13px을 점 길(lane)로 비워 둔다 — 글자는 위쪽에 모으고 점은 길을 따라 움직여 글자 위를 지나지 않는다.
 // ⑥ DB 노드의 점 자리는 왼쪽 가장자리 + 14 — 글자는 가운데 맞춤이고 가장 긴 줄 폭이 상자 폭 − 2 × 21 이하라 점(반지름 ≤ 7)과 만나지 않는다.
@@ -37,7 +37,7 @@ export interface Box {
 export const VIEW_W = 1126;
 export const VIEW_H = 440;
 
-/** 글자 크기(viewBox 단위 = 1440 × 900에서 CSS px) — 노드 제목 · 역할 줄 · 숫자 줄 · 간선 라벨 · 단 머리 · 업무 · 알람 표지 */
+/** 글자 크기(viewBox 단위 = 1440 × 900에서 CSS px) — 노드 제목 · 역할 줄 · 숫자 줄 · 간선 라벨 · 단 머리 · 업무 표지 */
 export const FONT = { title: 14, role: 12, num: 13, label: 12, column: 13, mark: 12 } as const;
 /** 노드 줄 간격 · 라벨 여러 줄 간격 */
 export const LINE_H = 16;
@@ -118,7 +118,7 @@ export const HAS_LANE: Record<BoxId, boolean> = {
 /**
  * 노드 줄의 종류 — 제목(14 굵게) · 역할(12 · 무엇을 하나 · 문장) · 숫자(13 굵기 500 · 지금 값 · 고정 폭 숫자).
  * 종류는 노드 자리가 아니라 줄이 스스로 갖는다(node-lines.ts가 줄마다 정한다) — 스위치로 숫자 줄이 문장으로 바뀌어도
- * ("센서 수집기가 직접 고쳐요" · "결과는 서버가 바로 답해요") 문장은 문장 모양으로 그린다(.omc/plans/web-ux-polish.md §7.1 R16).
+ * ("센서 수집기가 직접 고쳐요" · "결과는 서버가 바로 답해요") 문장은 문장 모양으로 그린다(docs/08_screen/08_evidence_screens.md §EXP-FLOW §표시 계약).
  */
 export type LineKind = 'title' | 'role' | 'num';
 export interface NodeLine {
@@ -158,24 +158,22 @@ const CELL_RIGHT = CELL_X + CELL_W - 22;
 const CELL_LEFT = CELL_X + 22;
 
 /**
- * 업무 줄 옆 한 줄 — ClickHouse와 PostgreSQL 사이(업무 데이터가 왜 ClickHouse로 가지 않는지) · 세 줄 가운데 맞춤.
+ * 업무 줄 옆 한 줄 — ClickHouse와 PostgreSQL 사이(업무 데이터는 ClickHouse로 가지 않는다) · 두 줄 가운데 맞춤.
  * 왼쪽은 배치 점이 ClickHouse → 비교용 사본으로 내려가는 길(점 자리 x ± 반지름) · 오른쪽은 조회 선 통로 사이 가운데에 든다.
  */
 export const BIZ_NOTE = {
   spot: { x: (STORE_DOT_X + DOT_R_MAX + READ_CH_X) / 2, y: 130, align: 'middle' as const },
-  lines: ['업무 데이터는', 'ClickHouse로 보내지 않아요', '이유는 성능 비교 화면 오른쪽'],
+  lines: ['업무 데이터는', 'ClickHouse로 보내지 않아요'],
 };
 
-/** 알람 · 비교용 사본 선이 PostgreSQL 왼쪽 가장자리에 드는 높이 — 업무 처리 노드 위쪽(처리기 노드 아래로 꺾여 든다) */
-const ALARM_IN_Y = 176;
+/** 비교용 사본 선이 PostgreSQL 왼쪽 가장자리에 드는 높이 — 업무 처리 노드 위쪽(처리기 노드 아래로 꺾여 든다) */
 const COPY_IN_Y = 189;
 
-/** 배치 점이 머무는 자리 — 접은 단계(XACK · 알람 판정)는 처리기 노드 안 점 길 위 · 최신값은 기둥 ② */
+/** 배치 점이 머무는 자리 — 접은 단계(XACK)는 처리기 노드 안 점 길 위 · 최신값은 기둥 ② */
 export const BATCH_AT = {
   src: { x: laneX('src'), y: LANE_A },
   stream: { x: laneX('stream'), y: LANE_A },
   worker: { x: laneX('worker'), y: LANE_A },
-  alarm: { x: laneX('worker') - 30, y: LANE_A },
   xack: { x: laneX('worker') + 30, y: LANE_A },
   ch: { x: STORE_DOT_X, y: LANE_A },
   latest: { x: CELL_RIGHT, y: laneY('latest') },
@@ -197,7 +195,7 @@ export const BIZ_AT = {
 
 /**
  * 업무 표지(거절됨 · 저장 못 함 · 시간 초과 · 이미 처리됨 — 그린 기호 + 쉬운 말) 자리 — 노드 글자와 겹치지 않는 귀퉁이(왼쪽 맞춤).
- * 요청 노드는 폭이 좁아 노드 바로 아래 · PostgreSQL은 왼쪽 아래(왼쪽 위는 알람 · 사본 선이 드는 자리).
+ * 요청 노드는 폭이 좁아 노드 바로 아래 · PostgreSQL은 왼쪽 아래(왼쪽 위는 비교용 사본 선이 드는 자리).
  */
 export const MARK_AT = {
   api: { x: BIZ_AT.api.x + 10, y: ROW_B.y + ROW_B.h + 14 },
@@ -217,8 +215,6 @@ export const markBox = (at: Pt, label: string): Box => ({
   w: MARK_ICON + MARK_ICON_GAP + textWidth(label, FONT.mark),
   h: 14,
 });
-/** 알람 켜짐 · 꺼짐 표지 자리 — PostgreSQL 노드 오른쪽 위(오른쪽 맞춤 · 알람 선은 왼쪽으로 든다) */
-export const ALARM_AT: Pt = { x: BOX.pg.x + BOX.pg.w - 8, y: BOX.pg.y + 15 };
 
 export type Align = 'start' | 'middle' | 'end';
 export interface LabelSpot {
@@ -233,7 +229,6 @@ export type EdgeId =
   | 'stream-worker'
   | 'worker-ch'
   | 'worker-latest'
-  | 'worker-pg-alarm'
   | 'worker-pg-copy'
   | 'biz-stream'
   | 'biz-worker'
@@ -251,8 +246,7 @@ const PILLAR_R = BOX.stream.x + BOX.stream.w; // 기둥 칸 오른쪽 가장자�
 const W = BOX.worker; // 처리기 열
 /** 처리기 → 기둥 되돌아가는 선이 내려오는 x — 처리기 왼쪽 가장자리 + 24 */
 const BACK_X = W.x + 24;
-/** 알람 · 비교용 사본 선이 처리기 바닥에서 내려오는 x — 오른쪽 가장자리 − 14 · − 30(알람이 바깥 · 위쪽이라 서로 교차하지 않는다) */
-const ALARM_X = W.x + W.w - 14;
+/** 비교용 사본 선이 처리기 바닥에서 내려오는 x — 오른쪽 가장자리 − 30 */
 const COPY_X = W.x + W.w - 30;
 /** 처리기 → ②(지금 값) 되돌아가는 가로선 높이 */
 const LATEST_Y = 150;
@@ -280,7 +274,7 @@ export const EDGE: Record<EdgeId, { path: Pt[]; label: LabelSpot | null }> = {
     ],
     label: { x: (PILLAR.x + PILLAR.w + W.x) / 2, y: LANE_A - 9, align: 'middle' },
   },
-  // 처리기 → DB — ClickHouse는 점 길(y 103) 그대로 곧게 · 알람 · 사본은 처리기 바닥에서 내려와 한 번 꺾여 PostgreSQL 위쪽으로
+  // 처리기 → DB — ClickHouse는 점 길(y 103) 그대로 곧게 · 사본은 처리기 바닥에서 내려와 한 번 꺾여 PostgreSQL 위쪽으로
   'worker-ch': {
     path: [
       { x: W.x + W.w, y: LANE_A },
@@ -288,7 +282,7 @@ export const EDGE: Record<EdgeId, { path: Pt[]; label: LabelSpot | null }> = {
     ],
     label: null,
   },
-  // 모아서 저장이 기둥 ②(지금 값 · 알람 상태)를 쓴다 — 처리기 아래에서 왼쪽으로 되돌아간다
+  // 모아서 저장이 기둥 ②(지금 값)를 쓴다 — 처리기 아래에서 왼쪽으로 되돌아간다
   'worker-latest': {
     path: [
       { x: BACK_X, y: W.y + W.h },
@@ -296,14 +290,6 @@ export const EDGE: Record<EdgeId, { path: Pt[]; label: LabelSpot | null }> = {
       { x: PILLAR_R, y: LATEST_Y },
     ],
     label: { x: (PILLAR.x + PILLAR.w + BACK_X) / 2, y: LATEST_Y - 9, align: 'middle' },
-  },
-  'worker-pg-alarm': {
-    path: [
-      { x: ALARM_X, y: W.y + W.h },
-      { x: ALARM_X, y: ALARM_IN_Y },
-      { x: DB_X, y: ALARM_IN_Y },
-    ],
-    label: { x: DB_X - 6, y: ALARM_IN_Y - 22, align: 'end' },
   },
   // 비교용 사본(SW-09 on일 때만 그린다) — 라벨은 선 아래(업무 처리 노드 오른쪽 통로)
   'worker-pg-copy': {

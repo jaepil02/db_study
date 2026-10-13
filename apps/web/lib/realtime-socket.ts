@@ -123,7 +123,7 @@ class RealtimeSocket {
         const receivedAt = Date.now();
         for (const fn of this.flowListeners) fn(msg, receivedAt);
       }
-      // rt · cacheinv · alarm · subscribed · auth_ok — 두 화면이 쓰지 않는다(D-14)
+      // flow · ping 밖의 서버 메시지(rt · cacheinv · subscribed 등)는 지금 화면이 쓰지 않는다
     };
     ws.onclose = (ev) => {
       if (this.ws !== ws) return;

@@ -1,4 +1,4 @@
-// 웹 2화면 공통 UI 조각 — 저장소 토큰 · 실행 조작부 순수 로직 · 정적 렌더
+// 웹 공통 UI 조각 — 저장소 토큰 · 실행 조작부 순수 로직 · 정적 렌더
 import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
@@ -8,8 +8,8 @@ import {
   buildRunParams,
   defaultParams,
   FLOW_PARAM_DEFS,
-  PERF_PARAM_DEFS,
   paramWarnings,
+  type RunParamDef,
   stageProgress,
 } from '../components/runs/run-spec';
 import { STORE, STORE_KEYS } from '../components/ui/store';
@@ -27,34 +27,37 @@ const step = (key: string, status: RunObjectBody['steps'][number]['status'], det
   detail,
 });
 
-const perf = (over: Partial<RunObjectBody> = {}): RunObjectBody => ({
-  runId: 'r1',
-  type: 'perf',
+const flow = (over: Partial<RunObjectBody> = {}): RunObjectBody => ({
+  runId: 'r2',
+  type: 'flow',
   status: 'running',
-  params: { maxExponent: 7 },
+  params: { pps: 10000, durationSec: 60, bizPerSec: 1 },
   startedAt: '2026-09-28T01:20:05.000Z',
   endedAt: null,
   elapsedMs: 5000,
-  steps: [step('prepare', 'done'), step('fill-ch@5', 'running'), step('cleanup', 'pending')],
-  result: null,
-  error: null,
-  ...over,
-});
-
-const flow = (over: Partial<RunObjectBody> = {}): RunObjectBody => ({
-  ...perf(),
-  runId: 'r2',
-  type: 'flow',
-  params: { pps: 10000, durationSec: 60, bizPerSec: 1 },
   steps: [
     step('prepare', 'done'),
     { ...step('publish', 'running', { pointsSent: 5 }), elapsedMs: 30_000 },
     step('drain', 'pending'),
   ],
+  result: null,
+  error: null,
   ...over,
 });
 
 const snap = (run: RunObjectBody | null): RunSnapshot => ({ run, receivedAt: 100 });
+
+/** 선택지 경고 틀 — 지금 실행 종류에는 경고가 없어 시험용 정의 하나로 본다(run-spec RunParamDef.warn) */
+const WARN_DEFS: readonly RunParamDef[] = [
+  {
+    key: 'size',
+    label: '크기',
+    values: [1, 2],
+    defaultValue: 1,
+    text: (v) => `${v}`,
+    warn: (v) => (v === 2 ? '수 분 이상 걸려요' : null),
+  },
+];
 
 describe('저장소 토큰', () => {
   it('색 3 · 라벨 · 짧은 이름', () => {
@@ -66,15 +69,6 @@ describe('저장소 토큰', () => {
 });
 
 describe('매개변수 정의 · 요청 본문', () => {
-  it('perf 기본 1천만 행 · 선택지 4(쉬운 말) · 1억 행만 경고', () => {
-    const d = PERF_PARAM_DEFS[0];
-    expect(d?.label).toBe('어디까지');
-    expect(d?.values).toEqual([5, 6, 7, 8]);
-    expect(defaultParams(PERF_PARAM_DEFS)).toEqual({ maxExponent: 7 });
-    expect(d?.values.map((v) => d.text(v))).toEqual(['10만 행', '100만 행', '1천만 행', '1억 행']);
-    expect(d?.warn?.(7)).toBeNull();
-    expect(d?.warn?.(8)).toContain('수 분 이상 걸려요');
-  });
   it('flow 기본값 4개 · 쉬운 말 라벨(값 글자는 그대로) · 조회 요청 0 · 5 · 20(기본) · 50', () => {
     expect(defaultParams(FLOW_PARAM_DEFS)).toEqual({
       pps: 10000,
@@ -91,7 +85,7 @@ describe('매개변수 정의 · 요청 본문', () => {
     expect(FLOW_PARAM_DEFS[0]?.text(1000)).toBe('1,000');
     const reads = FLOW_PARAM_DEFS[3];
     expect(reads?.values).toEqual([0, 5, 20, 50]);
-    expect(reads?.values.map((v) => reads.text(v))).toEqual(['안 보냄', '5/초', '20/초', '50/초']);
+    expect(reads?.values.map((v) => reads.text(v))).toEqual(['안 보냄', '5/s', '20/s', '50/s']);
   });
   it('요청 본문 — 모르는 키 버림 · 선택지 밖은 기본값', () => {
     expect(buildRunParams(FLOW_PARAM_DEFS, { pps: 5000, durationSec: 999, extra: 1 })).toEqual({
@@ -101,62 +95,62 @@ describe('매개변수 정의 · 요청 본문', () => {
       readsPerSec: 20,
     });
   });
-  it('경고 모음', () => {
-    expect(paramWarnings(PERF_PARAM_DEFS, { maxExponent: 8 })).toHaveLength(1);
-    expect(paramWarnings(PERF_PARAM_DEFS, { maxExponent: 6 })).toEqual([]);
+  it('경고 모음 — 경고가 걸린 선택지만 · flow 선택지는 경고 없음', () => {
+    expect(paramWarnings(WARN_DEFS, { size: 2 })).toEqual(['수 분 이상 걸려요']);
+    expect(paramWarnings(WARN_DEFS, { size: 1 })).toEqual([]);
+    expect(paramWarnings(FLOW_PARAM_DEFS, defaultParams(FLOW_PARAM_DEFS))).toEqual([]);
   });
 });
 
 describe('단계 n/m', () => {
   it('진행 중 단계가 지금', () => {
-    expect(stageProgress(perf())).toMatchObject({ n: 2, total: 3, label: '라벨-fill-ch@5' });
-    expect(stageProgress(perf()).ratio).toBeCloseTo(1 / 3);
+    expect(stageProgress(flow())).toMatchObject({ n: 2, total: 3, label: '라벨-publish' });
+    expect(stageProgress(flow()).ratio).toBeCloseTo(1 / 3);
   });
   it('완료는 m/m · 라벨 없음', () => {
-    const r = perf({ status: 'completed', steps: [step('prepare', 'done'), step('cleanup', 'done')] });
+    const r = flow({ status: 'completed', steps: [step('prepare', 'done'), step('drain', 'done')] });
     expect(stageProgress(r)).toEqual({ n: 2, total: 2, label: null, ratio: 1 });
   });
   it('진행 단계가 없으면 첫 대기 단계', () => {
-    const r = perf({ steps: [step('prepare', 'done'), step('cleanup', 'pending')] });
+    const r = flow({ steps: [step('prepare', 'done'), step('drain', 'pending')] });
     expect(stageProgress(r).n).toBe(2);
   });
   it('실패 · 중단은 m/m이 아니라 멈춘 단계의 위치(정리 단계가 뒤에서 돌아도)', () => {
-    const failed = perf({
+    const failed = flow({
       status: 'failed',
       steps: [
         step('prepare', 'done'),
-        step('fill-ch@5', 'failed'),
-        step('fill-pg@5', 'skipped'),
+        step('ingest', 'failed'),
+        step('query', 'skipped'),
         step('cleanup', 'done'),
       ],
     });
-    expect(stageProgress(failed)).toMatchObject({ n: 2, total: 4, label: '라벨-fill-ch@5' });
-    const stopped = perf({
+    expect(stageProgress(failed)).toMatchObject({ n: 2, total: 4, label: '라벨-ingest' });
+    const stopped = flow({
       status: 'stopped',
       steps: [
         step('prepare', 'done'),
-        step('fill-ch@5', 'done'),
-        step('fill-pg@5', 'stopped'),
-        step('query@5', 'skipped'),
+        step('ingest', 'done'),
+        step('query', 'stopped'),
+        step('integrity', 'skipped'),
         step('cleanup', 'done'),
       ],
     });
-    expect(stageProgress(stopped)).toMatchObject({ n: 3, total: 5, label: '라벨-fill-pg@5' });
+    expect(stageProgress(stopped)).toMatchObject({ n: 3, total: 5, label: '라벨-query' });
     // 실패 · 중단 단계가 없으면(정리 중 실패 등) 마지막으로 돈 단계
-    const noMark = perf({
+    const noMark = flow({
       status: 'failed',
       steps: [step('prepare', 'done'), step('cleanup', 'done'), step('report', 'pending')],
     });
     expect(stageProgress(noMark).n).toBe(2);
   });
-  it('진행 띠의 단계 n/m — 멈춘 단계 · 진행 중 단계(끝난 수가 아니라 지금 단계)', () => {
-    const stopped = perf({
+  it('멈춘 단계 · 진행 중 단계(끝난 수가 아니라 지금 단계)', () => {
+    const stopped = flow({
       status: 'stopped',
       endedAt: '2026-09-28T01:21:00.000Z',
-      steps: [step('prepare', 'done'), step('fill-ch@5', 'stopped'), step('cleanup', 'done')],
+      steps: [step('prepare', 'done'), step('publish', 'stopped'), step('drain', 'done')],
     });
     expect(stageProgress(stopped).n).toBe(2);
-    expect(band('perf', perf())).toContain('단계 2/3');
   });
 });
 
@@ -164,8 +158,8 @@ describe('진행 띠 — 한 줄 · 폴링 실패', () => {
   const strip = (over: Partial<Parameters<typeof RunProgressView>[0]>) =>
     renderToStaticMarkup(
       createElement(RunProgressView, {
-        type: 'perf',
-        snapshot: snap(perf()),
+        type: 'flow',
+        snapshot: snap(flow()),
         pollFailed: false,
         local: PANEL_IDLE,
         now: 100,
@@ -181,7 +175,7 @@ describe('진행 띠 — 한 줄 · 폴링 실패', () => {
     expect(h).toContain('title="시작 10:20:05 KST');
     expect(h).not.toContain('aria-expanded');
     expect(h).not.toContain('라벨-');
-    expect(h).toContain('ClickHouse에 10만 행 넣는 중 · 단계 2/3');
+    expect(h).toContain('>보내는 중</span>');
   });
   it('첫 조회 실패(받은 응답 없음)도 띠 문구로', () => {
     const h = strip({ snapshot: undefined, pollFailed: true });
@@ -189,7 +183,7 @@ describe('진행 띠 — 한 줄 · 폴링 실패', () => {
     expect(h).toContain('data-testid="run-progress-strip"');
   });
   it('폴링 실패면 실행 상태와 무관하게 1초 재시도 — 종결 · 실행 없음 · 응답 없음 모두', () => {
-    const done = snap(perf({ status: 'completed', endedAt: '2026-09-28T01:21:00.000Z' }));
+    const done = snap(flow({ status: 'completed', endedAt: '2026-09-28T01:21:00.000Z' }));
     expect(runPollInterval(done, true)).toBe(RUN_POLL_MS);
     expect(runPollInterval(snap(null), true)).toBe(RUN_POLL_MS);
     expect(runPollInterval(undefined, true)).toBe(RUN_POLL_MS);
@@ -200,7 +194,7 @@ describe('진행 띠 — 한 줄 · 폴링 실패', () => {
 describe('팝오버 — 시작 202를 받은 뒤에만 닫힌다', () => {
   const err = new ApiError(400, 'common.validation_failed', 'bad');
   it('started만 닫고 409 · 400 · 요청 실패는 열어 둔다', () => {
-    expect(closesPopover({ kind: 'started', run: perf() })).toBe(true);
+    expect(closesPopover({ kind: 'started', run: flow() })).toBe(true);
     expect(closesPopover({ kind: 'conflict', type: 'flow', run: null })).toBe(false);
     expect(closesPopover({ kind: 'invalid', error: err })).toBe(false);
     expect(closesPopover({ kind: 'failed', error: new ApiError(0, null, 'x') })).toBe(false);
@@ -208,13 +202,13 @@ describe('팝오버 — 시작 202를 받은 뒤에만 닫힌다', () => {
   const open = (local: typeof PANEL_IDLE) =>
     renderToStaticMarkup(
       createElement(RunControlView, {
-        type: 'perf',
-        params: PERF_PARAM_DEFS,
+        type: 'flow',
+        params: FLOW_PARAM_DEFS,
         snapshot: snap(null),
         pollFailed: false,
         local,
-        chosen: { maxExponent: 7 },
-        buttonLabel: '내 컴퓨터에서 직접 재 보기',
+        chosen: defaultParams(FLOW_PARAM_DEFS),
+        buttonLabel: '직접 보내 보기',
         onChoose: () => {},
         onStart: () => undefined,
         defaultOpen: true,
@@ -232,10 +226,10 @@ describe('팝오버 — 시작 202를 받은 뒤에만 닫힌다', () => {
 });
 
 /** 진행 띠 — 종결 실행은 "이 화면에서 방금 끝난" 실행으로 본다(recentEndId — 30초 동안 띠가 결말을 그린다) */
-const band = (type: 'perf' | 'flow', run: RunObjectBody | null) =>
+const band = (run: RunObjectBody | null) =>
   renderToStaticMarkup(
     createElement(RunProgressView, {
-      type,
+      type: 'flow',
       snapshot: snap(run),
       pollFailed: false,
       local: PANEL_IDLE,
@@ -249,13 +243,13 @@ describe('정적 렌더', () => {
   const view = (run: RunObjectBody | null, over = {}) =>
     renderToStaticMarkup(
       createElement(RunControlView, {
-        type: 'perf',
-        params: PERF_PARAM_DEFS,
+        type: 'flow',
+        params: FLOW_PARAM_DEFS,
         snapshot: snap(run),
         pollFailed: false,
         local: PANEL_IDLE,
-        chosen: { maxExponent: 8 },
-        buttonLabel: '내 컴퓨터에서 직접 재 보기',
+        chosen: defaultParams(FLOW_PARAM_DEFS),
+        buttonLabel: '직접 보내 보기',
         onChoose: () => {},
         onStart: () => undefined,
         defaultOpen: true,
@@ -263,34 +257,31 @@ describe('정적 렌더', () => {
       }),
     );
 
-  it('조작부 — 팝오버에 대용량 경고 · 시작 켜짐 · 실행 없음', () => {
+  it('조작부 — 시작 켜짐 · 실행 없음 · 경고가 걸린 선택지면 팝오버에 경고', () => {
     const h = view(null);
-    expect(h).toContain('내 컴퓨터에서 직접 재 보기');
-    expect(h).toContain('run-large-warning');
-    expect(h).toContain('아직 재 보지 않았어요');
-  });
-  it('진행 중 — 잠긴 매개변수 · 중단은 진행 띠 오른쪽', () => {
-    const h = view(perf());
-    expect(h).toContain('실행 중');
+    expect(h).toContain('직접 보내 보기');
     expect(h).not.toContain('run-large-warning');
-    expect(h).not.toContain('중단');
-    expect(band('perf', perf())).toMatch(
-      /<button[^>]*>(?:<svg[^>]*>(?:<path[^>]*><\/path>)+<\/svg>)중단<\/button>/,
-    );
+    expect(h).toContain('아직 보내 보지 않았어요');
+    const warned = view(null, { params: WARN_DEFS, chosen: { size: 2 } });
+    expect(warned).toContain('run-large-warning');
+    expect(warned).toContain('수 분 이상 걸려요');
   });
-  it('진행 띠 — 단계 n/m · flow 진행 막대 · 종결 띠', () => {
-    expect(band('perf', perf())).toContain('단계 2/3');
-    expect(band('flow', flow())).toContain('aria-valuenow="50"');
-    expect(band('flow', flow())).toContain('보내는 중');
-    expect(band('flow', flow())).toContain('30초 / 60초');
-    const done = band('perf', perf({ status: 'completed', endedAt: '2026-09-28T01:21:00.000Z' }));
+  it('진행 중 — 잠긴 매개변수 · 경고는 고를 때만 · 중단은 진행 띠 오른쪽', () => {
+    const h = view(flow());
+    expect(h).toContain('실행 중');
+    expect(view(flow(), { params: WARN_DEFS, chosen: { size: 2 } })).not.toContain('run-large-warning');
+    expect(h).not.toContain('중단');
+    expect(band(flow())).toMatch(/<button[^>]*>(?:<svg[^>]*>(?:<path[^>]*><\/path>)+<\/svg>)중단<\/button>/);
+  });
+  it('진행 띠 — flow 진행 막대 · 종결 띠', () => {
+    expect(band(flow())).toContain('aria-valuenow="50"');
+    expect(band(flow())).toContain('보내는 중');
+    expect(band(flow())).toContain('30s / 60s');
+    const done = band(flow({ status: 'completed', endedAt: '2026-09-28T01:21:00.000Z' }));
     expect(done).toContain('완료 —');
     expect(done).not.toContain('role="progressbar"');
   });
-  it('실행이 없으면 그리지 않고 · 다른 종류 진행 중이면 그 화면 링크 한 줄만', () => {
-    expect(band('perf', null)).toBe('');
-    const h = band('perf', flow());
-    expect(h).toContain('다른 측정이 이미 돌고 있어요 — 분산 처리 모니터링 화면에서 보기');
-    expect(h).not.toContain('run-stage');
+  it('실행이 없으면 그리지 않는다', () => {
+    expect(band(null)).toBe('');
   });
 });

@@ -1,17 +1,14 @@
 'use client';
-// EXP-FLOW — 분산 처리 모니터링(/monitoring) · 설계 .omc/plans/web-junior-redesign.md §3(화면 B) · §5 픽셀 예산 · 정본 docs/08_screen/08_evidence_screens.md §EXP-FLOW
-// 한 화면 한 장(1440 × 900 스크롤 0 · 서랍 0): 제목 · 설명 52 → 숫자 4(64) → 흐름도(남는 높이 — 진행 띠가 생기면 흐름도가 줄어 흡수) → 왜 나눌까 · 모아서 vs 하나씩(124) → 회색 각주(24).
-// 높이 셈(본문 804 = 900 − 셸 머리 56 − 안쪽 여백 40 · 칸 사이 8): 띠 있음 804 − 52 − 34 − 64 − 124 − 24 − 8 × 5 = 466 · 띠 없음 508 —
-//   흐름도(viewBox 1126 × 440)가 테두리 2 · 안쪽 여백(가로 24 · 세로 12)을 뺀 1126 × 452 ~ 494에 든다 — 가로가 먼저 차서 띠가 있어도 없어도 1.0배(viewBox 단위 = CSS px · 노드 글자 12 ~ 14가 화면 크기 그대로).
-//   흐름도 최소 높이 454(= viewBox 440 + 테두리 · 세로 여백 14) — 세로에 묶여 1.0배 아래로 줄지 않는다(글자 바닥 12px). 그래서 화면 최소 높이 750
-//   (52 + 64 + 454 + 124 + 24 + 칸 사이 8 × 4). 1440 × 900은 흐름도가 466 ~ 508이라 이 바닥에 닿지 않는다(스크롤 0 그대로).
-//   1280 × 800은 내비가 레일(56)로 시작해 가로 1158 — 세로 704에 흐름도가 408이면 0.895배라, 바닥 454로 본문이 46 스크롤하고 1.0배를 지킨다
-//   (스크롤 허용 · .omc/plans/web-ux-polish.md §7.1 R4 · 진행 띠가 있으면 42 더 넘친다 — 1280에서 실행 중일 때만).
-//   1920 × 1080은 셸 본문 최대 폭 1408 안에서 가로 1382에 1.23배(세로가 남아 가로에 묶인다).
-//   다듬기 정본 .omc/plans/web-ux-polish.md §2.3 — 숫자 4 큰 숫자 28 · 흐름도 글자 · 조회 줄 선 정리 · 왜 나눌까 한 구역 세 칸 · 막대 10.
+// ⑥ 분산 처리 모니터링(/monitoring · EXP-FLOW) — 정본 docs/08_screen/08_evidence_screens.md §EXP-FLOW · docs/08_screen/01_standards.md §반응형 규칙
+// 화면 틀(components/shell/screen.tsx Screen): 제목 · 설명 + 머리 오른쪽 설비 가동 스위치 · 데이터 지우기 → 진행 띠(직접 보내 보기 중) → 숫자 4(64 → 88) →
+// 흐름도(남는 높이 — viewBox 1126 × 440 · meet) → 왜 나눌까 · 모아서 vs 하나씩(124 → 160) → 회색 각주(Footnote · 세부는 ⓘ 툴팁 — 스위치 · 저장소 상태).
+// 숫자 4 · 아래 줄의 높이와 글자는 1280 기준값에서 2560까지 글자 토큰(app/globals.css --fs)과 같은 비율로 는다.
+// 맞춤 보기(1280×720 ~ 2560×1440)는 페이지 스크롤 0 — 세로가 820px 미만이면 아래 줄(124)을 빼서 흐름도가 배율 1(글자 12px 이상)을 지킨다.
+// 작은 화면(맞춤 보기 밖)은 흐름도가 원래 비율로 쌓이고 본문만 세로로 스크롤한다.
 // 진입이 곧 subscribe_flow이고 이탈이 unsubscribe_flow다 — 셸의 WebSocket 연결 하나를 그대로 쓴다(재연결 재구독은 lib/realtime-socket.ts).
 // 관찰 보조 — 기록 정본 아님. flow 프레임은 캐시 층이 없다(Pub/Sub · 링 버퍼 20). 저장소 값은 BFF 흐름 보기 5초 폴링.
-// 직접 보내 보기(GEN-12)는 셸 머리 동작 자리(RunControl) · 머리 아래 진행 띠(RunProgress) — 결과는 흐름도가 바로 보여 준다.
+// 직접 보내 보기(GEN-12)는 셸 머리 동작 자리(RunControl) · 진행 띠(RunProgress) — 결과는 흐름도가 바로 보여 준다.
+// 센서가 안 올 때의 안내는 설비 가동 기준(health run.sensorAutogen — 실행 중 실효 상태 · 설비 가동 스위치가 정한다).
 import { useQuery } from '@tanstack/react-query';
 import { useEffect, useRef, useState } from 'react';
 import { ApiError } from '../../../lib/api';
@@ -47,11 +44,14 @@ import { healthTip } from '../../../lib/switches';
 import { formatAge } from '../../../lib/time';
 import { useNow } from '../../../lib/use-now';
 import { cn } from '../../../lib/utils';
+import { PlantPowerSwitch } from '../../controls/plant-power';
+import { PurgeButton } from '../../controls/purge-button';
 import { RunProvider, useRunContext } from '../../runs/run-context';
 import { RunControl } from '../../runs/run-control';
 import { RunProgress } from '../../runs/run-progress';
 import { FLOW_PARAM_DEFS } from '../../runs/run-spec';
 import { HeaderActions, HeaderStatus } from '../../shell/header-actions';
+import { Footnote, Screen } from '../../shell/screen';
 import { DotEngine, FlowDiagram } from './flow-diagram';
 import { BatchVsOne, HeadlineRow, WhyCards } from './flow-panels';
 import {
@@ -93,8 +93,8 @@ export const FLOW_LEAD =
   '공장 센서 데이터와 업무 데이터가 Redis 대기줄을 거쳐, 각자에게 맞는 DB로 나뉘어 저장되는 모습이에요. 움직이는 점 하나가 실제 데이터 묶음 하나예요.';
 
 /**
- * 흐름도 머리 알림 한 줄 — 직접 보내 보기 실행 상태(running · stopping이면 꺼짐 안내를 숨긴다)가 필요해 RunProvider 안에서 그린다
- * (current 1초 폴링은 Provider 한 곳 — run-context).
+ * 흐름도 알림 한 줄 — 직접 보내 보기 실행 상태(running · stopping이면 꺼짐 안내를 숨긴다)가 필요해 RunProvider 안에서 그린다
+ * (current 1초 폴링은 Provider 한 곳 — run-context). 자리는 흐름도 오른쪽 아래 빈 모서리 — 위에 두면 단 머리("어디에 저장하나")를 덮는다.
  */
 function FlowNoticeLine({ input }: { input: Omit<FlowNoticeInput, 'flowRunActive'> }) {
   const { snapshot, type } = useRunContext();
@@ -106,7 +106,7 @@ function FlowNoticeLine({ input }: { input: Omit<FlowNoticeInput, 'flowRunActive
       data-testid="flow-notice"
       data-tone={notice.tone}
       className={cn(
-        'absolute top-2 right-3 rounded-full border px-3 py-0.5 text-xs',
+        'absolute right-3 bottom-2 rounded-full border px-3 py-0.5 text-foot',
         notice.tone === 'info'
           ? 'border-slate-200 bg-slate-50 text-slate-600'
           : 'border-amber-200 bg-amber-50 text-amber-800',
@@ -206,11 +206,8 @@ export function FlowScreen() {
 
   return (
     <RunProvider type="flow">
-      {/* 한 화면 높이 — 본문(100dvh − 셸 머리) − 본문 안쪽 여백 40 */}
-      <div
-        data-testid="flow-screen"
-        className="flex h-[calc(100dvh-var(--header-height)-40px)] min-h-[750px] flex-col gap-2"
-      >
+      {/* data-testid는 e2e가 화면 뿌리를 찾는 이름(display contents — 화면 틀이 셸 본문 높이를 그대로 받는다) */}
+      <div data-testid="flow-screen" className="contents">
         <HeaderStatus>
           <span data-testid="flow-sub" className="text-slate-600">
             · {silent || dataAge === null ? '데이터 기다리는 중' : `마지막 데이터 ${dataAge} 전`}
@@ -223,84 +220,85 @@ export function FlowScreen() {
             intro="센서 데이터 · 업무 요청 · 조회 요청을 정한 양만큼 보내 봐요 — 결과는 흐름도가 바로 보여 줘요"
           />
         </HeaderActions>
-
-        {/* 제목 · 설명 52 */}
-        <header className="h-[52px] shrink-0">
-          <h2 className="truncate text-xl leading-7 font-bold text-slate-900">{FLOW_TITLE}</h2>
-          <p className="truncate text-sm leading-6 text-slate-600">{FLOW_LEAD}</p>
-        </header>
-
-        {/* 진행 띠 — 직접 보내 보기 중일 때만(32) · 흐름도가 그만큼 줄어든다 */}
-        <RunProgress className="shrink-0" />
-
-        <HeadlineRow
-          items={headlines({
-            rates: shown,
-            lag,
-            bizLag: flags.bizDirect ? null : bizLag,
-            slowing: maxBackpressure(metrics?.redis.backpressure ?? null) !== null,
-            e2eP50: metrics?.e2e.p50 ?? null,
-            e2eRows: metrics?.e2e.rows ?? null,
-          })}
-          dim={dim}
-        />
-
-        {/* 흐름도 — 남는 높이(1440 × 900 · 띠 있음 466 · 없음 508) · 최소 454 — 세로에 묶여 1.0배 아래로 줄지 않는다
-            (1280 × 800은 본문이 스크롤 — 스크롤 허용 · 1440 × 900은 늘 454 이상이라 스크롤 0) */}
-        <section
-          aria-label="흐름도"
-          className="relative min-h-[454px] flex-1 rounded-lg border border-slate-200 bg-white px-3 py-1.5"
+        <Screen
+          id="monitoring"
+          title={FLOW_TITLE}
+          lead={FLOW_LEAD}
+          aside={
+            <>
+              <PlantPowerSwitch />
+              <PurgeButton />
+            </>
+          }
+          foot={
+            <Footnote testId="flow-footnote" tip={healthTip(health, healthQ.isError && !health)}>
+              {footnoteText(off, flags.controlCopyOff && flags.controlCopyGated)}
+            </Footnote>
+          }
         >
-          <FlowNoticeLine input={noticeInput} />
-          <FlowDiagram
-            engine={engine}
-            rates={rates}
-            flags={flags}
-            lines={{
-              src: sourceLines(skeleton ? null : rates.rows),
-              stream: streamLines(skeleton ? null : lag, flags.streamOff),
-              latest: latestLines(shown, flags),
-              bizStream: bizStreamLines(bizLag, flags.bizDirect),
-              reply: replyLines(shown, flags.bizDirect),
-              worker: workerLines(shown),
-              bizSrc: bizSrcLines(shown),
-              ch: stores.ch,
-              pg: stores.pg,
-              readSrc: readSrcLines(reads),
-              readCache: readCacheLines(reads),
-            }}
-            reads={reads}
-            readMissLabel={readMissLabel(reads)}
-            readSrcTip={readSrcTip(reads)}
-            readCacheTip={readCacheTip(reads)}
-            pillarFoot={pillarFootText(metrics)}
-            sourceTip={skeleton ? null : sourceTip(pps, metricRates)}
-            invalidation={inval?.value ?? null}
-            skeleton={skeleton}
-          />
-        </section>
+          {/* 진행 띠 — 직접 보내 보기 중일 때만 · 흐름도가 그만큼 줄어든다 */}
+          <RunProgress className="shrink-0" />
 
-        {/* 아래 줄 124 — 왜 나눌까(한 구역 세 칸) · 모아서 vs 하나씩 */}
-        <div className="grid h-[124px] shrink-0 grid-cols-[2fr_1fr] gap-3">
-          <WhyCards cards={whyCards(shown, flags)} dim={dim} />
-          <BatchVsOne
-            bars={compareBars(
-              batchStageAverages(state.timeline),
-              bizStageAverages(state.biz),
-              state.timeline,
-            )}
+          <HeadlineRow
+            items={headlines({
+              rates: shown,
+              lag,
+              bizLag: flags.bizDirect ? null : bizLag,
+              slowing: maxBackpressure(metrics?.redis.backpressure ?? null) !== null,
+              e2eP50: metrics?.e2e.p50 ?? null,
+              e2eRows: metrics?.e2e.rows ?? null,
+            })}
             dim={dim}
           />
-        </div>
 
-        {/* 회색 각주 24 — 마우스를 올리면 스위치 · 저장소 상태(health) */}
-        <p
-          data-testid="flow-footnote"
-          className="h-6 shrink-0 truncate text-xs leading-6 text-slate-500"
-          title={healthTip(health, healthQ.isError && !health)}
-        >
-          {footnoteText(off)}
-        </p>
+          {/* 흐름도 — 남는 높이를 다 가진다(viewBox 1126 × 440 · meet) · 작은 화면은 원래 비율로 쌓인다 */}
+          <section
+            aria-label="흐름도"
+            className="relative aspect-[1150/454] w-full shrink-0 rounded-lg border border-slate-200 bg-white px-3 py-1.5 fit:aspect-auto fit:min-h-0 fit:flex-1 fit:shrink"
+          >
+            <FlowNoticeLine input={noticeInput} />
+            <FlowDiagram
+              engine={engine}
+              rates={rates}
+              flags={flags}
+              lines={{
+                src: sourceLines(skeleton ? null : rates.rows),
+                stream: streamLines(skeleton ? null : lag, flags.streamOff),
+                latest: latestLines(shown, flags),
+                bizStream: bizStreamLines(bizLag, flags.bizDirect),
+                reply: replyLines(shown, flags.bizDirect),
+                worker: workerLines(shown),
+                bizSrc: bizSrcLines(shown),
+                ch: stores.ch,
+                pg: stores.pg,
+                readSrc: readSrcLines(reads),
+                readCache: readCacheLines(reads),
+              }}
+              reads={reads}
+              readMissLabel={readMissLabel(reads)}
+              readSrcTip={readSrcTip(reads)}
+              readCacheTip={readCacheTip(reads)}
+              pillarFoot={pillarFootText(metrics)}
+              sourceTip={skeleton ? null : sourceTip(pps, metricRates)}
+              invalidation={inval?.value ?? null}
+              skeleton={skeleton}
+            />
+          </section>
+
+          {/* 아래 줄 124(1280) → 160(2560 — 글자 토큰과 같은 비율) — 왜 나눌까(한 구역 세 칸) · 모아서 vs 하나씩. 맞춤 보기에서 세로가 짧으면(820px 미만) 줄을 뺀다 —
+              흐름도 글자(viewBox 12 ~ 14)가 배율 1 아래로 줄지 않게(반응형 규칙 "줄 수를 줄인다") */}
+          <div className="grid h-[clamp(124px,calc(124px+36*var(--fs)),160px)] shrink-0 grid-cols-[2fr_1fr] gap-[var(--gap)] [@media(min-width:80rem)_and_(min-height:45rem)_and_(max-height:51.2rem)]:hidden">
+            <WhyCards cards={whyCards(shown, flags)} dim={dim} />
+            <BatchVsOne
+              bars={compareBars(
+                batchStageAverages(state.timeline),
+                bizStageAverages(state.biz),
+                state.timeline,
+              )}
+              dim={dim}
+            />
+          </div>
+        </Screen>
       </div>
     </RunProvider>
   );

@@ -7,8 +7,7 @@ const REASON_BY_CODE = new Map<number, WsCloseReason>(
 );
 
 /**
- * 종료 코드 → 재연결 여부. 계약 8종은 WS_RECONNECT를 따른다.
- * 4401(갱신 후 1회)은 S2에 인증 · BFF 갱신이 없어 갱신할 토큰이 없다 — 재연결하지 않고 끊김으로 둔다.
+ * 종료 코드 → 재연결 여부. 계약 종료 코드는 WS_RECONNECT를 따른다.
  * 계약 밖 코드(1006 비정상 종료 · 핸드셰이크 실패 등)는 네트워크 단절과 같아 백오프 재연결한다.
  */
 export function shouldReconnect(code: number): boolean {

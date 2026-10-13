@@ -1,13 +1,10 @@
 // 실행 조작부 · 진행 띠의 순수 로직 — 매개변수 정의(쉬운 말 라벨) · 요청 본문 · 단계 n/m
 // 버튼 상태 · 문구 · 종결 띠 · 경과 규칙은 lib/runs.ts(runControls · runBand · runElapsedText · flowProgress)를 그대로 쓴다 — 여기서 다시 만들지 않는다.
-import { rowsWords } from '../../lib/perf';
-import { largeRunWarning } from '../../lib/runs';
 import {
   FLOW_BIZ_PER_SEC,
   FLOW_DURATION_SEC,
   FLOW_PPS,
   FLOW_READS_PER_SEC,
-  PERF_MAX_EXPONENTS,
   RUN_DEFAULTS,
   type RunObjectBody,
 } from '../../lib/shared';
@@ -22,17 +19,6 @@ export interface RunParamDef {
   warn?: (v: number) => string | null;
 }
 
-export const PERF_PARAM_DEFS: readonly RunParamDef[] = [
-  {
-    key: 'maxExponent',
-    label: '어디까지',
-    values: PERF_MAX_EXPONENTS,
-    defaultValue: RUN_DEFAULTS.perf.maxExponent,
-    text: rowsWords,
-    warn: largeRunWarning,
-  },
-];
-
 export const FLOW_PARAM_DEFS: readonly RunParamDef[] = [
   {
     key: 'pps',
@@ -46,14 +32,14 @@ export const FLOW_PARAM_DEFS: readonly RunParamDef[] = [
     label: '보내는 시간',
     values: FLOW_DURATION_SEC,
     defaultValue: RUN_DEFAULTS.flow.durationSec,
-    text: (v) => `${v}초`,
+    text: (v) => `${v}s`,
   },
   {
     key: 'bizPerSec',
     label: '업무 요청(초당)',
     values: FLOW_BIZ_PER_SEC,
     defaultValue: RUN_DEFAULTS.flow.bizPerSec,
-    text: (v) => `${v}/초`,
+    text: (v) => `${v}/s`,
   },
   // 조회 섞기(설계 §9.1) — 센서 시계열 · 센서 지금 값 · 업무 목록 조회를 초당 이만큼(0이면 보내지 않는다)
   {
@@ -61,7 +47,7 @@ export const FLOW_PARAM_DEFS: readonly RunParamDef[] = [
     label: '조회 요청(초당)',
     values: FLOW_READS_PER_SEC,
     defaultValue: RUN_DEFAULTS.flow.readsPerSec,
-    text: (v) => (v === 0 ? '안 보냄' : `${v}/초`),
+    text: (v) => (v === 0 ? '안 보냄' : `${v}/s`),
   },
 ];
 

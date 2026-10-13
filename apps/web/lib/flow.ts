@@ -38,14 +38,13 @@ export const PG_UNAVAILABLE_CODE = 'common.postgres_unavailable';
 export type BatchStageKey = keyof FlowBatchSummaryBody['stages'];
 export type BizStageKey = keyof FlowBizSummaryBody['stages'];
 
-/** 배치 단계 6 — ⑧ 순서 그대로(스트림 대기 → 디코드 → CH 삽입 → PG COPY → 최신값 → 알람) · XACK는 ms가 없어 막대에 자리가 없다 */
+/** 배치 단계 5 — ⑧ 순서 그대로(스트림 대기 → 디코드 → CH 삽입 → PG COPY → 최신값) · XACK는 ms가 없어 막대에 자리가 없다 */
 export const BATCH_STAGES: readonly { key: BatchStageKey; label: string }[] = [
   { key: 'streamWaitMs', label: '스트림 대기' },
   { key: 'decodeMs', label: '디코드' },
   { key: 'chInsertMs', label: 'CH 삽입' },
   { key: 'controlCopyMs', label: 'PG COPY' },
   { key: 'latestWriteMs', label: '최신값' },
-  { key: 'alarmMs', label: '알람' },
 ];
 
 /** 업무 단계 4 — 적용 단계 순서 그대로(대기 → 트랜잭션 → 무효화 → 결과) · 무효화가 결과보다 먼저인 것이 read-your-writes의 기전 */
@@ -96,7 +95,7 @@ function sumStages(stages: Record<string, number | null>): number {
 
 // ── 점 계획 — 노드 사이 다리(leg)마다 배율을 곱한 ms ──
 
-export type BatchNode = 'src' | 'stream' | 'worker' | 'ch' | 'pgCopy' | 'xack' | 'latest' | 'alarm';
+export type BatchNode = 'src' | 'stream' | 'worker' | 'ch' | 'pgCopy' | 'xack' | 'latest';
 export type BizNode = 'api' | 'bizStream' | 'bizWorker' | 'pgTx' | 'cache' | 'result';
 
 export interface Leg<N extends string> {
@@ -122,7 +121,7 @@ function finish<N extends string>(start: N, raw: Leg<N>[], realTotal: number): D
 }
 
 /**
- * 배치 점 — 스트림 대기 → 디코드 → CH 삽입 → PG COPY → XACK → 최신값 → 알람 판정(⑧ 순서) · null 단계는 건너뛴다.
+ * 배치 점 — 스트림 대기 → 디코드 → CH 삽입 → PG COPY → XACK → 최신값(⑧ 순서) · null 단계는 건너뛴다.
  * 스트림 대기는 발생원 → Stream → 워커 두 다리에 반씩 나눈다(단계 합은 그대로).
  */
 export function batchPlan(b: FlowBatchSummaryBody): DotPlan<BatchNode> {
@@ -139,7 +138,6 @@ export function batchPlan(b: FlowBatchSummaryBody): DotPlan<BatchNode> {
   if (s.controlCopyMs !== null) legs.push({ to: 'pgCopy', ms: s.controlCopyMs, stage: 'controlCopyMs' });
   legs.push({ to: 'xack', ms: 0, stage: null });
   if (s.latestWriteMs !== null) legs.push({ to: 'latest', ms: s.latestWriteMs, stage: 'latestWriteMs' });
-  if (s.alarmMs !== null) legs.push({ to: 'alarm', ms: s.alarmMs, stage: 'alarmMs' });
   return finish('src', legs, sumStages(s));
 }
 
@@ -553,7 +551,6 @@ export interface FlowRates {
   chRows: number | null;
   controlCopyRows: number | null;
   latestWrites: number | null;
-  transitions: number | null;
   commands: number | null;
   commandsWriter: number | null;
   commandsDirect: number | null;
@@ -578,15 +575,12 @@ export function flowRates(
   const biz = (f: string) => roleRate(tracks, ['biz-writer', 'api-direct'], f, now);
   const noBiz = opts.subscribed === true && !Object.values(tracks).some((t) => isSparseRole(t.role));
   const bizOrZero = (v: number | null) => (v === null && noBiz ? 0 : v);
-  const opened = ing('opened');
-  const closed = ing('closed');
   return {
     batches: ing('batches'),
     rows: ing('rows'),
     chRows: ing('chRows'),
     controlCopyRows: ing('controlCopyRows'),
     latestWrites: ing('latestWrites'),
-    transitions: opened === null && closed === null ? null : (opened ?? 0) + (closed ?? 0),
     commands: bizOrZero(biz('commands')),
     commandsWriter: roleRate(tracks, ['biz-writer'], 'commands', now),
     commandsDirect: roleRate(tracks, ['api-direct'], 'commands', now),
@@ -638,11 +632,14 @@ export function sensorQuiet(
 
 // ── 흐름도 위 알림 한 줄(08_evidence_screens §EXP-FLOW 빈 값 · 알림) ──
 export const FLOW_DISCONNECTED_NOTICE = '연결이 끊겨 점을 멈췄어요 — 다시 연결되면 이어서 보여 줘요';
-export const FLOW_NO_DATA_WARNING = '10초째 새 데이터가 오지 않아요 — 센서 데이터 적재가 멈췄을 수 있어요';
+export const FLOW_NO_DATA_WARNING = '10s째 새 데이터가 오지 않아요 — 센서 데이터 적재가 멈췄을 수 있어요';
 export const FLOW_ACK_LATE_NOTICE = '연결 확인이 늦어지고 있어요';
-/** 센서 자동 생성 꺼짐(health run.sensorAutogen off) — 고장이 아니라 꺼 둔 상태라 경고가 아니라 길 안내다 */
+/**
+ * 설비 가동 꺼짐(health run.sensorAutogen off — 실행 중 실효 상태 · 설비 가동 스위치가 정한다) — 고장이 아니라 꺼 둔 상태라 경고가 아니라 길 안내다.
+ * 켜는 길 둘: 화면 머리 설비 가동 스위치 · 셸 머리 '직접 보내 보기'.
+ */
 export const FLOW_AUTOGEN_OFF_NOTICE =
-  "센서 자동 생성이 꺼져 있어요 — 오른쪽 위 '직접 보내 보기'로 데이터를 보내 보세요";
+  "설비 가동이 꺼져 있어요 — 위 스위치로 켜거나 '직접 보내 보기'로 보내 보세요";
 
 /** warn = 경고 색(앰버) · info = 차분한 안내(회색) */
 export interface FlowNotice {
@@ -699,7 +696,7 @@ export interface FlowMetrics {
   source: {
     /** points_emitted 합(device 전부 · 누적) — Collector */
     pointsEmitted: number | null;
-    /** gen_points_generated_total{mode}(누적) — run(라이브 flow 실행)을 모드 B와 따로 */
+    /** gen_points_generated_total{mode}(누적) — run(라이브 flow 실행)을 모드 A(가상 PLC 레지스터 갱신)와 따로 */
     genByMode: Record<string, number> | null;
     /** redis_stream_entries_added_total{stream}(누적) */
     streamAdded: Record<string, number> | null;
@@ -708,13 +705,11 @@ export interface FlowMetrics {
     tables: Record<string, FlowChTable>;
     insertedRowsTotal: number | null;
     rowsInserted: number | null;
-    alarmEvalRowsInserted: number | null;
   };
   postgres: {
     tables: Record<string, FlowPgTable>;
     walBytesTotal: number | null;
     xactCommitTotal: number | null;
-    activeAlarms: Record<string, number> | null;
   };
   redis: {
     usedMemoryBytes: number | null;
@@ -763,7 +758,6 @@ export function summarizeFlow(samples: readonly MetricSample[]): FlowMetrics {
   const streamAdded: Record<string, number> = {};
   const chTables: Record<string, FlowChTable> = {};
   const pgTables: Record<string, FlowPgTable> = {};
-  const activeAlarms: Record<string, number> = {};
   const prefixMemory: Record<string, number> = {};
   const streamLength: Record<string, number> = {};
   const backpressure: Record<string, number> = {};
@@ -775,13 +769,8 @@ export function summarizeFlow(samples: readonly MetricSample[]): FlowMetrics {
   const latestPoints: Record<string, number> = {};
   const m: FlowMetrics = {
     source: { pointsEmitted: null, genByMode: null, streamAdded: null },
-    clickhouse: {
-      tables: chTables,
-      insertedRowsTotal: null,
-      rowsInserted: null,
-      alarmEvalRowsInserted: null,
-    },
-    postgres: { tables: pgTables, walBytesTotal: null, xactCommitTotal: null, activeAlarms: null },
+    clickhouse: { tables: chTables, insertedRowsTotal: null, rowsInserted: null },
+    postgres: { tables: pgTables, walBytesTotal: null, xactCommitTotal: null },
     redis: {
       usedMemoryBytes: null,
       maxMemoryBytes: null,
@@ -849,9 +838,6 @@ export function summarizeFlow(samples: readonly MetricSample[]): FlowMetrics {
       case 'rows_inserted':
         m.clickhouse.rowsInserted = plus(m.clickhouse.rowsInserted, v);
         break;
-      case 'alm_eval_rows_inserted_total':
-        m.clickhouse.alarmEvalRowsInserted = plus(m.clickhouse.alarmEvalRowsInserted, v);
-        break;
       case 'pg_relation_size_bytes':
         if (l.kind === 'index') pg(l.table).indexBytes = plus(pg(l.table).indexBytes, v);
         else pg(l.table).heapBytes = plus(pg(l.table).heapBytes, v);
@@ -867,9 +853,6 @@ export function summarizeFlow(samples: readonly MetricSample[]): FlowMetrics {
         break;
       case 'pg_xact_commit_total':
         m.postgres.xactCommitTotal = v;
-        break;
-      case 'alm_active_alarms':
-        add(activeAlarms, l.severity, v);
         break;
       case 'redis_used_memory_bytes':
         m.redis.usedMemoryBytes = v;
@@ -929,7 +912,6 @@ export function summarizeFlow(samples: readonly MetricSample[]): FlowMetrics {
     genByMode: orNull(genByMode),
     streamAdded: orNull(streamAdded),
   };
-  m.postgres.activeAlarms = orNull(activeAlarms);
   m.redis.prefixMemory = orNull(prefixMemory);
   m.redis.streamLength = orNull(streamLength);
   m.redis.backpressure = orNull(backpressure);
@@ -1053,11 +1035,10 @@ export function readShare(part: number | null, rr: Pick<ReadRates, 'requests'>):
 }
 
 /**
- * 센서 대기줄(Stream)로 들어가는 생성 모드 — B(생성기 → XADD 직결) · C(HTTP 표면) · run(라이브 flow 실행).
+ * 센서 대기줄(Stream)로 들어가는 생성 모드 — run(라이브 flow 실행)뿐이다.
  * A는 레지스터만 갱신하고 행은 Collector가 폴링해 만든다(points_emitted가 그 수 — 10_observability/01 §무손실 차 S2 판정) — 더하면 두 번 센다.
- * D는 ClickHouse 직행 · standalone은 수집 경로 없는 생성기 단독 측정이라 대기줄을 지나지 않는다(06_pipeline/10 §모드 표).
  */
-export const STREAM_GEN_MODES: readonly string[] = ['B', 'C', 'run'];
+export const STREAM_GEN_MODES: readonly string[] = ['run'];
 
 /** 발생원 초당 포인트 — Collector 발행 + 대기줄로 가는 생성 모드만(공장 센서 노드 · 대기줄 간선 라벨) */
 export function sourcePps(r: FlowMetricRates | null): number | null {
@@ -1073,6 +1054,8 @@ export function sourcePps(r: FlowMetricRates | null): number | null {
 
 export interface FlowSwitchFlags {
   controlCopyOff: boolean;
+  /** SW-09 gated — 비교 사본은 직접 비교 실험(게이트 켬) 중에만 실린다(꺼진 길이 아니라 기다리는 길) */
+  controlCopyGated: boolean;
   collectorLatest: boolean;
   streamOff: boolean;
   directGateway: boolean;
@@ -1097,8 +1080,12 @@ export function flowSwitchFlags(
   lastBiz: FlowBizSummaryBody | null,
   switches: Record<string, SwitchStateBody> | null,
 ): FlowSwitchFlags {
+  // SW-09는 값이 셋(off · on · gated — 기본 gated) — 요약이 없으면 on일 때만 길을 그린다(gated는 실험 중에만 실린다)
+  const sw09 = switches?.['SW-09'];
+  const sw09Value = sw09 && sw09.impl !== null ? String(sw09.value) : null;
   return {
-    controlCopyOff: latestBatch ? latestBatch.controlCopy === null : !isAlt(switches, 'SW-09'),
+    controlCopyOff: latestBatch ? latestBatch.controlCopy === null : sw09Value !== 'on',
+    controlCopyGated: sw09Value === null || sw09Value === 'gated',
     collectorLatest: latestBatch ? latestBatch.latestWrites === null : isAlt(switches, 'SW-11'),
     streamOff: latestBatch ? latestBatch.stream === null : isAlt(switches, 'SW-01'),
     directGateway: isAlt(switches, 'SW-06'),
@@ -1107,7 +1094,7 @@ export function flowSwitchFlags(
   };
 }
 
-// ── 숫자 4 · 모아서 vs 하나씩(설계 .omc/plans/web-junior-redesign.md §3) ──
+// ── 숫자 4 · 모아서 vs 하나씩(docs/08_screen/08_evidence_screens.md §EXP-FLOW §요소) ──
 
 export interface StageAvg<K extends string> {
   key: K;
@@ -1164,7 +1151,7 @@ export const BATCH_WAIT_STAGE: BatchStageKey = 'streamWaitMs';
 export const BIZ_WAIT_STAGE: BizStageKey = 'queueWaitMs';
 
 /**
- * 처리 시간 · 대기 시간 — 단계 평균을 대기 단계와 나머지(처리)로 가른다(.omc/plans/web-ux-polish.md §7.1 R17).
+ * 처리 시간 · 대기 시간 — 단계 평균을 대기 단계와 나머지(처리)로 가른다(docs/08_screen/08_evidence_screens.md §EXP-FLOW §요소).
  * 대기줄이 밀리면(예: ClickHouse가 멈춘 사이 쌓인 줄을 따라잡는 중) 대기만 수천 초로 커져 처리 방식 비교가 묻힌다 — 막대는 처리만,
  * 대기는 따로 한 줄. 둘 다 원천 단계 평균 그대로다(지어내지 않는다) · 그 단계 표본이 없으면 null.
  */
@@ -1179,18 +1166,18 @@ export function workAndWait<K extends string>(
 }
 
 /**
- * 사람이 읽는 시간 — 1초 미만 "120ms"(10ms 미만은 소수 1자리 "7.9ms") · 1분 미만 "1.2초" · 1시간 미만 "46분 28초" · 그 위 "3시간 2분".
- * 반올림한 뒤의 값으로 단위를 다시 고른다 — 999.6ms는 "1,000ms"가 아니라 "1.0초" · 59.96초는 "60.0초"가 아니라 "1분 0초".
+ * 사람이 읽는 시간 — 1초 미만 "120ms"(10ms 미만은 소수 1자리 "7.9ms") · 1분 미만 "1.2s" · 1시간 미만 "46m 28s" · 그 위 "3h 2m".
+ * 반올림한 뒤의 값으로 단위를 다시 고른다 — 999.6ms는 "1,000ms"가 아니라 "1.0s" · 59.96s는 "60.0s"가 아니라 "1m 0s".
  */
 export function durationText(ms: number | null | undefined): string {
   if (ms === null || ms === undefined || !Number.isFinite(ms) || ms < 0) return '—';
   if (ms < 9.95) return `${ms.toFixed(1)}ms`;
   if (Math.round(ms) < 1_000) return `${Math.round(ms)}ms`;
-  if (Math.round(ms / 100) < 600) return `${(ms / 1000).toFixed(1)}초`;
+  if (Math.round(ms / 100) < 600) return `${(ms / 1000).toFixed(1)}s`;
   const s = Math.round(ms / 1000);
-  if (s < 3_600) return `${Math.floor(s / 60)}분 ${s % 60}초`;
+  if (s < 3_600) return `${Math.floor(s / 60)}m ${s % 60}s`;
   const m = Math.round(s / 60);
-  return `${Math.floor(m / 60)}시간 ${m % 60}분`;
+  return `${Math.floor(m / 60)}h ${m % 60}m`;
 }
 
 /**

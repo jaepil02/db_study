@@ -1,4 +1,4 @@
-// 스위치 판정 · 조합 경고 — 두 화면의 각주(요약 · 마우스 올림 툴팁)가 쓴다(측정 조건 서랍 · 스위치 비교 화면은 폐지 — D-14 · D-15)
+// 스위치 판정 · 조합 경고 — ⑥ 분산 처리 모니터링 각주(요약 · 마우스 올림 툴팁)가 쓴다(측정 조건 서랍 · 스위치 비교 화면은 폐지 — D-14 · D-15)
 // "현재" 열은 환경변수 문자열이 아니라 health switches.*.impl · value다(REQ-OBS-11).
 import { type HealthBody, implFor, SWITCHES, type SwitchSpec } from './shared';
 
@@ -57,22 +57,56 @@ export interface ComboWarning {
 }
 
 /**
- * 조합 제약 경고 9건(#1~#9) — 화면 판정 조건은 "그 스위치가 대안 구현인가"뿐이다. health에 없거나 impl null(도입 전)인 스위치는 판정하지 않는다.
- * #10(SW-12 stream + 워커 역할 없음)은 판정하지 않는다 — 조건이 기본값이라 경고로 띄우면 모든 기동에서 떠 다른 경고가 묻힌다.
+ * SW-09(kind sink) 값의 쉬운 뜻 — off 싣지 않음 · on 늘 싣기 · gated(기본) 직접 비교 실험 중에만(D-16 · 실행이 게이트를 켠 동안만 같은 배치를 PostgreSQL에도 싣는다).
+ * 각주 툴팁이 "SW-09=on(늘 싣기)"처럼 값 옆에 붙인다.
  */
-const COMBO_RULES: readonly { no: number; switchId: string; text: string }[] = [
+export const SINK_VALUE_TEXT: Record<string, string> = {
+  off: '싣지 않음',
+  on: '늘 싣기',
+  gated: '비교 실험 중에만',
+};
+
+/** 툴팁의 스위치 값 표기 — sink만 쉬운 뜻을 괄호로 붙인다 */
+export function switchValueText(spec: SwitchSpec, value: string | number): string {
+  const plain = spec.kind === 'sink' ? SINK_VALUE_TEXT[String(value)] : undefined;
+  return plain ? `${value}(${plain})` : String(value);
+}
+
+/**
+ * 조합 제약 경고 9건(#1~#9) — 판정 조건은 기본이 "그 스위치가 대안 구현인가"다. health에 없거나 impl null(도입 전)인 스위치는 판정하지 않는다.
+ * SW-09는 값이 셋이고 on · gated가 같은 구현(PostgresControlSink)을 주입하므로 구현이 아니라 값으로 판정한다(#4 — on일 때만).
+ * #10(SW-12 stream + 워커 역할 없음)은 판정하지 않는다 — 조건이 기본값이라 경고로 띄우면 모든 기동에서 떠 다른 경고가 묻힌다.
+ * #2 · #8 · #9의 옛 주입 모드 B · C · D(측정 도구 — D-16 삭제)는 지금 그 자리에 있는 실행(직접 보내 보기 · 직접 비교 실험 — 수집기를 거치지 않고
+ * Redis 대기줄에 바로 싣는다)으로 말한다.
+ */
+const COMBO_RULES: readonly {
+  no: number;
+  switchId: string;
+  text: string;
+  /** 경고 조건 — 없으면 "기본값과 다른 구현" */
+  when?: (value: string | number) => boolean;
+}[] = [
   {
     no: 1,
     switchId: 'SW-03',
     text: '캐시가 없어요 — SW-04 · SW-05 on/off 차이가 0이라 이 구성으로는 비교하지 않아요',
   },
-  { no: 2, switchId: 'SW-01', text: 'Stream 경계가 없어요 — 주입 모드 A로만 실험해요(모드 B · C는 안 돼요)' },
+  {
+    no: 2,
+    switchId: 'SW-01',
+    text: 'Stream 경계가 없어요 — 대기줄에 바로 싣는 직접 보내 보기 · 직접 비교 실험은 이 구성으로 재지 않아요',
+  },
   {
     no: 3,
     switchId: 'SW-01',
     text: '멱등 수치는 이 구성으로 재지 않아요 — 배치 토큰 재료(엔트리 ID)가 없어요',
   },
-  { no: 4, switchId: 'SW-09', text: '대조군 적재가 켜졌어요 — 목표 ② 처리량 측정과 섞지 않아요' },
+  {
+    no: 4,
+    switchId: 'SW-09',
+    text: '비교 사본 적재가 늘 켜졌어요 — 센서 처리량을 잴 때 PostgreSQL 사본 비용이 섞여요(기본은 비교 실험 중에만)',
+    when: (v) => String(v) === 'on',
+  },
   {
     no: 5,
     switchId: 'SW-10',
@@ -84,11 +118,15 @@ const COMBO_RULES: readonly { no: number; switchId: string; text: string }[] = [
     switchId: 'SW-02',
     text: 'SW-11 비교는 이 구성으로 재지 않아요 — 최신값 조회가 rt:latest를 읽지 않아요',
   },
-  { no: 8, switchId: 'SW-10', text: '데드밴드는 주입 모드 A에서만 돌아요 — 모드 B · C · D로는 재지 않아요' },
+  {
+    no: 8,
+    switchId: 'SW-10',
+    text: '데드밴드는 설비 수집(가상 PLC)에서만 돌아요 — 직접 보내 보기 · 직접 비교 실험 데이터에는 걸리지 않아요',
+  },
   {
     no: 9,
     switchId: 'SW-11',
-    text: 'collector 갱신은 주입 모드 A에서만 돌아요 — 모드 B · C · D에서는 최신값을 쓰는 주체가 없어요',
+    text: 'collector 갱신은 설비 수집에서만 지금 값을 써요 — 직접 보내 보기 · 직접 비교 실험 데이터는 지금 값을 쓰는 주체가 없어요',
   },
 ];
 
@@ -98,7 +136,8 @@ export function comboWarnings(switches: SwitchStates): ComboWarning[] {
     const spec = SWITCHES.find((s) => s.id === rule.switchId);
     const cur = switches[rule.switchId];
     if (!spec || !cur || cur.impl === null) continue; // 도입 전(impl null)은 판정하지 않는다
-    if (cur.impl !== implFor(spec, spec.defaultValue)) out.push({ no: rule.no, text: rule.text });
+    const hit = rule.when ? rule.when(cur.value) : cur.impl !== implFor(spec, spec.defaultValue);
+    if (hit) out.push({ no: rule.no, text: rule.text });
   }
   return out;
 }
@@ -124,7 +163,7 @@ export function healthTip(health: HealthBody | null, failed: boolean): string {
   if (!health) return failed ? '구성을 읽지 못했어요' : '구성을 읽는 중이에요';
   const changed = buildSwitchRows(health.switches)
     .filter((r): r is Extract<SwitchRow, { kind: 'present' }> => r.kind === 'present' && !r.sameAsDefault)
-    .map((r) => `${r.spec.id}=${r.value}`);
+    .map((r) => `${r.spec.id}=${switchValueText(r.spec, r.value)}`);
   const stores = Object.entries(health.stores)
     .map(([k, c]) => `${k} ${c.status}`)
     .join(' · ');

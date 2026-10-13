@@ -1,13 +1,18 @@
-// 라이브 실행 패널(EXP-PERF · EXP-FLOW) — 정본 docs/08_screen/08_evidence_screens.md §실행 패널 — 두 화면 공통 규칙
+// 라이브 실행 패널(EXP-FLOW · 웨이브 2의 직접 비교 실험이 같은 틀을 쓴다) — 정본 docs/08_screen/08_evidence_screens.md §실행 패널 — 두 화면 공통 규칙
 // 표면 정본 docs/07_api/09_datagen.md §라이브 실행 제어 #2~#5 · §실행 객체 — 브라우저 → BFF(/bff/runs) → api · no-store.
 // 경과 시간은 서버 elapsedMs 하나를 기준으로 두고 브라우저는 그 응답을 받은 뒤 흐른 단조 시계 길이만 더한다(startedAt을 빼지 않는다).
 // 화면 조각은 components/runs/**가 그리고, 여기는 판정 · 문구 · 요청만 둔다(순수 함수 — 단위 테스트 대상).
 import type { Query } from '@tanstack/react-query';
 import { ApiError } from './api';
-import { rowsWords } from './perf';
 import {
+  COMPARE_PARTS,
+  COMPARE_QUERY_SIZES,
+  type ComparePart,
+  compareQueryStepKey,
+  compareSizeName,
   ErrorEnvelope,
   RUN_TERMINAL,
+  RUN_TYPES,
   RunCurrentBody,
   RunObject,
   type RunObjectBody,
@@ -21,7 +26,7 @@ type Fetch = (url: string, init?: RequestInit) => Promise<Response>;
 /** 폴링 주기 1초 — running · stopping 동안만(§갱신과 응답 처리 폴링 행) */
 export const RUN_POLL_MS = 1_000;
 
-/** 실행 쿼리 키 — 두 화면이 같은 키를 써서 한 화면에서 시작한 실행이 다른 화면으로 이어진다(08_screen/08 §EXP-FLOW 캐시 층) */
+/** 실행 쿼리 키 — 화면들이 같은 키를 써서 한 화면에서 시작한 실행이 다른 화면으로 이어진다(08_screen/08 §EXP-FLOW 캐시 층) */
 export const runKeys = {
   current: ['runs', 'current'] as const,
   one: (runId: string) => ['runs', runId] as const,
@@ -29,30 +34,29 @@ export const runKeys = {
 
 /** 화면 종류 → 화면 이름 · 경로(다른 실행 링크) — 1층 문구라 화면 코드가 아니라 이름을 쓴다(08_screen/08 §실행 패널 버튼 상태) */
 export const RUN_SCREEN: Record<RunType, { name: string; href: string }> = {
-  perf: { name: '성능 비교', href: '/performance' },
   flow: { name: '분산 처리 모니터링', href: '/monitoring' },
+  compare: { name: '직접 비교 실험', href: '/lab' },
 };
 
 /** 다른 종류의 실행이 진행 중일 때의 한 줄 — "다른 실행 진행 중(분산 처리 모니터링) — 그 화면으로" */
 export const otherRunText = (other: RunType): string =>
   `다른 측정이 이미 돌고 있어요 — ${RUN_SCREEN[other].name} 화면에서 보기`;
 
-/** 실행 기록 없음 — 선택 칸 문구(08_screen/08 §상태 4행 빈 값 — EXP-PERF ⑤ · EXP-FLOW ④) */
+/** 실행 기록 없음 — 선택 칸 문구(08_screen/08 §상태 4행 빈 값 — EXP-FLOW ④) */
 export const NO_RUN_TEXT: Record<RunType, string> = {
-  perf: '아직 재 보지 않았어요(서버가 다시 켜지면 지난 결과는 사라져요)',
   flow: '아직 보내 보지 않았어요(서버가 다시 켜지면 지난 결과는 사라져요)',
+  compare: '아직 재 보지 않았어요',
 };
 export const VANISHED_TEXT = '서버가 다시 켜져서 지난 실행 기록이 없어요';
 export const POLL_FAILED_TEXT = '상태를 못 읽었어요 — 다시 읽는 중이에요';
-/** 라이브 표지 — 완료 띠 옆 · 내 측정 범례의 글자와 툴팁 고정 문구(08_screen/08 §표시 계약 라이브 표지) */
+/** 라이브 표지 — 완료 띠 옆 글자와 툴팁 고정 문구(08_screen/08 §표시 계약 라이브 표지) */
 export const LIVE_LABEL = '내 측정(참고용)';
 export const LIVE_MARK = '라이브 실행 — 앱 경유 · 시연값 · 기록 정본 아님';
 /** 지난 실행 띠 머리 — 무엇을 잰 결과인지(리드 확인 2026-10-03) */
 export const LAST_RUN_LABEL: Record<RunType, string> = {
-  perf: '지난번 직접 재 보기',
   flow: '지난번 보내 보기',
+  compare: '지난번 직접 비교',
 };
-export const ROLE_TEXT = '엔지니어 · 관리자만 실행할 수 있어요';
 /** 같은 종류 409 — 이 화면에서 이미 돌고 있다(진행 띠가 그 실행을 보인다 · 자기 화면 링크를 걸지 않는다) */
 export const SAME_RUN_TEXT = '같은 측정이 이미 돌고 있어요 — 끝나면 다시 눌러 주세요';
 
@@ -73,7 +77,7 @@ export const isTerminal = (s: RunStatus): boolean => RUN_TERMINAL.has(s);
 export const formatRunClock = (iso: string): string => formatKstIso(iso).slice(11);
 
 /**
- * 경과 시간 — 진행 중 1초 단위("42초" · "1분 42초" · "1시간 3분 12초") · 종결 0.1초 단위 버림("12.4초" · "3분 12.4초" · "1시간 3분 12.4초").
+ * 경과 시간 — 진행 중 1s 단위("42s" · "1m 42s" · "1h 3m 12s") · 종결 0.1s 단위 버림("12.4s" · "3m 12.4s" · "1h 3m 12.4s").
  * 길이라 시간대 변환이 없다(08_screen/01 §시각 표시 경과 시간 행).
  */
 export function formatElapsed(ms: number, precise: boolean): string {
@@ -86,15 +90,15 @@ export function formatElapsed(ms: number, precise: boolean): string {
     h = Math.floor(tenths / 36_000);
     m = Math.floor((tenths % 36_000) / 600);
     const t = tenths % 600;
-    sec = `${Math.floor(t / 10)}.${t % 10}초`;
+    sec = `${Math.floor(t / 10)}.${t % 10}s`;
   } else {
     const s = Math.floor(v / 1000);
     h = Math.floor(s / 3600);
     m = Math.floor((s % 3600) / 60);
-    sec = `${s % 60}초`;
+    sec = `${s % 60}s`;
   }
-  if (h > 0) return `${h}시간 ${m}분 ${sec}`;
-  if (m > 0) return `${m}분 ${sec}`;
+  if (h > 0) return `${h}h ${m}m ${sec}`;
+  if (m > 0) return `${m}m ${sec}`;
   return sec;
 }
 
@@ -142,7 +146,7 @@ export function runBand(run: RunObjectBody): { tone: BandTone; text: string; tip
       return { tone: 'info', text: '멈추는 중이에요… — 하던 단계를 멈추고 정리하고 있어요', tip: null };
     case 'completed': {
       const drain = run.steps.find((s) => s.key === 'drain');
-      const late = drain?.detail.timedOut === true ? ' · 30초 안에 다 처리되지 않았어요' : '';
+      const late = drain?.detail.timedOut === true ? ' · 30s 안에 다 처리되지 않았어요' : '';
       return { tone: 'success', text: `완료 — 걸린 시간 ${took}${late}`, tip: end };
     }
     // 오류 문장은 길 수 있다 — 띠 안은 한 줄로 자르고(truncate) 전문은 툴팁 첫 줄에 둔다
@@ -170,16 +174,31 @@ export function runBand(run: RunObjectBody): { tone: BandTone; text: string; tip
   }
 }
 
-/** 지난 실행이 무엇을 잰 것인지 — perf "10만 행까지" · flow "초당 10,000개 · 60초" */
+/** 직접 비교 부분 이름 — ⑤ 패널 제목과 같은 말 */
+export const COMPARE_PART_NAME: Record<ComparePart, string> = {
+  ingest: '넣기',
+  query: '조회 대결',
+  consistency: '데이터 정합성',
+};
+
+const isComparePart = (v: unknown): v is ComparePart =>
+  typeof v === 'string' && (COMPARE_PARTS as readonly string[]).includes(v);
+
+/** 지난 실행이 무엇을 보낸 것인지 — flow "초당 10,000개 · 60초" · compare "넣기 1억 행" · "조회 대결" */
 export function runScopeText(run: Pick<RunObjectBody, 'type' | 'params'>): string | null {
-  if (run.type === 'perf')
-    return run.params.maxExponent === undefined ? null : `${rowsWords(run.params.maxExponent)}까지`;
+  if (run.type === 'compare') {
+    const { part, rows } = run.params;
+    if (!isComparePart(part)) return null;
+    const name = `직접 비교 ${COMPARE_PART_NAME[part]}`;
+    if (part === 'ingest' && typeof rows === 'number') return `${name} ${compareSizeName(rows)} 행`;
+    return name;
+  }
   const { pps, durationSec } = run.params;
-  if (pps === undefined || durationSec === undefined) return null;
-  return `초당 ${pps.toLocaleString('ko-KR')}개 · ${durationSec}초`;
+  if (typeof pps !== 'number' || durationSec === undefined) return null;
+  return `초당 ${pps.toLocaleString('ko-KR')}개 · ${durationSec}s`;
 }
 
-// ── 지난 실행 자리(.omc/plans/web-ux-polish.md §2.1) ──
+// ── 지난 실행 자리(docs/08_screen/08_evidence_screens.md §실행 패널 §상태 칩과 종결 표시) ──
 // 진행 띠는 실행 중과 "이 화면에서 방금 끝난" 실행(종결 뒤 30초)에만 본문 위에 선다. 그 뒤(또는 이미 끝난 실행을 열었을 때)는
 // 셸 머리 버튼 옆 작은 글자 한 줄로 접힌다 — 접힘은 애니메이션 없이 사라짐(서랍이 아니다) · 상세는 그 글자의 툴팁.
 
@@ -207,20 +226,13 @@ export const headerLastRun = (run: RunObjectBody | null, recentEndId: string | n
   run !== null && isTerminal(run.status) && run.runId !== recentEndId ? run : null;
 
 /**
- * 셸 머리 "지난번" 한 줄 — 무엇을 잰 결과(runScopeText) · 결말.
- * perf 완료 "지난번 100만 행까지 · 3.0초"(걸린 시간이 답) · flow 완료 "지난번 초당 1,000개 · 30초 · 완료"(보낸 시간은 이미 범위에 있다) ·
- * 중단 · 실패는 상태 낱말("· 중단됨" · "· 실패").
+ * 셸 머리 "지난번" 한 줄 — 무엇을 보낸 결과(runScopeText) · 결말.
+ * flow 완료 "지난번 초당 1,000개 · 30초 · 완료"(보낸 시간은 이미 범위에 있다) · 중단 · 실패는 상태 낱말("· 중단됨" · "· 실패").
  */
 export function lastRunText(run: RunObjectBody): string {
   const scope = runScopeText(run);
   const head = scope ? `지난번 ${scope}` : LAST_RUN_LABEL[run.type];
-  const tail =
-    run.status === 'completed'
-      ? run.type === 'perf'
-        ? formatElapsed(terminalElapsedMs(run), true)
-        : STATUS_LABEL.completed
-      : STATUS_LABEL[run.status];
-  return `${head} · ${tail}`;
+  return `${head} · ${STATUS_LABEL[run.status]}`;
 }
 
 /** "지난번" 글자 툴팁 — 띠가 하던 말 전부(머리 · 종결 띠 문장과 툴팁 · 시작 · 종료 · 단계 · 라이브 표지) */
@@ -259,21 +271,35 @@ export function runTip(run: RunObjectBody): string {
  * 지금 단계 쉬운 문장 — 진행 띠 한 줄(단계 key로 분기 · label은 서버 문구라 쓰지 않는다 · 07_api/09 §steps[]).
  * 진행 중이면 running 단계(없으면 첫 대기 단계) · 종결이면 null(띠가 완료 · 중단 · 실패 문구를 낸다).
  */
-export function stepPlainText(run: Pick<RunObjectBody, 'steps' | 'status'>): string | null {
+export function stepPlainText(
+  run: Pick<RunObjectBody, 'steps' | 'status'> & { type?: RunType },
+): string | null {
   if (!isActive(run.status)) return null;
   const step = run.steps.find((s) => s.status === 'running') ?? run.steps.find((s) => s.status === 'pending');
   if (!step) return '정리 중';
-  const at = /@(\d+(?:\.\d+)?)$/.exec(step.key);
-  const rows = at ? rowsWords(Number(at[1])) : '';
-  if (step.key.startsWith('fill-ch@')) return `ClickHouse에 ${rows} 넣는 중`;
-  if (step.key.startsWith('fill-pg@')) return `PostgreSQL에 ${rows} 넣는 중`;
-  if (step.key.startsWith('query@')) return `${rows}에서 질문 5개를 재는 중`;
+  const compare = COMPARE_STEP_TEXT[step.key];
+  if (run.type === 'compare' && compare) return compare;
   if (step.key === 'prepare') return '준비 중';
   if (step.key === 'cleanup') return '정리 중';
   if (step.key === 'publish') return '보내는 중';
-  if (step.key === 'drain') return '남은 데이터 처리 기다리는 중(최대 30초)';
+  if (step.key === 'drain') return '남은 데이터 처리 기다리는 중(최대 30s)';
   return '진행 중';
 }
+
+/** 직접 비교 단계 쉬운 문장(api compare-runner 단계 key) — 넣기 · 조회 대결(원천 행 수 단계 rows-N) · 데이터 정합성 */
+const COMPARE_STEP_TEXT: Record<string, string> = {
+  prepare: '준비 중',
+  clear: '지난 구간 비우는 중',
+  publish: 'Redis로 보내는 중',
+  drain: '두 DB에 다 들어가길 기다리는 중',
+  verify: '행 수 · 크기 맞춰 보는 중',
+  ...Object.fromEntries(
+    COMPARE_QUERY_SIZES.map((n) => [compareQueryStepKey(n), `원천 ${compareSizeName(n)} 행 집계하는 중`]),
+  ),
+  clickhouse: 'ClickHouse에서 재는 중',
+  postgres: 'PostgreSQL에서 재는 중',
+  compare: '두 DB 맞춰 보는 중',
+};
 
 // ── 버튼 상태 ──
 
@@ -286,8 +312,13 @@ export interface ControlInput {
   starting: boolean;
   /** 중단을 눌렀고 응답 전 */
   stopRequested: boolean;
-  /** S7 ② 뒤 ENGINEER · ADMIN — 인증 도입 전에는 true(무인증) */
-  canControl: boolean;
+}
+
+/** 실행 매개변수 중 숫자 칸만(선택 칸 잠금 표시용 — compare의 part 같은 글자 칸은 화면이 따로 보인다) */
+export function numericParams(params: Record<string, number | string>): Record<string, number> {
+  const out: Record<string, number> = {};
+  for (const [k, v] of Object.entries(params)) if (typeof v === 'number') out[k] = v;
+  return out;
 }
 
 export interface Controls {
@@ -311,21 +342,19 @@ export function runControls(i: ControlInput): Controls {
   const active = run !== null && isActive(run.status);
   const mine = run !== null && run.type === i.type;
   const otherActive = active && !mine && run !== null;
-  let note: string | null = null;
-  if (!i.canControl) note = ROLE_TEXT;
-  else if (otherActive && run) note = otherRunText(run.type);
+  const note = otherActive && run ? otherRunText(run.type) : null;
   const stopping = i.stopRequested || (mine && run?.status === 'stopping');
   return {
     paramsLocked: !ready || active || i.starting,
-    lockedParams: active && mine && run ? run.params : null,
+    lockedParams: active && mine && run ? numericParams(run.params) : null,
     start: {
-      enabled: ready && !active && !i.starting && i.canControl,
+      enabled: ready && !active && !i.starting,
       label: i.starting ? '시작하는 중이에요…' : '시작',
       note,
       other: otherActive && run ? RUN_SCREEN[run.type] : null,
     },
     stop: {
-      enabled: mine && run?.status === 'running' && !i.stopRequested && i.canControl,
+      enabled: mine && run?.status === 'running' && !i.stopRequested,
       label: stopping ? '멈추는 중이에요…' : '중단',
     },
   };
@@ -409,19 +438,38 @@ export function currentRunQueryOptions(f: Fetch = fetch) {
   };
 }
 
+/** 시작 매개변수 — flow는 숫자만 · compare는 part(글자)가 섞인다 */
+export type RunParamsInput = Record<string, number | string>;
+
+/**
+ * 화면이 바꿀 수 없는 이유로 서버가 시작을 거절 — no_data · ingest_incomplete(409 compare_no_data · details.reason) ·
+ * sink_off · plant_on · purging(400 validation_failed · details.fields path 'SW-09' · 'plant' · 'purge')
+ */
+export type RefuseReason = 'no_data' | 'ingest_incomplete' | 'sink_off' | 'plant_on' | 'purging';
+export const REFUSE_TEXT: Record<RefuseReason, string> = {
+  no_data: '비교할 데이터가 없어요 — 먼저 ① 넣기를 해 주세요',
+  ingest_incomplete: '넣기가 끝까지 되지 않아 비교 데이터가 온전하지 않아요 — 다시 넣어 주세요',
+  plant_on: '설비 가동을 끈 뒤 비교해 주세요 — 가동 데이터가 섞이면 비교가 흐려져요',
+  purging: '센서 데이터를 지우는 중이에요 — 끝난 뒤 다시 해 주세요',
+  sink_off:
+    '동시 적재 스위치(SW-09)가 꺼져 있어요 — CONTROL_TABLE_ENABLED를 gated로 두고 api를 다시 켜야 해요',
+};
+
 export type StartOutcome =
   | { kind: 'started'; run: RunObjectBody }
+  /** 409 compare_no_data · 400 SW-09 — 고른 값 문제가 아니라 순서 · 설정 문제(띠 문구) */
+  | { kind: 'refused'; reason: RefuseReason; error: ApiError }
   /** 409 — 단건 조회 1회로 맞춘 실행(404면 null → current 재조회) */
   | { kind: 'conflict'; type: RunType | null; run: RunObjectBody | null }
   /** 400 — 화면과 서버의 화이트리스트가 어긋났다 */
   | { kind: 'invalid'; error: ApiError }
-  /** 네트워크 · 5xx · 403 · 429 — 버튼을 되돌리고 current 1회 재조회 */
+  /** 네트워크 · 5xx · 429 — 버튼을 되돌리고 current 1회 재조회 */
   | { kind: 'failed'; error: ApiError };
 
 /** #2 시작 — 409면 details.runId로 #4 한 번(다음 폴링을 기다리지 않고 패널을 맞춘다) */
 export async function requestStart(
   type: RunType,
-  params: Record<string, number>,
+  params: RunParamsInput,
   f: Fetch = fetch,
 ): Promise<StartOutcome> {
   try {
@@ -436,7 +484,7 @@ export async function requestStart(
     if (error.status === 409 && error.code === 'datagen.run_in_progress') {
       const runId = typeof error.details?.runId === 'string' ? error.details.runId : null;
       const t = error.details?.type;
-      const otherType = t === 'perf' || t === 'flow' ? t : null;
+      const otherType = RUN_TYPES.find((x) => x === t) ?? null;
       let run: RunObjectBody | null = null;
       if (runId) {
         try {
@@ -447,9 +495,30 @@ export async function requestStart(
       }
       return { kind: 'conflict', type: run?.type ?? otherType, run };
     }
+    if (error.status === 409 && error.code === 'datagen.compare_no_data')
+      return {
+        kind: 'refused',
+        reason: error.details?.reason === 'ingest_incomplete' ? 'ingest_incomplete' : 'no_data',
+        error,
+      };
+    const path = error.status === 400 ? refusedPath(error) : null;
+    if (path === 'SW-09') return { kind: 'refused', reason: 'sink_off', error };
+    if (path === 'plant') return { kind: 'refused', reason: 'plant_on', error };
+    if (path === 'purge') return { kind: 'refused', reason: 'purging', error };
     if (error.status === 400) return { kind: 'invalid', error };
     return { kind: 'failed', error };
   }
+}
+
+/** 400 중 순서 · 설정 거절 — details.fields의 path가 'SW-09'(동시 적재 꺼짐) · 'plant'(설비 가동 중) · 'purge'(지우는 중)면 그 path */
+export function refusedPath(e: Pick<ApiError, 'details'>): 'SW-09' | 'plant' | 'purge' | null {
+  const fields = e.details?.fields;
+  if (!Array.isArray(fields)) return null;
+  for (const x of fields) {
+    const p = (x as { path?: unknown })?.path;
+    if (p === 'SW-09' || p === 'plant' || p === 'purge') return p;
+  }
+  return null;
 }
 
 export type StopOutcome =
@@ -462,7 +531,12 @@ export type StopOutcome =
 /** #5 중단 */
 export async function requestStop(runId: string, f: Fetch = fetch): Promise<StopOutcome> {
   try {
-    const { body } = await call(f, `/bff/runs/${encodeURIComponent(runId)}/stop`, { method: 'POST' });
+    // 상태를 바꾸는 POST는 JSON 본문 필수(api 규칙 · 중단은 빈 객체)
+    const { body } = await call(f, `/bff/runs/${encodeURIComponent(runId)}/stop`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: '{}',
+    });
     return { kind: 'stopped', run: parseRun(body) };
   } catch (e) {
     const error = e instanceof ApiError ? e : new ApiError(0, null, String(e));
@@ -504,8 +578,7 @@ export type PanelAction =
   | { kind: 'stop-done'; outcome: StopOutcome }
   | { kind: 'vanished' };
 
-const failText = (e: ApiError): string =>
-  e.status === 403 || e.code === 'auth.forbidden' ? ROLE_TEXT : '요청이 실패했어요 — 다시 눌러 주세요';
+const FAIL_TEXT = '요청이 실패했어요 — 다시 눌러 주세요';
 
 /** 사건 → 지역 상태(§갱신과 응답 처리 사건 9 가운데 요청 쪽) — 캐시 반영은 훅이 한다 */
 export function panelReducer(s: PanelLocal, a: PanelAction): PanelLocal {
@@ -531,12 +604,17 @@ export function panelReducer(s: PanelLocal, a: PanelAction): PanelLocal {
                   : otherRunText(o.type),
           },
         };
+      if (o.kind === 'refused')
+        return {
+          ...base,
+          notice: { tone: o.reason === 'sink_off' ? 'danger' : 'info', text: REFUSE_TEXT[o.reason] },
+        };
       if (o.kind === 'invalid')
         return {
           ...base,
           paramError: '고른 값을 서버가 받지 않았어요 — 화면을 새로고침해 주세요',
         };
-      return { ...base, notice: { tone: 'danger', text: failText(o.error) } };
+      return { ...base, notice: { tone: 'danger', text: FAIL_TEXT } };
     }
     case 'stop-request':
       return { ...s, stopRequested: true, notice: null };
@@ -545,7 +623,7 @@ export function panelReducer(s: PanelLocal, a: PanelAction): PanelLocal {
       const base = { ...s, stopRequested: false };
       if (o.kind === 'stopped') return base;
       if (o.kind === 'gone') return { ...base, notice: { tone: 'neutral', text: VANISHED_TEXT } };
-      return { ...base, notice: { tone: 'danger', text: failText(o.error) } };
+      return { ...base, notice: { tone: 'danger', text: FAIL_TEXT } };
     }
     case 'vanished':
       return { ...s, notice: { tone: 'neutral', text: VANISHED_TEXT } };
@@ -576,7 +654,7 @@ export interface FlowProgress {
 export function flowProgress(run: RunObjectBody, receivedAt: number, now: number): FlowProgress | null {
   const publish = run.steps.find((s) => s.key === 'publish');
   const drain = run.steps.find((s) => s.key === 'drain');
-  const durationSec = run.params.durationSec ?? 0;
+  const durationSec = typeof run.params.durationSec === 'number' ? run.params.durationSec : 0;
   if (!publish || durationSec <= 0) return null;
   const ms =
     publish.elapsedMs === null
@@ -598,87 +676,26 @@ export function flowProgress(run: RunObjectBody, receivedAt: number, now: number
   };
 }
 
-// ── perf 라이브 계열 · 대용량 경고 ──
+// ── compare 넣기 진행 ──
 
-export interface LivePoint {
-  rows: number;
-  exponent: number;
-  median: number;
-  values: number[];
-  /** 결과 행 수 — 두 저장소 비교 */
-  resultRows: number | null;
-  resultMatch: boolean | null;
+export interface CompareLive {
+  part: ComparePart;
+  /** 넣기 발행 진행 0~1 — 넣기가 아니거나 아직 없으면 null */
+  ratio: number | null;
+  published: number | null;
+  rowsCh: number | null;
+  rowsPg: number | null;
 }
 
-type PerfScales = { scales: { exponent: number; rows: number; queries: PerfQueryCell[] }[] };
-type PerfQueryCell = {
-  q: string;
-  ch: { values: number[]; median: number | null; rows: number | null };
-  pg: { values: number[]; median: number | null; rows: number | null };
-  resultMatch: boolean | null;
-};
-
-/** perf result인가 — flow 결과와 모양으로 가른다 */
-export const isPerfResult = (r: RunObjectBody['result']): r is RunObjectBody['result'] & PerfScales =>
-  !!r && 'scales' in r;
-
-/** 라이브 계열 2(CH · PG I2) — 툴바 쿼리의 규모별 중앙값 · 실행이 채운 규모만 */
-export function liveSeries(run: RunObjectBody | null, query: string): { ch: LivePoint[]; pg: LivePoint[] } {
-  const out = { ch: [] as LivePoint[], pg: [] as LivePoint[] };
-  if (run?.type !== 'perf' || !isPerfResult(run.result)) return out;
-  for (const s of [...run.result.scales].sort((a, b) => a.exponent - b.exponent)) {
-    const c = s.queries.find((x) => x.q === query);
-    if (!c) continue;
-    const rows = s.rows > 0 ? s.rows : 10 ** s.exponent;
-    for (const side of ['ch', 'pg'] as const) {
-      const m = c[side].median;
-      if (m === null) continue;
-      out[side].push({
-        rows,
-        exponent: s.exponent,
-        median: m,
-        values: c[side].values,
-        resultRows: c[side].rows,
-        resultMatch: c.resultMatch,
-      });
-    }
-  }
-  return out;
-}
-
-/**
- * 예상 디스크 행당 바이트(추정 상한) — 05_data_stores/10 §결과 비교 축 6 결정적 값의 상한값(현행 참고)
- * PostgreSQL 힙 76.6 B + btree I2 31.6 B · ClickHouse 5.4 B. 41 B와 같은 변경 단위에서 따라간다(08_screen/08 §표시 계약 대용량 경고).
- */
-export const LIVE_ROW_BYTES_UPPER = { pgHeap: 76.6, pgBtree: 31.6, ch: 5.4 } as const;
-/** 경고를 보이는 최대 규모 지수 — 1천만 행 이하는 경고 없음 */
-export const LARGE_EXPONENT = 8;
-
-/** 바이트 — 1000 단위(B · KB · MB · GB) */
-export function formatBytes(b: number): string {
-  if (b < 1000) return `${b} B`;
-  const units = ['KB', 'MB', 'GB', 'TB'];
-  let v = b;
-  let u = -1;
-  while (v >= 1000 && u < units.length - 1) {
-    v /= 1000;
-    u++;
-  }
-  return `${v >= 100 ? v.toFixed(0) : v.toFixed(1)} ${units[u]}`;
-}
-
-export function expectedDisk(maxExponent: number): { pg: number; ch: number } | null {
-  if (maxExponent < LARGE_EXPONENT) return null;
-  const rows = 10 ** maxExponent;
+/** 진행 중 직접 비교의 지금 값 — publish 단계 detail(published · rowsCh · rowsPg · progress) */
+export function compareLive(run: Pick<RunObjectBody, 'type' | 'params' | 'steps'>): CompareLive | null {
+  if (run.type !== 'compare' || !isComparePart(run.params.part)) return null;
+  const d = run.steps.find((s) => s.key === 'publish')?.detail ?? {};
   return {
-    pg: rows * (LIVE_ROW_BYTES_UPPER.pgHeap + LIVE_ROW_BYTES_UPPER.pgBtree),
-    ch: rows * LIVE_ROW_BYTES_UPPER.ch,
+    part: run.params.part,
+    ratio: n(d.progress),
+    published: n(d.published),
+    rowsCh: n(d.rowsCh),
+    rowsPg: n(d.rowsPg),
   };
-}
-
-/** 대용량 경고 — 예상 디스크(추정 상한)와 "수 분 이상 걸려요"(1억 행만) */
-export function largeRunWarning(maxExponent: number): string | null {
-  const d = expectedDisk(maxExponent);
-  if (!d) return null;
-  return `예상 디스크(추정 상한) PostgreSQL ${formatBytes(d.pg)} · ClickHouse ${formatBytes(d.ch)} — 수 분 이상 걸려요`;
 }

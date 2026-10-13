@@ -1,13 +1,13 @@
 'use client';
-// /monitoring 흐름도 — 설계 .omc/plans/web-junior-redesign.md §3 흐름도(화면의 주인공) · §8 Redis 기둥 · §9 조회 줄 · 정본 docs/08_screen/08_evidence_screens.md §EXP-FLOW
-// 노드 12 = 어디서 오나 3(공장 센서 · 사람의 업무 요청 · 사람의 조회 요청) + Redis 기둥 칸 5(① 센서 대기줄 · ② 지금 값 · 알람 상태 · ③ 업무 대기줄 · ④ 옛 사본 지움 · 결과 알림 · ⑤ 조회 사본)
+// /monitoring 흐름도(화면의 주인공 · Redis 기둥 · 조회 줄) — 정본 docs/08_screen/08_evidence_screens.md §EXP-FLOW
+// 노드 12 = 어디서 오나 3(공장 센서 · 사람의 업무 요청 · 사람의 조회 요청) + Redis 기둥 칸 5(① 센서 대기줄 · ② 지금 값 · ③ 업무 대기줄 · ④ 옛 사본 지움 · 결과 알림 · ⑤ 조회 사본)
 //   + 누가 처리하나 2(모아서 저장 · 하나씩 처리) + 진짜 DB 2(ClickHouse · PostgreSQL). Redis는 서버와 DB 사이 한 기둥이다(목적지처럼 오른쪽에 두지 않는다).
 // 조회 줄은 처리기를 거치지 않고(api가 직접 Redis를 먼저 본다) flow 프레임 요약이 없어 점이 없다 — 선 굵기 · 숫자(메트릭 5초 차분)로만.
 // 점 하나가 flow 프레임의 요약 하나(실제 묶음 · 실제 요청)이고, 단계마다 머무는 시간의 비율이 그 요약의 실제 단계 ms 비율이다(보기 좋게 느리게).
 // 선 굵기 = 초당 양 · 꺼진 길(스위치로 끈 길)은 그리지 않는다 — 각주가 이름을 댄다. 셸 WS가 끊기면 점 애니메이션을 멈춘다.
 // 요약이 오지 않으면 점도 없다 — 멈춘 그림이 곧 멈춘 적재다. 좌표 · 라벨 자리와 그 겹침 근거는 diagram-layout.ts(검사 test/flow-layout.test.ts).
 // 움직임 줄이기(prefers-reduced-motion: reduce)면 점이 움직이지 않는다 — 가장 오래 머무는 자리(lib/flow restNode)에 나타났다 사라진다.
-// 숫자 자리(숫자 줄 · 숫자가 든 라벨 · 기둥 바닥 · 알람 표지)만 고정 폭 숫자(font-variant-numeric) — 문장 줄의 숫자는 본문 숫자 그대로.
+// 숫자 자리(숫자 줄 · 숫자가 든 라벨 · 기둥 바닥)만 고정 폭 숫자(font-variant-numeric) — 문장 줄의 숫자는 본문 숫자 그대로.
 import { type CSSProperties, useEffect, useRef, useState } from 'react';
 import {
   arriveAt,
@@ -30,7 +30,6 @@ import {
 import type { FlowBatchSummaryBody, FlowBizSummaryBody } from '../../../lib/shared';
 import { STORE, type StoreKey } from '../../ui/store';
 import {
-  ALARM_AT,
   BATCH_AT,
   BIZ_AT,
   BIZ_NOTE,
@@ -65,7 +64,7 @@ import { BIZ_WORKER_LINES, edgeRate, markText, PILLAR_HEAD, PILLAR_TIP } from '.
 
 /** 동시에 그리는 점 상한 — 넘으면 오래된 점부터 뺀다 */
 const MAX_DOTS = 60;
-/** 알람 켜짐 · 꺼짐 표지와 업무 결과 표지가 점이 끝난 뒤 남는 시간 */
+/** 업무 결과 표지가 점이 끝난 뒤 남는 시간 */
 const LINGER_MS = 2_000;
 /** 움직임 줄이기 — 매 화면 갱신(rAF) 대신 이 간격으로 시계만 넘긴다(점은 제자리에 나타났다 사라질 뿐 움직이지 않는다) */
 const REDUCED_TICK_MS = 500;
@@ -82,7 +81,6 @@ type Dot =
       born: number;
       plan: DotPlan<BatchNode>;
       r: number;
-      batch: FlowBatchSummaryBody;
     }
   | {
       id: number;
@@ -123,7 +121,6 @@ export class DotEngine {
         born: this.clock + Math.min(b.at - t0, 250),
         plan,
         r: batchDotRadius(b.rows),
-        batch: b,
       });
     }
   }
@@ -448,12 +445,13 @@ export function FlowDiagram(p: DiagramProps) {
       )}
       <Edge id="worker-ch" width={w(r?.chRows)} />
       {f.collectorLatest ? null : <Edge id="worker-latest" width={w(r?.latestWrites)} label="지금 값 씀" />}
-      <Edge id="worker-pg-alarm" width={w(r?.transitions)} label={['알람이 켜지고', '꺼질 때만']} />
       {f.controlCopyOff ? null : (
         <Edge
           id="worker-pg-copy"
           width={w(r?.controlCopyRows)}
-          label={['비교용 사본', lbl(r?.controlCopyRows, '개')].filter((x): x is string => x !== null)}
+          label={[f.controlCopyGated ? '비교 실험 중' : '비교용 사본', lbl(r?.controlCopyRows, '개')].filter(
+            (x): x is string => x !== null,
+          )}
         />
       )}
 
@@ -490,7 +488,7 @@ export function FlowDiagram(p: DiagramProps) {
       {f.bizDirect ? (
         <Edge id="biz-direct" width={w(r?.commandsDirect)} label={['대기줄 없이 바로 저장', '(비교 실험)']} />
       ) : null}
-      {/* 업무 줄 옆 한 줄 — 업무 데이터가 왜 ClickHouse로 가지 않는지(답은 성능 비교 화면 오른쪽) */}
+      {/* 업무 줄 옆 한 줄 — 업무 데이터는 ClickHouse로 가지 않는다 */}
       <g data-testid="flow-biz-note">
         <SpotText spot={BIZ_NOTE.spot} lines={[...BIZ_NOTE.lines]} fill="#64748b" />
       </g>
@@ -501,24 +499,8 @@ export function FlowDiagram(p: DiagramProps) {
         if (elapsed < 0) return null;
         if (d.kind === 'batch') {
           const pos = dotPos(d.plan, elapsed, BATCH_AT, still);
-          const a = d.batch.alarm;
-          return (
-            <g key={d.id}>
-              {!pos.done && <circle cx={pos.x} cy={pos.y} r={d.r} fill="#334155" fillOpacity={0.7} />}
-              {pos.done && a && a.opened + a.closed > 0 && (
-                <text
-                  x={ALARM_AT.x}
-                  y={ALARM_AT.y}
-                  textAnchor="end"
-                  dominantBaseline="middle"
-                  fontSize={FONT.mark}
-                  fill="#b45309"
-                  style={TNUM}
-                >
-                  알람 켜짐 {a.opened} · 꺼짐 {a.closed}
-                </text>
-              )}
-            </g>
+          return pos.done ? null : (
+            <circle key={d.id} cx={pos.x} cy={pos.y} r={d.r} fill="#334155" fillOpacity={0.7} />
           );
         }
         const pos = dotPos(d.plan, elapsed, BIZ_AT, still);

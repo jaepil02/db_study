@@ -1,7 +1,8 @@
 'use client';
 // /monitoring 흐름도 바깥 구역 — 숫자 4 · 왜 이렇게 나눌까? 한 구역 세 칸 · 모아서 vs 하나씩 막대 2
-// 설계 .omc/plans/web-junior-redesign.md §3 구역 표 · §5 픽셀 예산 · 다듬기 .omc/plans/web-ux-polish.md §2.3 — 높이는 고정값이다(한 화면 · 스크롤 0).
-//   숫자 4 64(이름 12 · 큰 숫자 28(text-answer) tabular · 짧은 문장 13(text-label)은 큰 숫자 옆 두 줄까지 — 잘림 없음) · 아래 줄 124.
+// 정본 docs/08_screen/08_evidence_screens.md §EXP-FLOW §요소 · docs/08_screen/01_standards.md §한 화면 원칙(픽셀 예산) · docs/08_screen/01_standards.md §글자와 화면 표면 — 높이는 화면 크기로만 정해진다(한 화면 · 스크롤 0).
+//   1280 기준 숫자 4 64(이름 12(text-foot) · 큰 숫자 26(text-big) tabular · 짧은 문장 13(text-note)은 큰 숫자 옆 두 줄까지 — 잘림 없음) · 아래 줄 124 —
+//   2560까지 높이 · 글자가 글자 토큰(app/globals.css --fs)과 같은 비율로 는다(숫자 4 88 · 아래 줄 160). 줄 높이는 1280에서 옛 고정값(16 · 20)과 같게 비율로 준다.
 //   왜 나눌까는 카드 셋이 아니라 한 구역 세 칸(세로 hairline) — 카드 안 카드 · 굵은 색 테두리 없이 저장소 이름 앞 색 점 · 세 칸은 위 맞춤(이름 줄 높이가 같다).
 //   모아서 vs 하나씩은 막대 두 줄(이름 · 막대 · 처리 시간 — 이름 칸 폭이 같아 두 막대가 같은 자리에서 시작) + 대기줄에서 기다린 시간 한 줄 + 결론 한 줄.
 // 문구는 node-lines.ts의 순수 함수가 만든다(검사 test/flow.test.ts · 두 줄 안에 드는지는 test/flow-layout.test.ts가 Pretendard 실측으로).
@@ -24,7 +25,7 @@ export function HeadlineRow({ items, dim }: { items: Headline[]; dim: boolean })
     <section
       aria-label="지금 상태"
       data-testid="flow-headline"
-      className="grid h-16 shrink-0 grid-cols-4 gap-3"
+      className="grid h-[clamp(64px,calc(64px+24*var(--fs)),88px)] shrink-0 grid-cols-4 gap-3"
     >
       {items.map((it) => (
         <div
@@ -36,22 +37,19 @@ export function HeadlineRow({ items, dim }: { items: Headline[]; dim: boolean })
             it.warn ? 'border-amber-300 bg-amber-50' : 'border-slate-200 bg-white',
           )}
         >
-          <p className="truncate text-xs leading-4 font-medium text-slate-500">{it.label}</p>
-          <div className="flex h-8 min-w-0 items-center gap-2.5">
+          <p className="truncate text-foot leading-[1.333] font-medium text-slate-500">{it.label}</p>
+          <div className="flex h-[clamp(32px,calc(32px+16*var(--fs)),48px)] min-w-0 items-center gap-2.5">
             <p className={cn('flex shrink-0 items-baseline gap-1', dim && 'opacity-50')}>
-              <span
-                data-value
-                className="text-answer font-semibold tracking-tight text-slate-900 tabular-nums"
-              >
+              <span data-value className="text-big font-semibold tracking-tight text-slate-900 tabular-nums">
                 {it.value}
               </span>
-              {/* 60초 이상 "46분 28초"는 단위가 숫자 안에 있어 단위 칸이 없다(§9 P3) */}
-              {it.unit ? <span className="text-sm text-slate-500">{it.unit}</span> : null}
+              {/* 60s 이상 "46m 28s"는 단위가 숫자 안에 있어 단위 칸이 없다(§9 P3) */}
+              {it.unit ? <span className="text-note text-slate-500">{it.unit}</span> : null}
             </p>
             <p
               data-text
               className={cn(
-                'line-clamp-2 min-w-0 text-label leading-4',
+                'line-clamp-2 min-w-0 text-note leading-[1.23]',
                 it.warn ? 'font-medium text-amber-800' : 'text-slate-600',
               )}
             >
@@ -72,11 +70,11 @@ export function WhyCards({ cards, dim }: { cards: WhyCard[]; dim: boolean }) {
       data-testid="flow-why"
       className="flex min-w-0 flex-col rounded-lg border border-slate-200 bg-white px-4 py-2"
     >
-      <h3 className="text-sm leading-5 font-semibold text-slate-800">왜 이렇게 나눌까?</h3>
+      <h3 className="text-body leading-[1.43] font-semibold text-slate-800">왜 이렇게 나눌까?</h3>
       <div className="mt-1 grid min-h-0 flex-1 grid-cols-3 divide-x divide-slate-200">
         {cards.map((c) => (
           <div key={c.store} className="flex min-w-0 flex-col justify-start px-4 first:pl-0 last:pr-0">
-            <p className="flex items-center gap-1.5 text-sm leading-5 font-semibold">
+            <p className="flex items-center gap-1.5 text-body leading-[1.43] font-semibold">
               <span
                 aria-hidden="true"
                 className={STORE_DOT_CLASS}
@@ -84,11 +82,14 @@ export function WhyCards({ cards, dim }: { cards: WhyCard[]; dim: boolean }) {
               />
               <span style={{ color: STORE[c.store].ink }}>{c.name}</span>
             </p>
-            <p className="mt-0.5 line-clamp-2 text-label text-slate-800" title={c.why}>
+            <p className="mt-0.5 line-clamp-2 text-note text-slate-800" title={c.why}>
               {c.why}
             </p>
             <p
-              className={cn('truncate text-xs leading-4 text-slate-500 tabular-nums', dim && 'opacity-50')}
+              className={cn(
+                'truncate text-foot leading-[1.333] text-slate-500 tabular-nums',
+                dim && 'opacity-50',
+              )}
               title={c.now}
             >
               {c.now}
@@ -103,7 +104,8 @@ export function WhyCards({ cards, dim }: { cards: WhyCard[]; dim: boolean }) {
 /**
  * 모아서 vs 하나씩 — 센서 1묶음 · 업무 1건의 평균 처리 시간(대기줄 대기 빼고) 막대 2(두께 10 · 숫자 16 굵게) + 대기줄에서 기다린 시간 한 줄.
  * 높이 124 안(테두리 2 · 세로 여백 8 · 제목 20 · 결론 16 → 가운데 78): 막대 두 줄 20 + 4 + 20 · 대기 한 줄 4 + 16 = 64 ·
- * 업무가 없으면 안내 문구가 두 줄(32)까지 — 20 + 4 + 32 + 4 + 16 = 76.
+ * 업무가 없으면 안내 문구가 두 줄(32)까지 — 20 + 4 + 32 + 4 + 16 = 76. 2560에서는 높이 160 · 글자 토큰이 함께 늘어 같은 셈이 맞다
+ * (테두리 2 · 여백 8 · 제목 25.7 · 결론 20 → 가운데 104 ≥ 막대 27.5 + 4 + 안내 40 + 4 + 대기 20 = 95.5).
  */
 export function BatchVsOne({ bars, dim }: { bars: CompareBar[]; dim: boolean }) {
   const wait = waitLine(bars);
@@ -113,7 +115,7 @@ export function BatchVsOne({ bars, dim }: { bars: CompareBar[]; dim: boolean }) 
       data-testid="flow-compare"
       className="flex min-w-0 flex-col rounded-lg border border-slate-200 bg-white px-4 py-1"
     >
-      <h3 className="truncate text-sm leading-5 font-semibold text-slate-800">
+      <h3 className="truncate text-body leading-[1.43] font-semibold text-slate-800">
         모아서 vs 하나씩 — 한 번 처리에 걸린 시간
       </h3>
       <div className={cn('flex min-h-0 flex-1 flex-col justify-center gap-1', dim && 'opacity-50')}>
@@ -121,9 +123,9 @@ export function BatchVsOne({ bars, dim }: { bars: CompareBar[]; dim: boolean }) 
           {bars.map((b) =>
             b.key === 'biz' && b.samples === 0 ? (
               <Fragment key={b.key}>
-                <span className="text-label leading-5 text-slate-600">{b.label}</span>
+                <span className="text-note leading-[1.54] text-slate-600">{b.label}</span>
                 <p
-                  className="col-span-2 line-clamp-2 text-xs leading-4 text-slate-600"
+                  className="col-span-2 line-clamp-2 text-foot leading-[1.333] text-slate-600"
                   data-testid="flow-no-biz"
                   title={NO_BIZ_TEXT}
                 >
@@ -132,17 +134,17 @@ export function BatchVsOne({ bars, dim }: { bars: CompareBar[]; dim: boolean }) 
               </Fragment>
             ) : (
               <Fragment key={b.key}>
-                <span className="truncate text-label leading-5 text-slate-600">{b.label}</span>
-                <div className="h-2.5 rounded-sm bg-slate-100">
+                <span className="truncate text-note leading-[1.54] text-slate-600">{b.label}</span>
+                <div className="h-[clamp(10px,calc(10px+4*var(--fs)),14px)] rounded-sm bg-slate-100">
                   <div
-                    className="h-2.5 rounded-sm"
+                    className="h-full rounded-sm"
                     style={{
                       width: `${Math.max(b.frac * 100, b.ms === null ? 0 : 2)}%`,
                       background: b.key === 'batch' ? STORE.ch.color : STORE.pg.color,
                     }}
                   />
                 </div>
-                <span className="text-right text-base leading-5 font-bold text-slate-900 tabular-nums">
+                <span className="text-right text-head leading-[1.25] font-bold text-slate-900 tabular-nums">
                   {durationText(b.ms)}
                 </span>
               </Fragment>
@@ -152,14 +154,14 @@ export function BatchVsOne({ bars, dim }: { bars: CompareBar[]; dim: boolean }) 
         {wait ? (
           <p
             data-testid="flow-wait"
-            className="truncate text-xs leading-4 text-slate-600 tabular-nums"
+            className="truncate text-foot leading-[1.333] text-slate-600 tabular-nums"
             title={wait}
           >
             {wait}
           </p>
         ) : null}
       </div>
-      <p className="truncate text-xs leading-4 text-slate-600">{COMPARE_NOTE}</p>
+      <p className="truncate text-foot leading-[1.333] text-slate-600">{COMPARE_NOTE}</p>
     </section>
   );
 }

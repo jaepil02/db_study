@@ -1,10 +1,10 @@
 // EXP-FLOW — 분산 처리 모니터링(/monitoring · 관찰 보조) 한 장 화면. 직접 보내 보기의 화면 조작은 run-flow.spec.ts가 본다.
-// 설계 .omc/plans/web-junior-redesign.md §1 원칙(한 화면 = 한 장 · 쉬운 말) · §3 화면 B · §5 픽셀 예산(1440 × 900 스크롤 0) · §9 조회 줄
-// 배치 요약은 스트림에 센서 데이터가 들어와야 온다. 센서 자동 생성(SENSOR_AUTOGEN)이 on이면 수집기가 늘 싣고,
-// off(로컬 Compose 기본)이면 아무도 싣지 않는다 — 그때는 차분한 안내 문구를 먼저 확인하고, 직접 보내 보기를 api로 짧게 시작해
-// 같은 데이터 단언(센서 숫자 넷이 한 값 · 대기줄 대기 · 한 장)을 그대로 본다(.omc/plans/sensor-autogen-switch.md §1 e2e).
+// 정본 docs/08_screen/08_evidence_screens.md §EXP-FLOW · docs/08_screen/01_standards.md §한 화면 원칙(한 화면 = 한 장 · 쉬운 말 · 1440 × 900 스크롤 0)
+// 배치 요약은 스트림에 센서 데이터가 들어와야 온다. 설비 가동(health run.sensorAutogen — 실행 중 실효 상태 · 머리 스위치가 정한다)이 켜져 있으면
+// 수집기가 늘 싣고, 꺼져 있으면(로컬 기본) 아무도 싣지 않는다 — 그때는 차분한 안내 문구를 먼저 확인하고, 직접 보내 보기를 api로 짧게 시작해
+// 같은 데이터 단언(센서 숫자 넷이 한 값 · 대기줄 대기 · 한 장)을 그대로 본다(docs/08_screen/08_evidence_screens.md §EXP-FLOW §상태 4행).
 import { expect, type Page, test } from '@playwright/test';
-import { apiWrite, currentRun, sensorAutogen, settleRuns, shot, startFlowRun } from './support';
+import { apiWrite, currentRun, runSuffix, sensorAutogen, settleRuns, shot, startFlowRun } from './support';
 
 test.use({ viewport: { width: 1440, height: 900 } });
 test.describe.configure({ mode: 'serial' });
@@ -14,9 +14,9 @@ test.afterEach(() => settleRuns());
 /** 자동 생성이 꺼진 스택의 센서 원천 — 업무 · 조회는 섞지 않는다(업무 요청 단언은 이 테스트가 직접 보낸 1건만 센다) */
 const SENSOR_ONLY_RUN = { pps: 1000, durationSec: 60, bizPerSec: 0, readsPerSec: 0 };
 
-type Rule = { ruleId: number; threshold: number };
+type Site = { siteId: number; siteName: string };
 
-/** 한 장 화면 — 본문 세로 · 가로 스크롤 없음 · 서랍 · 아코디언 없음(사이드바 접기 버튼 제외) · 화면 1층에 코드 문자열 없음 */
+/** 한 장 화면 — 본문 세로 · 가로 스크롤 없음 · 서랍 · 아코디언 없음(사이드바 접기 · 데이터 지우기 확인 창 단추 제외) · 화면 1층에 코드 문자열 없음 */
 async function expectOneGlance(page: Page) {
   const body = page.locator('[data-shell="content-body"]');
   const m = await body.evaluate((el) => ({
@@ -29,29 +29,26 @@ async function expectOneGlance(page: Page) {
   expect(m.sw, '본문 가로 스크롤 없음').toBeLessThanOrEqual(m.cw + 1);
   const expanders = await page.evaluate(
     () =>
-      [...document.querySelectorAll('[aria-expanded]')].filter((el) => !el.closest('[data-shell="nav"]'))
-        .length + document.querySelectorAll('details').length,
+      [...document.querySelectorAll('[aria-expanded]')].filter(
+        // 데이터 지우기(components/controls/purge-button)는 확인 창을 여는 단추라 aria-expanded를 단다 — 서랍이 아니다
+        (el) => !el.closest('[data-shell="nav"]') && !el.closest('[data-testid="purge"]'),
+      ).length + document.querySelectorAll('details').length,
   );
   expect(expanders, '서랍 · 아코디언 없음').toBe(0);
   const text = (await body.innerText()) + (await page.locator('[data-shell="content-header"]').innerText());
   expect(text).not.toMatch(/\bQ[1-5]\b|\bI2\b|EXP-|SW-|10\^/);
 }
 
-test('한 장 화면 — 실시간 연결됨 · 자동 생성 꺼짐 안내(off) · 10초 안에 데이터 · 숫자 4 · 흐름도 노드 12(Redis 기둥 칸 5 · 조회 줄) · 카드 3 · 막대 · 각주 · 스크롤 0 · 업무 요청이 숫자와 막대에 보인다', async ({
+test('한 장 화면 — 실시간 연결됨 · 설비 가동 꺼짐 안내(off) · 머리 스위치 · 데이터 지우기 · 10초 안에 데이터 · 숫자 4 · 흐름도 노드 12(Redis 기둥 칸 5 · 조회 줄) · 카드 3 · 막대 · 각주 · 스크롤 0 · 업무 요청이 숫자와 막대에 보인다', async ({
   page,
 }, info) => {
   test.setTimeout(120_000);
   const autogen = await sensorAutogen();
-  // 이 테스트 전용 규칙(사용 해제 · 큰 임계값) — 업무 요청 하나를 보낼 대상
-  const rule = (await apiWrite('POST', 'alarms/rules', {
-    tagId: 1,
-    conditionType: 'GT',
-    threshold: 8_000_000 + Math.floor(Math.random() * 900_000),
-    thresholdLow: null,
-    debounceMs: 5000,
-    severity: 1,
-    enabled: false,
-  })) as Rule;
+  // 이 테스트 전용 사이트(E2E- 접두 + 실행 접미) — 업무 요청 하나를 보낼 대상
+  const site = (await apiWrite('POST', 'sites', {
+    siteCode: `E2E-FLOW-${runSuffix()}`,
+    siteName: 'E2E 흐름 업무 요청',
+  })) as Site;
 
   await page.goto('/monitoring');
   // 머리 — 실시간 연결 표지 한 알약(쉬운 말) · 화면 제목은 셸 h1 하나 + 질문형 제목(h2)
@@ -62,15 +59,16 @@ test('한 장 화면 — 실시간 연결됨 · 자동 생성 꺼짐 안내(off)
     page.getByRole('heading', { level: 2, name: '데이터가 Redis를 거쳐 어디로 가는지 실시간으로 보기' }),
   ).toBeVisible();
   await expect(page.getByRole('heading', { level: 1 })).toHaveCount(1);
+  // 머리 오른쪽 — 설비 가동 스위치 · 데이터 지우기(누르지 않는다)
+  await expect(page.getByTestId('plant-power')).toBeVisible();
+  await expect(page.getByTestId('purge')).toBeVisible();
 
   const notice = page.getByTestId('flow-notice');
   if (autogen === 'off') {
-    // 자동 생성 꺼짐 + 센서 없음 — 경고("적재가 멈췄을 수 있어요") 대신 차분한 안내(경고 색 아님 · 직접 보내 보기로 가는 길)
+    // 설비 가동 꺼짐 + 센서 없음 — 경고("적재가 멈췄을 수 있어요") 대신 차분한 안내(경고 색 아님 · 켜는 길 둘: 머리 스위치 · 직접 보내 보기)
     await expect(notice).toHaveText(
-      "센서 자동 생성이 꺼져 있어요 — 오른쪽 위 '직접 보내 보기'로 데이터를 보내 보세요",
-      {
-        timeout: 15_000,
-      },
+      "설비 가동이 꺼져 있어요 — 위 스위치로 켜거나 '직접 보내 보기'로 보내 보세요",
+      { timeout: 15_000 },
     );
     await expect(notice).toHaveAttribute('data-tone', 'info');
     await expect(notice).not.toHaveClass(/amber/);
@@ -115,8 +113,12 @@ test('한 장 화면 — 실시간 연결됨 · 자동 생성 꺼짐 안내(off)
   const sensorNumbers = () =>
     page.evaluate(() => {
       const t = (sel: string) => document.querySelector(sel)?.textContent ?? '';
-      const node = /초당 ([\d,.]+)개/.exec(t('[data-node="src"] text:nth-of-type(2)'))?.[1] ?? null;
-      const edge = (id: string) => /([\d,.]+)개\/초/.exec(t(`[data-edge="${id}"]`))?.[1] ?? null;
+      // 설비 노드 세 줄(카드 라인 설비 30대 · + 직접 보내 보기 시연 · 초당 N개 보냄) — 글자 줄(<text>)에서만 숫자 줄을 찾는다(툴팁 <title>의 보낸 쪽 계수는 뺀다)
+      const srcText = [...document.querySelectorAll('[data-node="src"] text')]
+        .map((e) => e.textContent)
+        .join(' ');
+      const node = /초당 ([\d,.]+)개/.exec(srcText)?.[1] ?? null;
+      const edge = (id: string) => /([\d,.]+)개\/s/.exec(t(`[data-edge="${id}"]`))?.[1] ?? null;
       return [t('[data-key="sensor"] [data-value]'), node, edge('src-stream'), edge('stream-worker')];
     });
   await expect
@@ -126,7 +128,7 @@ test('한 장 화면 — 실시간 연결됨 · 자동 생성 꺼짐 안내(off)
     })
     .toBe(1);
 
-  // 흐름도 — 노드 12 = 출처 3 · Redis 기둥 칸 5 · 처리 2 · DB 2(설계 §8 — Redis는 서버와 DB 사이 한 기둥 · 오른쪽 저장 열에 Redis 노드 없음 · §9 조회 줄)
+  // 흐름도 — 노드 12 = 출처 3(카드 라인 설비 30대 · 업무 요청 · 조회 요청) · Redis 기둥 칸 5 · 처리 2 · DB 2(설계 §8 — Redis는 서버와 DB 사이 한 기둥 · 오른쪽 저장 열에 Redis 노드 없음 · §9 조회 줄)
   // 쉬운 이름 · 꺼진 길은 그리지 않는다(회색 간선 없음)
   const diagram = page.getByTestId('flow-diagram');
   await expect(diagram.locator('[data-node]')).toHaveCount(12);
@@ -136,10 +138,10 @@ test('한 장 화면 — 실시간 연결됨 · 자동 생성 꺼짐 안내(off)
   await expect(pillar).toContainText('줄 세우고 · 지금 값을 들고 · 결과를 전해요');
   await expect(pillar).toContainText('Redis 메모리');
   for (const name of [
-    '공장 센서',
+    '카드 라인 설비 30대',
     '사람의 업무 요청(api)',
     '① 센서 대기줄(Stream)',
-    '② 지금 값 · 알람 상태',
+    '② 지금 값',
     '③ 업무 대기줄(Stream)',
     '④ 옛 사본 지움 · 결과 알림',
     '사람의 조회 요청(api)',
@@ -173,7 +175,7 @@ test('한 장 화면 — 실시간 연결됨 · 자동 생성 꺼짐 안내(off)
   for (const db of ['ClickHouse', 'Redis', 'PostgreSQL'])
     await expect(why.getByText(db, { exact: true })).toBeVisible();
   await expect(page.getByTestId('flow-compare')).toContainText('센서는 묶어서 많이 · 업무는 하나씩 정확히');
-  // 모아서 vs 하나씩 — 막대 숫자는 처리 시간(대기줄 대기 빼고) · 사람이 읽는 단위 · 대기는 따로 한 줄(.omc/plans/web-ux-polish.md §7.1 R17 = L1)
+  // 모아서 vs 하나씩 — 막대 숫자는 처리 시간(대기줄 대기 빼고) · 사람이 읽는 단위 · 대기는 따로 한 줄(docs/08_screen/08_evidence_screens.md §EXP-FLOW §요소)
   await expect(page.getByTestId('flow-wait')).toContainText(/^대기줄에서 기다린 시간 — 센서 \d/, {
     timeout: 15_000,
   });
@@ -185,7 +187,7 @@ test('한 장 화면 — 실시간 연결됨 · 자동 생성 꺼짐 안내(off)
   for (const id of ['flow-headline', 'flow-diagram', 'flow-why', 'flow-compare', 'flow-footnote'])
     await expect(page.getByTestId(id)).toBeInViewport({ ratio: 1 });
 
-  // 다듬기(.omc/plans/web-ux-polish.md §2.3) — 화면 안 글자 최소 12px(SVG 글자 크기 × 그려진 배율) · 숫자 4 문장 잘림 없음 · 굵은 왼쪽 색 테두리 없음
+  // 글자 바닥(docs/08_screen/01_standards.md §글자와 화면 표면) — 화면 안 글자 최소 12px(SVG 글자 크기 × 그려진 배율) · 숫자 4 문장 잘림 없음 · 굵은 왼쪽 색 테두리 없음
   const svgText = await diagram.evaluate((el) => {
     const svg = el as SVGSVGElement;
     const r = svg.getBoundingClientRect();
@@ -217,8 +219,8 @@ test('한 장 화면 — 실시간 연결됨 · 자동 생성 꺼짐 안내(off)
   await expectOneGlance(page);
   await shot(page, info, 'flow-one-screen');
 
-  // 업무 요청 — 규칙 PATCH를 api에 직접 보낸다(명령 경로 · Idempotency-Key) → 숫자 4 · 막대에 보인다
-  await apiWrite('PATCH', `alarms/rules/${rule.ruleId}`, { threshold: rule.threshold + 1 });
+  // 업무 요청 — 사이트 이름 PATCH를 api에 직접 보낸다(명령 경로 · Idempotency-Key) → 숫자 4 · 막대에 보인다
+  await apiWrite('PATCH', `sites/${site.siteId}`, { siteName: `${site.siteName} 고침` });
   await expect.poll(() => num('biz'), { timeout: 15_000, message: '업무 요청 초당 > 0' }).toBeGreaterThan(0);
   await expect(page.getByTestId('flow-no-biz')).toHaveCount(0);
   await expect(page.getByTestId('flow-compare')).toContainText('업무 1건');
@@ -226,7 +228,7 @@ test('한 장 화면 — 실시간 연결됨 · 자동 생성 꺼짐 안내(off)
   await shot(page, info, 'flow-biz-request');
 });
 
-// 1280 × 800 바닥(.omc/plans/web-ux-polish.md §7.1 R4) — 처음부터 1280으로 연 새 페이지(저장값 없음)는 사이드바가 레일로 시작해
+// 1280 × 800 바닥(docs/08_screen/01_standards.md §요청 경로와 공통 셸 — 1440 미만 레일) — 처음부터 1280으로 연 새 페이지(저장값 없음)는 사이드바가 레일로 시작해
 // 본문 폭이 흐름도 원래 크기(viewBox 1126)보다 넓다 — 흐름도 배율 1 · 실제 글자 최소 12px. 세로 스크롤은 허용(깨지지만 않게 — 가로 스크롤 없음).
 test.describe('1280 × 800', () => {
   test.use({ viewport: { width: 1280, height: 800 } });

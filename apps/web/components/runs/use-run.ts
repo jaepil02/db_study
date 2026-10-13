@@ -14,6 +14,7 @@ import {
   panelRun,
   RECENT_END_MS,
   RUN_POLL_MS,
+  type RunParamsInput,
   type RunSnapshot,
   requestStart,
   requestStop,
@@ -63,7 +64,7 @@ export function useRunPanel(type: RunType) {
   const refetch = useCallback(() => qc.refetchQueries({ queryKey: runKeys.current }), [qc]);
 
   const start = useCallback(
-    async (params: Record<string, number>): Promise<StartOutcome> => {
+    async (params: RunParamsInput): Promise<StartOutcome> => {
       dispatch({ kind: 'start-request' });
       const outcome = await requestStart(type, params);
       if (outcome.kind === 'started') put(outcome.run);

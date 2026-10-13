@@ -6,6 +6,7 @@ import {
   conditionsSummary,
   countNonDefault,
   healthTip,
+  SINK_VALUE_TEXT,
 } from '../lib/switches';
 import { backoffMs, shouldReconnect } from '../lib/ws-policy';
 
@@ -74,6 +75,46 @@ describe('조합 경고', () => {
   });
 });
 
+describe('SW-09 sink(off · on · gated — 기본 gated · D-16)', () => {
+  const sw09 = (value: string, impl: string): HealthBody['switches'] => ({
+    'SW-09': { name: 'CONTROL_TABLE_ENABLED', value, impl, warning: null },
+  });
+
+  it('gated(기본)는 기본값 · 경고 없음 · on은 다름 + #4 · off는 다름 · 경고 없음(구현이 아니라 값으로 판정)', () => {
+    expect(countNonDefault(buildSwitchRows(sw09('gated', 'PostgresControlSink')))).toBe(0);
+    expect(comboWarnings(sw09('gated', 'PostgresControlSink'))).toEqual([]);
+    // on은 gated와 같은 구현을 주입한다 — 옛 판정(구현 비교)은 #4를 놓쳤다
+    expect(countNonDefault(buildSwitchRows(sw09('on', 'PostgresControlSink')))).toBe(1);
+    expect(comboWarnings(sw09('on', 'PostgresControlSink')).map((w) => w.no)).toEqual([4]);
+    // off는 구현이 다르지만 대조군을 켠 것이 아니다 — 옛 판정은 off에 "켜졌어요"를 띄웠다
+    expect(countNonDefault(buildSwitchRows(sw09('off', 'NoopControlSink')))).toBe(1);
+    expect(comboWarnings(sw09('off', 'NoopControlSink'))).toEqual([]);
+  });
+
+  it('툴팁 값 옆에 쉬운 뜻 — on(늘 싣기) · off(싣지 않음) · gated(비교 실험 중에만)', () => {
+    const tip = (v: string, impl: string) => healthTip({ ...health, switches: sw09(v, impl) }, false);
+    expect(tip('on', 'PostgresControlSink')).toContain('SW-09=on(늘 싣기)');
+    expect(tip('off', 'NoopControlSink')).toContain('SW-09=off(싣지 않음)');
+    expect(tip('gated', 'PostgresControlSink')).toContain('스위치: 전부 기본값');
+    expect(SINK_VALUE_TEXT.gated).toBe('비교 실험 중에만');
+  });
+
+  it('조합 경고 문구에 지운 주입 모드(B · C · D)가 없다 — 지금 실행(직접 보내 보기 · 직접 비교 실험)으로 말한다', () => {
+    const all = comboWarnings({
+      'SW-01': { name: 'REDIS_STREAM_BUFFER', value: 'off', impl: 'InProcessQueueBuffer', warning: null },
+      'SW-10': { name: 'COLLECTOR_DEADBAND', value: 'on', impl: 'TagDeadbandFilter', warning: null },
+      'SW-11': {
+        name: 'LATEST_VALUE_WRITER',
+        value: 'collector',
+        impl: 'CollectorLatestValueWriter',
+        warning: null,
+      },
+    });
+    expect(all.map((w) => w.no)).toEqual([2, 3, 5, 8, 9]);
+    for (const w of all) expect(w.text).not.toMatch(/모드 [BCD]/);
+  });
+});
+
 describe('impl null — 도입 전 스위치(health가 11키 전부를 싣는다)', () => {
   const withNull: HealthBody['switches'] = {
     ...health.switches,
@@ -107,7 +148,6 @@ describe('WebSocket 재연결 정책', () => {
     expect(shouldReconnect(1000)).toBe(false);
     expect(shouldReconnect(1001)).toBe(true);
     expect(shouldReconnect(4400)).toBe(false);
-    expect(shouldReconnect(4401)).toBe(false);
     expect(shouldReconnect(4403)).toBe(false);
     expect(shouldReconnect(4408)).toBe(true);
     expect(shouldReconnect(4413)).toBe(true);
