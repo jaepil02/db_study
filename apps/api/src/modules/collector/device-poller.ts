@@ -16,6 +16,7 @@ import {
   colPollTimeouts,
   pointsEmitted,
   pollDuration,
+  tallyEmitted,
 } from './collector-metrics';
 import { type DeadbandFilterPort, PassthroughFilter } from './deadband-filter';
 import type { PointBufferPort } from './point-buffer.port';
@@ -111,6 +112,12 @@ export class DevicePoller {
   private seq = 0;
   /** 마지막 발행 뒤의 grp:ingest 적체 — 보관만 한다. 백프레셔 단계 반응(경고 · 위험 · 스풀)은 S6이다 */
   lastBacklog: GroupBacklog | null = null;
+  /**
+   * 연결 시도 끊기 — modbus-serial은 연결 중에 close하면 connectTCP의 콜백을 close 콜백으로 덮어 그 약속이 영영 풀리지 않는다
+   * (ports/tcpport.js close · 실측 2026-10-11). 정지가 연결 시도를 기다리며 매달리지 않게 우리 쪽 약속을 따로 거절한다.
+   * 설비 가동을 켜자마자 끄는 경우(D-16 설비 가동 스위치)에 실제로 걸린다.
+   */
+  private abortConnect: (() => void) | null = null;
 
   constructor(
     private readonly def: DeviceDef,
@@ -139,6 +146,7 @@ export class DevicePoller {
   async stop(): Promise<void> {
     this.running = false;
     this.wakeAll();
+    this.abortConnect?.();
     this.closeClient(); // 진행 중 요청을 끊는다 — 응답 · 타임아웃을 기다리지 않는다
     await this.done;
   }
@@ -152,7 +160,10 @@ export class DevicePoller {
     this.running = false;
     this.wakeAll();
     // 연결 시도 중이면 OS 연결 타임아웃까지 묶이지 않게 닫는다 — 진행 중 사이클만 끝까지 둔다(검수 N1)
-    if (!this.inCycle) this.closeClient();
+    if (!this.inCycle) {
+      this.abortConnect?.();
+      this.closeClient();
+    }
     await this.done;
   }
 
@@ -183,7 +194,15 @@ export class DevicePoller {
   private async session(): Promise<void> {
     const client = new ModbusRTU();
     this.client = client;
-    await client.connectTCP(this.def.host, { port: this.def.port, timeout: this.def.timeoutMs });
+    await new Promise<void>((resolve, reject) => {
+      this.abortConnect = () => reject(new Error('연결 시도 중 정지'));
+      client
+        .connectTCP(this.def.host, { port: this.def.port, timeout: this.def.timeoutMs })
+        .then(resolve, reject);
+    }).finally(() => {
+      this.abortConnect = null;
+    });
+    if (!this.running) return; // 연결되는 사이에 정지했다 — 그룹 루프를 띄우지 않는다
     client.setID(this.def.unitId);
     client.setTimeout(this.def.timeoutMs);
     const lock = exclusive();
@@ -266,6 +285,7 @@ export class DevicePoller {
     const payload = encodeEntry({ ...entry, s: this.seq });
     // 발행 시도 수로 센다(생략분 제외) — 아래에서 버린 엔트리가 points_emitted − tag_raw 차로 드러난다
     pointsEmitted.inc({ device: this.device }, entry.tg.length);
+    tallyEmitted(entry.tg);
     try {
       this.lastBacklog = (await this.buffer.publish(payload)).backlog;
     } catch (e) {

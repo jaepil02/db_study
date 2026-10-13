@@ -43,9 +43,6 @@ function ingestTotals() {
     chRows: 0,
     dlqEntries: 0,
     controlCopyRows: 0,
-    judgedRows: 0,
-    opened: 0,
-    closed: 0,
     latestWrites: 0,
   };
 }
@@ -117,11 +114,6 @@ export class FlowPublisher implements OnApplicationBootstrap, OnModuleDestroy {
     t.chRows += input.chRows;
     t.dlqEntries += input.dlqEntries;
     if (input.controlCopy?.ok) t.controlCopyRows += input.controlCopy.rows;
-    if (input.alarm) {
-      t.judgedRows += input.alarm.judgedRows;
-      t.opened += input.alarm.opened;
-      t.closed += input.alarm.closed;
-    }
     t.latestWrites += input.latestWrites ?? 0;
     void this.fanout.publishFlow({
       event: 'batch',

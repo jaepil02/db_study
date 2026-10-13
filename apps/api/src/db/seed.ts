@@ -1,41 +1,19 @@
-// seed — 마스터 시드(S2 범위: 사이트 · 라인 · 설비 · 접속 설정 · 태그) + S7 ① 계정 · 역할 시드(역할 3 · 학습자 계정 1 · 부여 3 — 같은 트랜잭션).
-// 실행: docker compose run --rm api node dist/db/seed.js --tier S | --slice s2 [--deadband <값>] [--range <min>,<max>] [--scan-rate <ms>] (task seed)
-// S5 옵션: --scan-rate는 모든 태그의 scan_rate_ms다(모드 A 계단 · S5 판정 6 — 계단마다 빈 볼륨에 다시 시드하고 재기동).
-// S3 옵션: --deadband · --range는 모든 태그에 같은 값이다 — 티어 시드의 data_type 구성(FLOAT32 ABCD)은 바꾸지 않는다.
-// 빈 볼륨 전용 · 한 트랜잭션 — 두 번 시드한 볼륨은 tag_id 공간이 달라 같은 시드의 두 실험이 다른 태그를 본다(09_tooling §Taskfile 작업).
-// 시드는 감사하지 않는다 — 사람이 쓰기 표면으로 일으킨 변경이 아니다(REQ-WRK-07).
-// 계정 시드(09_migrations_seed §S7 ①): SEED_USER_PASSWORD가 비었거나 자리표시면 트랜잭션 전에 거부 · 원문은 로그에 남기지 않는다(Argon2id 해시만 저장).
-// 계정만 더하는 부분 시드를 두지 않는다 — 옛 스냅샷(마스터가 찬 볼륨)은 빈 볼륨 검사가 거부한다.
+// seed — 마스터 시드(사이트 · 라인 · 설비 · 접속 설정 · 태그) — 카드 라인(로컬 기본 · 설비 30 · 태그 129) 또는 S2 슬라이스(설비 1 · 태그 8).
+// 실행: docker compose run --rm api node dist/db/seed.js [--card-line | --slice s2] [--deadband <값>] [--range <min>,<max>] (task seed)
+// 대상 인자가 없으면 카드 라인이다. --range는 슬라이스 전용 — 카드 라인은 템플릿(packages/shared/src/card-line.ts)의 태그별 범위를 쓴다.
+// 빈 볼륨 전용 · 한 트랜잭션 — 두 번 시드한 볼륨은 tag_id 공간이 달라 같은 시드의 두 실행이 다른 태그를 본다(09_tooling §Taskfile 작업).
+// 티어 시드 · 계정 · 역할 시드는 D-16(2026-10-11)에서 측정 도구 · 로그인과 함께 삭제했다.
 
 import { createClient } from '@clickhouse/client';
-import { CAPACITY_TIER_NAMES, type CapacityTier } from '@db-study/shared';
 import { Client } from 'pg';
 import {
-  argon2idHasher,
+  assertSeedOptionsFor,
+  describeScanRates,
   describeSeedOptions,
-  effectiveScanRateMs,
-  isArgon2idEncoded,
-  parseScanRate,
   parseSeedOptions,
-  SEED_LEARNER_EMAIL,
-  SEED_ROLES,
-  type SeedTarget,
-  seedDevices,
-  seedPlan,
-  seedUserPassword,
+  parseSeedTarget,
+  seedLayout,
 } from './seed-plan';
-
-function target(argv: string[]): SeedTarget {
-  const t = argv.indexOf('--tier');
-  const s = argv.indexOf('--slice');
-  if (t >= 0 && s < 0) {
-    const tier = argv[t + 1] as CapacityTier;
-    if (!CAPACITY_TIER_NAMES.includes(tier)) throw new Error(`--tier ${String(tier)} — S · M · M+ · L`);
-    return { kind: 'tier', tier };
-  }
-  if (s >= 0 && t < 0 && argv[s + 1] === 's2') return { kind: 'slice' };
-  throw new Error('사용: seed --tier <S|M|M+|L> | --slice s2');
-}
 
 /**
  * 적용 순서 ⑨ — 시드 직후 dict_tag를 즉시 적재한다(09_migrations_seed §저장소 간 적용 순서).
@@ -58,76 +36,69 @@ async function reloadDictionary() {
 }
 
 async function main() {
-  const plan = seedPlan(target(process.argv));
+  const target = parseSeedTarget(process.argv);
   const opts = parseSeedOptions(process.argv);
-  const devices = seedDevices(plan);
-  const scanRateMs = effectiveScanRateMs(plan, parseScanRate(process.argv));
-  // 해시는 트랜잭션 밖에서 먼저 — 비용 파라미터만큼 걸리는 계산 동안 트랜잭션을 열어 두지 않는다
-  const password = seedUserPassword();
-  const passwordHash = await argon2idHasher().hash(password);
-  if (!isArgon2idEncoded(passwordHash))
-    throw new Error('password_hash가 Argon2id 자기 기술 문자열이 아니다 — seed 거부');
+  assertSeedOptionsFor(target, opts);
+  const layout = seedLayout(target);
   const pg = new Client({ connectionString: process.env.POSTGRES_URL });
   await pg.connect();
+  let deviceCount = 0;
+  let tagCount = 0;
   try {
     await pg.query('BEGIN');
-    const used = await pg.query(
-      `SELECT (SELECT count(*) FROM site) + (SELECT count(*) FROM device)
-            + (SELECT count(*) FROM role) + (SELECT count(*) FROM user_account) AS n`,
-    );
+    const used = await pg.query('SELECT (SELECT count(*) FROM site) + (SELECT count(*) FROM device) AS n');
     if (Number(used.rows[0]?.n) > 0)
-      throw new Error('마스터가 비어 있지 않다 — 빈 볼륨 전용(task restore로 빈 상태를 되돌린다)');
-    const site = await pg.query(
-      `INSERT INTO site (site_code, site_name) VALUES ('SITE-001', '시뮬레이션 사이트') RETURNING site_id`,
-    );
-    const line = await pg.query(
-      `INSERT INTO production_line (site_id, line_code, line_name) VALUES ($1, 'LINE-001', '시뮬레이션 라인') RETURNING line_id`,
-      [site.rows[0].site_id],
-    );
-    let tagCount = 0;
-    for (const d of devices) {
-      const dev = await pg.query(
-        'INSERT INTO device (line_id, device_code, device_name) VALUES ($1, $2, $3) RETURNING device_id',
-        [line.rows[0].line_id, d.deviceCode, d.deviceName],
+      throw new Error('마스터가 비어 있지 않다 — 빈 볼륨 전용(볼륨을 비우고 migrate부터 다시 한다)');
+    const site = await pg.query('INSERT INTO site (site_code, site_name) VALUES ($1, $2) RETURNING site_id', [
+      layout.site.code,
+      layout.site.name,
+    ]);
+    for (const l of layout.lines) {
+      const line = await pg.query(
+        'INSERT INTO production_line (site_id, line_code, line_name) VALUES ($1, $2, $3) RETURNING line_id',
+        [site.rows[0].site_id, l.lineCode, l.lineName],
       );
-      const deviceId = dev.rows[0].device_id;
-      // 루프백 host = 시뮬레이션 설비 → 정상 값에 SIMULATED(9) · 타임아웃 3초는 원본 현행(06_pipeline/02 §미확인 등재)
-      await pg.query(
-        `INSERT INTO modbus_config (device_id, host, port, unit_id, timeout_ms, retry_count, max_regs_per_request)
-         VALUES ($1, '127.0.0.1', $2, 1, 3000, 0, 125)`,
-        [deviceId, d.port],
-      );
-      for (const t of d.tags) {
-        await pg.query(
-          `INSERT INTO tag_master (device_id, tag_code, tag_name, function_code, address, data_type, word_order,
-                                   scale, offset_value, unit, deadband, scan_rate_ms, range_min, range_max)
-           VALUES ($1, $2, $3, 3, $4, 'FLOAT32', 'ABCD', 1, 0, '', $5, $6, $7, $8)`,
-          [
-            deviceId,
-            t.tagCode,
-            t.tagName,
-            t.address,
-            opts.deadband,
-            scanRateMs,
-            opts.range?.min ?? null,
-            opts.range?.max ?? null,
-          ],
+      for (const d of l.devices) {
+        const dev = await pg.query(
+          `INSERT INTO device (line_id, device_code, device_name, vendor, model)
+           VALUES ($1, $2, $3, $4, $5) RETURNING device_id`,
+          [line.rows[0].line_id, d.deviceCode, d.deviceName, d.vendor, d.model],
         );
-        tagCount++;
+        const deviceId = dev.rows[0].device_id;
+        deviceCount++;
+        // 루프백 host = 시뮬레이션 설비 → 정상 값에 SIMULATED(9) · 타임아웃 3초는 원본 현행(06_pipeline/02 §미확인 등재)
+        await pg.query(
+          `INSERT INTO modbus_config (device_id, host, port, unit_id, timeout_ms, retry_count, max_regs_per_request)
+           VALUES ($1, '127.0.0.1', $2, 1, 3000, 0, 125)`,
+          [deviceId, d.port],
+        );
+        for (const t of d.tags) {
+          await pg.query(
+            `INSERT INTO tag_master (device_id, tag_code, tag_name, function_code, address, data_type, word_order,
+                                     scale, offset_value, unit, deadband, scan_rate_ms, range_min, range_max, tag_kind)
+             VALUES ($1, $2, $3, 3, $4, $5, $6, 1, 0, $7, $8, $9, $10, $11, $12)`,
+            [
+              deviceId,
+              t.tagCode,
+              t.tagName,
+              t.address,
+              t.dataType,
+              t.wordOrder,
+              t.unit,
+              opts.deadband,
+              t.scanRateMs,
+              opts.range?.min ?? t.rangeMin,
+              opts.range?.max ?? t.rangeMax,
+              t.tagKind,
+            ],
+          );
+          tagCount++;
+        }
       }
     }
-    // S7 ① — 역할 3(순서 고정 → role_id 고정) → 학습자 계정 1 → 부여 3(학습자에게 역할 전부 · REQ-AUT-17)
-    for (const code of SEED_ROLES) await pg.query('INSERT INTO role (role_code) VALUES ($1)', [code]);
-    const user = await pg.query(
-      'INSERT INTO user_account (email, password_hash, is_active) VALUES ($1, $2, true) RETURNING user_id',
-      [SEED_LEARNER_EMAIL, passwordHash],
-    );
-    await pg.query('INSERT INTO user_role (user_id, role_id) SELECT $1, role_id FROM role ORDER BY role_id', [
-      user.rows[0].user_id,
-    ]);
     await pg.query('COMMIT');
     process.stdout.write(
-      `seed 완료 — ${plan.label} · 설비 ${devices.length} · 태그 ${tagCount} · ${describeSeedOptions(opts)} · scan_rate_ms ${scanRateMs} · 계정 ${SEED_LEARNER_EMAIL}(역할 ${SEED_ROLES.length})\n`,
+      `seed 완료 — ${layout.label} · 설비 ${deviceCount} · 태그 ${tagCount} · ${describeSeedOptions(opts, layout)} · scan_rate_ms ${describeScanRates(layout)}\n`,
     );
   } catch (e) {
     await pg.query('ROLLBACK').catch(() => undefined);

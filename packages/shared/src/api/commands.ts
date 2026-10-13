@@ -3,7 +3,7 @@
 // 키 · 채널 정본 docs/05_data_stores/05_redis_keyspace.md · 원장 정본 docs/05_data_stores/01_postgresql_schema.md §biz_command_log 설계
 import { z } from 'zod';
 
-/** 명령 종류 — 표면 하나가 kind 하나(도메인.대상.동작) · 구현된 업무 쓰기 14 = 마스터 11 + 알람 규칙 2 + 알람 확인 1 */
+/** 명령 종류 — 표면 하나가 kind 하나(도메인.대상.동작) · 구현된 업무 쓰기 11 = 마스터 11(알람 3종은 D-16에서 삭제) */
 export const BIZ_KINDS = [
   'master.tag.create',
   'master.tag.patch',
@@ -16,9 +16,6 @@ export const BIZ_KINDS = [
   'master.device.create',
   'master.device.patch',
   'master.modbus.put',
-  'alarm.rule.create',
-  'alarm.rule.patch',
-  'alarm.event.ack',
 ] as const;
 export type BizKind = (typeof BIZ_KINDS)[number];
 
@@ -52,7 +49,7 @@ export const BizCommandEnvelope = z.strictObject({
     params: z.record(z.string(), z.union([z.number(), z.string()])),
     body: z.unknown().optional(),
   }),
-  /** 요청자 user_id · 인증 전(S7 ②) null */
+  /** 요청자 — 로그인 기능이 없어 늘 null(D-16 — 로그인 · 권한 · 감사 삭제) */
   actor: z.number().int().nullable(),
   /** api 수신 epoch ms */
   requestedAt: z.number().int(),

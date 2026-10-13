@@ -1,4 +1,5 @@
 // CacheKeyClient — 캐시 계열(cache · lock · rl · sess · auth · biz) 래퍼(ADR-13 · 정본 docs/05_data_stores/05_redis_keyspace.md)
+// D-16 추가: 동시 적재 게이트 cache:dual:active(SW-09 gated) · 센서 데이터 지우기의 조회 사본(cache:q:*) 훑기 · 삭제(SCAN — KEYS 아님).
 // ① TTL은 쓰기 메서드의 필수 인자다 — 빠뜨린 호출은 컴파일되지 않는다 ② PERSIST · KEYS · FLUSH를 노출하지 않는다
 // ③ 실패는 짧은 타임아웃(현행 50 ms · 소유 06_pipeline/06) 뒤 조용히 degrade — 결과 없음으로 돌려주고 계수한다
 //    lock:biz:writer 연산만 긴 타임아웃(LOCK_CALL_TIMEOUT_MS) — 갱신 실패는 소비 중단이라 응답 지연을 상실로 읽지 않는다
@@ -240,41 +241,6 @@ export class CacheKeyClient {
     return this.releaseLock(`lock:rebuild:rt:${deviceId}`, token);
   }
 
-  /** cache:alarmrules — 활성 규칙 전체 JSON(쓰기 주체는 판정기 하나 · 05_redis_keyspace) · failed는 degrade(부르는 쪽이 PostgreSQL 직행 · 채우지 않는다) */
-  async getAlarmRules(): Promise<{ value: string | null; failed: boolean }> {
-    const r = await this.getBuffer('cache:alarmrules');
-    return { value: r.value ? r.value.toString('utf8') : null, failed: r.failed };
-  }
-
-  /** 현행 TTL 300초 · 쓰기 시 ±20% 지터(05_redis_keyspace §TTL 조회 계약) */
-  setAlarmRules(json: string, ttlSeconds = 300): Promise<void> {
-    return this.setWithTtl('cache:alarmrules', json, ttlSeconds);
-  }
-
-  /** 체인 ② — 규칙 쓰기 커밋 뒤 DEL(내용은 판정기가 다시 채운다) */
-  delAlarmRules(): Promise<boolean> {
-    return this.del('cache:alarmrules');
-  }
-
-  /** cache:alarmevents — 목록 Hash 필드(정규화 쿼리 SHA-1) · 값 gzip JSON */
-  getAlarmEventsPage(sha1: string): Promise<Buffer | null> {
-    const key = 'cache:alarmevents';
-    return this.degrade(key, 'hget', () => this.redis.hgetBuffer(key, sha1));
-  }
-
-  /** 필드 채움 + 첫 채움 기준 만료(EXPIRE NX) · 지터 없음 — 필드마다 만료를 갱신하면 인기 조합이 영원히 낡지 않는다 */
-  async setAlarmEventsPage(sha1: string, gz: Buffer, ttlSeconds: number): Promise<void> {
-    const key = 'cache:alarmevents';
-    await this.degrade(key, 'hset', () =>
-      this.redis.multi().hset(key, sha1, gz).expire(key, ttlSeconds, 'NX').exec(),
-    );
-  }
-
-  /** 체인 ② — 확인 커밋 뒤 키 하나 DEL */
-  delAlarmEvents(): Promise<boolean> {
-    return this.del('cache:alarmevents');
-  }
-
   // ── 업무 명령(06_pipeline/07 §업무 명령 경로) · 흐름 표지(07_api/11 §흐름 이벤트)
 
   /** biz:result:{cmdId} — 결과 JSON · failed는 degrade(부르는 쪽이 원장으로 간다 · 다시 채우지 않는다) */
@@ -351,4 +317,74 @@ export class CacheKeyClient {
   setFlowSubscribed(owner: string, ttlSeconds: number): Promise<boolean> {
     return this.setExact('cache:flow:subscribed', owner, ttlSeconds);
   }
+
+  // ── 동시 적재 게이트(SW-09 gated · D-16) — 직접 비교 실행이 켜 둔 동안만 flusher가 같은 배치를 PostgreSQL에도 COPY한다
+
+  /** cache:dual:active — 값 = 실행 runId · TTL 필수(지터 없음 · 실행이 주기적으로 다시 쓴다) · 실패면 false */
+  setDualGate(runId: string, ttlSeconds: number): Promise<boolean> {
+    return this.setExact(DUAL_GATE_KEY, runId, ttlSeconds);
+  }
+
+  /** 게이트 읽기 — failed는 degrade(타임아웃 · 오류)라 있는지 모른다(부르는 쪽이 직전 값을 지킨다) */
+  async getDualGate(): Promise<{ value: string | null; failed: boolean }> {
+    const r = await this.getBuffer(DUAL_GATE_KEY);
+    return { value: r.value ? r.value.toString('utf8') : null, failed: r.failed };
+  }
+
+  /** 게이트 끄기 — 실패면 false(TTL이 지나면 저절로 꺼진다) */
+  delDualGate(): Promise<boolean> {
+    return this.del(DUAL_GATE_KEY);
+  }
+
+  // ── 센서 데이터 지우기(D-16 결정 5) — 시계열 조회 사본(cache:q:*)만 · 마스터 사본(cache:tagmeta · cache:devlist)은 남긴다
+
+  /** cache:q:* 키 수 — SCAN(KEYS 금지) · degrade면 null */
+  countQueryCopies(): Promise<number | null> {
+    return this.degrade(
+      'cache:q:',
+      'scan',
+      async () => {
+        let n = 0;
+        await this.scanKeys('cache:q:*', async (keys) => {
+          n += keys.length;
+        });
+        return n;
+      },
+      SCAN_CALL_TIMEOUT_MS,
+    );
+  }
+
+  /** cache:q:* 전부 삭제 — SCAN 한 쪽씩 DEL · 지운 키 수 · degrade면 null(사본은 TTL로 저절로 사라진다) */
+  deleteQueryCopies(): Promise<number | null> {
+    return this.degrade(
+      'cache:q:',
+      'del',
+      async () => {
+        let n = 0;
+        await this.scanKeys('cache:q:*', async (keys) => {
+          n += await this.redis.del(...keys);
+        });
+        return n;
+      },
+      SCAN_CALL_TIMEOUT_MS,
+    );
+  }
+
+  private async scanKeys(pattern: string, each: (keys: string[]) => Promise<void>): Promise<void> {
+    let cursor = '0';
+    do {
+      const [next, keys] = await this.redis.scan(cursor, 'MATCH', pattern, 'COUNT', SCAN_COUNT);
+      cursor = next;
+      if (keys.length > 0) await each(keys);
+    } while (cursor !== '0');
+  }
 }
+
+/** 동시 적재 게이트 키(05_data_stores/05 캐시 계열 · SW-09 gated) — 값 runId · TTL DUAL_GATE_TTL_SECONDS */
+export const DUAL_GATE_KEY = 'cache:dual:active';
+/** 게이트 TTL 10초 — 실행이 DUAL_GATE_REFRESH_MS마다 다시 쓴다 · 실행이 죽으면 10초 안에 저절로 꺼진다 */
+export const DUAL_GATE_TTL_SECONDS = 10;
+export const DUAL_GATE_REFRESH_MS = 2000;
+/** 사본 키 훑기 — SCAN 한 번 COUNT · 전체 상한(지우기 표면의 Redis 단계) */
+const SCAN_COUNT = 1000;
+const SCAN_CALL_TIMEOUT_MS = 10_000;

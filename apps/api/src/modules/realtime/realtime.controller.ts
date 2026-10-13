@@ -1,4 +1,4 @@
-// RLT REST 표면 — 07_api/06_realtime.md #1(S2) · #2(S4) · 브라우저 직결 · S2~S6 무인증
+// RLT REST 표면 — 07_api/06_realtime.md #1(S2) · #2(S4) · 브라우저 직결 · 인증 없음(D-16 — 로그인 삭제)
 import { DeviceIdParam, EntityIdParam, type LatestDeviceBody, type LatestTagBody } from '@db-study/shared';
 import { Controller, Get, Header, Param } from '@nestjs/common';
 import { parseOrThrow } from '../../common/http/api-error';

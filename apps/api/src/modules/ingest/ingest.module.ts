@@ -1,14 +1,13 @@
 // ING — Stream 소비 · 창 정렬 배치 · tag_raw 삽입 · 재시도 · DLQ · 회수 · 대조군 · XACK · 최신값(ING-01~08 · 11 · 12 — S2 · S3)
 // 스위치 포트 구현은 모듈 초기화 때 한 번 고른다 — 경로 안 분기를 두지 않는다(ADR-08).
 // 포트 · 구현 이름 정본 docs/04_architecture/02_module_boundaries.md(SW-08 BatchTokenPort · SW-09 ControlTableSinkPort · SW-11 LatestValueWritePort)
-// 판정기(ALM · S7 ①)는 여기서 import한다 — IngestModule이 도는 역할(all · worker)에만 판정기가 산다(flusher ⑥ 인계 · 06_pipeline/08).
 import { Logger, Module } from '@nestjs/common';
 import { REALTIME_FANOUT_PORT, type RealtimeFanoutPort } from '../../common/ports/realtime-fanout.port';
 import { SwitchRegistry } from '../../common/ports/switch-registry';
+import { CacheKeyClient } from '../../common/redis/cache-key-client';
 import { DurableKeyClient } from '../../common/redis/durable-key-client';
 import { type AppConfig, INGEST_BATCH_PLANS, requireStoreUrls } from '../../config/app-config';
 import { APP_CONFIG } from '../../config/config.module';
-import { AlarmEvalModule } from '../alarm/eval/alarm-eval.module';
 import {
   BATCH_TOKEN_PORT,
   type BatchTokenPort,
@@ -19,6 +18,9 @@ import {
   CONTROL_TABLE_SINK_PORT,
   type ControlTableSinkPort,
   controlCopyTimeoutMs,
+  DualGateReader,
+  type DualGateSource,
+  GatedControlSink,
   NoopControlSink,
   PostgresControlSink,
 } from './control-table-sink.port';
@@ -47,18 +49,29 @@ export function batchTokenFactory(cfg: AppConfig, reg: SwitchRegistry): BatchTok
   return impl;
 }
 
-/** SW-09 — on PostgreSQL 대조군 COPY(전용 커넥션) · off 아무것도 하지 않는다(기본) */
-export function controlSinkFactory(cfg: AppConfig, reg: SwitchRegistry): ControlTableSinkPort {
+/**
+ * SW-09 — off 아무것도 하지 않는다 · on 배치마다 PostgreSQL 비교 사본 COPY(전용 커넥션) ·
+ * gated(기본 · D-16) 같은 COPY를 게이트 cache:dual:active가 있을 때만 — 직접 비교 실행이 켠 동안만 싣는다
+ */
+export function controlSinkFactory(
+  cfg: AppConfig,
+  reg: SwitchRegistry,
+  cache: DualGateSource,
+): ControlTableSinkPort {
   const value = cfg.switches['SW-09'];
   const log = new Logger('ControlTableSink');
+  const pg = () =>
+    new PostgresControlSink(
+      requireStoreUrls(cfg).postgresUrl,
+      { error: (s) => log.error(s), warn: (s) => log.warn(s) },
+      controlCopyTimeoutMs(INGEST_BATCH_PLANS[cfg.ingestBatchPlan].windowMs),
+    );
   const impl: ControlTableSinkPort =
-    value === 'on'
-      ? new PostgresControlSink(
-          requireStoreUrls(cfg).postgresUrl,
-          { error: (s) => log.error(s), warn: (s) => log.warn(s) },
-          controlCopyTimeoutMs(INGEST_BATCH_PLANS[cfg.ingestBatchPlan].windowMs),
-        )
-      : new NoopControlSink();
+    value === 'off'
+      ? new NoopControlSink()
+      : value === 'on'
+        ? pg()
+        : new GatedControlSink(pg(), new DualGateReader(cache));
   reg.register('SW-09', value, impl.implName);
   return impl;
 }
@@ -83,13 +96,12 @@ export function latestWriterFactory(
 }
 
 @Module({
-  imports: [AlarmEvalModule],
   providers: [
     { provide: BATCH_TOKEN_PORT, useFactory: batchTokenFactory, inject: [APP_CONFIG, SwitchRegistry] },
     {
       provide: CONTROL_TABLE_SINK_PORT,
       useFactory: controlSinkFactory,
-      inject: [APP_CONFIG, SwitchRegistry],
+      inject: [APP_CONFIG, SwitchRegistry, CacheKeyClient],
     },
     {
       provide: LATEST_VALUE_WRITE_PORT,

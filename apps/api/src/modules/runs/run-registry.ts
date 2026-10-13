@@ -2,6 +2,9 @@
 // docs/06_pipeline/10_datagen_inject.md §라이브 실행(상태 전이 · 단계 표지)
 // 상태 자리는 인스턴스 메모리 — 진행 중 1 + 마지막으로 끝난 1(다음 시작 전까지) · 재기동이면 둘 다 사라진다(기록 없음).
 // 동시 실행 확인(③)과 실행 객체 생성(④)은 한 임계 구역이다 — 같은 동기 구간 안에서 끝내 두 시작 요청 중 하나만 running이 된다.
+// 직접 비교(compare · D-16)는 두 가지를 더한다 — 시작 전 사전 확인(precheck · 넣기 전 조회는 409 datagen.compare_no_data)과
+// 종결 직전 보관(archive · PG run_result). 보관이 끝나야 종결 표지를 단다 — 화면이 completed를 본 순간 GET latest가 그 결과를 읽는다.
+// 시작 문(startGuard) — 센서 데이터를 지우는 동안에는 어떤 실행도 시작하지 않는다(SensorPurgeLock.assertIdle · 동기 임계 구역 안에서 본다).
 import { randomUUID } from 'node:crypto';
 import {
   RUN_TERMINAL,
@@ -11,6 +14,7 @@ import {
   type RunStepStatus,
   type RunType,
 } from '@db-study/shared';
+import { Logger } from '@nestjs/common';
 import { ApiError } from '../../common/http/api-error';
 import { runMetrics } from './runs.metrics';
 
@@ -42,6 +46,9 @@ interface StepState extends RunStepDef {
 
 export type RunError = { code: string | null; message: string };
 
+/** 실행 매개변수 — flow는 수 · compare는 part(문자열) + rows(넣기 건수) */
+export type RunParams = Record<string, number | string>;
+
 /** 원인의 기존 에러 코드(ApiError)만 싣고 아니면 null — run_failed 같은 코드를 만들지 않는다 */
 export function runErrorOf(e: unknown): RunError {
   if (e instanceof ApiError) return { code: e.code, message: e.message };
@@ -62,7 +69,7 @@ export class RunState {
 
   constructor(
     readonly type: RunType,
-    readonly params: Record<string, number>,
+    readonly params: RunParams,
     readonly startedAt: number,
     steps: readonly RunStepDef[],
     private readonly clock: RunClock,
@@ -128,7 +135,14 @@ export class RunState {
     if (detail) s.detail = { ...s.detail, ...detail };
   }
 
-  /** 미시작 단계 → skipped(except 제외 — perf cleanup은 중단 · 실패에도 돈다) */
+  /** 시작하지 않고 건너뛴 단계 하나 → skipped(조회 대결 — 넣은 데이터보다 큰 원천 행 수 단계) */
+  skipStep(key: string, detail?: Record<string, unknown>): void {
+    const s = this.step(key);
+    s.status = 'skipped';
+    if (detail) s.detail = { ...s.detail, ...detail };
+  }
+
+  /** 미시작 단계 → skipped(except 제외 — 정리 단계는 중단 · 실패에도 돈다) */
   skipPending(except: readonly string[] = []): void {
     for (const s of this.steps) if (s.status === 'pending' && !except.includes(s.key)) s.status = 'skipped';
   }
@@ -156,11 +170,11 @@ export class RunState {
     }
   }
 
-  finish(status: 'completed' | 'stopped' | 'failed', error: RunError | null): void {
+  finish(status: 'completed' | 'stopped' | 'failed', error: RunError | null, endedAtMs?: number): void {
     if (this.terminal) return;
     this.status = status;
     this.error = error;
-    this.endedAt = this.clock.nowMs();
+    this.endedAt = endedAtMs ?? this.clock.nowMs();
     for (const w of this.stopWaiters.splice(0)) w();
   }
 
@@ -200,13 +214,18 @@ export interface RunEnding {
 /** 실행 종류 하나의 실행기 — 단계 목록을 내고, 단계를 돌린 뒤 종결 status · error를 돌려준다(종결 표지는 레지스트리가 한 번에 한다) */
 export interface RunExecutor {
   readonly type: RunType;
-  steps(params: Record<string, number>): RunStepDef[];
+  steps(params: RunParams): RunStepDef[];
   execute(state: RunState): Promise<RunEnding>;
+  /** 시작 전 확인 — 던지면 실행을 만들지 않는다(ApiError면 그 코드로 응답) */
+  precheck?(params: RunParams): Promise<void>;
+  /** 종결 직전 보관 — 실패해도 종결은 막지 않는다(부르는 쪽이 삼키고 경고) */
+  archive?(state: RunState, ending: RunEnding, endedAtMs: number): Promise<void>;
 }
 
 export type StopOutcome = { httpStatus: 200 | 202; run: RunObjectBody };
 
 export class RunRegistry {
+  private readonly log = new Logger('RunRegistry');
   private current: RunState | null = null;
   private last: RunState | null = null;
   private readonly executors = new Map<RunType, RunExecutor>();
@@ -214,6 +233,8 @@ export class RunRegistry {
   constructor(
     executors: readonly RunExecutor[],
     private readonly clock: RunClock = systemRunClock,
+    /** 시작 직전 확인(동기) — 던지면 시작하지 않는다(센서 데이터 지우기 중 거절) */
+    private readonly startGuard: () => void = () => undefined,
   ) {
     for (const e of executors) this.executors.set(e.type, e);
   }
@@ -227,13 +248,14 @@ export class RunRegistry {
    * #2 ③ · ④ — 동기 구간 하나(await 없음). 진행 중이 있으면 409 details {runId, type}.
    * 마지막으로 끝난 실행을 버리고 새 실행을 만든 뒤 실행기를 응답 뒤로 돌린다.
    */
-  start(type: RunType, params: Record<string, number>): RunState {
+  start(type: RunType, params: RunParams): RunState {
     const busy = this.active();
     if (busy)
       throw new ApiError('datagen.run_in_progress', '다른 라이브 실행이 진행 중이다', {
         runId: busy.runId,
         type: busy.type,
       });
+    this.startGuard();
     const exec = this.executors.get(type);
     if (!exec) throw new Error(`실행기 없음 — ${type}`);
     const state = new RunState(type, params, this.clock.nowMs(), exec.steps(params), this.clock);
@@ -242,6 +264,22 @@ export class RunRegistry {
     runMetrics.started(type);
     void this.drive(exec, state);
     return state;
+  }
+
+  /**
+   * #2 표면용 — 진행 중이면 409 run_in_progress를 먼저 내고, 실행기의 사전 확인(await)을 거친 뒤 start(동기 임계 구역)로 간다.
+   * 확인 중에 다른 시작이 끼어들면 start가 다시 409로 막는다(임계 구역은 그대로 start 하나다).
+   */
+  async begin(type: RunType, params: RunParams): Promise<RunState> {
+    const busy = this.active();
+    if (busy)
+      throw new ApiError('datagen.run_in_progress', '다른 라이브 실행이 진행 중이다', {
+        runId: busy.runId,
+        type: busy.type,
+      });
+    this.startGuard();
+    await this.executors.get(type)?.precheck?.(params);
+    return this.start(type, params);
   }
 
   /** 종결 표지 · 계측 · 보관 이동을 한 동기 구간에서 — 실행기가 던져도 종결을 보장한다 */
@@ -253,7 +291,15 @@ export class RunRegistry {
       state.skipPending();
       ending = { status: 'failed', error: runErrorOf(e) };
     }
-    state.finish(ending.status, ending.error);
+    const endedAt = this.clock.nowMs();
+    if (exec.archive) {
+      try {
+        await exec.archive(state, ending, endedAt);
+      } catch (e) {
+        this.log.warn(`실행 결과 보관 실패(${state.type} ${state.runId}) — ${(e as Error).message}`);
+      }
+    }
+    state.finish(ending.status, ending.error, endedAt);
     runMetrics.ended(state.type, state.status);
     this.last = state;
     this.current = null;

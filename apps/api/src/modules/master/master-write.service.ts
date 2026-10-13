@@ -1,6 +1,5 @@
 // MST 쓰기(S4) — 표면 정본 docs/07_api/04_master.md · 체인 정본 06_pipeline/07_business_crud.md
-// 쓰기 하나 = 트랜잭션 하나(변경 + audit_log · 감사 실패는 변경 전체 롤백 — REQ-MST-05 · REQ-WRK-08).
-// 무인증 기간(S4~S6)의 감사 행위자는 NULL이다(05_data_stores/01 §인계 판정). 인가(ADMIN)는 S7.
+// 쓰기 하나 = 트랜잭션 하나. 감사 기록 · 인가는 D-16에서 로그인 · 권한과 함께 삭제했다.
 // 체인 ②③은 커밋 뒤 · 응답 전(InvalidationChain) · ④는 응답 뒤. 체인 실패는 요청을 실패시키지 않는다(REQ-MST-10).
 // 업무 명령 경로(SW-12 stream)에서는 명령 워커가 이 서비스를 부른다 — 원장 APPLIED 행은 COMMIT 직전 같은 트랜잭션(bizBeforeCommit · 06_pipeline/07 §적용 단계 ⑤).
 import {
@@ -133,22 +132,6 @@ export class MasterWriteService {
     return out.result;
   }
 
-  /** 감사 — 무인증 기간 행위자 NULL · 물리 DELETE 없음(INSERT · UPDATE만) */
-  private async audit(
-    c: PoolClient,
-    action: 'INSERT' | 'UPDATE',
-    table: string,
-    key: string | number,
-    before: unknown,
-    after: unknown,
-  ): Promise<void> {
-    await c.query(
-      `INSERT INTO audit_log (user_id, action, target_table, target_key, before_value, after_value)
-       VALUES (NULL, $1, $2, $3, $4, $5)`,
-      [action, table, String(key), before === null ? null : JSON.stringify(before), JSON.stringify(after)],
-    );
-  }
-
   private async lockTag(c: PoolClient, tagId: number): Promise<TagMeta> {
     const r = await c.query(`${TAG_META_SELECT} WHERE tag_id = $1 FOR UPDATE`, [tagId]);
     if (r.rowCount === 0) throw new ApiError('common.not_found', '태그가 없다');
@@ -200,12 +183,11 @@ export class MasterWriteService {
         ],
       );
       const tag = await this.readTag(c, Number(r.rows[0].tag_id));
-      await this.audit(c, 'INSERT', 'tag_master', tag.tagId, null, tag);
       return { result: tagObject(tag), chain: { tagIds: [tag.tagId], reloadDictionary: true } };
     });
   }
 
-  /** #5 수정 — 불변 400 · 스케일이 현재와 다르면 409 · 실제로 바뀐 필드가 없으면 감사 · 체인 없음 */
+  /** #5 수정 — 불변 400 · 스케일이 현재와 다르면 409 · 실제로 바뀐 필드가 없으면 변경 · 체인 없음 */
   async patchTag(tagId: number, b: TagPatch): Promise<TagObjectBody> {
     const imm = immutableIssues(b as Json, ['tagId', 'deviceId', 'isActive']);
     if (imm.length) throw validationFailed(imm);
@@ -249,24 +231,22 @@ export class MasterWriteService {
         ...changed.map((f) => (next as unknown as Json)[f]),
       ]);
       const after = await this.readTag(c, tagId);
-      await this.audit(c, 'UPDATE', 'tag_master', tagId, cur, after);
       return { result: tagObject(after), chain: { tagIds: [tagId], reloadDictionary: true } };
     });
   }
 
-  /** #6 논리 삭제 — 이미 비활성이면 변경 · 감사 · 체인 없이 200 */
+  /** #6 논리 삭제 — 이미 비활성이면 변경 · 체인 없이 200 */
   deactivateTag(tagId: number): Promise<TagObjectBody> {
     return this.tx(async (c) => {
       const cur = await this.lockTag(c, tagId);
       if (!cur.isActive) return { result: tagObject(cur) };
       await c.query('UPDATE tag_master SET is_active = false WHERE tag_id = $1', [tagId]);
       const after = await this.readTag(c, tagId);
-      await this.audit(c, 'UPDATE', 'tag_master', tagId, cur, after);
       return { result: tagObject(after), chain: { tagIds: [tagId], reloadDictionary: true } };
     });
   }
 
-  /** #7 새 태그 발급 — 한 트랜잭션(발급 · 이전 비활성 · 이력 · 감사 2행) · 원천이 비활성이면 409 */
+  /** #7 새 태그 발급 — 한 트랜잭션(발급 · 이전 비활성 · 이력) · 원천이 비활성이면 409 */
   reissueTag(
     tagId: number,
     b: TagReissue,
@@ -299,10 +279,12 @@ export class MasterWriteService {
         isActive: true,
       };
       this.shapeOrThrow(n);
+      // 종류(tag_kind · 006)는 표면 계약 밖이라 옛 태그 것을 그대로 잇는다 — 새 태그가 HMI · 가상 PLC에서 같은 종류로 남는다
       const r = await c.query(
         `INSERT INTO tag_master (device_id, tag_code, tag_name, function_code, address, data_type, word_order,
-                                 scale, offset_value, unit, deadband, scan_rate_ms, range_min, range_max)
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14) RETURNING tag_id`,
+                                 scale, offset_value, unit, deadband, scan_rate_ms, range_min, range_max, tag_kind)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,
+                 (SELECT o.tag_kind FROM tag_master o WHERE o.tag_id = $15)) RETURNING tag_id`,
         [
           n.deviceId,
           n.tagCode,
@@ -318,19 +300,17 @@ export class MasterWriteService {
           n.scanRateMs,
           n.rangeMin,
           n.rangeMax,
+          tagId,
         ],
       );
       const newId = Number(r.rows[0].tag_id);
       await c.query('UPDATE tag_master SET is_active = false WHERE tag_id = $1', [tagId]);
       const h = await c.query(
-        `INSERT INTO tag_master_history (old_tag_id, new_tag_id, old_scale, old_offset_value, new_scale, new_offset_value, changed_by, reason)
-         VALUES ($1,$2,$3,$4,$5,$6,NULL,$7) RETURNING history_id`,
+        `INSERT INTO tag_master_history (old_tag_id, new_tag_id, old_scale, old_offset_value, new_scale, new_offset_value, reason)
+         VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING history_id`,
         [tagId, newId, old.scale, old.offsetValue, scale, offsetValue, b.reason ?? null],
       );
       const newTag = await this.readTag(c, newId);
-      const oldAfter = await this.readTag(c, tagId);
-      await this.audit(c, 'INSERT', 'tag_master', newId, null, newTag);
-      await this.audit(c, 'UPDATE', 'tag_master', tagId, old, oldAfter);
       return {
         result: { newTag: tagObject(newTag), oldTagId: tagId, historyId: Number(h.rows[0].history_id) },
         chain: { tagIds: [newId, tagId], reloadDictionary: true },
@@ -338,7 +318,7 @@ export class MasterWriteService {
     });
   }
 
-  // ── 사이트 · 라인 — Redis 사본 없음(② ③ 없음 · ⑤만) · 감사는 한다
+  // ── 사이트 · 라인 — Redis 사본 없음(② ③ 없음 · ⑤만)
 
   createSite(b: { siteCode: string; siteName: string }): Promise<SiteObjectBody> {
     return this.tx(async (c) => {
@@ -347,7 +327,6 @@ export class MasterWriteService {
         [b.siteCode, b.siteName],
       );
       const site = rowToSite(r.rows[0]);
-      await this.audit(c, 'INSERT', 'site', site.siteId, null, site);
       return { result: site };
     });
   }
@@ -370,7 +349,6 @@ export class MasterWriteService {
         [siteId, next.siteCode, next.siteName],
       );
       const after = rowToSite(r.rows[0]);
-      await this.audit(c, 'UPDATE', 'site', siteId, before, after);
       return { result: after };
     });
   }
@@ -383,7 +361,6 @@ export class MasterWriteService {
         [b.siteId, b.lineCode, b.lineName],
       );
       const line = rowToLine(r.rows[0]);
-      await this.audit(c, 'INSERT', 'production_line', line.lineId, null, line);
       return { result: line };
     });
   }
@@ -407,7 +384,6 @@ export class MasterWriteService {
         [lineId, next.lineCode, next.lineName],
       );
       const after = rowToLine(r.rows[0]);
-      await this.audit(c, 'UPDATE', 'production_line', lineId, before, after);
       return { result: after };
     });
   }
@@ -445,8 +421,6 @@ export class MasterWriteService {
         [device.deviceId, m.host, m.port, m.unitId, m.timeoutMs, m.retryCount, m.maxRegsPerRequest],
       );
       const modbusConfig = rowToModbus(mr.rows[0]);
-      await this.audit(c, 'INSERT', 'device', device.deviceId, null, device);
-      await this.audit(c, 'INSERT', 'modbus_config', device.deviceId, null, modbusConfig);
       return { result: { ...device, modbusConfig }, chain: { deviceSites: [siteId] } };
     });
   }
@@ -474,7 +448,6 @@ export class MasterWriteService {
         [deviceId, next.deviceCode, next.deviceName, next.vendor, next.model, next.isActive],
       );
       const after = rowToDevice(r.rows[0]);
-      await this.audit(c, 'UPDATE', 'device', deviceId, before, after);
       const siteId = await this.siteOfLine(c, before.lineId);
       return { result: after, chain: { deviceSites: [siteId] } };
     });
@@ -494,7 +467,6 @@ export class MasterWriteService {
         [deviceId, m.host, m.port, m.unitId, m.timeoutMs, m.retryCount, m.maxRegsPerRequest],
       );
       const after = rowToModbus(r.rows[0]);
-      await this.audit(c, 'UPDATE', 'modbus_config', deviceId, before, after);
       const site = await c.query(
         'SELECT l.site_id FROM device d JOIN production_line l USING (line_id) WHERE d.device_id = $1',
         [deviceId],

@@ -1,8 +1,8 @@
 // F-07 실시간 푸시 — /ws/realtime 프로토콜 정본 docs/07_api/11_websocket.md · 기전 06_pipeline/05 §F-07 실시간 푸시 한 사이클
 // ① 핸드셰이크 Host 대조(업그레이드 전 400) · Origin 검증(업그레이드 뒤 4403) ③ subscribe · unsubscribe(연결당 설비 상한 · rejected limit)
 // ④ ch:rt 수신(SW-06 on) 또는 프로세스 안 버스(SW-06 off) · ch:cacheinv 즉시 중계(RLT-09 · 병합 없음 · 전 연결)
-// ⑤ 스로틀(SW-07 FrameThrottlePort) ⑥ JSON ping 30초 · pong 3회 미수신 4408 · 송신 대기량 한도 초과 4413. 인증(②)은 S7 ②.
-// alarm(S7 ① · RLT-08) — ch:alarm(SW-06 on) 또는 프로세스 안 버스 'alarm'(SW-06 off)을 병합 없이 즉시 전 연결에 중계한다(구독과 무관).
+// ⑤ 스로틀(SW-07 FrameThrottlePort) ⑥ JSON ping 30초 · pong 3회 미수신 4408 · 송신 대기량 한도 초과 4413.
+// 인증(옛 ②) · 알람 중계(옛 RLT-08)는 D-16에서 삭제.
 // flow(EXP-FLOW · 07_api/11 §흐름 이벤트) — subscribe_flow 연결에만 ch:flow 요약을 연결마다 250 ms 창으로 병합해 보낸다(배치 8 · 업무 20 ·
 // 넘친 수 dropped · totals는 (source · role)마다 창 안 마지막 값). 인스턴스의 첫 흐름 구독자에서 SUBSCRIBE ch:flow · 표지 갱신 시작,
 // 마지막 해지 · 종료에서 UNSUBSCRIBE · 갱신 중단(표지는 TTL로 만료 — 지우지 않는다). 송신 대기량 한도는 rt와 같은 send()를 쓴다.
@@ -32,7 +32,7 @@ import type { WebSocket } from 'ws';
 import { flowSource } from '../../common/flow/flow-publisher';
 import { isAllowedHost, isAllowedOrigin } from '../../common/http/surface-defense';
 import { appRegistry } from '../../common/metrics/registry';
-import { type AlarmFrame, directBus, takeStamp } from '../../common/ports/realtime-fanout.port';
+import { directBus, takeStamp } from '../../common/ports/realtime-fanout.port';
 import { CacheKeyClient } from '../../common/redis/cache-key-client';
 import { RedisConnections } from '../../common/redis/connections';
 import type { LatestTuple } from '../../common/redis/durable-key-client';
@@ -167,7 +167,6 @@ export class RealtimeGateway implements OnGatewayConnection, OnModuleDestroy {
   private readonly pingTimer: NodeJS.Timeout;
   private readonly onDirect = (deviceId: number, tuples: LatestTuple[]) =>
     this.deliver(deviceId, tuples, 'direct');
-  private readonly onDirectAlarm = (frame: AlarmFrame) => this.broadcastAlarm(frame);
   /** 흐름 구독 연결 — 0 → 1에서 채널 구독 · 표지 갱신 · 창 타이머를 열고 1 → 0에서 닫는다 */
   private readonly flowConns = new Set<Conn>();
   private flowTimer: NodeJS.Timeout | null = null;
@@ -189,10 +188,7 @@ export class RealtimeGateway implements OnGatewayConnection, OnModuleDestroy {
     });
     // 무효화 신호는 구독과 무관하게 연결 전원에게 간다(RLT-09) — SW-06 대상이 아니라 끄지 않는다
     this.subscriber.subscribe('ch:cacheinv').catch(() => undefined);
-    // 알람도 구독과 무관하게 연결 전원에게 간다(RLT-08 브로드캐스트) — 발행 구현(SW-06)이 무엇이든 두 입구를 다 연다(발행자는 하나다)
-    this.subscriber.subscribe('ch:alarm').catch(() => undefined);
     directBus.on('rt', this.onDirect);
-    directBus.on('alarm', this.onDirectAlarm);
     this.flushTimer = throttle.windowMs > 0 ? setInterval(() => this.flushFrames(), throttle.windowMs) : null;
     this.pingTimer = setInterval(() => this.ping(), PING_INTERVAL_MS);
   }
@@ -287,10 +283,6 @@ export class RealtimeGateway implements OnGatewayConnection, OnModuleDestroy {
         return;
       case 'unsubscribe_flow':
         await this.leaveFlow(conn);
-        return;
-      case 'auth':
-        // 인증은 S7 — 그 전에는 받지 않는 메시지다
-        this.close(conn, WS_CLOSE.invalid_message, 'invalid_message');
         return;
     }
   }
@@ -389,16 +381,6 @@ export class RealtimeGateway implements OnGatewayConnection, OnModuleDestroy {
       for (const c of this.conns) this.send(c, { type: 'cacheinv', keys }, 'cacheinv');
       return;
     }
-    if (channel === 'ch:alarm') {
-      let frame: AlarmFrame;
-      try {
-        frame = JSON.parse(message) as AlarmFrame;
-      } catch {
-        return;
-      }
-      if (frame?.type === 'alarm') this.broadcastAlarm(frame);
-      return;
-    }
     if (!channel.startsWith('ch:rt:')) return;
     let tuples: LatestTuple[];
     try {
@@ -420,11 +402,6 @@ export class RealtimeGateway implements OnGatewayConnection, OnModuleDestroy {
       if (r.merged) merged.inc(r.merged);
       if (r.frame) this.sendRt(c, r.frame);
     }
-  }
-
-  /** alarm — 병합 없이 즉시 · 전 연결(07_api/11 §스로틀 병합 — 병합 대상은 ch:rt만) */
-  private broadcastAlarm(frame: AlarmFrame) {
-    for (const c of this.conns) this.send(c, frame, 'alarm');
   }
 
   /** 창 끝에 연결마다 rt 프레임 1회 — 한 창에 변화가 없으면 보내지 않는다 */
@@ -450,7 +427,7 @@ export class RealtimeGateway implements OnGatewayConnection, OnModuleDestroy {
     }
   }
 
-  private send(c: Conn, msg: WsServerMessageBody, channel: 'rt' | 'control' | 'cacheinv' | 'alarm' | 'flow') {
+  private send(c: Conn, msg: WsServerMessageBody, channel: 'rt' | 'control' | 'cacheinv' | 'flow') {
     if (c.ws.readyState !== c.ws.OPEN) return;
     // 느린 브라우저 — 송신 대기량이 한도를 넘으면 그 소켓만 4413(Redis 출력 버퍼 절단 4503과 다른 사건)
     if (c.ws.bufferedAmount > WS_SEND_BUFFER_LIMIT_BYTES) {
@@ -480,7 +457,6 @@ export class RealtimeGateway implements OnGatewayConnection, OnModuleDestroy {
 
   onModuleDestroy() {
     directBus.off('rt', this.onDirect);
-    directBus.off('alarm', this.onDirectAlarm);
     if (this.flushTimer) clearInterval(this.flushTimer);
     clearInterval(this.pingTimer);
     this.stopFlow();

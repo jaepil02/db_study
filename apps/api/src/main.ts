@@ -12,14 +12,12 @@ import { ApiExceptionFilter } from './common/http/exception-filter';
 import { installHttpMetrics } from './common/http/http-metrics';
 import { corsDelegator, hostGuard } from './common/http/surface-defense';
 import { appRegistry } from './common/metrics/registry';
-import { ConfigRejectedError, loadConfig } from './config/app-config';
+import { loadConfig } from './config/app-config';
 
 export const API_PORT = 3000;
 
 async function main() {
   const cfg = loadConfig();
-  if (cfg.appRole === 'datagen')
-    throw new ConfigRejectedError('APP_ROLE=datagen은 HTTP 표면이 없다 — node dist/bench.js');
   collectDefaultMetrics({ register: appRegistry, eventLoopMonitoringPrecision: 10 });
   const app = await NestFactory.create<NestFastifyApplication>(
     AppModule.forConfig(cfg),

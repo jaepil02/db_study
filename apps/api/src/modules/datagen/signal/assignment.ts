@@ -1,5 +1,6 @@
 // 태그별 프로파일 배정 — 시드 · 구성이 정하는 생성기 설정(06_pipeline/10 §티어 시드 구성)
-import { SIGNAL_PROFILES, type SignalProfile } from '@db-study/shared';
+// 종류가 있는 태그(카드 라인 · tag_master.tag_kind)는 종류가 신호를 정한다(KIND_PROFILE · signal/card-signal) — GEN_PROFILE 구성은 종류가 없는 태그(슬라이스 등)만 쓴다.
+import { SIGNAL_PROFILES, type SignalProfile, type TagKind } from '@db-study/shared';
 import { PROFILE_CODE } from './profiles';
 import { tagParam } from './rng';
 
@@ -23,3 +24,19 @@ export function parseMix(s: string): ProfileMix {
     return s as ProfileMix;
   throw new Error(`프로파일 구성 ${s} — mixed · all · 8종 이름 중 하나`);
 }
+
+/**
+ * 태그 종류 → 신호 프로파일(D-16 결정 3) — 온도 RANDOM_WALK · 압력 SINE · 속도 STEP+잡음 · 전류 SINE+잡음 · 진동 SPIKE ·
+ * 수량 COUNTER · 상태 상태 기계 · 기타 RANDOM_WALK. 상태 기계는 8종에 없다 — 구간별 상수라 STEP 칸으로 센다(gen_points_generated_total{profile}).
+ * 실제 값은 signal/card-signal이 설비 운전 상태와 함께 만든다 — 이 표는 프로파일 이름(계측 레이블 · 문서)의 정본이다.
+ */
+export const KIND_PROFILE: Record<TagKind, SignalProfile> = {
+  TEMP: 'RANDOM_WALK',
+  PRESSURE: 'SINE',
+  SPEED: 'STEP',
+  CURRENT: 'SINE',
+  VIBRATION: 'SPIKE',
+  COUNT: 'COUNTER',
+  STATE: 'STEP',
+  OTHER: 'RANDOM_WALK',
+};

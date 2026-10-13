@@ -2,13 +2,13 @@
 // 포트 · 구현 이름 정본 docs/04_architecture/02_module_boundaries.md §포트 · 구현 이름 확정 표
 // api(주입 · 노출)와 웹(실험 콘솔 표)이 같은 목록을 쓴다 — 두 벌이 되면 콘솔이 모르는 구현 이름을 "다름"으로 오판한다.
 
-export type SwitchValueKind = 'onoff' | 'ms' | 'writer' | 'path';
+export type SwitchValueKind = 'onoff' | 'ms' | 'writer' | 'path' | 'sink';
 
 export interface SwitchSpec {
   id: string;
   env: string;
   kind: SwitchValueKind;
-  /** 기본값 — onoff는 on · off, ms는 정수, writer는 ingest · collector, path는 stream · direct */
+  /** 기본값 — onoff는 on · off, ms는 정수, writer는 ingest · collector, path는 stream · direct, sink는 off · on · gated(SW-09 — gated는 직접 비교 실험 중에만 싣는다 · D-16) */
   defaultValue: string | number;
   port: string;
   /** 04_architecture/02 표의 on 구현 열(SW-11은 기본값 ingest 쪽) */
@@ -93,8 +93,8 @@ export const SWITCHES: readonly SwitchSpec[] = [
   {
     id: 'SW-09',
     env: 'CONTROL_TABLE_ENABLED',
-    kind: 'onoff',
-    defaultValue: 'off',
+    kind: 'sink',
+    defaultValue: 'gated',
     port: 'ControlTableSinkPort',
     onImpl: 'PostgresControlSink',
     offImpl: 'NoopControlSink',
@@ -128,7 +128,7 @@ export const SWITCHES: readonly SwitchSpec[] = [
   },
 ];
 
-/** 값에서 주입될 구현 이름 — SW-07은 0이면 통과 구현 · SW-11은 ingest가 onImpl 쪽 · SW-12는 stream이 onImpl 쪽 */
+/** 값에서 주입될 구현 이름 — SW-07은 0이면 통과 구현 · SW-11은 ingest가 onImpl 쪽 · SW-12는 stream이 onImpl 쪽 · SW-09는 off만 offImpl */
 export function implFor(spec: SwitchSpec, value: string | number): string {
   switch (spec.kind) {
     case 'onoff':
@@ -139,5 +139,8 @@ export function implFor(spec: SwitchSpec, value: string | number): string {
       return value === 'ingest' ? spec.onImpl : spec.offImpl;
     case 'path':
       return value === 'stream' ? spec.onImpl : spec.offImpl;
+    case 'sink':
+      // gated도 같은 싱크를 주입한다 — 싣는지는 실행 중 게이트(Redis cache:dual:active)가 정한다
+      return value === 'off' ? spec.offImpl : spec.onImpl;
   }
 }

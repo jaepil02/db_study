@@ -1,14 +1,16 @@
 // flow 라이브 실행(GEN-12) — 기전 정본 docs/06_pipeline/10_datagen_inject.md §흐름 시연 실행 — flow · §시연 전용 행 · §취소 · 정리
-// 단계: prepare(시드 태그 로드 · 시연 전용 행 확인 · 시작 적체 기록) → publish(발행 + 업무 명령) → drain(적체 복귀 · 상한 30초).
+// 단계: prepare(시연 전용 행 · flow 전용 태그 확인 · 시작 적체 기록) → publish(발행 + 업무 명령) → drain(적체 복귀 · 상한 30초).
 // 흐름 요약은 내지 않는다 — 실행은 발행 원천일 뿐이고 요약은 워커가 낸다(흐름 계약 불변).
+// 발행 대상은 시연 전용 설비 DEMO-FLOW-DEV의 flow 전용 태그 50개뿐이다(demo-rows.ts) — 카드 라인 30대의 태그에는 쓰지 않는다(r5 H2 ·
+// ⑦ HMI의 지금 값 · 상태 · 최근 추이가 flow 값으로 거짓이 되지 않게).
 // 업무 명령은 BizWritePort(프로세스 안 호출)로 시연 전용 설비 DEMO-FLOW-DEV에만 · actor null · 되돌림 없음.
 // 조회 섞기(웹 개편 §9.1): publish 동안 초당 readsPerSec로 조회 3종을 FlowReads(프로세스 안 호출 — 표면과 같은 서비스)로 보낸다.
-import { DEMO_FLOW, type TimeseriesQuery } from '@db-study/shared';
+import type { TimeseriesQuery } from '@db-study/shared';
 import type { GroupBacklog } from '../../common/redis/durable-key-client';
 import type { BizWriteOutcome, BizWritePort, BizWriteRequest } from '../biz/biz-contracts';
-import { genPointsGenerated } from '../datagen/datagen.service';
-import { BackpressureGate, type Thresholds } from '../datagen/mode-b/backpressure-gate';
-import { genPublishHaltedEntries, genPublishHaltedPoints } from '../datagen/mode-b/mode-b-runner';
+import { genPointsGenerated, genPublishHaltedEntries, genPublishHaltedPoints } from '../datagen/gen.metrics';
+import { BackpressureGate, type Thresholds } from './backpressure-gate';
+import { DEMO_NAMES, type DemoRows, ensureDemoRows, ensureFlowTags, FLOW_TAG_COUNT } from './demo-rows';
 import {
   FLOW_MAX_REPS_PER_TAG,
   type FlowSecondResult,
@@ -31,18 +33,12 @@ export const FLOW_DRAIN_LIMIT_MS = 30_000;
 export const FLOW_DRAIN_POLL_MS = 250;
 
 export const FLOW_STEPS: RunStepDef[] = [
-  { key: 'prepare', label: '시드 설비 · 태그 로드 · 시연 전용 행 확인' },
+  { key: 'prepare', label: '시연 전용 설비 · flow 태그 확인' },
   { key: 'publish', label: '발행' },
   { key: 'drain', label: '적체 소진' },
 ];
 
-/** 시연 전용 행 조회 결과 — 코드로 찾는다 */
-export interface DemoRows {
-  siteId: number | null;
-  lineId: number | null;
-  deviceId: number | null;
-  deviceActive: boolean | null;
-}
+export type { DemoRows } from './demo-rows';
 
 /**
  * 조회 섞기 포트 — HTTP가 아니라 표면 컨트롤러가 부르는 서비스 그대로(캐시 경로 · SW-02 · SW-03 · SW-04 · SW-05가 실제 요청과 같다).
@@ -68,7 +64,7 @@ export const FLOW_SERIES_LAG_MS = 10 * 60_000;
 export const FLOW_SERIES_FRESH_EVERY = 4;
 /** 새 범위 간격 — 1분 단위라 SW-04 버킷 스냅(1m 이하)에도 키가 갈린다 */
 export const FLOW_SERIES_STEP_MS = 60_000;
-/** 시계열 한 조회의 태그 수 — 활성 태그 앞쪽 */
+/** 시계열 한 조회의 태그 수 — 발행 태그 앞쪽 */
 export const FLOW_SERIES_TAGS = 3;
 /** 동시 진행 조회 상한 — 원천이 느려 쌓이면 새 조회를 건너뛴다(detail.readsSkipped) · 실행을 막지 않는다 */
 export const FLOW_MAX_INFLIGHT_READS = 32;
@@ -84,7 +80,7 @@ export function readOffsetMs(j: number, readsPerSec: number): number {
 export interface FlowReadCtx {
   /** 시계열 조회 태그(앞쪽 FLOW_SERIES_TAGS개) */
   seriesTagIds: number[];
-  /** 지금 값 조회를 돌릴 설비(시드 활성 태그의 설비 · 오름차순) */
+  /** 지금 값 조회를 돌릴 설비(발행 태그의 설비 · 오름차순 — 시연 전용 설비 하나) */
   deviceIds: number[];
   /** 설비 목록 조회 사이트 — 시연 사이트(업무 명령이 cache:devlist:{이 사이트}를 지운다) */
   demoSiteId: number;
@@ -138,7 +134,8 @@ function sendRead(reads: FlowReads, x: FlowRead): Promise<unknown> {
 }
 
 export interface FlowDeps {
-  loadTags(): Promise<FlowTag[]>;
+  /** 시연 전용 설비의 태그 전부(코드 · id) — flow 전용 태그를 코드로 가른다(demo-rows.ensureFlowTags) */
+  loadDemoTags(deviceId: number): Promise<{ tagId: number; tagCode: string }[]>;
   /** siteId가 주어지면 그 사이트 안 라인을 찾는다 */
   findDemo(siteId?: number | null): Promise<DemoRows>;
   port: BizWritePort;
@@ -147,7 +144,7 @@ export interface FlowDeps {
   xaddBatch(
     payloads: readonly Buffer[],
   ): Promise<{ results: (string | Error)[]; backlog: GroupBacklog | null }>;
-  /** 모드 B와 같은 임계(MAXLEN 비율) — MEMORY_PROFILE이 없으면 던진다(실행 failed) */
+  /** 발행 게이트 임계(MAXLEN 비율) — MEMORY_PROFILE이 없으면 던진다(실행 failed) */
   thresholds(): Thresholds;
   /** 한 초 생성 · 인코딩 — worker_threads 작업 또는 프로세스 안 */
   encode(task: FlowSecondTask): Promise<FlowSecondResult>;
@@ -172,16 +169,8 @@ export const systemFlowClock: FlowClock = {
     }),
 };
 
-/** 시연 전용 행 이름 · 설비 접속 설정(비활성 · 루프백 기본값 · 태그 없음) */
-export const DEMO_NAMES = { site: '시연 사이트', line: '시연 라인', device: '시연 설비' } as const;
-export const DEMO_MODBUS = {
-  host: '127.0.0.1',
-  port: 502,
-  unitId: 1,
-  timeoutMs: 3000,
-  retryCount: 0,
-  maxRegsPerRequest: 125,
-} as const;
+/** 시연 전용 행 이름 · 설비 접속 설정(demo-rows.ts) */
+export { DEMO_MODBUS, DEMO_NAMES } from './demo-rows';
 
 /** publish 명령 본문 — 매번 새 값이라 항상 실제 변경(감사 · 무효화 체인이 돈다) */
 export function demoDeviceName(runId: string, n: number): string {
@@ -224,76 +213,11 @@ export class FlowRunExecutor implements RunExecutor {
     return this.deps.port.submit({ ...req, actor: null, idempotencyKey: null });
   }
 
-  /** prepare의 생성 명령 — 적용(2xx)만 성공 · 대기 상한 초과 · 거절 · 불가는 실행 failed */
-  private async create(
-    kind: BizWriteRequest['kind'],
-    params: Record<string, number>,
-    body: unknown,
-  ): Promise<unknown> {
-    const out = await this.submit({ kind, params, body });
-    if (out.type === 'accepted')
-      throw new Error(
-        `시연 전용 행 명령 ${kind}가 대기 상한을 넘었다(${out.status}) — 다음 실행이 다시 확인한다`,
-      );
-    if (out.httpStatus < 200 || out.httpStatus >= 300)
-      throw new Error(`시연 전용 행 명령 ${kind} 응답 ${out.httpStatus}`);
-    return out.body;
-  }
-
-  /** 시연 전용 행 — 코드로 찾고 없는 것만 만든다(사이트 → 라인 → 설비 → 비활성 patch) · 명령 결과까지 기다린 뒤 중단을 본다 */
-  private async ensureDemo(state: RunState): Promise<{ siteId: number; deviceId: number }> {
-    const checkStop = () => {
+  /** 시연 전용 행 — 코드로 찾고 없는 것만 만든다(demo-rows.ensureDemoRows) · 명령 결과까지 기다린 뒤 중단을 본다 */
+  private ensureDemo(state: RunState): Promise<{ siteId: number; deviceId: number }> {
+    return ensureDemoRows(this.deps, () => {
       if (state.stopRequested) throw new RunStopped();
-    };
-    let rows = await this.deps.findDemo();
-    let siteId = rows.siteId;
-    if (siteId === null) {
-      const b = (await this.create(
-        'master.site.create',
-        {},
-        { siteCode: DEMO_FLOW.siteCode, siteName: DEMO_NAMES.site },
-      )) as {
-        siteId: number;
-      };
-      siteId = b.siteId;
-      checkStop();
-      rows = await this.deps.findDemo(siteId);
-    }
-    let lineId = rows.lineId;
-    if (lineId === null) {
-      const b = (await this.create(
-        'master.line.create',
-        {},
-        { siteId, lineCode: DEMO_FLOW.lineCode, lineName: DEMO_NAMES.line },
-      )) as { lineId: number };
-      lineId = b.lineId;
-      checkStop();
-    }
-    let deviceId = rows.deviceId;
-    let active = rows.deviceActive;
-    if (deviceId === null) {
-      const b = (await this.create(
-        'master.device.create',
-        {},
-        {
-          lineId,
-          deviceCode: DEMO_FLOW.deviceCode,
-          deviceName: DEMO_NAMES.device,
-          vendor: null,
-          model: null,
-          modbusConfig: DEMO_MODBUS,
-        },
-      )) as { deviceId: number };
-      deviceId = b.deviceId;
-      active = true;
-      checkStop();
-    }
-    // 생성 표면이 isActive를 받지 않아 비활성은 뒤따르는 patch가 한다 — 앞 실행이 patch 전에 끊겼으면 여기서 마저 한다
-    if (active) {
-      await this.create('master.device.patch', { id: deviceId }, { isActive: false });
-      checkStop();
-    }
-    return { siteId, deviceId };
+    });
   }
 
   async execute(state: RunState): Promise<RunEnding> {
@@ -323,19 +247,21 @@ export class FlowRunExecutor implements RunExecutor {
     let startBacklog = 0;
     try {
       await state.runStep('prepare', async () => {
-        tags = await this.deps.loadTags();
-        if (tags.length === 0) throw new Error('시드 활성 태그가 없다 — 시드 뒤 다시 시작');
         // 한 초 한 태그 점 수가 상한을 넘으면 ts 간격이 0이라 (태그 · ts)가 겹친다 — 시연 전용 행을 건드리기 전에 거절
-        if (!flowTagsSuffice(pps, tags.length))
+        if (!flowTagsSuffice(pps, FLOW_TAG_COUNT))
           throw new Error(
-            `활성 태그 수가 pps에 비해 적다 — 활성 태그 ${tags.length}개 · pps ${pps}(한 초 한 태그 ${Math.ceil(pps / tags.length)}점 > ${FLOW_MAX_REPS_PER_TAG})`,
+            `flow 전용 태그 수가 pps에 비해 적다 — 태그 ${FLOW_TAG_COUNT}개 · pps ${pps}(한 초 한 태그 ${Math.ceil(pps / FLOW_TAG_COUNT)}점 > ${FLOW_MAX_REPS_PER_TAG})`,
           );
         if (state.stopRequested) throw new RunStopped();
         ({ siteId: demoSiteId, deviceId: demoDeviceId } = await this.ensureDemo(state));
+        const ft = await ensureFlowTags(this.deps, demoDeviceId, () => {
+          if (state.stopRequested) throw new RunStopped();
+        });
+        tags = ft.tagIds.map((tagId) => ({ deviceId: demoDeviceId, tagId }));
         const b = await this.deps.backlog().catch(() => null);
         startBacklog = b && b.lag !== null ? b.lag + b.pending : 0;
         if (state.stopRequested) throw new RunStopped();
-        return { devices: new Set(tags.map((t) => t.deviceId)).size, tags: tags.length };
+        return { devices: 1, tags: tags.length, tagsCreated: ft.created };
       });
 
       await state.runStep('publish', async () => {

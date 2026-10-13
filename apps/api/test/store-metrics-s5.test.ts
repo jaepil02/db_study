@@ -1,11 +1,10 @@
-// S5 OBS-02 저장소 메트릭 — 수집 결과 → 게이지 매핑 · 계열별 실패 격리 · 트리밍 결함 검출 분기 · 설계 거절 계수 · 메모리 상한
+// S5 OBS-02 저장소 메트릭 — 수집 결과 → 게이지 매핑 · 계열별 실패 격리 · 트리밍 결함 검출 분기 · 메모리 상한
 // 정본: docs/10_observability/01_metrics_catalog.md §저장소 · §E2E · 관측 자체 · 02_instrumentation.md §수집 방식 · §트리밍 결함 검출
 import { mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { Metric } from 'prom-client';
 import { beforeEach, describe, expect, it } from 'vitest';
-import { countDesignedRejection } from '../src/common/http/http-metrics';
 import { appRegistry } from '../src/common/metrics/registry';
 import { ingestMetrics } from '../src/modules/ingest/ingest.metrics';
 import { installRunMemoryLimit, readMemoryLimitBytes } from '../src/modules/metrics/obs.metrics';
@@ -162,7 +161,7 @@ describe('수집 결과 → 게이지 매핑 — PostgreSQL', () => {
     for (const v of vs) expect(Object.keys(v.labels).sort()).toEqual(['queryid', 'rank']);
   });
 
-  it('테이블 — 고정 기준 16 밖(pgmigrations 등)은 싣지 않는다 · heap · index 두 kind', async () => {
+  it('테이블 — 고정 기준 8 밖(pgmigrations 등)은 싣지 않는다 · heap · index 두 kind', async () => {
     applyPgTables([
       { table: 'plc_tag_raw_control', live: '5000', dead: '10', autovac: '2', heap: '8192', idx: '4096' },
       { table: 'pgmigrations', live: 1, dead: 1, autovac: 1, heap: 1, idx: 1 },
@@ -373,17 +372,7 @@ describe('트리밍 결함 검출 — 02_instrumentation §트리밍 결함 검�
   });
 });
 
-describe('HTTP 설계 거절 · 관측 자체', () => {
-  it('http_designed_rejections_total — datagen.stream_full · common.rate_limited만 센다', async () => {
-    const m = appRegistry.getSingleMetric('http_designed_rejections_total') as Metric;
-    expect(countDesignedRejection('/api/v1/ingest/bulk', 'datagen.stream_full')).toBe(true);
-    expect(countDesignedRejection(undefined, 'common.rate_limited')).toBe(true);
-    expect(countDesignedRejection('/api/v1/tags', 'common.validation_failed')).toBe(false);
-    expect(await sampleOf(m, { route: '/api/v1/ingest/bulk', error_code: 'datagen.stream_full' })).toBe(1);
-    expect(await sampleOf(m, { route: 'unmatched', error_code: 'common.rate_limited' })).toBe(1);
-    expect(await sampleOf(m, { error_code: 'common.validation_failed' })).toBeUndefined();
-  });
-
+describe('관측 자체', () => {
   it('obs_run_memory_limit_bytes — cgroup memory.max 바이트 · max(상한 없음)이면 비운다', async () => {
     const dir = mkdtempSync(join(tmpdir(), 'cg-'));
     const f = join(dir, 'memory.max');

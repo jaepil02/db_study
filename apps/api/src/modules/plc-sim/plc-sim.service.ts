@@ -1,9 +1,10 @@
-// SIM 기동 — 기동 로드 결과의 시뮬레이션 설비(modbus_config.host가 루프백)마다 포트 하나를 연다
-// 포트 · 레지스터 주소는 COL과 같은 기동 로드 사본에서 안다(modbus_config.port · tag_master.address · function_code).
+// SIM — 수집 정의의 시뮬레이션 설비(modbus_config.host가 루프백)마다 포트 하나를 연다
+// 포트 · 레지스터 주소는 COL과 같은 수집 정의 사본에서 안다(modbus_config.port · tag_master.address · function_code).
 // 기동 실패는 SIM이 오류를 내지 않는다 — 기동 로그와 sim_listen_failed_ports로 남기고 COL 쪽 결측으로 드러난다(REQ-SIM-03).
 // 주입 계획(SIM_FAULT_PLAN)은 검증 실패면 기동을 거부한다(09_tech_stack/05) — 스키마는 모듈 초기화, 시드 포트 규칙은 기동 로드 뒤.
-// SENSOR_AUTOGEN=off면 포트를 열지 않는다 — Buffer를 쓰는 모드 A와 읽는 수집기가 둘 다 꺼져 열 까닭이 없다(다른 모듈은 SIM에 의존하지 않는다).
-// 계획 파일의 스키마 검증은 그대로 한다 — 설정 오류는 게이트와 무관하게 기동에서 드러난다.
+// 포트를 여닫는 것은 설비 가동 스위치다(plant/plant-runtime · D-16) — 켜면 start(사본) · 끄면 stop. 기동만으로는 포트를 열지 않는다.
+// 계획 파일의 스키마 · 포트 검증은 설비 가동과 무관하게 기동에서 한다 — 설정 오류는 스위치를 켜기 전에 드러난다.
+// 주입 시간표의 기준(시작 오프셋 0)은 포트를 연 시각 — 설비 가동을 켤 때마다 다시 선다.
 
 import type { SimFaultPlanBody } from '@db-study/shared';
 import {
@@ -56,10 +57,9 @@ export class PlcSimService implements OnModuleInit, OnApplicationBootstrap, OnMo
   private readonly log = new Logger('PlcSim');
   private readonly servers = new Map<number, DeviceSimServer>();
   private plan: SimFaultPlanBody | null = null;
-  private resolveStarted!: () => void;
-  private readonly started = new Promise<void>((r) => {
-    this.resolveStarted = r;
-  });
+  /** 포트 여닫기 직렬화 — 켜기 · 끄기가 겹쳐도 앞 전환이 끝난 뒤 다음을 한다 */
+  private chain: Promise<void> = Promise.resolve();
+  private running = false;
 
   constructor(
     private readonly definitions: CollectDefinitionService,
@@ -75,23 +75,52 @@ export class PlcSimService implements OnModuleInit, OnApplicationBootstrap, OnMo
     );
   }
 
+  /** 계획이 있으면 기동 로드 뒤 "시드된 설비 포트 안"을 검사한다 — 어기면 기동 거부(설비 가동과 무관) */
   onApplicationBootstrap() {
-    if (this.cfg.sensorAutogen === 'off') {
-      this.resolveStarted(); // 기다리는 쪽이 매달리지 않게 — 서버 0개로 기동 완료
-      return;
-    }
-    void this.definitions.whenLoaded().then((defs) => this.startServers(defs));
+    const plan = this.plan;
+    if (!plan) return;
+    void this.definitions.whenLoaded().then((defs) => {
+      try {
+        assertPlanPorts(plan, new Set(defs.filter((d) => d.simulated).map((d) => d.port)));
+      } catch (e) {
+        this.refuse(e);
+      }
+    });
   }
 
-  private async startServers(defs: DeviceDef[]): Promise<void> {
+  /** 포트를 연다(설비 가동 켬) — 이미 열려 있으면 그대로 · 끝나면 풀린다(모드 A가 그 뒤 Buffer를 받는다) */
+  start(defs: readonly DeviceDef[]): Promise<void> {
+    return this.serialize(async () => {
+      if (this.running) return;
+      this.running = true;
+      await this.startServers(defs);
+    });
+  }
+
+  /** 포트를 닫는다(설비 가동 끔) — 열린 연결을 끊고 주입 시간표를 비운다 · 이미 닫혀 있으면 그대로 */
+  stop(): Promise<void> {
+    return this.serialize(async () => {
+      if (!this.running) return;
+      this.running = false;
+      await this.closeServers();
+    });
+  }
+
+  private serialize(fn: () => Promise<void>): Promise<void> {
+    const p = this.chain.then(fn);
+    this.chain = p.catch(() => undefined);
+    return p;
+  }
+
+  private async closeServers(): Promise<void> {
+    schedule = FaultSchedule.empty();
+    await Promise.all([...this.servers.values()].map((s) => s.close()));
+    this.servers.clear();
+    listenFailedPorts.set(0);
+  }
+
+  private async startServers(defs: readonly DeviceDef[]): Promise<void> {
     const sims = defs.filter((d) => d.simulated); // 실설비는 LAN 너머 — SIM이 띄울 대상이 아니다
-    if (this.plan) {
-      try {
-        assertPlanPorts(this.plan, new Set(sims.map((d) => d.port)));
-      } catch (e) {
-        return this.refuse(e);
-      }
-    }
     let failed = 0;
     for (const d of sims) {
       if (d.port < SIM_PORT_MIN || d.port > SIM_PORT_MAX)
@@ -116,7 +145,6 @@ export class PlcSimService implements OnModuleInit, OnApplicationBootstrap, OnMo
     // 시작 오프셋의 기준 = 포트 기동 완료 시각("기동 뒤 언제 켜고" — 06_pipeline/10 §SIM 주입 제어)
     if (this.plan) schedule = new FaultSchedule(this.plan.faults, Date.now());
     this.log.log(`Modbus 서버 ${this.servers.size}개 기동 · 실패 ${failed}`);
-    this.resolveStarted();
   }
 
   /** 기동 거부 — 기동 로드 뒤라 예외로 Nest 기동을 막을 수 없다. 종료 신호로 정상 종료 훅을 태우고 종료 코드 1을 남긴다 */
@@ -127,16 +155,10 @@ export class PlcSimService implements OnModuleInit, OnApplicationBootstrap, OnMo
   }
 
   async onModuleDestroy() {
-    schedule = FaultSchedule.empty();
-    await Promise.all([...this.servers.values()].map((s) => s.close()));
+    await this.stop();
   }
 
-  /** 포트 기동이 끝나면 풀린다 — 모드 A가 Buffer를 받기 전에 기다린다 */
-  whenStarted(): Promise<void> {
-    return this.started;
-  }
-
-  /** 열린 Modbus 서버 수 — SENSOR_AUTOGEN=off면 늘 0 */
+  /** 열린 Modbus 서버 수 — 설비 가동이 꺼져 있으면 0 */
   serverCount(): number {
     return this.servers.size;
   }

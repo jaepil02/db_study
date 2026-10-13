@@ -274,7 +274,7 @@ export function lastDeliveredOf(reply: unknown, group: string): string | null {
 
 // ─────────────────────────── PostgreSQL ───────────────────────────
 
-/** 고정 기준 PostgreSQL 테이블 16(루트 README · biz_command_log — D-04 부분 개정) — table 레이블의 닫힌 집합 · 파티션은 부모 이름으로 합산 */
+/** 고정 기준 PostgreSQL 테이블 8(D-16 — 알람 · 인증 · 감사 · 역방향 실험 업무 테이블 삭제) — table 레이블의 닫힌 집합 · 파티션 · hypertable 칸은 부모 이름으로 합산 */
 export const PG_TABLES = [
   'site',
   'production_line',
@@ -282,14 +282,6 @@ export const PG_TABLES = [
   'modbus_config',
   'tag_master',
   'tag_master_history',
-  'alarm_rule',
-  'alarm_event',
-  'user_account',
-  'role',
-  'user_role',
-  'work_order',
-  'production_log',
-  'audit_log',
   'plc_tag_raw_control',
   'biz_command_log',
 ] as const;
@@ -402,8 +394,8 @@ export function applyPgWal(r: { wal_bytes: string | number } | undefined): void 
 
 // ─────────────────────────── ClickHouse ───────────────────────────
 
-/** 고정 기준 ClickHouse 테이블 5 — table 레이블의 닫힌 집합(MV · Dictionary는 파트가 없다) */
-export const CH_TABLES = ['tag_raw', 'alarm_eval', 'tag_1m', 'tag_1h', 'tag_1d'] as const;
+/** 고정 기준 ClickHouse 테이블 4 — table 레이블의 닫힌 집합(MV · Dictionary는 파트가 없다) */
+export const CH_TABLES = ['tag_raw', 'tag_1m', 'tag_1h', 'tag_1d'] as const;
 
 function knownCh<T extends { table: string }>(rows: readonly T[]): T[] {
   return rows.filter((r) => (CH_TABLES as readonly string[]).includes(r.table));

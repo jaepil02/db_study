@@ -1,7 +1,7 @@
-// flow 발행 한 초 — 정본 docs/06_pipeline/10_datagen_inject.md §흐름 시연 실행 — flow(대용량 발행) · 판정 .omc/run-fix-rulings.md M3
-// 시드 활성 태그 목록 T(길이 L) · 발행 초 s마다 점 i = 0 … pps − 1 · 태그 = T[(i + s × pps) mod L] ·
+// flow 발행 한 초 — 정본 docs/06_pipeline/10_datagen_inject.md §흐름 시연 실행 — flow(대용량 발행)
+// flow 전용 태그 목록 T(길이 L — 시연 전용 설비 DEMO-FLOW-DEV의 50개 · demo-rows.ts) · 발행 초 s마다 점 i = 0 … pps − 1 · 태그 = T[(i + s × pps) mod L] ·
 // ts = 초 시작 + ⌊i ÷ L⌋ × ⌊1000 ÷ ⌈pps ÷ L⌉⌋ ms — (태그 · ts) 중복 없음 · 같은 설비 · 같은 ts는 한 엔트리(엔트리 계약 v1 · quality 9).
-// 값은 결정적 정수 산술(perf 생성 식과 같은 모양) — ((tag_id × 7 + 초 × 13) mod 1000) ÷ 10.
+// 값은 결정적 정수 산술 — ((tag_id × 7 + 초 × 13) mod 1000) ÷ 10.
 // 순수 함수라 worker_threads 작업으로 옮길 수 있다(04_architecture/02 §worker_threads 격리 대상).
 import { encodeEntry, QUALITY } from '@db-study/shared';
 
@@ -11,7 +11,7 @@ export interface FlowTag {
 }
 
 export interface FlowSecondTask {
-  /** 시드 활성 태그 목록 — (device_id, tag_id) 오름차순 */
+  /** flow 전용 태그 목록 — (device_id, tag_id) 오름차순 */
   tags: readonly FlowTag[];
   pps: number;
   /** 발행 초 번호(0부터) */
@@ -31,7 +31,7 @@ export interface FlowSecondResult {
 /** 한 초에 한 태그가 받는 점 수의 상한 — ⌈pps ÷ L⌉이 이를 넘으면 ts 간격 ⌊1000 ÷ ⌈pps ÷ L⌉⌋가 0이 되어 (태그 · ts)가 겹친다 */
 export const FLOW_MAX_REPS_PER_TAG = 1000;
 
-/** 활성 태그 L개로 pps를 (태그 · ts) 중복 없이 낼 수 있는가 — prepare가 발행 전에 본다 */
+/** 태그 L개로 pps를 (태그 · ts) 중복 없이 낼 수 있는가 — prepare가 발행 전에 본다 */
 export function flowTagsSuffice(pps: number, L: number): boolean {
   return L > 0 && Math.ceil(pps / L) <= FLOW_MAX_REPS_PER_TAG;
 }
@@ -55,7 +55,7 @@ export function flowValue(tagId: number, epochSec: number): number {
 export function buildFlowSecond(task: FlowSecondTask): FlowSecondResult {
   const t0 = performance.now();
   const L = task.tags.length;
-  if (L === 0) throw new Error('시드 활성 태그 없음');
+  if (L === 0) throw new Error('발행 태그 없음');
   // 설비 · ts → 엔트리(삽입 순서 유지)
   const groups = new Map<string, { d: number; ts: number; tg: number[]; va: number[] }>();
   const epochSec = Math.floor(task.secondStartMs / 1000);

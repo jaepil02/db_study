@@ -1,4 +1,5 @@
 export * from './api';
+export * from './card-line';
 export * from './codec';
 export * from './dlq';
 export * from './enums';

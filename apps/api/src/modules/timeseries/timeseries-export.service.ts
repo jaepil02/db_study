@@ -1,7 +1,7 @@
 // TSQ-09 원시 내보내기 — 정본 docs/07_api/05_timeseries.md #2 · 06_pipeline/06 §원시 내보내기
 // ClickHouse FORMAT 응답을 그대로 중계한다(애플리케이션 직렬화 없음) · 해상도를 줄이지 않고 캐시하지 않는다.
 // 완결 = 종결 청크 · 도중 실패 = 종결 청크 없이 연결을 끊는다(본문 표지 없음 — §내보내기 스트림 중단 종료 표지 판정).
-// 인가(ENGINEER) · 내보내기 등급 레이트 리밋은 S7.
+// 인가는 없다(D-16 — 로그인 · 권한 삭제) · 내보내기 등급 레이트 리밋은 두지 않았다.
 import type { Readable } from 'node:stream';
 import { distinctTagIds, TIMESERIES_TAG_LIMIT, type TimeseriesExport } from '@db-study/shared';
 import { Injectable, Logger } from '@nestjs/common';

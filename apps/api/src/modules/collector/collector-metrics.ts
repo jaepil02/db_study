@@ -11,6 +11,17 @@ export const pointsEmitted = new Counter({
   registers: [appRegistry],
 });
 
+/**
+ * 태그별 발행 누계 — 프로세스 안 집계(메트릭이 아니다 · 태그 레이블은 카디널리티 규칙 밖).
+ * HMI 개요(plant/plant-overview)가 같은 프로세스(APP_ROLE all)일 때 실제 초당 점 수(measured)를 이 차분으로 센다.
+ * 데드밴드 생략분은 넣지 않는다(points_emitted와 같은 규칙) · 수집기가 없는 프로세스에서는 늘 비어 있다.
+ */
+export const tagEmitTally = new Map<number, number>();
+
+export function tallyEmitted(tagIds: readonly number[]): void {
+  for (const id of tagIds) tagEmitTally.set(id, (tagEmitTally.get(id) ?? 0) + 1);
+}
+
 /** 한 사이클(첫 요청 송신 직전 ~ 발행 끝) — scan_rate 초과가 F-01 병목 #1의 신호 */
 export const pollDuration = new Histogram({
   name: 'poll_duration',

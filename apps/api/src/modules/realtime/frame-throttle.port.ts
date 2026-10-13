@@ -1,7 +1,7 @@
 // SW-07 WS_THROTTLE_MS — FrameThrottlePort(정본 04_architecture/02 · 계약 07_api/11 §스로틀 병합)
 // 창 > 0 = WindowMergeThrottle — 연결마다 창 안 같은 태그는 ts가 가장 큰 값 하나 · 창 끝에 rt 프레임 1회
 // 창 0 = PassthroughThrottle — 병합 없이 받은 대로 즉시 전송(프레임 모양은 같다) · 창 0의 병합 구현을 만들지 않는다
-// 병합 대상은 ch:rt뿐 — alarm · cacheinv는 즉시 · 병합 없음(무효화 신호를 병합하면 키가 빠진다).
+// 병합 대상은 ch:rt뿐 — cacheinv는 즉시 · 병합 없음(무효화 신호를 병합하면 키가 빠진다).
 import type { LatestTuple } from '../../common/redis/durable-key-client';
 
 export const FRAME_THROTTLE_PORT = Symbol('FrameThrottlePort');

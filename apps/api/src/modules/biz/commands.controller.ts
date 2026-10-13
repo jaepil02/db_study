@@ -1,6 +1,6 @@
 // 명령 조회 표면 — docs/07_api/01_conventions.md §명령 조회 표면 #1 GET /api/v1/commands/{cmdId}(횡단 · BFF 경유 no-store)
 // 읽는 순서: 결과 키 biz:result → 없으면 원장 biz_command_log → 둘 다 없으면 pending(알 수 없는 키도 pending — 소비 전과 가를 수 없다).
-// 결과 키 또는 원장의 actor가 요청자와 다르면 404(둘 다 NULL이면 같다 · 인증 도입 S7 ② 전은 사실상 판정 없음).
+// 결과 키 또는 원장의 actor가 요청자와 다르면 404(둘 다 NULL이면 같다 · 로그인 기능이 없어 사실상 판정 없음 — D-16).
 // 결과 키 미스에서 원장 값으로 다시 채우지 않는다 — 결과 키는 워커만 쓴다(05_data_stores/05 §인계 판정 #11).
 import {
   BizResult,

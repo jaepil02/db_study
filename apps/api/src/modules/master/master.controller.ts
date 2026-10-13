@@ -1,7 +1,7 @@
 // MST 표면 — docs/07_api/04_master.md 표면 17(조회 6 · 쓰기 11). 전 표면 BFF 경유(조회 revalidate · 쓰기 성공 시 BFF가 ⑤).
 // 쓰기 11은 업무 쓰기 포트(SW-12)를 거친다 — 검증은 여기서 끝내고 적용은 포트가 고른 경로(stream 명령 워커 · direct 직접 커밋)가 한다.
 // 상태 코드 · 본문 · 에러 봉투는 옛 직접 커밋 경로와 같다 · 202 pending · expired와 Idempotency-Key 되싣기는 07_api/01 §업무 쓰기 경로.
-// 물리 삭제 표면이 없다 — DELETE 메서드를 두지 않는다(설비 · 태그는 is_active false). 인가(ADMIN)는 S7.
+// 물리 삭제 표면이 없다 — DELETE 메서드를 두지 않는다(설비 · 태그는 is_active false). 인가는 없다(D-16 — 로그인 · 권한 삭제).
 import {
   DeviceCreateRequest,
   DeviceListQuery,

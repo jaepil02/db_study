@@ -25,9 +25,6 @@ export const FlowIngestTotals = z.strictObject({
   chRows: int,
   dlqEntries: int,
   controlCopyRows: int,
-  judgedRows: int,
-  opened: int,
-  closed: int,
   latestWrites: int,
 });
 export const FlowBizTotals = z.strictObject({
@@ -53,14 +50,12 @@ export const FlowBatchSummary = z.strictObject({
     chInsertMs: ms,
     controlCopyMs: ms,
     latestWriteMs: ms,
-    alarmMs: ms,
   }),
   chRows: int,
   retries: int,
   dlqEntries: int,
   controlCopy: z.strictObject({ rows: int, ok: z.boolean() }).nullable(),
   latestWrites: int.nullable(),
-  alarm: z.strictObject({ judgedRows: int, opened: int, closed: int }).nullable(),
   stream: z.strictObject({ length: int, lag: int.nullable() }).nullable(),
 });
 export type FlowBatchSummaryBody = z.infer<typeof FlowBatchSummary>;

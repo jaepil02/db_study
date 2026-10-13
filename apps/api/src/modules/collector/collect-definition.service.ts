@@ -2,11 +2,14 @@
 // ① 설비 · 접속 설정 ② 활성 태그(PostgreSQL 직접) ③ cache:tagmeta 워밍(실패 무시) ④ 스캔 그룹 · 요청 블록 계산.
 // PostgreSQL이 불가면 폴링을 시작하지 않고 재시도한다 — 캐시 사본으로 대신 기동하지 않는다(B형).
 // 실행 중 마스터 변경 반영(S4)은 CollectorService가 ch:cacheinv로 받아 loadDevices로 설비 단위 재로드한다.
+// 설비 가동을 다시 켤 때(plant/plant-runtime)는 refresh로 전체를 다시 읽는다 — SIM · 모드 A · COL이 같은 새 사본을 쓴다.
+// 태그는 종류(tag_kind · 006)를 함께 읽는다 — 모드 A가 종류 신호를 고른다(마스터 표면 계약에는 싣지 않는다).
+import type { TagKind } from '@db-study/shared';
 import { Injectable, Logger, type OnApplicationBootstrap, type OnModuleDestroy } from '@nestjs/common';
 import { Postgres } from '../../common/postgres/postgres.module';
 import { MasterReadService } from '../master/master-read.service';
 import { rowToTagMeta, TAG_META_SELECT } from '../master/tag-meta';
-import { buildDeviceDefs, type DeviceDef, type DeviceRow } from './collect-definition';
+import { buildDeviceDefs, type CollectTag, type DeviceDef, type DeviceRow } from './collect-definition';
 import { colReady } from './collector-metrics';
 
 /**
@@ -22,6 +25,20 @@ SELECT d.device_id, d.device_code, host(m.host) AS host, m.port, m.unit_id, m.ti
   FROM device d JOIN modbus_config m ON m.device_id = d.device_id
  WHERE d.is_active = $1
  ORDER BY d.device_id`;
+
+/** 태그 메타 SELECT + tag_kind — 수집 정의 전용 */
+export const COLLECT_TAG_SELECT = (() => {
+  const q = TAG_META_SELECT.replace(/\n\s*FROM tag_master$/, ', tag_kind\n  FROM tag_master');
+  if (q === TAG_META_SELECT) throw new Error('TAG_META_SELECT 모양이 바뀌었다 — COLLECT_TAG_SELECT를 고친다');
+  return q;
+})();
+
+export function rowToCollectTag(r: Record<string, unknown>): CollectTag {
+  return {
+    ...rowToTagMeta(r),
+    tagKind: r.tag_kind === null || r.tag_kind === undefined ? null : (String(r.tag_kind) as TagKind),
+  };
+}
 
 function rowToDevice(r: Record<string, unknown>): DeviceRow {
   return {
@@ -45,6 +62,8 @@ export class CollectDefinitionService implements OnApplicationBootstrap, OnModul
   });
   private stopped = false;
   private retryTimer: NodeJS.Timeout | null = null;
+  /** 마지막으로 읽은 사본 — refresh가 PostgreSQL 불가면 이것을 돌려준다 */
+  private latest: DeviceDef[] | null = null;
 
   constructor(
     private readonly pg: Postgres,
@@ -70,6 +89,7 @@ export class CollectDefinitionService implements OnApplicationBootstrap, OnModul
     if (this.stopped) return;
     try {
       const defs = await this.load();
+      this.latest = defs;
       colReady.set(1);
       const tags = defs.reduce((n, d) => n + d.tags.length, 0);
       this.log.log(`기동 로드 완료 — 설비 ${defs.length} · 태그 ${tags}`);
@@ -80,6 +100,22 @@ export class CollectDefinitionService implements OnApplicationBootstrap, OnModul
       );
       this.retryTimer = setTimeout(() => void this.attempt(), LOAD_RETRY_MS);
     }
+  }
+
+  /**
+   * 전체 다시 읽기 — 설비 가동을 다시 켤 때. 꺼져 있던 동안의 마스터 변경(태그 추가 · 비활성 · 주기 변경)이 SIM 영역 · 모드 A · 폴링에 함께 반영된다.
+   * PostgreSQL 불가면 마지막 사본으로 켠다(경고) — 기동 로드 전이면 기동 로드를 기다린다.
+   */
+  async refresh(): Promise<DeviceDef[]> {
+    if (!this.latest) return this.whenLoaded();
+    try {
+      this.latest = await this.load();
+    } catch (e) {
+      this.log.warn(
+        `수집 정의 다시 읽기 실패 — 마지막 사본으로 켠다: ${e instanceof Error ? e.message : String(e)}`,
+      );
+    }
+    return this.latest;
   }
 
   /**
@@ -120,10 +156,10 @@ export class CollectDefinitionService implements OnApplicationBootstrap, OnModul
     );
     const devices = dr.rows.map(rowToDevice);
     const tr = await this.pg.pool.query(
-      `${TAG_META_SELECT} WHERE device_id = ANY($1::int[]) AND is_active = $2 ORDER BY device_id, address, tag_id`,
+      `${COLLECT_TAG_SELECT} WHERE device_id = ANY($1::int[]) AND is_active = $2 ORDER BY device_id, address, tag_id`,
       [devices.map((d) => d.deviceId), true],
     );
-    const tags = tr.rows.map(rowToTagMeta);
+    const tags = tr.rows.map(rowToCollectTag);
     await Promise.all(tags.map((t) => this.master.warm(t)));
     for (const def of buildDeviceDefs(devices, tags, (m) => this.log.warn(m))) out.set(def.deviceId, def);
     return out;
@@ -141,10 +177,10 @@ export class CollectDefinitionService implements OnApplicationBootstrap, OnModul
     const ids = devices.map((d) => d.deviceId);
     // 인덱스 (device_id, is_active)를 타는 조건 — 설비마다 왕복하지 않고 한 번에 읽는다
     const tr = await this.pg.pool.query(
-      `${TAG_META_SELECT} WHERE device_id = ANY($1::int[]) AND is_active = $2 ORDER BY device_id, address, tag_id`,
+      `${COLLECT_TAG_SELECT} WHERE device_id = ANY($1::int[]) AND is_active = $2 ORDER BY device_id, address, tag_id`,
       [ids, true],
     );
-    const tags = tr.rows.map(rowToTagMeta);
+    const tags = tr.rows.map(rowToCollectTag);
     // ③ 워밍 — 실패는 래퍼가 삼킨다(캐시 계열 degrade). 폴링은 메모리 사본을 쓴다
     await Promise.all(tags.map((t) => this.master.warm(t)));
     return buildDeviceDefs(devices, tags, (m) => this.log.warn(m));

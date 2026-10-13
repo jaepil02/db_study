@@ -248,9 +248,9 @@ describe('회수 커서 — 회수 창은 커서가 창 끝을 지나야 닫힌�
 });
 
 describe('flusher 보유 상한', () => {
-  it('문서 표 4칸 · S3 정지 조건은 창 버퍼 + 삽입 중 2칸', () => {
+  it('보유 2칸 = 정지 조건(창 버퍼 + 삽입 중) — 알람 판정 인계 칸 삭제(D-16)', () => {
     const total = Object.values(FLUSHER_HOLD_SLOTS).reduce((a, b) => a + b, 0);
-    expect(total).toBe(4);
+    expect(total).toBe(2);
     expect(FLUSHER_ACTIVE_SLOTS).toBe(2);
     expect(heldBatches(1, 0, 50_000, 1)).toBe(2); // 닫혀 대기 1 + 삽입 중 1 → 멈춤
     expect(heldBatches(0, 49_999, 50_000, 1)).toBe(1); // 조립 중 R 미만은 0칸
@@ -598,6 +598,101 @@ describe('대조군 COPY 순서(04_routing §대조군 동시 적재 기전)', (
       token: batchToken('5300-0', '5300-1', 4),
     });
     await sink.close();
+  });
+
+  describe('COPY 다시 보내기 — 결과를 모르는 실패(시간 초과 · 연결 오류) 뒤 같은 배치를 새 커넥션으로(5억 넣기 99,988행 유실 재발 방지)', () => {
+    type Step = 'hang' | 'ok' | Error;
+    /** 시도마다 정한 결과를 내는 싱크 — hang은 끝나지 않아 제한 시간에 걸린다 · present는 키 세기 결과 */
+    class ScriptedSink extends PostgresControlSink {
+      attempts = 0;
+      counted = 0;
+      constructor(
+        private readonly steps: Step[],
+        private readonly present: number,
+        readonly logs: { error: string[]; warn: string[] },
+      ) {
+        super(
+          'postgres://u:p@127.0.0.1:1/plc',
+          { error: (x) => logs.error.push(x), warn: (x) => logs.warn.push(x) },
+          20,
+          { attempts: 2, timeoutMs: 50 },
+        );
+      }
+      protected override async copyOnce(): Promise<void> {
+        const step = this.steps[this.attempts++] ?? 'hang';
+        if (step === 'hang') return new Promise<void>(() => {});
+        if (step instanceof Error) throw step;
+      }
+      protected override async countPresent(): Promise<number> {
+        this.counted += 1;
+        return this.present;
+      }
+    }
+    const pgError = (code: string) => Object.assign(new Error(`pg ${code}`), { code });
+    const rows: [number, number, number, number, number, number][] = [
+      [1_790_000_000_000, 1, 1, 0.5, 9, 7],
+      [1_790_000_000_100, 1, 1, 0.6, 9, 8],
+    ];
+    const counter = async (c: { get(): Promise<{ values: { value: number }[] }> }) =>
+      (await c.get()).values[0]?.value ?? 0;
+    const run = async (steps: Step[], present = 0) => {
+      const logs = { error: [] as string[], warn: [] as string[] };
+      const sink = new ScriptedSink(steps, present, logs);
+      const before = {
+        fail: await counter(ingestMetrics.controlCopyFailures),
+        retry: await counter(ingestMetrics.controlCopyRetries),
+        rows: await counter(ingestMetrics.controlCopyRows),
+      };
+      const ok = await sink.copy(rows, { token: 't' });
+      return {
+        ok,
+        sink,
+        logs,
+        failures: (await counter(ingestMetrics.controlCopyFailures)) - before.fail,
+        retries: (await counter(ingestMetrics.controlCopyRetries)) - before.retry,
+        rows: (await counter(ingestMetrics.controlCopyRows)) - before.rows,
+      };
+    };
+
+    it('시간 초과 뒤 다시 보내 들어가면 성공 — 실패로 세지 않는다 · 들어간 행은 센다', async () => {
+      const r = await run(['hang', 'ok']);
+      expect(r).toMatchObject({ ok: true, failures: 0, retries: 1, rows: 2 });
+      expect(r.sink.attempts).toBe(2);
+      expect(JSON.parse(r.logs.warn[0] as string)).toMatchObject({
+        event: 'control_copy_retry',
+        attempt: 1,
+        rows: 2,
+        token: 't',
+      });
+      expect(r.logs.error).toEqual([]);
+    });
+
+    it('다시 보낸 COPY가 기본 키 충돌이면 — 배치 키가 모두 있으면 앞 시도가 들어간 것(성공) · 일부만 있으면 실패', async () => {
+      const already = await run(['hang', pgError('23505')], 2);
+      expect(already).toMatchObject({ ok: true, failures: 0, retries: 1, rows: 2 });
+      expect(already.sink.counted).toBe(1);
+      const partial = await run(['hang', pgError('23505')], 1);
+      expect(partial).toMatchObject({ ok: false, failures: 1, retries: 1, rows: 0 });
+      // 일부만 있으면 더 다시 보내지 않는다(같은 충돌이 난다)
+      expect(partial.sink.attempts).toBe(2);
+      expect(JSON.parse(partial.logs.error[0] as string)).toMatchObject({
+        event: 'control_copy_failed',
+        error: '기본 키 충돌 — 배치 2행 중 1행만 대조군에 있다',
+      });
+    });
+
+    it('데이터 규칙 위반(참조 · 값)은 다시 보내지 않는다 · 끝까지 시간 초과면 실패 하나', async () => {
+      const fk = await run([pgError('23503')]);
+      expect(fk).toMatchObject({ ok: false, failures: 1, retries: 0 });
+      expect(fk.sink.attempts).toBe(1);
+      const hung = await run(['hang', 'hang', 'hang']);
+      expect(hung).toMatchObject({ ok: false, failures: 1, retries: 2, rows: 0 });
+      expect(hung.sink.attempts).toBe(3);
+      expect(JSON.parse(hung.logs.error[0] as string)).toMatchObject({
+        event: 'control_copy_failed',
+        error: 'COPY 타임아웃 50 ms',
+      });
+    });
   });
 
   it('COPY 한 줄 — ts는 UTC ISO(ms) · 탭 구분 · 열 순서는 tag_raw 행과 같다', () => {

@@ -15,8 +15,6 @@ import { ApiError } from '../src/common/http/api-error';
 import type { Postgres } from '../src/common/postgres/postgres.module';
 import type { CacheKeyClient } from '../src/common/redis/cache-key-client';
 import type { FanoutPublisher } from '../src/common/redis/fanout-publisher';
-import type { AlarmEventsService } from '../src/modules/alarm/api/alarm-events.service';
-import type { AlarmRulesService } from '../src/modules/alarm/api/alarm-rules.service';
 import type { BizApplyOutcome, BizHandlers } from '../src/modules/biz/biz-contracts';
 import { BizHandlersImpl } from '../src/modules/biz/biz-handlers';
 import { BizLedgerConflict, type LedgerKey, type LedgerRow } from '../src/modules/biz/biz-ledger';
@@ -731,23 +729,17 @@ function pgHarness(opts: { ledgerConflict?: boolean } = {}) {
   } as unknown as FanoutPublisher;
   const ch = { client: { command: async () => undefined } } as unknown as ClickHouse;
   const master = new MasterWriteService(pg, new InvalidationChain(cache, fanout, ch));
-  const handlers = new BizHandlersImpl(master, {} as AlarmRulesService, {} as AlarmEventsService);
+  const handlers = new BizHandlersImpl(master);
   return { log, handlers };
 }
 
 describe('BizHandlers — 명령 하나 = 트랜잭션 하나', () => {
-  it('ledger true — biz_command_log INSERT가 audit_log 뒤 · COMMIT 앞(같은 트랜잭션) · 201', async () => {
+  it('ledger true — biz_command_log INSERT가 업무 행 뒤 · COMMIT 앞(같은 트랜잭션) · 201', async () => {
     const h = pgHarness();
     const out = await h.handlers.apply(envelope(), { ledger: true });
     expect(out.httpStatus).toBe(201);
     expect(out.body).toMatchObject({ siteId: 11 });
-    expect(h.log).toEqual([
-      'BEGIN',
-      'INSERT INTO site',
-      'INSERT INTO audit_log',
-      'INSERT INTO biz_command_log',
-      'COMMIT',
-    ]);
+    expect(h.log).toEqual(['BEGIN', 'INSERT INTO site', 'INSERT INTO biz_command_log', 'COMMIT']);
     expect(out.trace.txMs).not.toBeNull();
     expect(out.trace.invalidateMs).toBeNull();
   });

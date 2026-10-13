@@ -19,9 +19,10 @@ import type { GroupBacklog } from '../src/common/redis/durable-key-client';
 import { flowSecond } from '../src/common/workers/tasks';
 import type { WorkerPool } from '../src/common/workers/worker-pool';
 import type { BizWriteOutcome, BizWritePort, BizWriteRequest } from '../src/modules/biz/biz-contracts';
-import { thresholdsFor } from '../src/modules/datagen/mode-b/backpressure-gate';
 import { MasterReadService } from '../src/modules/master/master-read.service';
 import { RealtimeService } from '../src/modules/realtime/realtime.service';
+import { thresholdsFor } from '../src/modules/runs/backpressure-gate';
+import { FLOW_TAG_COUNT, flowTagCode } from '../src/modules/runs/demo-rows';
 import { buildFlowSecond, type FlowTag, flowPoint, flowTagsSuffice } from '../src/modules/runs/flow-gen';
 import {
   commandPlan,
@@ -114,6 +115,16 @@ class FakePort implements BizWritePort {
   reqs: BizWriteRequest[] = [];
   /** 시연 전용 행 상태(가짜 마스터) */
   demo: DemoRows = { siteId: null, lineId: null, deviceId: null, deviceActive: null };
+  /** 시연 설비의 태그(가짜 tag_master) */
+  tags: { tagId: number; tagCode: string }[] = [];
+  /** 시연 전용 행 · flow 전용 태그 50개가 이미 있다(생성 명령 없음) */
+  ready(): void {
+    this.demo = { siteId: 7, lineId: 8, deviceId: 9, deviceActive: false };
+    this.tags = Array.from({ length: FLOW_TAG_COUNT }, (_, i) => ({
+      tagId: 101 + i,
+      tagCode: flowTagCode(i + 1),
+    }));
+  }
   patchOutcome: (n: number) => BizWriteOutcome | Error = () => ({
     type: 'result',
     cmdId: null,
@@ -142,6 +153,11 @@ class FakePort implements BizWritePort {
         this.demo.deviceId = 9;
         this.demo.deviceActive = true;
         return ok({ deviceId: 9 });
+      case 'master.tag.create': {
+        const tagId = 101 + this.tags.length;
+        this.tags.push({ tagId, tagCode: (req.body as { tagCode: string }).tagCode });
+        return ok({ tagId });
+      }
       case 'master.device.patch': {
         if ((req.body as { isActive?: boolean }).isActive === false) {
           this.demo.deviceActive = false;
@@ -187,7 +203,7 @@ interface Rig {
   onSecond?: (s: number) => void;
 }
 
-function rig(tags: FlowTag[] = tagsOf(2, 5)): Rig {
+function rig(): Rig {
   const port = new FakePort();
   const r: Rig = {
     port,
@@ -200,7 +216,7 @@ function rig(tags: FlowTag[] = tagsOf(2, 5)): Rig {
   };
   let seconds = 0;
   r.deps = {
-    loadTags: async () => tags,
+    loadDemoTags: async () => [...port.tags],
     findDemo: async () => ({ ...port.demo }),
     port,
     backlog: async () => r.backlogs.shift() ?? { lag: 0, pending: 0 },
@@ -249,13 +265,13 @@ async function runFlow(
 }
 
 describe('flow 실행기 — prepare(시연 전용 행) · publish · drain', () => {
-  it('완료 — 시연 전용 행 없으면 명령 4로 생성(계수 제외) · 명령 전부 DEMO-FLOW-DEV · actor null · 결과 8', async () => {
+  it('완료 — 시연 전용 행 없으면 명령 4 + flow 전용 태그 50으로 생성(계수 제외) · 명령 전부 DEMO-FLOW-DEV · actor null · 결과 8', async () => {
     const r = rig();
     const { done } = await runFlow(r, { pps: 10, durationSec: 5, bizPerSec: 1 });
     const o = await done;
     expect(o.status).toBe('completed');
     expect(o.steps.map((x) => x.status)).toEqual(['done', 'done', 'done']);
-    expect(o.steps[0]?.detail).toEqual({ devices: 2, tags: 10 });
+    expect(o.steps[0]?.detail).toEqual({ devices: 1, tags: 50, tagsCreated: 50 });
     const kinds = r.port.reqs.map((q) => q.kind);
     expect(kinds.slice(0, 4)).toEqual([
       'master.site.create',
@@ -271,7 +287,28 @@ describe('flow 실행기 — prepare(시연 전용 행) · publish · drain', ()
       modbusConfig: { host: '127.0.0.1' },
     });
     expect(r.port.reqs[3]).toMatchObject({ params: { id: 9 }, body: { isActive: false } });
-    const pub = r.port.reqs.slice(4);
+    const tagReqs = r.port.reqs.slice(4, 4 + FLOW_TAG_COUNT);
+    expect(tagReqs.every((q) => q.kind === 'master.tag.create' && q.actor === null)).toBe(true);
+    expect(tagReqs.map((q) => (q.body as { tagCode: string }).tagCode)).toEqual(
+      Array.from({ length: FLOW_TAG_COUNT }, (_, i) => flowTagCode(i + 1)),
+    );
+    // 공유 스키마 기본값까지 채운 본문(워커는 다시 거르지 않는다) · 시연 설비 아래 FLOAT32 · 2워드씩
+    expect(tagReqs[1]?.body).toMatchObject({
+      deviceId: 9,
+      dataType: 'FLOAT32',
+      wordOrder: 'ABCD',
+      functionCode: 3,
+      address: 2,
+      scale: 1,
+      offsetValue: 0,
+      unit: '',
+      deadband: 0,
+    });
+    // 발행은 flow 전용 태그에만 — 카드 라인 설비 · 태그가 없다
+    const sent = r.xadds.flat().map((p) => StreamEntryV1.parse(decodeEntry(p)));
+    expect(new Set(sent.map((e) => e.d))).toEqual(new Set([9]));
+    expect(sent.flatMap((e) => e.tg).every((t) => t >= 101 && t <= 150)).toBe(true);
+    const pub = r.port.reqs.slice(4 + FLOW_TAG_COUNT);
     expect(pub).toHaveLength(5);
     expect(pub.every((q) => q.kind === 'master.device.patch' && q.params.id === 9 && q.actor === null)).toBe(
       true,
@@ -296,7 +333,7 @@ describe('flow 실행기 — prepare(시연 전용 행) · publish · drain', ()
 
   it('시연 전용 행이 있으면 재사용 — 생성 명령 없음 · 명령 결과 ok · pending · failed 계수', async () => {
     const r = rig();
-    r.port.demo = { siteId: 7, lineId: 8, deviceId: 9, deviceActive: false };
+    r.port.ready();
     r.port.patchOutcome = (n) =>
       n === 2
         ? { type: 'accepted', cmdId: 'c', status: 'pending' }
@@ -310,13 +347,13 @@ describe('flow 실행기 — prepare(시연 전용 행) · publish · drain', ()
 
   it('bizPerSec 0 → 명령 없음 · 0.5 → durationSec × 0.5', async () => {
     const r0 = rig();
-    r0.port.demo = { siteId: 7, lineId: 8, deviceId: 9, deviceActive: false };
+    r0.port.ready();
     expect((await (await runFlow(r0, { pps: 10, durationSec: 3, bizPerSec: 0 })).done).result).toMatchObject({
       commandsSent: 0,
     });
     expect(r0.port.reqs).toHaveLength(0);
     const r1 = rig();
-    r1.port.demo = { siteId: 7, lineId: 8, deviceId: 9, deviceActive: false };
+    r1.port.ready();
     expect(
       (await (await runFlow(r1, { pps: 10, durationSec: 4, bizPerSec: 0.5 })).done).result,
     ).toMatchObject({
@@ -354,7 +391,7 @@ describe('flow 실행기 — prepare(시연 전용 행) · publish · drain', ()
 
   it('publish 중 중단 → 발행 · 명령 정지 · publish stopped · drain skipped · 그때까지 계수', async () => {
     const r = rig();
-    r.port.demo = { siteId: 7, lineId: 8, deviceId: 9, deviceActive: false };
+    r.port.ready();
     const run = await runFlow(r, { pps: 10, durationSec: 30, bizPerSec: 1 });
     r.onSecond = (s) => {
       if (s === 2) run.reg.stop(run.s.runId);
@@ -371,7 +408,7 @@ describe('flow 실행기 — prepare(시연 전용 행) · publish · drain', ()
 
   it('백프레셔 — 위험이면 발행을 멈추고 주의 임계 아래에서 잇는다 · 정지 수 = 정지 구간 수', async () => {
     const r = rig();
-    r.port.demo = { siteId: 7, lineId: 8, deviceId: 9, deviceActive: false };
+    r.port.ready();
     const t = thresholdsFor(50_000);
     // prepare 시작 적체 · 1초 발행 뒤 위험 · 정지 중 확인 1회 위험 유지 · 다음 확인 주의 아래 → 재개
     r.backlogs = [
@@ -387,7 +424,7 @@ describe('flow 실행기 — prepare(시연 전용 행) · publish · drain', ()
 
   it('drain — 적체가 시작 수준으로 돌아오지 않으면 상한에서 done + timedOut true(실패 아님)', async () => {
     const r = rig();
-    r.port.demo = { siteId: 7, lineId: 8, deviceId: 9, deviceActive: false };
+    r.port.ready();
     r.deps.xaddBatch = async (p) => ({ results: p.map(() => '1-0'), backlog: { lag: 5, pending: 0 } });
     // 시작 적체 0 · 발행 뒤 5에 머문다 — 시작 수준 이하로 돌아오지 않는다
     let first = true;
@@ -404,19 +441,35 @@ describe('flow 실행기 — prepare(시연 전용 행) · publish · drain', ()
     expect((o.result as { drainMs: number }).drainMs).toBeGreaterThanOrEqual(1000);
   });
 
-  it('시드 활성 태그가 없으면 prepare failed', async () => {
-    const r = rig([]);
-    const o = await (await runFlow(r, { pps: 10, durationSec: 2, bizPerSec: 0 })).done;
-    expect(o.status).toBe('failed');
-    expect(o.error?.message).toContain('시드 활성 태그');
+  it('flow 전용 태그가 일부만 있으면 없는 코드만 만든다(멱등) · 다른 태그는 쓰지 않는다 · tag_id 오름차순', async () => {
+    const r = rig();
+    r.port.ready();
+    // 앞 실행이 태그 1~20만 만들고 끊겼다 · 시연 설비에 손으로 만든 다른 태그 하나
+    r.port.tags = [{ tagId: 7, tagCode: 'DEMO-FLOW-DEV-HAND' }, ...r.port.tags.slice(0, 20)];
+    const o = await (await runFlow(r, { pps: 50, durationSec: 2, bizPerSec: 0 })).done;
+    expect(o.status).toBe('completed');
+    expect(o.steps[0]?.detail).toEqual({ devices: 1, tags: 50, tagsCreated: 30 });
+    expect(r.port.reqs.map((q) => (q.body as { tagCode: string }).tagCode)).toEqual(
+      Array.from({ length: 30 }, (_, i) => flowTagCode(i + 21)),
+    );
+    const tg = r.xadds.flat().flatMap((p) => StreamEntryV1.parse(decodeEntry(p)).tg);
+    expect(tg).not.toContain(7);
+    expect(new Set(tg).size).toBe(50);
+    // 다음 실행은 만들지 않는다
+    const again = rig();
+    again.port.demo = r.port.demo;
+    again.port.tags = r.port.tags;
+    const o2 = await (await runFlow(again, { pps: 10, durationSec: 1, bizPerSec: 0 })).done;
+    expect(o2.steps[0]?.detail).toMatchObject({ tagsCreated: 0 });
+    expect(again.port.reqs).toEqual([]);
   });
 
-  it('⌈pps ÷ L⌉ > 1000(한 초 ts 간격 0)이면 prepare failed — 시연 전용 행 명령 없음 · 뒤 단계 skipped', async () => {
-    const r = rig(tagsOf(1, 5));
-    const o = await (await runFlow(r, { pps: 10_000, durationSec: 2, bizPerSec: 1 })).done;
+  it('⌈pps ÷ 50⌉ > 1000(한 초 ts 간격 0)이면 prepare failed — 시연 전용 행 명령 없음 · 뒤 단계 skipped', async () => {
+    const r = rig();
+    const o = await (await runFlow(r, { pps: 60_000, durationSec: 2, bizPerSec: 1 })).done;
     expect(o.status).toBe('failed');
     expect(o.error).toMatchObject({ code: null });
-    expect(o.error?.message).toContain('활성 태그 수가 pps에 비해 적다');
+    expect(o.error?.message).toContain('flow 전용 태그 수가 pps에 비해 적다');
     expect(o.steps.map((x) => x.status)).toEqual(['failed', 'skipped', 'skipped']);
     expect(r.port.reqs).toEqual([]);
     expect(r.xadds).toEqual([]);
@@ -485,11 +538,11 @@ describe('조회 섞기 규칙 — 비율 · 키 선택(웹 개편 §9.1 · 06_p
 
 describe('flow 실행기 — 조회 섞기', () => {
   const demoReady = (r: Rig) => {
-    r.port.demo = { siteId: 7, lineId: 8, deviceId: 9, deviceActive: false };
+    r.port.ready();
   };
 
   it('publish 동안 초당 readsPerSec · 종류 비율 · 시연 사이트 · readsSent = 보낸 수', async () => {
-    const r = rig(tagsOf(2, 5));
+    const r = rig();
     demoReady(r);
     const o = await (await runFlow(r, { pps: 10, durationSec: 4, bizPerSec: 0, readsPerSec: 5 })).done;
     expect(o.status).toBe('completed');
@@ -497,9 +550,13 @@ describe('flow 실행기 — 조회 섞기', () => {
     expect(r.reads.filter((x) => x.kind === 'series')).toHaveLength(8);
     expect(r.reads.filter((x) => x.kind === 'latest')).toHaveLength(8);
     expect(r.reads.filter((x) => x.kind === 'devices').every((x) => x.siteId === 7)).toBe(true);
-    expect(new Set(r.reads.flatMap((x) => (x.kind === 'latest' ? [x.deviceId] : [])))).toEqual(
-      new Set([1, 2]),
-    );
+    // 지금 값은 발행 대상 설비(시연 전용 설비 하나)만 · 시계열은 flow 전용 태그 앞쪽 3개
+    expect(new Set(r.reads.flatMap((x) => (x.kind === 'latest' ? [x.deviceId] : [])))).toEqual(new Set([9]));
+    expect(
+      r.reads
+        .flatMap((x) => (x.kind === 'series' ? [x.q.tagIds] : []))
+        .every((t) => t.join() === '101,102,103'),
+    ).toBe(true);
     expect(o.result).toMatchObject({ readsSent: 20 });
     expect(o.steps[1]?.detail).toMatchObject({ readsSent: 20, readsFailed: 0, readsSkipped: 0 });
   });
@@ -655,7 +712,7 @@ describe('조회 섞기 배선 — 표면과 같은 서비스 · mst_cache_reque
   it('실행 — 업무 명령이 사본을 지운 다음 설비 목록 조회가 미스 · 그 밖은 히트', async () => {
     const m = masterRig();
     const r = rig();
-    r.port.demo = { siteId: 7, lineId: 8, deviceId: 9, deviceActive: false };
+    r.port.ready();
     r.deps.reads.devices = (siteId) => m.svc.listDevices(siteId, true);
     // 명령 적용 = 체인 ② cache:devlist:{시연 사이트} DEL
     const origin = r.port.submit.bind(r.port);

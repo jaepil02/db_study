@@ -1,5 +1,7 @@
 // COL-01 수집 정의 — 기동 로드 결과의 모양(정본 docs/06_pipeline/02_collect.md §기동 로드)
-// 설비 · 접속 설정 · 활성 태그를 한 번 읽어 SIM(포트 · 영역 크기) · GEN 모드 A(주소 · 타입) · COL(폴링)이 같은 사본을 쓴다.
+// 설비 · 접속 설정 · 활성 태그를 한 번 읽어 SIM(포트 · 영역 크기) · GEN 모드 A(주소 · 타입 · 종류) · COL(폴링)이 같은 사본을 쓴다.
+// 설비 가동을 다시 켤 때는 다시 읽은 사본을 쓴다(CollectDefinitionService.refresh · plant/plant-runtime).
+import type { TagKind } from '@db-study/shared';
 import type { TagMeta } from '../master/tag-meta';
 import { DATA_TYPE_WORDS, isLoopbackHost, isRegisterDataType, isWordOrder } from './decode';
 import { planBlocks, type RequestBlock } from './request-blocks';
@@ -15,18 +17,26 @@ export interface DeviceRow {
   maxRegsPerRequest: number;
 }
 
+/**
+ * 수집 정의의 태그 = 태그 메타 + 종류(tag_master.tag_kind · 006) — 종류는 모드 A 신호만 쓴다(수집 · 디코딩과 무관).
+ * 마스터 표면 계약(TagObject)에는 종류가 없다 — 그래서 TagMeta에 넣지 않고 여기서만 붙인다. 없으면 NULL과 같다.
+ */
+export interface CollectTag extends TagMeta {
+  tagKind?: TagKind | null;
+}
+
 /** 스캔 그룹 = 설비 × scan_rate_ms — 그룹마다 폴링 루프 하나(COL-02 · S3) */
 export interface ScanGroup {
   scanRateMs: number;
-  tags: TagMeta[];
-  blocks: RequestBlock<TagMeta>[];
+  tags: CollectTag[];
+  blocks: RequestBlock<CollectTag>[];
 }
 
 export interface DeviceDef extends DeviceRow {
   /** 루프백 host = 시뮬레이션 설비 — SIM이 포트를 띄우고 정상 값은 SIMULATED(9) */
   simulated: boolean;
   /** 폴링하는 태그 전부(그룹 합) — SIM 영역 크기 · 모드 A 쓰기 대상 */
-  tags: TagMeta[];
+  tags: CollectTag[];
   /** scan_rate_ms 오름차순 */
   groups: ScanGroup[];
 }
@@ -53,10 +63,10 @@ function unsupported(t: TagMeta): string | null {
  */
 export function buildDeviceDefs(
   devices: readonly DeviceRow[],
-  tags: readonly TagMeta[],
+  tags: readonly CollectTag[],
   warn: (msg: string) => void,
 ): DeviceDef[] {
-  const byDevice = new Map<number, TagMeta[]>();
+  const byDevice = new Map<number, CollectTag[]>();
   for (const t of tags) {
     const why = unsupported(t);
     if (why) {

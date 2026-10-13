@@ -5,13 +5,13 @@
 // S1 범위: APP_ROLE · 스위치 11 · MEMORY_PROFILE · CAPACITY_TIER · COMMIT_HASH · WORKER_POOL_SIZE.
 // S2 추가: 저장소 접속 3(POSTGRES_URL · CLICKHOUSE_URL · REDIS_URL) — 비밀번호 자리는 Compose 변수 치환이 채운다(09_tech_stack/04).
 // S3 추가: SIM_FAULT_PLAN(정본 목록에 이미 있다) · INGEST_BATCH_PLAN · INGEST_LAB_FAULT · GEN_PROFILE(S3 신설 — 09_tech_stack/04 갱신).
-// S7 ① 추가: ALARM_ACK_ACTOR_EMAIL(인증 전 확인 행위자 — 판정 정본 07_api/07 §인증 전 확인 행위자 판정 · 인증 도입 S7 ②에서 폐기).
-// 2026-10-03 추가: SENSOR_AUTOGEN(센서 자동 생성 게이트 — 스위치가 아니다 · 09_tech_stack/04 §환경변수 · 판정 .omc/plans/sensor-autogen-switch.md §1).
+// 2026-10-03 추가: SENSOR_AUTOGEN(스위치가 아니다 · 09_tech_stack/04 §환경변수) — D-16부터 설비 가동 기동 기본값(실행 중 상태는 Redis ctl:plant:power).
+// D-16(2026-10-11) 삭제: 생성기 단독 실행 역할 · 부하 주입 표면 게이트 · 알람 확인 행위자(측정 도구 · 알람 · 인증과 함께).
 import { readFileSync } from 'node:fs';
 import { CAPACITY_TIER_NAMES, type CapacityTier, SIGNAL_PROFILES } from '@db-study/shared';
 import { z } from 'zod';
 
-export const APP_ROLES = ['all', 'api', 'worker', 'collector', 'datagen'] as const;
+export const APP_ROLES = ['all', 'api', 'worker', 'collector'] as const;
 export type AppRole = (typeof APP_ROLES)[number];
 
 const onOff = (def: 'on' | 'off') => z.enum(['on', 'off']).default(def);
@@ -26,7 +26,8 @@ const SWITCH_ENV = {
   'SW-06': ['REDIS_PUBSUB_FANOUT', onOff('on')],
   'SW-07': ['WS_THROTTLE_MS', z.coerce.number().int().min(0).default(100)],
   'SW-08': ['INGEST_IDEMPOTENCY', onOff('on')],
-  'SW-09': ['CONTROL_TABLE_ENABLED', onOff('off')],
+  // SW-09 off · on · gated(D-16) — gated는 직접 비교 실행이 Redis 게이트(cache:dual:active)를 켠 동안만 같은 배치를 PostgreSQL에도 싣는다
+  'SW-09': ['CONTROL_TABLE_ENABLED', z.enum(['off', 'on', 'gated']).default('gated')],
   'SW-10': ['COLLECTOR_DEADBAND', onOff('off')],
   'SW-11': ['LATEST_VALUE_WRITER', z.enum(['ingest', 'collector']).default('ingest')],
   'SW-12': ['BIZ_WRITE_PATH', z.enum(['stream', 'direct']).default('stream')],
@@ -42,9 +43,9 @@ const EnvSchema = z.object({
   MEMORY_PROFILE: optional(z.enum(['load', 'dev', 'mid'])),
   CAPACITY_TIER: optional(z.enum(CAPACITY_TIER_NAMES as [CapacityTier, ...CapacityTier[]])),
   COMMIT_HASH: optional(z.string().regex(/^[0-9a-f]{7,40}$/)),
-  // 워커 수가 기록에 없으면 S1 워커 1 · 2 · 4 비교가 섞인다 — 기본값을 두지 않는다
+  // 워커 수가 기록에 없으면 워커 수가 다른 실행의 수치가 섞인다 — 기본값을 두지 않는다
   WORKER_POOL_SIZE: z.coerce.number().int().min(1),
-  // 저장소를 쓰지 않는 역할(생성기 단독 실행)도 있어 선택이다 — 쓰는 모듈이 초기화 때 requireStoreUrls로 강제한다
+  // 선택으로 받고 쓰는 모듈이 초기화 때 requireStoreUrls · requireStoreUrl로 강제한다(없으면 기동 거부)
   POSTGRES_URL: optional(z.url({ protocol: /^postgres(ql)?$/ })),
   CLICKHOUSE_URL: optional(z.url({ protocol: /^https?$/ })),
   REDIS_URL: optional(z.url({ protocol: /^rediss?$/ })),
@@ -56,15 +57,11 @@ const EnvSchema = z.object({
   INGEST_LAB_FAULT: optional(z.string().regex(/^crash-after-insert:[1-9]\d*$/)),
   // 모드 A 신호 프로파일 구성 — mixed · all · 8종 단독(06_pipeline/10 · EXP-14)
   GEN_PROFILE: z.enum(['mixed', 'all', ...SIGNAL_PROFILES] as [string, ...string[]]).default('SINE'),
-  // S5 — 모드 C 부하 주입 표면 게이트(스위치가 아니다 · 07_api/09) — 'true'일 때만 켜진다 · 그 밖은 전부 꺼짐(기본 비활성)
-  DATAGEN_BULK_ENABLED: z.string().optional(),
-  // 센서 자동 생성 게이트(스위치가 아니다 — 운영 게이트) — off면 SIM 포트 · 모드 A 틱 · 수집기 폴링을 띄우지 않는다(직접 보내 보기만 센서 데이터를 보낸다).
-  // 측정 조건이라(health run.sensorAutogen) 허용값 밖이면 기동 거부 — 'of' 같은 오타가 조용히 on이 되면 하루 약 8.6억 행이 쌓이고, off가 되면 실험 조건이 바뀐다.
+  // 설비 가동 기동 기본값(스위치가 아니다) — 실행 중 상태는 Redis ctl:plant:power(설비 가동 스위치 · D-16)이고, 키가 없을 때만 이 값을 쓴다.
+  // off면 기동 때 SIM 포트 · 모드 A 틱 · 수집기 폴링을 띄우지 않는다(켜기는 POST /api/v1/plant/power).
+  // 측정 조건이라(health run.sensorAutogen) 허용값 밖이면 기동 거부 — 'of' 같은 오타가 조용히 on이 되면 센서 행이 저절로 쌓이고, off가 되면 실험 조건이 바뀐다.
   // 앱 기본 on(요구 · 시험 · 실험 조건 보존) · 로컬 Compose 기본 off(infra/compose/compose.yml)
   SENSOR_AUTOGEN: z.preprocess((v) => (v === '' ? undefined : v), z.enum(['on', 'off']).default('on')),
-  // S7 ① — 인증 전 확인(ACK) 행위자 email · 기본값 없음 · 없어도 기동한다(확인만 401 — 09_tech_stack/04 §환경변수)
-  // 형식 검사를 걸지 않는다 — 시드 값 learner@localhost는 최상위 도메인이 없어 일반 email 정규식을 통과하지 못한다
-  ALARM_ACK_ACTOR_EMAIL: optional(z.string().trim().min(1)),
 });
 
 export interface AppConfig {
@@ -82,12 +79,8 @@ export interface AppConfig {
   /** 실험 전용 결함 주입 — 켜져 있으면 health 경고로 드러낸다 */
   ingestLabFault: { kind: 'crash-after-insert'; afterBatches: number } | null;
   genProfile: string;
-  /** 모드 C 부하 주입 표면 게이트 — DATAGEN_BULK_ENABLED === 'true' */
-  datagenBulkEnabled: boolean;
-  /** 센서 자동 생성 게이트 — off면 PlcSim · 모드 A · 수집기가 기동 시 아무것도 띄우지 않는다(SENSOR_AUTOGEN) */
+  /** 설비 가동 기동 기본값(SENSOR_AUTOGEN) — 실행 중 상태는 Redis ctl:plant:power · 키가 없을 때만 이 값 */
   sensorAutogen: 'on' | 'off';
-  /** 인증 전 확인 행위자 email — null이면 확인만 401(계정 조회는 확인 트랜잭션마다 · 07_api/07) */
-  alarmAckActorEmail: string | null;
 }
 
 export class ConfigRejectedError extends Error {}
@@ -129,9 +122,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
       ? { kind: 'crash-after-insert', afterBatches: Number(base.data.INGEST_LAB_FAULT.split(':')[1]) }
       : null,
     genProfile: base.data.GEN_PROFILE,
-    datagenBulkEnabled: base.data.DATAGEN_BULK_ENABLED === 'true',
     sensorAutogen: base.data.SENSOR_AUTOGEN,
-    alarmAckActorEmail: base.data.ALARM_ACK_ACTOR_EMAIL,
   };
 }
 
@@ -188,7 +179,7 @@ export function requireStoreUrls(cfg: AppConfig): StoreUrls {
   return { postgresUrl, clickhouseUrl, redisUrl };
 }
 
-/** 저장소 하나만 쓰는 실행(모드 B 단독 진입점 — PostgreSQL 태그 읽기 · Redis 발행)의 기동 조건 — 쓰지 않는 저장소 URL을 요구하지 않는다 */
+/** 저장소 하나만 요구하는 기동 조건(Redis 연결 묶음 등) — 쓰지 않는 저장소 URL을 요구하지 않는다 */
 export function requireStoreUrl<K extends keyof StoreUrls>(cfg: AppConfig, key: K): string {
   const v = cfg.stores[key];
   if (!v) {
@@ -241,15 +232,4 @@ export function runInfo(cfg: AppConfig, memoryLimitMb = readMemoryLimitMb()) {
     },
     switches: cfg.switches,
   };
-}
-
-/** 센서 자동 생성을 띄우는 역할 — SIM · 모드 A · 수집기가 한 프로세스에 함께 뜬다(app.module ROLE_MODULES all · collector · ADR-22) */
-export const SENSOR_AUTOGEN_ROLES: ReadonlySet<AppRole> = new Set(['all', 'collector']);
-
-/**
- * health run.sensorAutogen — 실효값(게이트 × 역할 · 07_api/10). 게이트가 on이어도 수집기가 없는 역할(api · worker)은 이 프로세스가
- * 센서 데이터를 만들지 않는다 — 게이트 값을 그대로 실으면 api · worker 분리 실행의 기록이 배경 적재가 있었던 것처럼 읽힌다.
- */
-export function sensorAutogenEffective(cfg: Pick<AppConfig, 'appRole' | 'sensorAutogen'>): 'on' | 'off' {
-  return cfg.sensorAutogen === 'on' && SENSOR_AUTOGEN_ROLES.has(cfg.appRole) ? 'on' : 'off';
 }

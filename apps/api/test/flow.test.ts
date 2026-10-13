@@ -1,5 +1,5 @@
 // 흐름 이벤트(EXP-FLOW) 단위 — 정본 docs/07_api/11_websocket.md §흐름 이벤트 — flow
-// 발행기: 표지 없음 · 읽기 실패 → 발행 0 · seq · totals(role별) / 배치 요약: 발행 시점(인계 없으면 flusher ⑤ 뒤 · 인계면 판정기 ⑦ 뒤) · stages 6
+// 발행기: 표지 없음 · 읽기 실패 → 발행 0 · seq · totals(role별) / 배치 요약: 발행 시점(flusher ⑤ 뒤) · stages 5
 // 게이트웨이: subscribe_flow 필드 → 4400 · 빈 확인 프레임 · 250 ms 병합 상한(배치 8 · 업무 20) · dropped · totals (source · role) 묶음 · 채널 구독 수명
 import { EventEmitter } from 'node:events';
 import type { IncomingMessage } from 'node:http';
@@ -20,12 +20,15 @@ import type { CacheKeyClient } from '../src/common/redis/cache-key-client';
 import type { RedisConnections } from '../src/common/redis/connections';
 import type { FanoutPublisher } from '../src/common/redis/fanout-publisher';
 import type { DecodedEntry } from '../src/common/workers/tasks';
-import { AlarmEvaluator, type AlarmEvaluatorDeps } from '../src/modules/alarm/eval/evaluator';
 import { DeterministicBatchToken } from '../src/modules/ingest/batch-token.port';
 import { NoopControlSink } from '../src/modules/ingest/control-table-sink.port';
 import { Flusher, type FlusherDeps, flowDraft } from '../src/modules/ingest/flusher';
 import { createLabFault } from '../src/modules/ingest/lab-fault';
-import { IngestLatestValueWriter } from '../src/modules/ingest/latest-value-write.port';
+import {
+  IngestLatestValueWriter,
+  LATEST_MAX_AGE_MS,
+  latestByDevice,
+} from '../src/modules/ingest/latest-value-write.port';
 import { type BatchEntry, idMsOf, type Piece } from '../src/modules/ingest/window-buffer';
 import type { MasterReadService } from '../src/modules/master/master-read.service';
 import { PassthroughThrottle } from '../src/modules/realtime/frame-throttle.port';
@@ -54,14 +57,12 @@ function batchInput(over: Partial<FlowBatchInput> = {}): FlowBatchInput {
       chInsertMs: 2,
       controlCopyMs: null,
       latestWriteMs: 1,
-      alarmMs: null,
     },
     chRows: 10,
     retries: 0,
     dlqEntries: 0,
     controlCopy: null,
     latestWrites: 4,
-    alarm: null,
     stream: null,
     ...over,
   };
@@ -70,7 +71,7 @@ function batchInput(over: Partial<FlowBatchInput> = {}): FlowBatchInput {
 const bizInput = (result: string, role: 'biz-writer' | 'api-direct' = 'biz-writer', duplicate = false) => ({
   role,
   cmdId: role === 'api-direct' ? null : '3f1c9a2e-8b7d-4c1e-9f0a-2d6b5e4c3a10',
-  kind: 'alarm.rule.patch',
+  kind: 'master.site.patch',
   result,
   duplicate,
   stages: { queueWaitMs: 1, txMs: 2, invalidateMs: 1, replyMs: 1 },
@@ -108,12 +109,10 @@ describe('FlowPublisher — 표지 · seq · totals', () => {
     expect(sent).toHaveLength(0);
   });
 
-  it('배치 — seq 1부터 · totals 누적(대조군 성공 행 · 판정 · 최신값) · startedAt 고정', async () => {
+  it('배치 — seq 1부터 · totals 누적(대조군 성공 행 · 최신값) · startedAt 고정', async () => {
     const { p, sent } = publisher(async () => ({ present: true, failed: false }));
     await p.check();
-    p.publishBatch(
-      batchInput({ controlCopy: { rows: 10, ok: true }, alarm: { judgedRows: 10, opened: 1, closed: 0 } }),
-    );
+    p.publishBatch(batchInput({ controlCopy: { rows: 10, ok: true } }));
     p.publishBatch(batchInput({ controlCopy: { rows: 10, ok: false }, dlqEntries: 2, chRows: 0 }));
     expect(sent.map((m) => m.seq)).toEqual([1, 2]);
     const last = sent[1] as Extract<FlowChannelMessageBody, { event: 'batch' }>;
@@ -124,9 +123,6 @@ describe('FlowPublisher — 표지 · seq · totals', () => {
       chRows: 10,
       dlqEntries: 2,
       controlCopyRows: 10,
-      judgedRows: 10,
-      opened: 1,
-      closed: 0,
       latestWrites: 8,
     });
   });
@@ -135,7 +131,7 @@ describe('FlowPublisher — 표지 · seq · totals', () => {
     const { p, sent } = publisher(async () => ({ present: true, failed: false }));
     await p.check();
     p.publishBiz(bizInput('ok'));
-    p.publishBiz(bizInput('alarm.rule_not_found', 'biz-writer', true));
+    p.publishBiz(bizInput('common.not_found', 'biz-writer', true));
     p.publishBiz(bizInput('expired'));
     p.publishBiz(bizInput('common.postgres_unavailable'));
     p.publishBiz(bizInput('ok', 'api-direct'));
@@ -175,10 +171,9 @@ function entry(id: string, receivedAt: number, decodedAt: number): BatchEntry {
 const piece = (): Piece =>
   ({ k: 0, entries: [entry('1000-0', 1012, 1015), entry('1005-0', 1010, 1020)], rows: 4 }) as Piece;
 
-function flusherHarness(opts: { on: boolean; alarm?: boolean; insertFails?: boolean; copyOk?: boolean }) {
+function flusherHarness(opts: { on: boolean; insertFails?: boolean; copyOk?: boolean | null }) {
   const calls: string[] = [];
   const published: FlowBatchInput[] = [];
-  const handed: { flow?: FlowBatchInput | null }[] = [];
   const deps: FlusherDeps = {
     insert: async () => {
       calls.push('insert');
@@ -191,7 +186,7 @@ function flusherHarness(opts: { on: boolean; alarm?: boolean; insertFails?: bool
         ? { implName: 'NoopControlSink', copy: async () => true, close: async () => {} }
         : {
             implName: 'PostgresControlSink',
-            copy: async () => opts.copyOk as boolean,
+            copy: async () => opts.copyOk as boolean | null,
             close: async () => {},
           },
     ack: async () => {
@@ -207,15 +202,6 @@ function flusherHarness(opts: { on: boolean; alarm?: boolean; insertFails?: bool
         return 3;
       },
     },
-    alarm: opts.alarm
-      ? {
-          handoff: async (b) => {
-            calls.push('handoff');
-            handed.push(b);
-          },
-          drain: async () => {},
-        }
-      : null,
     labFault: createLabFault(null),
     sleep: async () => {},
     stopping: () => false,
@@ -229,35 +215,33 @@ function flusherHarness(opts: { on: boolean; alarm?: boolean; insertFails?: bool
     },
     streamStat: () => ({ length: 500, lag: 3 }),
   };
-  return { f: new Flusher(deps), calls, published, handed };
+  return { f: new Flusher(deps), calls, published };
 }
 
 describe('배치 요약 — 배치당 1건 · 발행 시점', () => {
-  it('표지 없음 — 요약을 만들지도 내지도 않는다(인계 초안도 null)', async () => {
-    const h = flusherHarness({ on: false, alarm: true });
+  it('표지 없음 — 요약을 만들지도 내지도 않는다', async () => {
+    const h = flusherHarness({ on: false });
     expect(await h.f.process(piece())).toBe('inserted');
     expect(h.published).toHaveLength(0);
-    expect(h.handed[0]?.flow).toBeNull();
+    expect(h.calls).toEqual(['insert', 'ack', 'latest']);
   });
 
-  it('인계 없음 — flusher가 ⑤ 최신값 뒤에 1건 · stages 6 · 대조군 off면 null', async () => {
+  it('flusher가 ⑤ 최신값 뒤에 1건 · stages 5 · 대조군 off면 null', async () => {
     const h = flusherHarness({ on: true });
     await h.f.process(piece());
     expect(h.calls).toEqual(['insert', 'ack', 'latest', 'flow']);
     const s = h.published[0] as FlowBatchInput;
-    expect(Object.keys(s.stages)).toHaveLength(6);
+    expect(Object.keys(s.stages)).toHaveLength(5);
     // 6a = max(수신 − ID 시각) = max(12, 5) · 6b = max(디코드 − 수신) = max(3, 10)
     expect(s.stages.streamWaitMs).toBe(12);
     expect(s.stages.decodeMs).toBe(10);
     expect(s.stages.controlCopyMs).toBeNull();
-    expect(s.stages.alarmMs).toBeNull();
     expect(s).toMatchObject({
       rows: 4,
       chRows: 4,
       retries: 0,
       controlCopy: null,
       latestWrites: 3,
-      alarm: null,
     });
     expect(s.stream).toEqual({ length: 500, lag: 3 });
   });
@@ -271,11 +255,11 @@ describe('배치 요약 — 배치당 1건 · 발행 시점', () => {
     }
   });
 
-  it('인계 있음 — flusher는 내지 않고 초안을 판정기로 넘긴다', async () => {
-    const h = flusherHarness({ on: true, alarm: true });
-    await h.f.process(piece());
-    expect(h.calls).toEqual(['insert', 'ack', 'latest', 'handoff']);
-    expect(h.handed[0]?.flow).toMatchObject({ chRows: 4, latestWrites: 3 });
+  it('SW-09 gated 게이트 닫힘(copy null) — 실제로 싣지 않은 배치는 controlCopy · controlCopyMs가 null', async () => {
+    const h = flusherHarness({ on: true, copyOk: null });
+    expect(await h.f.process(piece())).toBe('inserted');
+    expect(h.published[0]?.controlCopy).toBeNull();
+    expect(h.published[0]?.stages.controlCopyMs).toBeNull();
   });
 
   it('재시도 소진 → DLQ 배치도 1건(삽입 행 0 · 격리 엔트리 수)', async () => {
@@ -289,30 +273,6 @@ describe('배치 요약 — 배치당 1건 · 발행 시점', () => {
     const p = piece();
     for (const e of p.entries) delete e.receivedAt;
     expect(flowDraft(p, 4).stages).toMatchObject({ streamWaitMs: null, decodeMs: null });
-  });
-
-  it('판정기 — ⑦ 뒤 1건 · alarmMs · judgedRows = 인계 행 · 규칙 없어도 낸다 · 초안 없으면 0건', async () => {
-    const published: FlowBatchInput[] = [];
-    const deps = {
-      rules: { load: async () => ({ rules: [] }) },
-      state: { read: async () => new Map(), write: async () => {} },
-      confirm: {} as AlarmEvaluatorDeps['confirm'],
-      evalSink: { insert: async () => {} },
-      fanout: { publishAlarm: async () => {} },
-      staleMultiplier: 3,
-      sleep: async () => {},
-      stopping: () => false,
-      log: { warn: () => {}, error: () => {} },
-      flow: { publishBatch: (i: FlowBatchInput) => published.push(i) },
-    } as AlarmEvaluatorDeps;
-    const ev = new AlarmEvaluator(deps);
-    const rows = [[1, 1, 1, 1, 9, 0]] as never;
-    await ev.handoff({ token: null, rows, flow: batchInput({ rows: 1 }) });
-    await ev.handoff({ token: null, rows, flow: null });
-    await ev.drain();
-    expect(published).toHaveLength(1);
-    expect(published[0]?.alarm).toEqual({ judgedRows: 1, opened: 0, closed: 0 });
-    expect(published[0]?.stages.alarmMs).toBeTypeOf('number');
   });
 });
 
@@ -392,9 +352,6 @@ function batchMsg(seq: number, source = 'worker@a'): FlowChannelMessageBody {
       chRows: seq * 10,
       dlqEntries: 0,
       controlCopyRows: 0,
-      judgedRows: 0,
-      opened: 0,
-      closed: 0,
       latestWrites: 0,
     },
   };
@@ -535,10 +492,45 @@ describe('포트 반환값 — 흐름 요약 재료', () => {
       writeLatestIfNewer: async (d: number, tuples: unknown[]) => (d === 1 ? tuples : tuples.slice(1)),
     };
     const fanout = { publishRt: async () => {} };
-    const w = new IngestLatestValueWriter(durable as never, fanout as never, () => {});
+    const w = new IngestLatestValueWriter(
+      durable as never,
+      fanout as never,
+      () => {},
+      () => 1_790_000_000_000,
+    );
     const e1 = entry('1000-0', 1, 1);
     const e2 = { ...entry('1001-0', 1, 1), entry: { ...entry('1001-0', 1, 1).entry, d: 2 } };
     // 설비 1: 태그 2 모두 · 설비 2: 태그 2 중 1
     expect(await w.write([e1, e2])).toBe(3);
+  });
+
+  it('신선도 가드 — 지금 − 1시간보다 오래된 점은 rt:latest · ch:rt에 쓰지 않는다(경계는 받아들인다)', async () => {
+    const T = 1_790_000_000_000;
+    const writes: { d: number; tuples: unknown[] }[] = [];
+    const published: number[] = [];
+    const durable = {
+      writeLatestIfNewer: async (d: number, tuples: unknown[]) => {
+        writes.push({ d, tuples });
+        return tuples;
+      },
+    };
+    const fanout = { publishRt: async (d: number) => void published.push(d) };
+    const now = T + LATEST_MAX_AGE_MS;
+    const w = new IngestLatestValueWriter(
+      durable as never,
+      fanout as never,
+      () => {},
+      () => now,
+    );
+    const at = (id: string, d: number, t0: number, dt: number[]): BatchEntry => {
+      const b = entry(id, 1, 1);
+      return { ...b, entry: { ...b.entry, d, t0, dt } };
+    };
+    // 설비 1: 태그 1은 1시간 1 ms 전(뺀다) · 태그 2는 딱 1시간 전(남긴다) · 설비 2: 전부 과거 재생(설비째 빠진다)
+    const out = await w.write([at('1-0', 1, T - 1, [0, 1]), at('2-0', 2, T - 86_400_000, [0, 0])]);
+    expect(out).toBe(1);
+    expect(writes).toEqual([{ d: 1, tuples: [[2, T, 1.5, 9]] }]);
+    expect(published).toEqual([1]);
+    expect(latestByDevice([at('3-0', 1, T - 1, [0, 1])], T).get(1)?.size).toBe(1);
   });
 });

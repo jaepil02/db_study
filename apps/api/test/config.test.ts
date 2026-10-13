@@ -19,7 +19,7 @@ describe('설정 로더 — 기동 시 1회 · 허용값 밖이면 기동 거부
       'SW-06': 'on',
       'SW-07': 100,
       'SW-08': 'on',
-      'SW-09': 'off',
+      'SW-09': 'gated',
       'SW-10': 'off',
       'SW-11': 'ingest',
       'SW-12': 'stream',
@@ -32,7 +32,7 @@ describe('설정 로더 — 기동 시 1회 · 허용값 밖이면 기동 거부
   it('주입값을 읽는다', () => {
     const c = loadConfig({
       ...base,
-      APP_ROLE: 'datagen',
+      APP_ROLE: 'collector',
       MEMORY_PROFILE: 'load',
       CAPACITY_TIER: 'M+',
       COMMIT_HASH: 'a7765f8',
@@ -40,7 +40,7 @@ describe('설정 로더 — 기동 시 1회 · 허용값 밖이면 기동 거부
       LATEST_VALUE_WRITER: 'collector',
     });
     expect(c).toMatchObject({
-      appRole: 'datagen',
+      appRole: 'collector',
       memoryProfile: 'load',
       capacityTier: 'M+',
       commitHash: 'a7765f8',
@@ -51,6 +51,7 @@ describe('설정 로더 — 기동 시 1회 · 허용값 밖이면 기동 거부
 
   it.each([
     ['APP_ROLE 허용값 밖', { ...base, APP_ROLE: 'everything' }],
+    ['APP_ROLE datagen(D-16에서 삭제한 역할)', { ...base, APP_ROLE: 'datagen' }],
     ['WORKER_POOL_SIZE 없음', {}],
     ['WORKER_POOL_SIZE 0', { WORKER_POOL_SIZE: '0' }],
     ['티어 허용값 밖', { ...base, CAPACITY_TIER: 'XL' }],
@@ -65,6 +66,14 @@ describe('설정 로더 — 기동 시 1회 · 허용값 밖이면 기동 거부
     expect(c.switches['SW-07']).toBe(100);
     expect(c.switchWarnings).toHaveLength(2);
     expect(runInfo(c, null).switches['SW-02']).toBe('on');
+  });
+
+  it('SW-09 — off · on · gated(기본 · D-16) · 허용값 밖은 기본(gated) 주입 + 경고', () => {
+    for (const v of ['off', 'on', 'gated'] as const)
+      expect(loadConfig({ ...base, CONTROL_TABLE_ENABLED: v }).switches['SW-09']).toBe(v);
+    const bad = loadConfig({ ...base, CONTROL_TABLE_ENABLED: 'yes' });
+    expect(bad.switches['SW-09']).toBe('gated');
+    expect(bad.switchWarnings).toHaveLength(1);
   });
 
   it('SENSOR_AUTOGEN — 앱 기본 on · on · off · 빈 값은 기본(on) · 허용값 밖은 기동 거부(측정 조건)', () => {

@@ -1,7 +1,7 @@
 // 업무 명령 멱등 원장 biz_command_log — 정본 docs/05_data_stores/01_postgresql_schema.md §biz_command_log 설계 · 기전 06_pipeline/07 §멱등 · 재전달
 // APPLIED 행은 업무 트랜잭션 안(COMMIT 직전) — 기존 쓰기 서비스의 tx()가 bizBeforeCommit 훅을 부른다(AsyncLocalStorage 범위가 있을 때만).
 // REJECTED · EXPIRED 행은 롤백 뒤 별도 트랜잭션(단문 INSERT 자동 커밋). PostgreSQL 불가는 행을 남기지 않는다(결과 키만).
-// 원장은 추가 전용이다(UPDATE · DELETE 권한 없음 — 008) · result jsonb = 결과 키 biz:result와 같은 모양(BizResult).
+// 원장은 추가 전용이다(UPDATE · DELETE 권한 없음 — 마이그레이션 005) · result jsonb = 결과 키 biz:result와 같은 모양(BizResult).
 import { AsyncLocalStorage } from 'node:async_hooks';
 import type { BizResultBody } from '@db-study/shared';
 import { Injectable } from '@nestjs/common';
@@ -65,7 +65,7 @@ export function runInBizScope<T>(scope: BizApplyScope, fn: () => Promise<T>): Pr
   return scopeStore.run(scope, fn);
 }
 
-/** 트랜잭션 안 COMMIT 직전 — 범위에 원장 명령이 있으면 APPLIED 행(업무 행 · audit_log와 같은 트랜잭션) */
+/** 트랜잭션 안 COMMIT 직전 — 범위에 원장 명령이 있으면 APPLIED 행(업무 행과 같은 트랜잭션) */
 export async function bizBeforeCommit(c: PoolClient, body: unknown): Promise<void> {
   const s = scopeStore.getStore();
   if (!s?.ledger) return;

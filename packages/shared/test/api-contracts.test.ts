@@ -13,13 +13,13 @@ import {
 import { docSectionRows, docTable } from './doc-table';
 
 describe('API 계약 — 정본 문서와 같다', () => {
-  it('에러 코드 23 · HTTP 상태(11_glossary/02 §에러 코드 전수)', () => {
+  it('에러 코드 · HTTP 상태(11_glossary/02 §에러 코드 전수 — 코드와 문서가 같은 집합)', () => {
     const rows = docSectionRows('11_glossary/02_error_codes.md', '에러 코드 전수').filter((r) =>
       /^[a-z_]+\.[a-z_]+$/.test(r[0] ?? ''),
     );
     const fromDoc = Object.fromEntries(rows.map((r) => [r[0], Number(r[1])]));
     expect(fromDoc).toEqual(ERROR_HTTP_STATUS);
-    expect(Object.keys(fromDoc)).toHaveLength(23);
+    expect(Object.keys(fromDoc)).toHaveLength(Object.keys(ERROR_HTTP_STATUS).length);
   });
 
   it('스위치 11 — 포트 · 구현 이름(04_architecture/02 확정 표)', () => {
@@ -57,7 +57,7 @@ describe('API 계약 — 정본 문서와 같다', () => {
     expect(sw11 && implFor(sw11, 'collector')).toBe('CollectorLatestValueWriter');
   });
 
-  it('WebSocket 종료 코드 8(07_api/11 §종료 코드)', () => {
+  it('WebSocket 종료 코드 7(07_api/11 §종료 코드)', () => {
     const rows = docTable('07_api/11_websocket.md', '종료 코드');
     const fromDoc = Object.fromEntries(rows.map((r) => [r[1], Number(r[0])]));
     expect(fromDoc).toEqual(WS_CLOSE);

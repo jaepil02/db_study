@@ -2,13 +2,14 @@
 // 세 저장소를 병렬로 실제 왕복하고 저장소마다 독립 타임아웃(현행 참고 1,000 ms · 소유 07_api/10) — 전체 시간은 가장 긴 타임아웃을 넘지 않는다.
 // 확인 연결: PostgreSQL 앱 풀 · ClickHouse 앱 HTTP 클라이언트 · Redis 명령 연결(구독 연결이 아니다).
 import type { HealthBody, StoreCheckResult } from '@db-study/shared';
-import { Inject, Injectable } from '@nestjs/common';
+import { Inject, Injectable, Optional } from '@nestjs/common';
 import { ClickHouse } from '../../common/clickhouse/clickhouse.module';
 import { SwitchRegistry } from '../../common/ports/switch-registry';
 import { Postgres } from '../../common/postgres/postgres.module';
 import { RedisConnections } from '../../common/redis/connections';
-import { type AppConfig, runInfo, sensorAutogenEffective } from '../../config/app-config';
+import { type AppConfig, runInfo } from '../../config/app-config';
 import { APP_CONFIG } from '../../config/config.module';
+import { PlantRuntime } from '../plant/plant-runtime.service';
 
 export const STORE_CHECK_TIMEOUT_MS = 1000;
 
@@ -44,6 +45,8 @@ export class HealthService {
     private readonly ch: ClickHouse,
     private readonly redis: RedisConnections,
     private readonly switches: SwitchRegistry,
+    /** 설비 가동 적용(수집기 역할만 있다) — 없으면 이 프로세스는 센서 데이터를 만들지 않는다 */
+    @Optional() private readonly runtime?: PlantRuntime,
   ) {}
 
   async check(): Promise<{ httpStatus: 200 | 503; body: HealthBody }> {
@@ -61,10 +64,11 @@ export class HealthService {
         checkedAt,
         stores: { postgres, clickhouse, redis },
         switches: this.switches.snapshot(),
-        // sensorAutogen은 health에만 싣는다 — 도구 출력(bench · 모드 B · 모드 D · oltp-lab)의 runInfo에 넣으면
-        // 수집기를 띄우지 않는 별도 프로세스가 api의 SENSOR_AUTOGEN을 모른 채 자기 기본값(on)을 적는다.
-        // 값은 실효값(게이트 × 역할) — 수집기가 없는 역할(api · worker)은 게이트가 on이어도 off다(07_api/10)
-        run: { ...runInfo(this.cfg).run, sensorAutogen: sensorAutogenEffective(this.cfg) },
+        // sensorAutogen은 health에만 싣는다 — runInfo는 수집기를 띄우지 않는 프로세스도 쓰므로 거기 넣으면
+        // api의 SENSOR_AUTOGEN을 모른 채 자기 기본값(on)을 적는다.
+        // 값은 실행 중 실효값(D-16) — 이 프로세스의 설비 가동 적용(PlantRuntime)이 지금 SIM · 모드 A · 폴링을 돌리고 있으면 on.
+        // 수집기가 없는 역할(api · worker)은 적용이 없어 늘 off다(07_api/10). 기동 기본값(SENSOR_AUTOGEN)이 아니라 지금 상태다.
+        run: { ...runInfo(this.cfg).run, sensorAutogen: this.runtime?.running() ? 'on' : 'off' },
       },
     };
   }

@@ -25,6 +25,5 @@ ENV COMMIT_HASH=${COMMIT_HASH}
 # spooldata 볼륨의 마운트 지점 — 이미지에 node 소유로 두어야 빈 볼륨이 처음 붙을 때 이 소유를 물려받는다(없으면 root 소유로 생겨 쓰기 불가)
 RUN mkdir -p /app/spool && chown node:node /app/spool
 USER node
-# 기본 명령은 api 진입점(S2) · 생성기 단독 실행은 명령을 덮어쓴다(node dist/bench.js — scripts/lab/s1/gen-bench.sh)
-# migrate · seed도 같은 이미지의 명령이다(node dist/db/migrate.js · node dist/db/seed.js)
+# 기본 명령은 api 진입점(S2) · migrate · seed도 같은 이미지의 명령이다(node dist/db/migrate.js · node dist/db/seed.js)
 CMD ["node", "dist/main.js"]

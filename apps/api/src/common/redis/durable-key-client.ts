@@ -1,4 +1,5 @@
-// DurableKeyClient — 봉인 계열(stream · rt · alarm) 래퍼(ADR-13 · 정본 docs/05_data_stores/05_redis_keyspace.md §봉인 표)
+// DurableKeyClient — 봉인 계열(stream · rt · ctl) 래퍼(ADR-13 · 정본 docs/05_data_stores/05_redis_keyspace.md §봉인 표 · 알람 계열은 D-16에서 삭제)
+// ctl: 실행 중 제어 상태(D-16) — 설비 가동 ctl:plant:power 하나. 축출되면 스위치가 기동 기본값으로 몰래 돌아가므로 TTL 없는 봉인 계열이다.
 // ① TTL 인자를 받지 않는다 ② TTL 명령(EXPIRE · PEXPIRE · EXPIREAT · SETEX · SET EX/PX · HEXPIRE 계열) · KEYS · FLUSH를 노출하지 않는다
 // ③ 실패를 삼키지 않고 그대로 던진다 — stream 쓰기 실패는 스풀 전환(S6)의, rt 읽기 실패는 503의 원천이다.
 // rt:latest 쓰기는 필드 조건부 쓰기 스크립트 하나로만 한다 — 새 ts ≥ 저장 ts일 때만 바꾼다(06_pipeline/05 §덮어쓰기 순서 역전).
@@ -9,7 +10,34 @@ import { Counter } from 'prom-client';
 import { appRegistry } from '../metrics/registry';
 import { RedisConnections } from './connections';
 
-const SEALED_PREFIXES = ['stream:', 'rt:', 'alarm:'] as const;
+const SEALED_PREFIXES = ['stream:', 'rt:', 'ctl:'] as const;
+
+/** 설비 가동 실행 중 상태 — Hash(state on|off · changed_at epoch ms) · TTL 없음(D-16 · plant/plant-power.service) */
+export const PLANT_POWER_KEY = 'ctl:plant:power';
+
+export interface PlantPowerRecord {
+  state: 'on' | 'off';
+  changedAtMs: number;
+}
+
+/**
+ * 설비 가동 쓰기 — 같은 상태면 그대로 두고(바뀐 시각 유지) 다르면 둘 다 바꾼다 · 결과 [state, changed_at].
+ * 읽고 쓰는 사이에 다른 요청이 끼지 않게 스크립트 하나로 한다.
+ */
+const PLANT_POWER_WRITE = `
+local cur = redis.call('HGET', KEYS[1], 'state')
+if cur == ARGV[1] then
+  return {cur, redis.call('HGET', KEYS[1], 'changed_at')}
+end
+redis.call('HSET', KEYS[1], 'state', ARGV[1], 'changed_at', ARGV[2])
+return {ARGV[1], ARGV[2]}
+`;
+
+function plantPowerOf(state: unknown, changedAt: unknown): PlantPowerRecord | null {
+  const ms = Number(changedAt);
+  if ((state !== 'on' && state !== 'off') || !Number.isFinite(ms)) return null;
+  return { state, changedAtMs: ms };
+}
 
 function assertSealed(key: string) {
   if (!SEALED_PREFIXES.some((p) => key.startsWith(p))) {
@@ -103,6 +131,20 @@ function parseXinfoGroups(reply: unknown, group: string): GroupBacklog | null {
   return null;
 }
 
+/**
+ * XINFO STREAM 응답의 entries-added — 대기줄이 생긴 뒤 더해진 엔트리 수(Redis 7+ · 지워도 줄지 않는다).
+ * 시간 초과로 끝난 발행이 실제로 몇 개 들어갔는지 세는 기준이다(직접 비교 넣기 — 넣는 동안 이 대기줄에 쓰는 쪽은 하나).
+ */
+export function parseEntriesAdded(reply: unknown): number | null {
+  if (!Array.isArray(reply)) return null;
+  for (let i = 0; i + 1 < reply.length; i += 2) {
+    if (String(reply[i]) !== 'entries-added') continue;
+    const n = Number(reply[i + 1]);
+    return Number.isSafeInteger(n) ? n : null;
+  }
+  return null;
+}
+
 @Injectable()
 export class DurableKeyClient {
   private readonly redis: Redis;
@@ -110,6 +152,7 @@ export class DurableKeyClient {
   constructor(conns: RedisConnections) {
     this.redis = conns.command;
     this.redis.defineCommand('rtConditionalWrite', { numberOfKeys: 1, lua: CONDITIONAL_WRITE });
+    this.redis.defineCommand('plantPowerWrite', { numberOfKeys: 1, lua: PLANT_POWER_WRITE });
   }
 
   /**
@@ -137,7 +180,7 @@ export class DurableKeyClient {
   }
 
   /**
-   * 묶음 XADD — 파이프라인 1회 = XADD × n + XINFO GROUPS 1(모드 B 발행 · 엔트리마다 XINFO를 붙이면 명령 수가 두 배).
+   * 묶음 XADD — 파이프라인 1회 = XADD × n + XINFO GROUPS 1(라이브 실행 발행 · 엔트리마다 XINFO를 붙이면 명령 수가 두 배).
    * 결과는 엔트리별 ID 또는 오류 — 한 엔트리 실패(OOM 등)가 나머지의 성공을 지우지 않는다.
    */
   async xaddBatchWithBacklog(
@@ -145,17 +188,30 @@ export class DurableKeyClient {
     payloads: readonly Buffer[],
     maxlen: number,
     group: string,
-  ): Promise<{ results: (string | Error)[]; backlog: GroupBacklog | null }> {
+  ): Promise<{ results: (string | Error)[]; backlog: GroupBacklog | null; entriesAdded: number | null }> {
     assertSealed(stream);
     const pipe = this.redis.pipeline();
     for (const p of payloads) pipe.xadd(stream, 'MAXLEN', '~', maxlen, '*', STREAM_PAYLOAD_FIELD, p);
     pipe.xinfo('GROUPS', stream);
+    pipe.xinfo('STREAM', stream);
     const res = await pipe.exec();
     if (!res) throw new Error('파이프라인 응답 없음');
     const results = res.slice(0, payloads.length).map(([err, id]) => (err ? err : String(id)));
     const xinfo = res[payloads.length];
     const backlog = xinfo && !xinfo[0] ? parseXinfoGroups(xinfo[1], group) : null;
-    return { results, backlog };
+    const info = res[payloads.length + 1];
+    // 발행 뒤 entries-added — 같은 파이프라인이라 이 묶음의 XADD가 다 반영된 값(다음 묶음이 실패하면 몇 개 들어갔는지 세는 기준)
+    const entriesAdded = info && !info[0] ? parseEntriesAdded(info[1]) : null;
+    return { results, backlog, entriesAdded };
+  }
+
+  /**
+   * 대기줄에 지금까지 더해진 엔트리 수(entries-added) — 같은 명령 연결이라 앞서 보낸 XADD(시간 초과로 끝났어도 서버에 닿은 것)가
+   * 다 처리된 뒤의 값이다(한 연결의 명령은 순서대로 처리된다).
+   */
+  async streamEntriesAdded(stream: string): Promise<number | null> {
+    assertSealed(stream);
+    return parseEntriesAdded(await this.redis.xinfo('STREAM', stream));
   }
 
   /** 컨슈머 그룹 보장 — 이미 있으면 그대로(ING-01 기동 · MKSTREAM) */
@@ -310,29 +366,77 @@ export class DurableKeyClient {
     return this.redis.hget(`rt:latest:${deviceId}`, String(tagId));
   }
 
-  /** alarm:state:{rule_id} 여러 개 — 파이프라인 HGETALL 1회(A2 · REQ-ALM-07 · 06_pipeline/08 ③). 하나라도 실패하면 던진다(판정 중단) */
-  async readAlarmStates(ruleIds: readonly number[]): Promise<Map<number, Record<string, string>>> {
-    const out = new Map<number, Record<string, string>>();
-    if (ruleIds.length === 0) return out;
+  /** 설비 여럿의 최신값 — 파이프라인 1회(HGETALL × n · HMI 개요). 결과는 deviceIds 순서 · 하나라도 실패하면 던진다 */
+  async readLatestMany(deviceIds: readonly number[]): Promise<Record<string, string>[]> {
+    if (deviceIds.length === 0) return [];
     const p = this.redis.pipeline();
-    for (const id of ruleIds) p.hgetall(`alarm:state:${id}`);
+    for (const id of deviceIds) p.hgetall(`rt:latest:${id}`);
     const res = await p.exec();
     if (!res) throw new Error('파이프라인 응답 없음');
-    res.forEach(([err, v], i) => {
+    return res.map(([err, v]) => {
       if (err) throw err;
-      out.set(ruleIds[i] as number, (v ?? {}) as Record<string, string>);
+      return (v ?? {}) as Record<string, string>;
     });
-    return out;
   }
 
-  /** alarm:state:{rule_id} 여러 개 — 파이프라인 HSET 1회(06_pipeline/08 ⑥) · TTL 없음(봉인). 하나라도 실패하면 던진다 */
-  async writeAlarmStates(states: ReadonlyMap<number, Record<string, string>>): Promise<void> {
-    if (states.size === 0) return;
-    const p = this.redis.pipeline();
-    for (const [id, fields] of states) p.hset(`alarm:state:${id}`, fields);
-    const res = await p.exec();
-    if (!res) throw new Error('파이프라인 응답 없음');
-    for (const [err] of res) if (err) throw err;
+  /** 설비 몇 대의 최신값 키 지우기 — DEL rt:latest:{id}(직접 비교 시험 행 정리 · runs) · 지운 키 수 */
+  async deleteLatest(deviceIds: readonly number[]): Promise<number> {
+    if (deviceIds.length === 0) return 0;
+    return this.redis.del(...deviceIds.map((id) => `rt:latest:${id}`));
+  }
+
+  /** 최신값 키 수 — SCAN MATCH rt:latest:*(KEYS를 쓰지 않는다 · 센서 데이터 현황 · runs) */
+  async countLatestKeys(): Promise<number> {
+    return (await this.scanLatestKeys()).length;
+  }
+
+  /** 최신값 키 전부 지우기 — SCAN rt:latest:* → UNLINK 묶음(센서 데이터 지우기 · runs) · 지운 키 수 */
+  async deleteAllLatest(): Promise<number> {
+    const keys = await this.scanLatestKeys();
+    let n = 0;
+    for (let i = 0; i < keys.length; i += 500) n += await this.redis.unlink(...keys.slice(i, i + 500));
+    return n;
+  }
+
+  /** Stream 비우기 — XTRIM MAXLEN 0(엔트리만 지우고 소비 그룹 · 키는 남긴다 · 센서 데이터 지우기 · runs) · 지운 엔트리 수 */
+  async trimStreamAll(stream: string): Promise<number> {
+    assertSealed(stream);
+    return this.redis.xtrim(stream, 'MAXLEN', 0);
+  }
+
+  private async scanLatestKeys(): Promise<string[]> {
+    const out: string[] = [];
+    let cursor = '0';
+    do {
+      const [next, keys] = await this.redis.scan(cursor, 'MATCH', 'rt:latest:*', 'COUNT', 1000);
+      out.push(...keys);
+      cursor = next;
+    } while (cursor !== '0');
+    return [...new Set(out)];
+  }
+
+  // ── 실행 중 제어 상태(ctl:) — 설비 가동
+
+  /** 설비 가동 상태 — 키가 없거나 모양이 깨졌으면 null(호출자가 기동 기본값을 쓴다) · 접속 불가는 던진다 */
+  async readPlantPower(): Promise<PlantPowerRecord | null> {
+    const h = await this.redis.hgetall(PLANT_POWER_KEY);
+    return plantPowerOf(h.state, h.changed_at);
+  }
+
+  /** 설비 가동 쓰기 — 같은 상태면 바뀐 시각을 그대로 둔다 · 쓴 뒤 상태를 돌려준다 */
+  async writePlantPower(state: 'on' | 'off', changedAtMs: number): Promise<PlantPowerRecord> {
+    assertSealed(PLANT_POWER_KEY);
+    const r = (await (
+      this.redis as unknown as {
+        plantPowerWrite(k: string, ...a: string[]): Promise<[string, string | null]>;
+      }
+    ).plantPowerWrite(PLANT_POWER_KEY, state, String(changedAtMs))) as [string, string | null];
+    return plantPowerOf(r[0], r[1]) ?? { state, changedAtMs };
+  }
+
+  /** 설비 가동 키 지우기 — 수집기 역할 기동 때 한 번(이번 기동은 기동 기본값부터 · plant/plant-runtime) */
+  async clearPlantPower(): Promise<void> {
+    await this.redis.del(PLANT_POWER_KEY);
   }
 
   // ── 업무 명령 스트림(stream:biz:cmd) — 엔트리 필드 하나(c)에 봉투 JSON(06_pipeline/07 §명령 봉투)
@@ -389,7 +493,7 @@ export class DurableKeyClient {
 
 /**
  * durable_wrapper_failures_total{prefix} — DurableKeyClient가 던진 실패(10_observability/01 · REQ-GLB-09 · S5).
- * 던지는 규칙은 그대로다 — 세고 다시 던진다. 접두는 메서드가 다루는 키 계열로 고정한다(닫힌 집합 stream · rt · alarm).
+ * 던지는 규칙은 그대로다 — 세고 다시 던진다. 접두는 메서드가 다루는 키 계열로 고정한다(닫힌 집합 stream · rt · ctl).
  */
 const durableFailures = new Counter({
   name: 'durable_wrapper_failures_total',
@@ -397,9 +501,9 @@ const durableFailures = new Counter({
   labelNames: ['prefix'],
   registers: [appRegistry],
 });
-for (const prefix of ['stream', 'rt', 'alarm']) durableFailures.inc({ prefix }, 0);
+for (const prefix of ['stream', 'rt', 'ctl']) durableFailures.inc({ prefix }, 0);
 
-const METHOD_PREFIX: Record<string, 'stream' | 'rt' | 'alarm'> = {
+const METHOD_PREFIX: Record<string, 'stream' | 'rt' | 'ctl'> = {
   xaddWithBacklog: 'stream',
   xaddBatchWithBacklog: 'stream',
   ensureGroup: 'stream',
@@ -412,11 +516,18 @@ const METHOD_PREFIX: Record<string, 'stream' | 'rt' | 'alarm'> = {
   xaddBizCommand: 'stream',
   readGroupText: 'stream',
   streamLength: 'stream',
+  streamEntriesAdded: 'stream',
   writeLatestIfNewer: 'rt',
   readLatest: 'rt',
   readLatestField: 'rt',
-  readAlarmStates: 'alarm',
-  writeAlarmStates: 'alarm',
+  readLatestMany: 'rt',
+  deleteLatest: 'rt',
+  countLatestKeys: 'rt',
+  deleteAllLatest: 'rt',
+  trimStreamAll: 'stream',
+  readPlantPower: 'ctl',
+  writePlantPower: 'ctl',
+  clearPlantPower: 'ctl',
 };
 for (const [method, prefix] of Object.entries(METHOD_PREFIX)) {
   const proto = DurableKeyClient.prototype as unknown as Record<

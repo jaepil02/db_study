@@ -24,10 +24,6 @@ import type { CacheKeyClient } from '../src/common/redis/cache-key-client';
 import type { RedisConnections } from '../src/common/redis/connections';
 import type { DurableKeyClient } from '../src/common/redis/durable-key-client';
 import { loadConfig } from '../src/config/app-config';
-import { AlarmApiController } from '../src/modules/alarm/api/alarm-api.controller';
-import type { AlarmEvalsService } from '../src/modules/alarm/api/alarm-evals.service';
-import type { AlarmEventsService } from '../src/modules/alarm/api/alarm-events.service';
-import type { AlarmRulesService } from '../src/modules/alarm/api/alarm-rules.service';
 import { bizMetrics } from '../src/modules/biz/biz.metrics';
 import { bizCommandSeconds } from '../src/modules/biz/biz-api.metrics';
 import {
@@ -243,15 +239,15 @@ describe('StreamBizWriter — 대기 맵 등록 → XADD → 결과 · 상한', 
   it('XADD 실패(Redis 불가) → 503 common.postgres_unavailable · unavailable 계수 · 대기 맵 해제 · 원장 우회 없음', async () => {
     const { stream, writer } = rig(5_000);
     stream.fail = true;
-    const before = await counter('alarm.rule.create', 'unavailable');
+    const before = await counter('master.line.create', 'unavailable');
     const t0 = Date.now();
-    const e = await rejects(writer.submit(req({ kind: 'alarm.rule.create', idempotencyKey: KEY })));
+    const e = await rejects(writer.submit(req({ kind: 'master.line.create', idempotencyKey: KEY })));
     expect(Date.now() - t0).toBeLessThan(1_000); // 대기 상한까지 기다리지 않는다
     expect(e).toBeInstanceOf(BizWriteError);
     expect(e.cmdId).toBe(KEY);
     expect(e.original.code).toBe('common.postgres_unavailable');
     expect(e.original.status).toBe(503);
-    expect(await counter('alarm.rule.create', 'unavailable')).toBe(before + 1);
+    expect(await counter('master.line.create', 'unavailable')).toBe(before + 1);
     expect(writer.pendingCount()).toBe(0);
   });
 
@@ -614,15 +610,9 @@ describe('Idempotency-Key — 형식 검사 · 응답 헤더 되싣기', () => {
   });
 });
 
-describe('쓰기 표면 14 → 포트(kind · params · body) · 검증은 포트 전에 끝난다', () => {
+describe('쓰기 표면 11 → 포트(kind · params · body) · 검증은 포트 전에 끝난다', () => {
   const port = new FakePort();
   const master = new MasterController({} as MasterReadService, port);
-  const alarm = new AlarmApiController(
-    {} as AlarmEventsService,
-    {} as AlarmRulesService,
-    {} as AlarmEvalsService,
-    port,
-  );
   it('각 표면이 자기 kind 하나 · 경로 식별자는 params.id', async () => {
     const q = reqWith();
     const run = async (fn: (res: FastifyReply) => Promise<unknown> | unknown) => fn(fakeReply().reply);
@@ -636,14 +626,12 @@ describe('쓰기 표면 14 → 포트(kind · params · body) · 검증은 포�
         res,
       ),
     );
-    await run((res) => alarm.ack('42', q, res));
-    await run((res) => alarm.patchRule('5', { enabled: false }, q, res));
+    await run((res) => master.patchDevice('42', { deviceName: '프레스 2' }, q, res));
     expect(port.calls.map((c) => [c.kind, c.params])).toEqual([
       ['master.tag.deactivate', { id: 7 }],
       ['master.site.patch', { id: 2 }],
       ['master.modbus.put', { id: 3 }],
-      ['alarm.event.ack', { id: 42 }],
-      ['alarm.rule.patch', { id: 5 }],
+      ['master.device.patch', { id: 42 }],
     ]);
     expect(port.calls[0]?.body).toBeUndefined();
     expect(port.calls[1]?.body).toEqual({ siteName: '구미2' });
@@ -653,7 +641,7 @@ describe('쓰기 표면 14 → 포트(kind · params · body) · 검증은 포�
     const n = port.calls.length;
     expect(() => master.createSite({ siteCode: 1 }, reqWith(), fakeReply().reply)).toThrow(ApiError);
     expect(() => master.patchTag('abc', {}, reqWith(), fakeReply().reply)).toThrow(ApiError);
-    expect(() => alarm.ack('0', reqWith(), fakeReply().reply)).toThrow(ApiError);
+    expect(() => master.deactivate('0', reqWith(), fakeReply().reply)).toThrow(ApiError);
     expect(port.calls.length).toBe(n);
   });
 });

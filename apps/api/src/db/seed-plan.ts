@@ -1,58 +1,171 @@
-// 시드 구성 — 모양 정본 docs/05_data_stores/09_migrations_seed.md §시드 · 티어별 구성 docs/06_pipeline/10_datagen_inject.md §티어 시드 구성
-// S2 판정(사용자 결정 2026-09-24): 티어 시드와 S2 슬라이스(설비 1 · 태그 8 — 티어 S의 부분 구성) 두 가지.
-import { randomBytes } from 'node:crypto';
-import { CAPACITY_TIERS, type CapacityTier } from '@db-study/shared';
+// 시드 구성 — 모양 정본 docs/05_data_stores/09_migrations_seed.md §시드
+// 두 종류: 카드 라인(card-line · 로컬 기본 — 라인 3 × 공정 10 = 설비 30 · 태그 129 · D-16 결정 3)과 S2 슬라이스(설비 1 · 태그 8 — 시험 · 빈 DB 기동용).
+// 카드 라인의 설비 · 태그 정의 정본은 packages/shared/src/card-line.ts — 시드는 그 템플릿을 그대로 tag_master 행으로 옮긴다.
+// 티어 시드(S · M · L) · 계정 · 역할 시드는 D-16에서 측정 도구 · 로그인과 함께 삭제.
+import {
+  CARD_LINES,
+  CARD_PROCESSES,
+  CARD_SITE,
+  type CardTagDataType,
+  cardDeviceCode,
+  cardTagCode,
+  type TagKind,
+} from '@db-study/shared';
+import { DATA_TYPE_WORDS } from '../modules/collector/decode';
 
 export const SIM_BASE_PORT = 5020; // PlcSim 대역 5020~5119(REQ-SIM-01)
-export const SEED_SCAN_RATE_MS: Record<CapacityTier, number> = { S: 1000, M: 1000, 'M+': 100, L: 100 };
+/** PlcSim 대역의 설비 수 상한(5020~5119) */
+export const SIM_PORT_SLOTS = 100;
 
-export type SeedTarget = { kind: 'tier'; tier: CapacityTier } | { kind: 'slice' };
+export type SeedTarget = { kind: 'slice' } | { kind: 'card-line' };
 
-export interface SeedPlan {
-  label: string;
-  devices: number;
-  tagsPerDevice: number;
+export interface SeedTag {
+  tagCode: string;
+  tagName: string;
+  /** FC03 holding 레지스터 시작 주소 — 설비 안에서 형식 워드 수만큼 연속(갭 0) */
+  address: number;
+  dataType: CardTagDataType;
+  /** 2워드 형식(FLOAT32 · UINT32)은 ABCD · 1워드(UINT16)는 NULL(tag_master CHECK) */
+  wordOrder: 'ABCD' | null;
+  unit: string;
   scanRateMs: number;
-}
-
-export function seedPlan(t: SeedTarget): SeedPlan {
-  if (t.kind === 'slice') return { label: 'S2 슬라이스', devices: 1, tagsPerDevice: 8, scanRateMs: 1000 };
-  const c = CAPACITY_TIERS[t.tier];
-  return {
-    label: `티어 ${t.tier}`,
-    devices: c.devices,
-    tagsPerDevice: c.tagsPerDevice,
-    scanRateMs: SEED_SCAN_RATE_MS[t.tier],
-  };
+  rangeMin: number | null;
+  rangeMax: number | null;
+  /** tag_master.tag_kind — 슬라이스는 NULL */
+  tagKind: TagKind | null;
 }
 
 export interface SeedDevice {
   deviceCode: string;
   deviceName: string;
+  vendor: string | null;
+  model: string | null;
   port: number;
-  tags: { tagCode: string; tagName: string; address: number }[];
+  tags: SeedTag[];
 }
 
-/** 설비 코드 연번 · 루프백 host · port 5020부터 · 태그는 FC03 · 연속 주소(FLOAT32 = 2워드 · 갭 0) */
-export function seedDevices(p: SeedPlan): SeedDevice[] {
-  if (p.devices > 100) throw new Error('PlcSim 대역(5020~5119)을 넘는 설비 수');
-  return Array.from({ length: p.devices }, (_, d) => ({
-    deviceCode: `DEV-${String(d + 1).padStart(3, '0')}`,
-    deviceName: `시뮬레이션 설비 ${d + 1}`,
-    port: SIM_BASE_PORT + d,
-    tags: Array.from({ length: p.tagsPerDevice }, (_, i) => ({
-      tagCode: `DEV-${String(d + 1).padStart(3, '0')}-T${String(i + 1).padStart(3, '0')}`,
-      tagName: `태그 ${i + 1}`,
-      address: i * 2,
-    })),
+export interface SeedLine {
+  lineCode: string;
+  lineName: string;
+  devices: SeedDevice[];
+}
+
+export interface SeedLayout {
+  label: string;
+  site: { code: string; name: string };
+  lines: SeedLine[];
+}
+
+/** 템플릿 순서대로 주소를 잇는다 — 다음 태그 주소 = 앞 태그 주소 + 앞 태그 워드 수 */
+function withAddresses<T extends { dataType: CardTagDataType }>(
+  tags: readonly T[],
+): (T & { address: number })[] {
+  let next = 0;
+  return tags.map((t) => {
+    const address = next;
+    next += DATA_TYPE_WORDS[t.dataType];
+    return { ...t, address };
+  });
+}
+
+/** 카드 라인 — 라인 L1~L3 × 공정 10 · 포트 5020 + 순번(라인 순 → 공정 순) · 설비 이름 '라인 1 인쇄' · vendor SIM · model 공정 코드 */
+function cardLineLayout(): SeedLayout {
+  let slot = 0;
+  const lines = CARD_LINES.map((line) => ({
+    lineCode: line.code,
+    lineName: line.name,
+    devices: [...CARD_PROCESSES]
+      .sort((a, b) => a.order - b.order)
+      .map((p) => {
+        const deviceCode = cardDeviceCode(line.code, p.code);
+        const port = SIM_BASE_PORT + slot;
+        slot += 1;
+        return {
+          deviceCode,
+          deviceName: `${line.name} ${p.name}`,
+          vendor: 'SIM',
+          model: p.code,
+          port,
+          tags: withAddresses(p.tags).map(
+            (t): SeedTag => ({
+              tagCode: cardTagCode(deviceCode, t.suffix),
+              tagName: t.name,
+              address: t.address,
+              dataType: t.dataType,
+              wordOrder: DATA_TYPE_WORDS[t.dataType] > 1 ? 'ABCD' : null,
+              unit: t.unit,
+              scanRateMs: t.scanRateMs,
+              rangeMin: t.rangeMin,
+              rangeMax: t.rangeMax,
+              tagKind: t.kind,
+            }),
+          ),
+        };
+      }),
   }));
+  return { label: '카드 라인(라인 3 × 공정 10)', site: { ...CARD_SITE }, lines };
 }
 
-/** 모든 태그에 같은 값으로 거는 시드 옵션 — 데드밴드(SW-10 실험) · 범위(BAD_RANGE 실험 · AC-08) */
+/** S2 슬라이스 — 설비 1 · 태그 8 · FLOAT32 ABCD · 1초 · 단위 · 범위 · 종류 없음(범위는 --range가 건다) */
+function sliceLayout(): SeedLayout {
+  const deviceCode = 'DEV-001';
+  return {
+    label: 'S2 슬라이스',
+    site: { code: 'SITE-001', name: '시뮬레이션 사이트' },
+    lines: [
+      {
+        lineCode: 'LINE-001',
+        lineName: '시뮬레이션 라인',
+        devices: [
+          {
+            deviceCode,
+            deviceName: '시뮬레이션 설비 1',
+            vendor: null,
+            model: null,
+            port: SIM_BASE_PORT,
+            tags: Array.from({ length: 8 }, (_, i) => ({
+              tagCode: `${deviceCode}-T${String(i + 1).padStart(3, '0')}`,
+              tagName: `태그 ${i + 1}`,
+              address: i * 2,
+              dataType: 'FLOAT32' as const,
+              wordOrder: 'ABCD' as const,
+              unit: '',
+              scanRateMs: 1000,
+              rangeMin: null,
+              rangeMax: null,
+              tagKind: null,
+            })),
+          },
+        ],
+      },
+    ],
+  };
+}
+
+export function seedLayout(t: SeedTarget): SeedLayout {
+  const layout = t.kind === 'card-line' ? cardLineLayout() : sliceLayout();
+  const devices = layout.lines.reduce((n, l) => n + l.devices.length, 0);
+  if (devices > SIM_PORT_SLOTS) throw new Error('PlcSim 대역(5020~5119)을 넘는 설비 수');
+  return layout;
+}
+
+/** 시드 대상 — --card-line · --slice s2 · 둘 다 없으면 카드 라인(로컬 기본) */
+export function parseSeedTarget(argv: readonly string[]): SeedTarget {
+  const card = argv.includes('--card-line');
+  const s = argv.indexOf('--slice');
+  if (card && s >= 0) throw new Error('--card-line과 --slice는 함께 쓰지 않는다');
+  if (s >= 0) {
+    if (argv[s + 1] === 's2') return { kind: 'slice' };
+    throw new Error('사용: seed [--card-line | --slice s2]');
+  }
+  return { kind: 'card-line' };
+}
+
+/** 모든 태그에 같은 값으로 거는 시드 옵션 — 데드밴드(SW-10 실험) · 범위(BAD_RANGE 실험 · AC-08 — 슬라이스 전용) */
 export interface SeedOptions {
   /** tag_master.deadband — 공학 단위 절대값 · 기본 0(= 데드밴드 없음) */
   deadband: number;
-  /** tag_master.range_min · range_max — 기본 NULL(범위 판정 없음) */
+  /** tag_master.range_min · range_max — 기본 NULL(범위 판정 없음) · 카드 라인은 템플릿 범위를 쓰므로 거부한다 */
   range: { min: number; max: number } | null;
 }
 
@@ -89,76 +202,45 @@ export function parseSeedOptions(argv: readonly string[]): SeedOptions {
   return { deadband, range };
 }
 
-/**
- * --scan-rate <ms>(S5 판정 6 · 모드 A 계단) — 티어 시드의 모든 태그 tag_master.scan_rate_ms · 없으면 null(티어 기본).
- * 제약은 CHECK(scan_rate_ms > 0)와 같고 정수 ms다 — 모드 A 틱 · Collector 폴링 격자가 정수 ms다.
- */
-export function parseScanRate(argv: readonly string[]): number | null {
-  const sr = optValue(argv, '--scan-rate');
-  if (sr === null) return null;
-  const v = Number(sr);
-  if (!(Number.isInteger(v) && v > 0 && v <= 3_600_000))
-    throw new Error(`--scan-rate ${sr} — 1~3,600,000 정수(ms)`);
-  return v;
-}
-
-/** 티어 시드의 모든 태그에 거는 scan_rate_ms — --scan-rate가 있으면 그 값 */
-export function effectiveScanRateMs(p: SeedPlan, scanRateMs: number | null): number {
-  return scanRateMs ?? p.scanRateMs;
-}
-
-/** seed 완료 줄에 싣는 옵션 문장 — 측정 기록이 시드 조건을 로그에서 읽는다(scan_rate_ms는 완료 줄이 따로 싣는다) */
-export function describeSeedOptions(o: SeedOptions): string {
-  return `deadband ${o.deadband} · range ${o.range ? `${o.range.min},${o.range.max}` : 'NULL'}`;
-}
-
-// ── S7 ① 계정 · 역할 시드 — 정본 docs/05_data_stores/09_migrations_seed.md §S7 ① 계정 · 역할 시드(행 7 = 역할 3 + 계정 1 + 부여 3)
-
-/** 이 순서로 넣어 IDENTITY role_id가 빈 볼륨마다 같다(OPERATOR 1 · ENGINEER 2 · ADMIN 3) */
-export const SEED_ROLES = ['OPERATOR', 'ENGINEER', 'ADMIN'] as const;
-/** 학습자 계정 email — 리드 판정 2026-09-26(비밀이 아닌 설계 값) · ALARM_ACK_ACTOR_EMAIL 값은 이 값과 같아야 한다 */
-export const SEED_LEARNER_EMAIL = 'learner@localhost';
-/** .env.example 자리표시(infra/init-env.sh) — 이 값이거나 비었으면 seed 거부(12_security/02 §자리표시 비밀로는 기동하지 않는다) */
-export const SECRET_PLACEHOLDER = 'CHANGE_ME';
-
-/** SEED_USER_PASSWORD — 트랜잭션 전에 거부한다. 원문은 로그 · 에러 문장에 싣지 않는다 */
-export function seedUserPassword(env: NodeJS.ProcessEnv = process.env): string {
-  const v = env.SEED_USER_PASSWORD;
-  if (!v || v === SECRET_PLACEHOLDER)
-    throw new Error('SEED_USER_PASSWORD가 비었거나 자리표시다 — seed 거부(.env에 학습자 비밀번호를 정한다)');
-  return v;
+/** 대상 × 옵션 — 카드 라인은 템플릿 범위가 정본이라 --range를 받지 않는다(태그마다 범위가 다르다) */
+export function assertSeedOptionsFor(t: SeedTarget, o: SeedOptions): void {
+  if (t.kind === 'card-line' && o.range !== null)
+    throw new Error('--range는 슬라이스 전용 — 카드 라인은 템플릿(card-line.ts)의 태그별 범위를 쓴다');
 }
 
 /**
- * 비밀번호 해시 — 알고리즘 Argon2id(판정 12_security/01) · 결과는 자기 기술 문자열($argon2id$v=19$m=…,t=…,p=…$salt$hash).
- * 비용 파라미터 값은 2계층 미정(12_security/01 §미확인) — 구현이 고른 값이 문자열에 남는다.
+ * seed 완료 줄에 싣는 옵션 문장 — 시드 조건을 로그에서 읽는다(scan_rate_ms는 완료 줄이 따로 싣는다).
+ * range는 실제로 넣은 값대로 — --range면 그 값(모든 태그) · 아니면 템플릿 범위(카드 라인 — 태그별 · 수량은 하한 0만) · 범위가 없으면 NULL.
  */
-export interface PasswordHasher {
-  hash(plain: string): Promise<string>;
+export function describeSeedOptions(o: SeedOptions, layout: SeedLayout): string {
+  return `deadband ${o.deadband} · range ${o.range ? `${o.range.min},${o.range.max}` : describeTemplateRanges(layout)}`;
 }
 
-/** 자기 기술 문자열이 Argon2id인가 — 다른 알고리즘 해시가 user_account에 들어가는 것을 막는다 */
-export function isArgon2idEncoded(h: string): boolean {
-  return /^\$argon2id\$v=\d+\$m=\d+,t=\d+,p=\d+\$[A-Za-z0-9+/]+\$[A-Za-z0-9+/]+$/.test(h);
+/** 템플릿 범위 — 전부 없으면 'NULL' · 아니면 '태그별(템플릿 — 양끝 90 · 하한만 39)'처럼 모양별 태그 수 */
+function describeTemplateRanges(layout: SeedLayout): string {
+  const n = { 양끝: 0, 하한만: 0, 상한만: 0, NULL: 0 };
+  for (const l of layout.lines)
+    for (const d of l.devices)
+      for (const t of d.tags) {
+        if (t.rangeMin !== null && t.rangeMax !== null) n.양끝++;
+        else if (t.rangeMin !== null) n.하한만++;
+        else if (t.rangeMax !== null) n.상한만++;
+        else n.NULL++;
+      }
+  if (n.NULL === n.양끝 + n.하한만 + n.상한만 + n.NULL) return 'NULL';
+  const parts = Object.entries(n)
+    .filter(([, c]) => c > 0)
+    .map(([k, c]) => `${k} ${c}`);
+  return `태그별(템플릿 — ${parts.join(' · ')})`;
 }
 
-/**
- * Argon2id — hash-wasm(순수 WASM · alpine 네이티브 빌드 없음 · 버전 고정 09_tech_stack/03 "비밀번호 해시 라이브러리(Argon2id)" 행).
- * 비용 파라미터(2계층 · 소유 12_security/01): 현행 OWASP Password Storage Cheat Sheet 최소 구성 m = 19 MiB · t = 2 · p = 1 · 솔트 16바이트.
- * 출력은 자기 기술 문자열($argon2id$v=19$m=…) — 로그인(S7 ②)은 같은 문자열에서 파라미터를 읽어 검증한다.
- */
-export const ARGON2ID_PARAMS = { memorySize: 19_456, iterations: 2, parallelism: 1, hashLength: 32 } as const;
-
-export function argon2idHasher(): PasswordHasher {
-  return {
-    async hash(plain: string): Promise<string> {
-      const { argon2id } = await import('hash-wasm');
-      return argon2id({
-        password: plain,
-        salt: randomBytes(16),
-        ...ARGON2ID_PARAMS,
-        outputType: 'encoded',
-      });
-    },
-  };
+/** 시드의 태그 주기 구성 — 완료 줄 문장(예 '100 ms 6 · 200 ms 12 · 1000 ms 111') */
+export function describeScanRates(layout: SeedLayout): string {
+  const by = new Map<number, number>();
+  for (const l of layout.lines)
+    for (const d of l.devices) for (const t of d.tags) by.set(t.scanRateMs, (by.get(t.scanRateMs) ?? 0) + 1);
+  return [...by.entries()]
+    .sort((a, b) => a[0] - b[0])
+    .map(([ms, n]) => `${ms} ms ${n}`)
+    .join(' · ');
 }

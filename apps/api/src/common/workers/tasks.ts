@@ -1,30 +1,9 @@
 // piscina 작업 파일 — 프로세스당 풀 하나를 모듈이 공유한다(09_tech_stack/02 §워커 풀 · ADR-25)
 // 격리 대상(04_architecture/02 §worker_threads 격리 대상): 신호 벡터 생성 · 대량 인코딩 · MessagePack 해제 · gzip.
-// 작업 종류는 piscina의 name 옵션으로 고른다 — 기본(default)은 S1 생성 창이다.
+// 작업 종류는 piscina의 name 옵션으로 고른다 — 기본(default) 작업은 두지 않는다(생성기 단독 처리량 창은 측정 도구와 함께 D-16에서 삭제).
 import { gunzipSync, gzipSync } from 'node:zlib';
 import { decodeEntry, StreamEntryV1Consumer, UnknownSchemaVersionError } from '@db-study/shared';
-import Piscina from 'piscina';
-import { generateWindow, type WindowResult, type WindowTask } from '../../modules/datagen/signal/window';
 import { type ReduceResult, type ReduceTask, reduceSeries } from '../../modules/timeseries/downsample';
-
-class MovedResult {
-  constructor(private readonly r: WindowResult) {}
-  get [Piscina.transferableSymbol]() {
-    return [this.r.payload.buffer, this.r.offsets.buffer, this.r.state.buffer, this.r.pointsByProfile.buffer];
-  }
-  get [Piscina.valueSymbol]() {
-    return this.r;
-  }
-}
-
-/** 생성 창(S1 · GEN-09) — 큰 배열은 복사하지 않고 소유권을 넘긴다 */
-export default function window(task: WindowTask): unknown {
-  const t0 = performance.now();
-  const r = generateWindow(task);
-  r.busyMs = performance.now() - t0; // 워커 사용률의 분자 — 작업 실행 시간
-  // piscina 타입 선언의 전송 심볼이 unique symbol이 아니어서 캐스트한다(런타임 계약은 같다)
-  return Piscina.move(new MovedResult(r) as unknown as Parameters<typeof Piscina.move>[0]);
-}
 
 export interface DecodeTask {
   payloads: Uint8Array[];

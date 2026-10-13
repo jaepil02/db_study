@@ -20,7 +20,7 @@ export function idempotencyKeyOf(req: FastifyRequest): string | null {
   return v.toLowerCase();
 }
 
-/** 요청자 user_id — 인증 도입(S7 ②) 전은 null(봉투 · 원장 · 결과 키 actor · 명령 조회 대조 기준) */
+/** 요청자 — 로그인 기능이 없어 늘 null(D-16 · 봉투 · 원장 · 결과 키 actor · 명령 조회 대조 기준) */
 export function requestActor(_req: FastifyRequest): number | null {
   return null;
 }

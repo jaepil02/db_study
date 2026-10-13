@@ -23,7 +23,7 @@ export interface BizApplyOutcome {
 }
 
 /**
- * kind → 기존 쓰기 서비스. 명령 하나 = 트랜잭션 하나(업무 행 · audit_log).
+ * kind → 기존 쓰기 서비스. 명령 하나 = 트랜잭션 하나(업무 행).
  * ledger가 true면 **같은 트랜잭션 안 COMMIT 직전**에 biz_command_log APPLIED 행을 넣는다(멱등의 유일한 근거).
  * 도메인 오류(UNIQUE · FK · CHECK · 조건부 갱신)는 ApiError를 던진다(트랜잭션은 롤백됨 · trace는 err.trace로 붙일 수 있다).
  * PostgreSQL 불가는 ApiError common.postgres_unavailable.
@@ -34,12 +34,12 @@ export interface BizHandlers {
 }
 export const BIZ_HANDLERS = Symbol('BIZ_HANDLERS');
 
-/** 표면이 포트에 넘기는 요청 — 스키마 검증 · 인가가 끝난 값 */
+/** 표면이 포트에 넘기는 요청 — 스키마 검증이 끝난 값 */
 export interface BizWriteRequest {
   kind: BizKind;
   params: Record<string, number | string>;
   body?: unknown;
-  /** 요청자 user_id · 인증 전 null */
+  /** 요청자 — 로그인 기능이 없어 늘 null(D-16) */
   actor: number | null;
   /** 요청 헤더 Idempotency-Key(UUID 형식 검사는 표면이 끝냈다) · 없으면 null(stream이면 포트가 발급) */
   idempotencyKey: string | null;

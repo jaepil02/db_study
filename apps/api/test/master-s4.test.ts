@@ -82,7 +82,7 @@ describe('태그 PATCH 세 갈래 — 수정 가능 · 스케일 409 · 불변 4
     expect(await code(harness().svc.patchTag(7, { scale: 2 }))).toBe('master.scale_change_forbidden');
     const h = harness();
     await h.svc.patchTag(7, { scale: 1, offsetValue: 0 });
-    expect(h.log).not.toContain('INSERT INTO audit_log');
+    expect(h.log).not.toContain('UPDATE tag_master SET');
     expect(h.chains).toEqual([]);
   });
 
@@ -92,12 +92,12 @@ describe('태그 PATCH 세 갈래 — 수정 가능 · 스케일 409 · 불변 4
     expect(h.log).toEqual([]);
   });
 
-  it('바뀐 필드가 있으면 UPDATE → 감사 → COMMIT → 체인(② ③ ④) 순서', async () => {
+  it('바뀐 필드가 있으면 UPDATE → COMMIT → 체인(② ③ ④) 순서', async () => {
     const h = harness();
     await h.svc.patchTag(7, { tagName: '온도-1' });
     const i = (x: string) => h.log.findIndex((l) => l.startsWith(x));
-    expect(i('UPDATE tag_master SET')).toBeLessThan(i('INSERT INTO audit_log'));
-    expect(i('INSERT INTO audit_log')).toBeLessThan(i('COMMIT'));
+    expect(i('UPDATE tag_master SET')).toBeGreaterThan(-1);
+    expect(i('UPDATE tag_master SET')).toBeLessThan(i('COMMIT'));
     expect(i('COMMIT')).toBeLessThan(i('CHAIN'));
     expect(h.chains).toEqual([{ tagIds: [7], reloadDictionary: true }]);
   });
@@ -111,11 +111,11 @@ describe('태그 PATCH 세 갈래 — 수정 가능 · 스케일 409 · 불변 4
 });
 
 describe('논리 삭제 · 새 태그 발급', () => {
-  it('이미 비활성이면 변경 · 감사 · 체인 없이 200', async () => {
+  it('이미 비활성이면 변경 · 체인 없이 200', async () => {
     const h = harness({ tag: { ...TAG_ROW, is_active: false } });
     const r = await h.svc.deactivateTag(7);
     expect(r.isActive).toBe(false);
-    expect(h.log).not.toContain('INSERT INTO audit_log');
+    expect(h.log).not.toContain('UPDATE tag_master SET');
     expect(h.chains).toEqual([]);
   });
 
@@ -126,12 +126,15 @@ describe('논리 삭제 · 새 태그 발급', () => {
     );
   });
 
-  it('변환식이 현재와 같으면 400 · 다르면 한 트랜잭션(발급 · 비활성 · 이력 · 감사 2) + 두 tag_id 체인', async () => {
+  it('변환식이 현재와 같으면 400 · 다르면 한 트랜잭션(발급 · 비활성 · 이력) + 두 tag_id 체인', async () => {
     expect(await code(harness().svc.reissueTag(7, { newTagCode: 'N' }))).toBe('common.validation_failed');
     const h = harness();
     const r = await h.svc.reissueTag(7, { newTagCode: 'N', scale: 1.8, offsetValue: 32, unit: '℉' });
     expect(r).toMatchObject({ oldTagId: 7, historyId: 9, newTag: { tagId: 100 } });
-    expect(h.log.filter((l) => l === 'INSERT INTO audit_log')).toHaveLength(2);
+    const i = (x: string) => h.log.findIndex((l) => l.startsWith(x));
+    expect(i('INSERT INTO tag_master_history')).toBeGreaterThan(i('UPDATE tag_master SET'));
+    expect(i('INSERT INTO tag_master_history')).toBeLessThan(i('COMMIT'));
+    expect(h.log.some((l) => l.includes('audit'))).toBe(false);
     expect(h.chains).toEqual([{ tagIds: [100, 7], reloadDictionary: true }]);
   });
 

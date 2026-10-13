@@ -24,7 +24,7 @@ export const ingestMetrics = {
     registers: reg,
   }),
   rowsInserted: new Counter({ name: 'rows_inserted', help: 'tag_raw에 쓰인 행', registers: reg }),
-  // ING-10 분기 대조의 원천 — S3는 layer raw(① 원시 적재)만 · alarm(② 판정기 인계)은 S7
+  // ING-10 분기 대조의 원천 — layer raw(원시 적재)만(알람 판정 인계 계층은 D-16에서 삭제)
   routedRows: new Counter({
     name: 'ing_routed_rows_total',
     help: '분기 계층별 쓰기 결과(행)',
@@ -95,6 +95,11 @@ export const ingestMetrics = {
   controlCopyFailures: new Counter({
     name: 'ing_control_copy_failures_total',
     help: '대조군 COPY 실패 배치(SW-09)',
+    registers: reg,
+  }),
+  controlCopyRetries: new Counter({
+    name: 'ing_control_copy_retries_total',
+    help: '대조군 COPY 다시 보내기 — 결과를 모르는 실패(시간 초과 · 연결 오류) 뒤 같은 배치를 새 커넥션으로(SW-09)',
     registers: reg,
   }),
   controlCopySeconds: new Histogram({

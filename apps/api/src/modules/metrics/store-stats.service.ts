@@ -216,7 +216,7 @@ export class StoreStatsService implements OnApplicationBootstrap, OnModuleDestro
   // ─────────── PostgreSQL ───────────
 
   pgGroups(): SeriesGroup[] {
-    // 수집 쿼리 상한 — 크기 함수가 TRUNCATE · DROP(모드 D ⑧ · 대조군 정리)의 AccessExclusiveLock 뒤에서 기다리면
+    // 수집 쿼리 상한 — 크기 함수가 TRUNCATE · DROP(대조군 파티션 정리 등)의 AccessExclusiveLock 뒤에서 기다리면
     // 수집 한 번이 끝나지 않아 세 저장소 계열이 함께 멈춘다(검수 #8). 트랜잭션 안 SET LOCAL로 그 쿼리만 끊고 그 계열만 비운다.
     const q = async <R>(sql: string, params: unknown[] = []): Promise<R[]> => {
       const client = await this.pg.pool.connect();
@@ -274,7 +274,9 @@ export class StoreStatsService implements OnApplicationBootstrap, OnModuleDestro
         clear: () => clearMetric(pgMetrics.statementTopMean),
       }),
       series({
-        // 파티션(대조군 일 · alarm_event 월)은 파티션 트리 최상위 부모 이름으로 합산 — table 레이블은 고정 기준 15
+        // 선언 분할 파티션은 파티션 트리 최상위 부모 이름으로 합산 — table 레이블은 고정 기준 PG_TABLES.
+        // TimescaleDB hypertable(비교 사본 · ADR-32)은 칸이 _timescaledb_internal에 있고 압축 데이터는 칸 표 밖에 있어 따로 센다 —
+        // 크기 hypertable_detailed_size(압축 포함) · 행 approximate_row_count(압축 포함) · 죽은 행 · 청소 횟수는 칸 표 합(압축 표 제외)
         name: 'tables',
         fetch: () =>
           q<PgTableRow>(
@@ -287,7 +289,24 @@ export class StoreStatsService implements OnApplicationBootstrap, OnModuleDestro
                FROM pg_stat_user_tables s
                JOIN pg_class r ON r.oid = coalesce(pg_partition_root(s.relid), s.relid)
               WHERE s.schemaname = 'public' AND r.relname = ANY($1::text[])
-              GROUP BY r.relname`,
+                AND NOT EXISTS (SELECT 1 FROM timescaledb_information.hypertables h
+                                 WHERE h.hypertable_schema = 'public' AND h.hypertable_name = r.relname)
+              GROUP BY r.relname
+             UNION ALL
+             SELECT h.hypertable_name,
+                    approximate_row_count(format('%I.%I', h.hypertable_schema, h.hypertable_name)::regclass),
+                    st.dead, st.autovac,
+                    coalesce(d.table_bytes + d.toast_bytes, 0)::bigint,
+                    coalesce(d.index_bytes, 0)::bigint
+               FROM timescaledb_information.hypertables h
+              CROSS JOIN LATERAL hypertable_detailed_size(format('%I.%I', h.hypertable_schema, h.hypertable_name)::regclass) d
+              CROSS JOIN LATERAL (
+                SELECT coalesce(sum(s.n_dead_tup), 0)::bigint AS dead, coalesce(sum(s.autovacuum_count), 0)::bigint AS autovac
+                  FROM timescaledb_information.chunks c
+                  JOIN pg_stat_user_tables s ON s.schemaname = c.chunk_schema AND s.relname = c.chunk_name
+                 WHERE c.hypertable_schema = h.hypertable_schema AND c.hypertable_name = h.hypertable_name
+              ) st
+              WHERE h.hypertable_schema = 'public' AND h.hypertable_name = ANY($1::text[])`,
             [[...PG_TABLES]],
           ),
         apply: applyPgTables,
