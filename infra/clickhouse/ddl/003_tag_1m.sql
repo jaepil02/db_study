@@ -1,4 +1,4 @@
--- 004 — tag_1m 분 롤업(정본 docs/05_data_stores/04_clickhouse_rollup.md §tag_1m) — 윈도우는 종속 MV 중복 제거 설정과 한 쌍(ADR-14 보강)
+-- 003 — tag_1m 분 롤업(정본 docs/05_data_stores/04_clickhouse_rollup.md §tag_1m) — 윈도우는 종속 MV 중복 제거 설정과 한 쌍(ADR-14 보강)
 CREATE TABLE IF NOT EXISTS plc.tag_1m
 (
     bucket    DateTime('UTC') CODEC(Delta(4), ZSTD(1)),

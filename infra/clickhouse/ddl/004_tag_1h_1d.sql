@@ -1,4 +1,4 @@
--- 005 — tag_1h · tag_1d(정본 docs/05_data_stores/04_clickhouse_rollup.md §tag_1h · tag_1d · 상위 MV) — 구조는 tag_1m과 같다(MV 제약 #6)
+-- 004 — tag_1h · tag_1d(정본 docs/05_data_stores/04_clickhouse_rollup.md §tag_1h · tag_1d · 상위 MV) — 구조는 tag_1m과 같다(MV 제약 #6)
 CREATE TABLE IF NOT EXISTS plc.tag_1h AS plc.tag_1m
 ENGINE = AggregatingMergeTree
 PARTITION BY toYYYYMM(bucket)

@@ -1,7 +1,6 @@
--- 007 — 대조군 plc_tag_raw_control(정본 docs/05_data_stores/10_olap_vs_rdb_control.md §동형 설계 DDL · §인덱스 변형 I1)
--- 컬럼 순서는 정렬 여백 0(8바이트 4 → 4바이트 2 → 2바이트 1) · PK · UNIQUE · FK 없음(비교 축 오염 방지)
--- 일 파티션 · 경계 Asia/Seoul 자정(DB 기본 timezone) · 보존 tag_raw와 같은 7일 · 파티션 DROP(08_retention_lifecycle #12 · 정리 주체 app_owner)
--- 인덱스 변형 I2(btree device_id · tag_id · ts)는 실험 조건이라 여기서 만들지 않는다.
+-- 004 — 대조군 plc_tag_raw_control(정본 docs/05_data_stores/10_olap_vs_rdb_control.md §동형 설계 DDL · §인덱스 변형 I1)
+-- 컬럼 순서는 정렬 여백 0(8바이트 4 → 4바이트 2 → 2바이트 1) · PK · UNIQUE · FK 없음 — 웨이브 2가 비교 실험 모양으로 고친다(지침서 §D).
+-- 일 파티션 · 경계 UTC 자정(001의 DB 기본 timezone · ADR-27) · 보존 tag_raw와 같은 7일 · 파티션 DROP(08_retention_lifecycle · 정리 주체 app_owner)
 
 -- Up Migration
 SET ROLE app_owner;

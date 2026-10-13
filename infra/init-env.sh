@@ -6,18 +6,16 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 
 cat > .env.example <<'EOF'
-# db_study 환경변수 견본 — 이름의 정본은 docs/09_tech_stack/04_local_environment.md §환경변수(34개)
+# db_study 환경변수 견본 — 이름의 정본은 docs/09_tech_stack/04_local_environment.md §환경변수
 # 이 파일에는 비밀 값을 두지 않는다. infra/init-env.sh가 이 견본으로 .env를 만든다(.env는 커밋하지 않는다).
 
-# ── 비밀 9 — 저장소 6종 · 서명 키는 난수, 학습자 · Grafana 비밀번호는 사람이 정한다
-JWT_SIGNING_KEY=CHANGE_ME
+# ── 비밀 7 — 저장소 6종은 난수, Grafana 비밀번호는 사람이 정한다(로그인 · 계정은 D-16에서 삭제 — 서명 키 · 학습자 비밀번호 없음)
 POSTGRES_ADMIN_PASSWORD=CHANGE_ME
 APP_OWNER_PASSWORD=CHANGE_ME
 APP_RW_PASSWORD=CHANGE_ME
 CH_READER_PASSWORD=CHANGE_ME
 CLICKHOUSE_PASSWORD=CHANGE_ME
 REDIS_PASSWORD=CHANGE_ME
-SEED_USER_PASSWORD=CHANGE_ME
 GRAFANA_ADMIN_PASSWORD=CHANGE_ME
 
 # ── 저장소 접속 — 서비스명 DNS 기반 · 비밀번호 자리는 비밀 변수를 참조한다
@@ -25,13 +23,10 @@ POSTGRES_URL=postgres://app_rw:${APP_RW_PASSWORD}@postgres:5432/plc
 CLICKHOUSE_URL=http://app:${CLICKHOUSE_PASSWORD}@clickhouse:8123/plc
 REDIS_URL=redis://:${REDIS_PASSWORD}@redis:6379
 
-# ── 기동 역할 · 게이트
+# ── 기동 역할
 APP_ROLE=all
-DATAGEN_BULK_ENABLED=false
-# 인증 전 알람 확인 행위자 — 시드 학습자 계정 email(S7 ② 인증 도입 때 폐기)
-ALARM_ACK_ACTOR_EMAIL=learner@localhost
 
-# ── 역할 스위치 11 — 기본값 정본 docs/02_features/13_switch_matrix.md
+# ── 역할 스위치 — 기본값 정본 docs/02_features/13_switch_matrix.md
 REDIS_STREAM_BUFFER=on
 REDIS_LATEST_CACHE=on
 REDIS_QUERY_CACHE=on
@@ -40,7 +35,7 @@ CACHE_STAMPEDE_LOCK=on
 REDIS_PUBSUB_FANOUT=on
 WS_THROTTLE_MS=100
 INGEST_IDEMPOTENCY=on
-CONTROL_TABLE_ENABLED=off
+CONTROL_TABLE_ENABLED=gated
 COLLECTOR_DEADBAND=off
 LATEST_VALUE_WRITER=ingest
 
@@ -63,15 +58,13 @@ fi
 umask 077
 gen() { openssl rand -hex "$1"; }
 sed \
-  -e "s/^JWT_SIGNING_KEY=CHANGE_ME$/JWT_SIGNING_KEY=$(gen 32)/" \
   -e "s/^POSTGRES_ADMIN_PASSWORD=CHANGE_ME$/POSTGRES_ADMIN_PASSWORD=$(gen 24)/" \
   -e "s/^APP_OWNER_PASSWORD=CHANGE_ME$/APP_OWNER_PASSWORD=$(gen 24)/" \
   -e "s/^APP_RW_PASSWORD=CHANGE_ME$/APP_RW_PASSWORD=$(gen 24)/" \
   -e "s/^CH_READER_PASSWORD=CHANGE_ME$/CH_READER_PASSWORD=$(gen 24)/" \
   -e "s/^CLICKHOUSE_PASSWORD=CHANGE_ME$/CLICKHOUSE_PASSWORD=$(gen 24)/" \
   -e "s/^REDIS_PASSWORD=CHANGE_ME$/REDIS_PASSWORD=$(gen 24)/" \
-  -e "s/^SEED_USER_PASSWORD=CHANGE_ME$/SEED_USER_PASSWORD=/" \
   -e "s/^GRAFANA_ADMIN_PASSWORD=CHANGE_ME$/GRAFANA_ADMIN_PASSWORD=/" \
   -e "1s/.*/# db_study 실제 환경변수 — 비밀 포함 · 커밋 금지/" \
   .env.example > .env
-echo "wrote .env (storage secrets generated · SEED_USER_PASSWORD · GRAFANA_ADMIN_PASSWORD left empty for you to set)"
+echo "wrote .env (storage secrets generated · GRAFANA_ADMIN_PASSWORD left empty for you to set)"

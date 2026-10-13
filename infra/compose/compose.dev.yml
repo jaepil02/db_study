@@ -1,13 +1,14 @@
 # 개발 프로파일 — Docker 8 GB · 파이프라인 연결 확인 전용 · 성능 수치를 REQ-NFR과 비교하지 않는다
 # 정본: docs/09_tech_stack/04_local_environment.md §컨테이너 메모리 상한 · docs/05_data_stores/06_redis_memory.md
 services:
+  # PostgreSQL · ClickHouse 메모리는 같게(합 4.5 GB 불변 — 사용자 결정 2026-10-12)
   postgres:
-    mem_limit: 1536m
+    mem_limit: 2304m
     volumes:
       - ../postgres/profile-dev.conf:/etc/postgresql/profile.conf:ro
 
   clickhouse:
-    mem_limit: 3g
+    mem_limit: 2304m
 
   redis:
     mem_limit: 1536m
@@ -27,15 +28,3 @@ services:
       # V8 힙 상한은 컨테이너 상한보다 낮게 — OOM Killer보다 GC 압박이 먼저 신호를 낸다(04_architecture/03)
       NODE_OPTIONS: --max-old-space-size=1024
       UV_THREADPOOL_SIZE: "8"
-
-  # 생성기 전용 프로세스(profile datagen) — MAXLEN(적체 임계의 분모)이 프로파일에서 나온다 · 메모리 상한은 프로파일 표 밖(04_architecture/03 잠정 배치)
-  datagen:
-    environment:
-      MEMORY_PROFILE: dev
-      WORKER_POOL_SIZE: "1"
-
-  # 모드 D 전용(datagen-d) — extends는 이 덮어쓰기 파일의 datagen 값을 물려받지 않아 같은 값을 따로 준다
-  datagen-d:
-    environment:
-      MEMORY_PROFILE: dev
-      WORKER_POOL_SIZE: "1"

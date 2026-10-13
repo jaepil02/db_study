@@ -2,13 +2,14 @@
 # maxmemory 여유가 작아 volatile-lru 축출 연쇄가 기본 구성에서 자연 발생한다
 # 정본: docs/09_tech_stack/04_local_environment.md §컨테이너 메모리 상한 · docs/05_data_stores/06_redis_memory.md
 services:
+  # PostgreSQL · ClickHouse 메모리는 같게(합 5.5 GB 불변 — 사용자 결정 2026-10-12)
   postgres:
-    mem_limit: 1536m
+    mem_limit: 2816m
     volumes:
       - ../postgres/profile-mid.conf:/etc/postgresql/profile.conf:ro
 
   clickhouse:
-    mem_limit: 4g
+    mem_limit: 2816m
 
   redis:
     mem_limit: 2g
@@ -28,15 +29,3 @@ services:
       # V8 힙 상한은 컨테이너 상한보다 낮게 — OOM Killer보다 GC 압박이 먼저 신호를 낸다(04_architecture/03)
       NODE_OPTIONS: --max-old-space-size=1536
       UV_THREADPOOL_SIZE: "8"
-
-  # 생성기 전용 프로세스(profile datagen) — MAXLEN(적체 임계의 분모)이 프로파일에서 나온다 · 메모리 상한은 프로파일 표 밖(04_architecture/03 잠정 배치)
-  datagen:
-    environment:
-      MEMORY_PROFILE: mid
-      WORKER_POOL_SIZE: "2"
-
-  # 모드 D 전용(datagen-d) — extends는 이 덮어쓰기 파일의 datagen 값을 물려받지 않아 같은 값을 따로 준다
-  datagen-d:
-    environment:
-      MEMORY_PROFILE: mid
-      WORKER_POOL_SIZE: "2"

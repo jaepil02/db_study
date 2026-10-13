@@ -20,22 +20,16 @@ groups:
   - name: db_study_derived
     interval: 15s
     rules:
-      # 1 API 오류율 = (5xx 증가 − 설계 거절 중 503 증가) ÷ (요청 증가 − 설계 거절 증가) — REQ-NFR-11
-      # 설계 거절 중 503은 datagen.stream_full(503) 하나다 — common.rate_limited는 429(11_glossary/02)
-      # 설계 거절 · 5xx 계열이 아직 한 건도 없으면 시계열이 비므로 0으로 메운다(5xx 없음 = 오류율 0 · 검수 #4)
+      # 1 API 오류율 = 5xx 증가 ÷ 요청 증가(설계된 거절은 오류율 밖 — 정본 01_metrics_catalog §파생 지표)
+      # 설계 거절 차감항(http_designed_rejections_total · common.rate_limited 429)은 던지는 곳이 없어 D-16 정리에서 지웠다
+      # 5xx 계열이 아직 한 건도 없으면 시계열이 비므로 0으로 메운다(5xx 없음 = 오류율 0 · 검수 #4)
       - record: api:error_ratio:increase5m
         expr: |
-          (
-            (sum(increase(http_requests_total{code=~"5.."}[5m])) or vector(0))
-            - (sum(increase(http_designed_rejections_total{error_code="datagen.stream_full"}[5m])) or vector(0))
-          )
+          (sum(increase(http_requests_total{code=~"5.."}[5m])) or vector(0))
           /
-          (
-            sum(increase(http_requests_total[5m]))
-            - (sum(increase(http_designed_rejections_total[5m])) or vector(0))
-          )
+          sum(increase(http_requests_total[5m]))
 
-      # 2 조회 캐시 히트율 = hit 증가 ÷ (hit + miss 증가) — tsq_cache_requests_total만(keyspace 적중 금지 · REQ-NFR-10)
+      # 2 조회 캐시 히트율 = hit 증가 ÷ (hit + miss 증가) — tsq_cache_requests_total만(keyspace 적중은 다른 캐시 계열 키 조회가 섞여 쓰지 않는다)
       - record: tsq:cache_hit_ratio:increase5m
         expr: |
           sum(increase(tsq_cache_requests_total{result="hit"}[5m]))
@@ -56,7 +50,7 @@ groups:
           /
           sum(increase(rlt_latest_points_served_total[5m]))
 
-      # 5 연결당 초당 프레임 = ws_frames_sent_total 증가율 ÷ ws_connections(AC-41)
+      # 5 연결당 초당 프레임 = ws_frames_sent_total 증가율 ÷ ws_connections
       - record: ws:frames_per_connection:rate5m
         expr: |
           sum(rate(ws_frames_sent_total[5m]))
@@ -64,7 +58,7 @@ groups:
           sum(ws_connections)
 
       # 6 무손실 차의 메트릭 항 = gen_points_generated_total − dropout − col_deadband_skipped_total − gen_publish_halted_points_total
-      # (− tag_raw count는 SQL 몫 — 이 값과 같은 구간의 tag_raw count를 비교한다 · 모드 B · C 식)
+      # (− tag_raw count는 SQL 몫 — 이 값과 같은 구간의 tag_raw count를 비교한다 · 라이브 실행 발행 식)
       # 차감 계열이 아직 없으면(해당 생략이 한 번도 없음) 0으로 메운다
       - record: gen:lossless_expected_points:increase5m
         expr: |
@@ -73,7 +67,7 @@ groups:
           - (sum(increase(col_deadband_skipped_total[5m])) or vector(0))
           - (sum(increase(gen_publish_halted_points_total[5m])) or vector(0))
 
-      # 7 파트 생성률 = ch_new_parts_total{table="tag_raw"} 증가율(AC-22 · REQ-NFR-13)
+      # 7 파트 생성률 = ch_new_parts_total{table="tag_raw"} 증가율(배치 세 안 비교의 판정 지표 — 기록 020)
       - record: ch:new_parts:rate5m
         expr: |
           sum by (table) (rate(ch_new_parts_total{table="tag_raw"}[5m]))

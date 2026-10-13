@@ -1,7 +1,8 @@
 -- 001 — 확장 · DB 역할 · DB 기본 timezone(대역 정본 docs/05_data_stores/09_migrations_seed.md §PostgreSQL 마이그레이션)
--- 관리자 계정으로 돈다(확장 생성은 슈퍼유저 권한). 002부터는 app_owner로 돈다 — 런타임(app_rw)은 DDL 권한을 갖지 않는다.
--- 비밀번호는 이 파일에 쓰지 않는다 — migrate 명령이 환경변수에서 읽어 매 실행 ALTER ROLE로 맞춘다(12_security/02).
--- pg_partman은 공식 이미지에 없어 004(alarm_event 월 파티션) 착수 때 파생 이미지와 함께 만든다(09_tech_stack/03 미확인 등재).
+-- 새 기준선(D-16 · 2026-10-11) — 남는 객체만 담아 001부터 다시 썼다. 빈 볼륨에서 001~005가 한 번에 끝난다.
+-- 관리자 계정으로 돈다(확장 생성 · ALTER DATABASE는 슈퍼유저 권한). 002부터는 app_owner로 돈다 — 런타임(app_rw)은 DDL 권한을 갖지 않는다.
+-- 역할 셋은 DB 접속 계정이다(로그인 기능이 아니다) — 비밀번호는 이 파일에 쓰지 않고 migrate 명령이 환경변수에서 읽어 매 실행 맞춘다(12_security/02).
+-- pg_partman 확장은 migrate 관리자 단계가 schema partman에 만든다(파생 이미지 infra/postgres/Dockerfile).
 
 -- Up Migration
 CREATE EXTENSION IF NOT EXISTS pg_stat_statements;
@@ -14,8 +15,9 @@ BEGIN
 END
 $$;
 
--- 달력 경계 시간대는 시스템 단일 값 — 월 파티션 경계 계산이 세션 시간대를 따른다(05_data_stores/01 §튜닝 파라미터)
-ALTER DATABASE plc SET timezone TO 'Asia/Seoul';
+-- 처리 시간대 UTC(ADR-27) — 일 파티션 경계(UTC 자정)를 create_parent가 세션 timezone으로 계산한다.
+-- 새 세션부터 듣는다 — 002~ app_owner 세션(별도 연결)이 UTC로 돈다. 달력 의미 경계(KST 하루)는 ClickHouse mv_tag_1d가 따로 정한다.
+ALTER DATABASE plc SET timezone TO 'UTC';
 
 GRANT CONNECT ON DATABASE plc TO app_owner, app_rw, ch_reader;
 GRANT USAGE, CREATE ON SCHEMA public TO app_owner;

@@ -345,7 +345,7 @@
     {
       "type": "timeseries",
       "title": "접두별 점유 — 봉인(파랑) · 캐시(주황)",
-      "description": "키 접두별 점유 추정(redis_prefix_memory_bytes · 표본) — 봉인 stream · rt · alarm(파랑 계열) · 캐시 cache · lock · rl · sess · auth(주황 계열). 표본 수는 redis_prefix_sampled_keys. OBS-03(S6) 계열이라 S5 구현에서는 비어 있을 수 있다.",
+      "description": "키 접두별 점유 추정(redis_prefix_memory_bytes · 표본) — 봉인 stream · rt(파랑 계열) · 캐시 cache · lock · rl(주황 계열). 표본 수는 redis_prefix_sampled_keys. OBS-03(S6) 계열이라 S5 구현에서는 비어 있을 수 있다.",
       "datasource": {
         "type": "prometheus",
         "uid": "db-study-prometheus"
@@ -431,21 +431,6 @@
           {
             "matcher": {
               "id": "byRegexp",
-              "options": "^alarm$"
-            },
-            "properties": [
-              {
-                "id": "color",
-                "value": {
-                  "mode": "fixed",
-                  "fixedColor": "light-blue"
-                }
-              }
-            ]
-          },
-          {
-            "matcher": {
-              "id": "byRegexp",
               "options": "^cache$"
             },
             "properties": [
@@ -484,36 +469,6 @@
                 "value": {
                   "mode": "fixed",
                   "fixedColor": "light-orange"
-                }
-              }
-            ]
-          },
-          {
-            "matcher": {
-              "id": "byRegexp",
-              "options": "^sess$"
-            },
-            "properties": [
-              {
-                "id": "color",
-                "value": {
-                  "mode": "fixed",
-                  "fixedColor": "yellow"
-                }
-              }
-            ]
-          },
-          {
-            "matcher": {
-              "id": "byRegexp",
-              "options": "^auth$"
-            },
-            "properties": [
-              {
-                "id": "color",
-                "value": {
-                  "mode": "fixed",
-                  "fixedColor": "semi-dark-orange"
                 }
               }
             ]
@@ -902,7 +857,7 @@
     {
       "type": "timeseries",
       "title": "keyspace 적중(참고) · cache:q 히트율(판정)",
-      "description": "판독 규칙 — keyspace 적중은 참고용이다. 판정은 cache:q 히트율(tsq_cache_requests_total만 · 파생 지표)이다. keyspace 적중률로 캐시 효과를 판정하면 rl · auth 조회가 섞인다(REQ-NFR-10).",
+      "description": "판독 규칙 — keyspace 적중은 참고용이다. 판정은 cache:q 히트율(tsq_cache_requests_total만 · 파생 지표)이다. keyspace 적중률로 캐시 효과를 판정하면 다른 캐시 계열 키 조회가 섞인다.",
       "datasource": {
         "type": "prometheus",
         "uid": "db-study-prometheus"
@@ -1054,7 +1009,7 @@
             "uid": "db-study-prometheus"
           },
           "refId": "B",
-          "expr": "sum(redis_prefix_memory_bytes{prefix=~\"cache|lock|rl|sess|auth\"})",
+          "expr": "sum(redis_prefix_memory_bytes{prefix=~\"cache|lock|rl\"})",
           "legendFormat": "캐시 계열 점유(접두 합)",
           "range": true,
           "instant": false,

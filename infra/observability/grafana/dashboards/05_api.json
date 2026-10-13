@@ -453,7 +453,7 @@
     },
     {
       "type": "row",
-      "title": "요청 · 오류 · 거절",
+      "title": "요청 · 오류",
       "collapsed": false,
       "panels": [],
       "gridPos": {
@@ -535,7 +535,7 @@
       "gridPos": {
         "x": 0,
         "y": 21,
-        "w": 8,
+        "w": 12,
         "h": 7
       },
       "id": 9
@@ -543,7 +543,7 @@
     {
       "type": "timeseries",
       "title": "5xx",
-      "description": "표면 · 상태별 초당 5xx(http_requests_total{code=~\"5..\"}) — 설계 거절 503(datagen.stream_full)이 포함된 원값이다.",
+      "description": "표면 · 상태별 초당 5xx(http_requests_total{code=~\"5..\"}).",
       "datasource": {
         "type": "prometheus",
         "uid": "db-study-prometheus"
@@ -609,93 +609,17 @@
         }
       },
       "gridPos": {
-        "x": 8,
+        "x": 12,
         "y": 21,
-        "w": 8,
+        "w": 12,
         "h": 7
       },
       "id": 10
     },
     {
       "type": "timeseries",
-      "title": "설계 거절",
-      "description": "설계된 거절(http_designed_rejections_total · datagen.stream_full · common.rate_limited) — 실패가 아니라 관측 대상.",
-      "datasource": {
-        "type": "prometheus",
-        "uid": "db-study-prometheus"
-      },
-      "targets": [
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "db-study-prometheus"
-          },
-          "refId": "A",
-          "expr": "sum by (route, error_code) (rate(http_designed_rejections_total[$__rate_interval]))",
-          "legendFormat": "{{route}} {{error_code}}",
-          "range": true,
-          "instant": false,
-          "format": "time_series",
-          "editorMode": "code"
-        }
-      ],
-      "fieldConfig": {
-        "defaults": {
-          "custom": {
-            "drawStyle": "line",
-            "lineInterpolation": "linear",
-            "lineWidth": 1,
-            "fillOpacity": 0,
-            "showPoints": "never",
-            "spanNulls": false,
-            "axisPlacement": "auto",
-            "stacking": {
-              "mode": "none",
-              "group": "A"
-            },
-            "thresholdsStyle": {
-              "mode": "off"
-            }
-          },
-          "unit": "short",
-          "color": {
-            "mode": "palette-classic"
-          },
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "value": null
-              }
-            ]
-          }
-        },
-        "overrides": []
-      },
-      "options": {
-        "legend": {
-          "displayMode": "list",
-          "placement": "bottom",
-          "showLegend": true
-        },
-        "tooltip": {
-          "mode": "multi",
-          "sort": "none"
-        }
-      },
-      "gridPos": {
-        "x": 16,
-        "y": 21,
-        "w": 8,
-        "h": 7
-      },
-      "id": 11
-    },
-    {
-      "type": "timeseries",
-      "title": "오류율(설계 거절 제외)",
-      "description": "판독 규칙 — 오류율은 설계 거절을 뺀 식(파생 지표 api:error_ratio:increase5m)으로 본다: (5xx 증가 − 설계 거절 중 503 증가) ÷ (요청 증가 − 설계 거절 증가). 단순 5xx 비율로 보면 백프레셔가 잘 동작할수록 오류율이 나빠 보인다(REQ-NFR-11).",
+      "title": "오류율",
+      "description": "파생 지표 api:error_ratio:increase5m — 5xx 증가 ÷ 요청 증가(창 5분 · 설계된 거절은 오류율 밖 — 정본 10_observability/01_metrics_catalog §파생 지표). 설계 거절 차감항(common.rate_limited)은 던지는 곳이 없어 D-16 정리에서 지웠다.",
       "datasource": {
         "type": "prometheus",
         "uid": "db-study-prometheus"
@@ -772,7 +696,7 @@
     {
       "type": "timeseries",
       "title": "WebSocket 연결 · 연결당 프레임",
-      "description": "동시 연결(ws_connections) · 연결당 초당 프레임(파생 지표 ws:frames_per_connection:rate5m · 오른쪽 축 · AC-41).",
+      "description": "동시 연결(ws_connections) · 연결당 초당 프레임(파생 지표 ws:frames_per_connection:rate5m · 오른쪽 축).",
       "datasource": {
         "type": "prometheus",
         "uid": "db-study-prometheus"

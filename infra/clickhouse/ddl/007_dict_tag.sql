@@ -1,4 +1,4 @@
--- 008 — dict_tag(정본 docs/05_data_stores/03_clickhouse_schema.md §dict_tag · ADR-16) — 비활성 태그 포함 적재 · 키 UInt64
+-- 007 — dict_tag(정본 docs/05_data_stores/03_clickhouse_schema.md §dict_tag · ADR-16) — 비활성 태그 포함 적재 · 키 UInt64
 -- 접속은 named collection pg_dict(infra/clickhouse/config.d/named_collections.xml) — 비밀번호를 DDL에 쓰지 않는다(12_security/02)
 CREATE DICTIONARY IF NOT EXISTS plc.dict_tag
 (

@@ -1,7 +1,6 @@
 -- 002 — MST 6 테이블 · 결합 CHECK(컬럼 정본 docs/05_data_stores/01_postgresql_schema.md §테이블 명세 — MST · §tag_master_history 설계)
 -- FK · UNIQUE · 결합 CHECK 정본 docs/05_data_stores/02_postgresql_constraints.md — ON DELETE는 전부 RESTRICT(물리 삭제 표면 없음)
--- tag_master_history.changed_by → user_account FK(#7)는 AUT 테이블이 생기는 003에서 붙인다(FK 방향상 AUT가 뒤다)
--- 가드 트리거 · 추가 전용 REVOKE · 인덱스는 006 대역이다.
+-- tag_master_history에 변경자 칸이 없다 — 로그인 · 계정은 D-16에서 삭제했다. 가드 트리거 · 추가 전용 REVOKE · 인덱스는 003이다.
 
 -- Up Migration
 SET ROLE app_owner;
@@ -72,12 +71,11 @@ CREATE TABLE tag_master_history (
   new_scale        numeric NOT NULL,
   new_offset_value numeric NOT NULL,
   changed_at       timestamptz NOT NULL DEFAULT now(),
-  changed_by       integer,
   reason           text,
   CHECK (old_tag_id <> new_tag_id)
 );
 
--- Dictionary 소스 계정은 tag_master SELECT만(REQ-MST-11) — dict_tag는 S3에 생기지만 권한은 테이블과 함께 둔다
+-- Dictionary 소스 계정은 tag_master SELECT만(REQ-MST-11) — ClickHouse dict_tag가 읽는다
 GRANT SELECT ON tag_master TO ch_reader;
 
 RESET ROLE;

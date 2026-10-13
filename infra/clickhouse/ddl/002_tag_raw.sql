@@ -13,7 +13,7 @@ CREATE TABLE IF NOT EXISTS plc.tag_raw
 ENGINE = MergeTree
 PARTITION BY toYYYYMMDD(ts)
 ORDER BY (device_id, tag_id, ts)
-TTL toDateTime(ts) + INTERVAL 7 DAY DELETE
+TTL toDateTime(ts) + INTERVAL 60 DAY DELETE
 SETTINGS index_granularity = 8192,
          non_replicated_deduplication_window = 1000,
          ttl_only_drop_parts = 1;

@@ -22,69 +22,28 @@ tests:
           - labels: 'api:error_ratio:increase5m'
             value: 0
 
-  # 설계 거절 계열이 있어도 5xx가 없으면 0 — 분모에서 설계 거절(429)만 빠진다
-  - name: error_ratio_no_5xx_with_designed_429
-    interval: 1m
-    input_series:
-      - series: 'http_requests_total{route="/api/v1/tags",method="GET",code="200"}'
-        values: '0+6x10'
-      - series: 'http_requests_total{route="/api/v1/tags",method="GET",code="429"}'
-        values: '0+2x10'
-      - series: 'http_designed_rejections_total{route="/api/v1/tags",error_code="common.rate_limited"}'
-        values: '0+2x10'
-    promql_expr_test:
-      - expr: api:error_ratio:increase5m
-        eval_time: 10m
-        exp_samples:
-          - labels: 'api:error_ratio:increase5m'
-            value: 0
-
-  # 5xx가 전부 설계 거절 503(datagen.stream_full)이면 0 — 분자에서 빠진다
-  - name: error_ratio_only_designed_503_is_zero
-    interval: 1m
-    input_series:
-      - series: 'http_requests_total{route="/api/v1/ingest/bulk",method="POST",code="202"}'
-        values: '0+8x10'
-      - series: 'http_requests_total{route="/api/v1/ingest/bulk",method="POST",code="503"}'
-        values: '0+2x10'
-      - series: 'http_designed_rejections_total{route="/api/v1/ingest/bulk",error_code="datagen.stream_full"}'
-        values: '0+2x10'
-    promql_expr_test:
-      - expr: api:error_ratio:increase5m
-        eval_time: 10m
-        exp_samples:
-          - labels: 'api:error_ratio:increase5m'
-            value: 0
-
-  # 섞인 경우 — 분모 = 요청 12 − 설계 거절 4(503 2 + 429 2) = 8 · 분자 = 5xx 3(503 2 + 500 1) − 설계 503 2 = 1 → 1/8
-  # 설계 거절이 아닌 503(다른 원인)은 분자에 남는다는 것을 두 번째 평가 시각에서 본다
-  - name: error_ratio_mixed_designed_rejections_excluded
+  # 섞인 경우 — 분모 = 요청 10(200 7 + 503 2 + 500 1) · 분자 = 5xx 3 → 3/10
+  # 16m~20m — 503이 분당 3 · 요청 11(200 7 + 503 3 + 500 1) · 분자 3 + 1 = 4 → 4/11
+  - name: error_ratio_mixed
     interval: 1m
     input_series:
       - series: 'http_requests_total{route="/api/v1/tags",method="GET",code="200"}'
         values: '0+7x20'
-      - series: 'http_requests_total{route="/api/v1/ingest/bulk",method="POST",code="503"}'
+      - series: 'http_requests_total{route="/api/v1/runs",method="POST",code="503"}'
         values: '0+2x10 20+3x10'
       - series: 'http_requests_total{route="/api/v1/tags",method="GET",code="500"}'
         values: '0+1x20'
-      - series: 'http_requests_total{route="/api/v1/tags",method="GET",code="429"}'
-        values: '0+2x20'
-      - series: 'http_designed_rejections_total{route="/api/v1/ingest/bulk",error_code="datagen.stream_full"}'
-        values: '0+2x20'
-      - series: 'http_designed_rejections_total{route="/api/v1/tags",error_code="common.rate_limited"}'
-        values: '0+2x20'
     promql_expr_test:
       - expr: api:error_ratio:increase5m
         eval_time: 10m
         exp_samples:
           - labels: 'api:error_ratio:increase5m'
-            value: 0.125
-      # 16m~20m — 503이 분당 3(설계 2 + 설계 밖 1) · 요청 13(200 7 + 503 3 + 500 1 + 429 2) − 설계 4 = 9 · 분자 (3 + 1) − 2 = 2 → 2/9
+            value: 0.3
       - expr: api:error_ratio:increase5m
         eval_time: 20m
         exp_samples:
           - labels: 'api:error_ratio:increase5m'
-            value: 0.2222222222222222
+            value: 0.36363636363636365
 
   # 2 조회 캐시 히트율 — hit ÷ (hit + miss) · error는 분모에서 빠진다
   - name: cache_hit_ratio_basic
@@ -124,7 +83,7 @@ tests:
   - name: lossless_expected_no_deductions
     interval: 1m
     input_series:
-      - series: 'gen_points_generated_total{mode="B",profile="SINE"}'
+      - series: 'gen_points_generated_total{mode="run",profile="RAMP"}'
         values: '0+100x10'
     promql_expr_test:
       - expr: gen:lossless_expected_points:increase5m
@@ -137,11 +96,11 @@ tests:
   - name: lossless_expected_with_deductions
     interval: 1m
     input_series:
-      - series: 'gen_points_generated_total{mode="B",profile="SINE"}'
+      - series: 'gen_points_generated_total{mode="run",profile="RAMP"}'
         values: '0+100x10'
-      - series: 'gen_points_dropout_total{mode="B"}'
+      - series: 'gen_points_dropout_total{mode="A"}'
         values: '0+10x10'
-      - series: 'gen_publish_halted_points_total{mode="B"}'
+      - series: 'gen_publish_halted_points_total{mode="run"}'
         values: '0+20x10'
     promql_expr_test:
       - expr: gen:lossless_expected_points:increase5m

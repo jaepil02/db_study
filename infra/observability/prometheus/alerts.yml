@@ -1,5 +1,5 @@
-# 알림 규칙 14(정본 docs/10_observability/03_dashboards_alerts.md §알림 규칙)
-# 검산: 원본 유지 5 + 적체 대체 2 + 신설 7 = 14
+# 알림 규칙 13(정본 docs/10_observability/03_dashboards_alerts.md §알림 규칙)
+# 검산: 원본 유지 5 + 적체 대체 2 + 신설 6 = 13(알람 판정 무효 구간 규칙은 D-16에서 알람과 함께 삭제)
 # 심각도 레이블 severity — 문서의 경고 = warning · 위험 = critical · 정보 = info
 # 전달 경로 없음 — 발동 상태는 ALERTS 시계열로 본다. 실험 기록에는 판정 창 안에 발동한 알림 이름을 적는다
 #
@@ -40,7 +40,7 @@ groups:
           severity: critical
         annotations:
           summary: 백프레셔 위험 단계 또는 스풀 전환
-          description: 발행이 멈추거나 스풀로 옮겨 갔다 — 모드 C는 datagen.stream_full(503)로 거절한다
+          description: 발행이 멈추거나 스풀로 옮겨 갔다 — 라이브 실행 발행기는 적체가 주의 임계 아래로 올 때까지 발행을 멈춘다
 
       # 4 신설 — 조용한 유실의 유일 경로(MAXLEN 트리밍)
       - alert: stream_trim_defect
@@ -141,13 +141,3 @@ groups:
         annotations:
           summary: MV 삽입 실패 — 롤업 의심 구간
           description: 1분 롤업이 원시와 어긋날 수 있는 구간이 생겼다(06_pipeline/09)
-
-      # 14 신설 — 판정 무효 구간(재시도 소진으로 판정 전수가 빔)
-      - alert: alarm_eval_gap
-        expr: increase(alm_eval_gap_batches_total[5m]) > 0
-        for: 0m
-        labels:
-          severity: info
-        annotations:
-          summary: 알람 판정 무효 구간 발생
-          description: 재시도 소진으로 판정 전수가 빈 배치가 있다(06_pipeline/08)

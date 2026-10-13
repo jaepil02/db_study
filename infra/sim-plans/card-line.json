@@ -1,0 +1,636 @@
+{
+  "v": 1,
+  "note": "카드 라인 통신 끊김 시연(D-16 · seed --card-line 전용 — 포트 5020~5049 · 설비당 레지스터 9워드 이하 · timeout_ms 3000). 설비 가동을 켠 뒤 1분부터 2분마다 설비 1대가 20초 동안 응답을 4초씩 늦춘다 → 타임아웃 · 행 없음 → rt:latest가 5초 넘게 안 바뀌어 HMI가 통신 끊김으로 본다. 대상은 순번 (k × 7) mod 30(라인 · 공정을 고루 돈다) · 45건 = 켠 뒤 약 91분까지. 오프셋은 설비 가동을 켤 때마다(SIM 포트를 열 때마다) 0부터 다시 센다. 슬라이스 시드에서는 시드된 설비 포트 밖이라 기동 거부다.",
+  "faults": [
+    {
+      "ports": {
+        "from": 5020,
+        "to": 5020
+      },
+      "registers": {
+        "start": 0,
+        "count": 16
+      },
+      "kind": "delay",
+      "delayMs": 4000,
+      "startOffsetMs": 60000,
+      "durationMs": 20000
+    },
+    {
+      "ports": {
+        "from": 5027,
+        "to": 5027
+      },
+      "registers": {
+        "start": 0,
+        "count": 16
+      },
+      "kind": "delay",
+      "delayMs": 4000,
+      "startOffsetMs": 180000,
+      "durationMs": 20000
+    },
+    {
+      "ports": {
+        "from": 5034,
+        "to": 5034
+      },
+      "registers": {
+        "start": 0,
+        "count": 16
+      },
+      "kind": "delay",
+      "delayMs": 4000,
+      "startOffsetMs": 300000,
+      "durationMs": 20000
+    },
+    {
+      "ports": {
+        "from": 5041,
+        "to": 5041
+      },
+      "registers": {
+        "start": 0,
+        "count": 16
+      },
+      "kind": "delay",
+      "delayMs": 4000,
+      "startOffsetMs": 420000,
+      "durationMs": 20000
+    },
+    {
+      "ports": {
+        "from": 5048,
+        "to": 5048
+      },
+      "registers": {
+        "start": 0,
+        "count": 16
+      },
+      "kind": "delay",
+      "delayMs": 4000,
+      "startOffsetMs": 540000,
+      "durationMs": 20000
+    },
+    {
+      "ports": {
+        "from": 5025,
+        "to": 5025
+      },
+      "registers": {
+        "start": 0,
+        "count": 16
+      },
+      "kind": "delay",
+      "delayMs": 4000,
+      "startOffsetMs": 660000,
+      "durationMs": 20000
+    },
+    {
+      "ports": {
+        "from": 5032,
+        "to": 5032
+      },
+      "registers": {
+        "start": 0,
+        "count": 16
+      },
+      "kind": "delay",
+      "delayMs": 4000,
+      "startOffsetMs": 780000,
+      "durationMs": 20000
+    },
+    {
+      "ports": {
+        "from": 5039,
+        "to": 5039
+      },
+      "registers": {
+        "start": 0,
+        "count": 16
+      },
+      "kind": "delay",
+      "delayMs": 4000,
+      "startOffsetMs": 900000,
+      "durationMs": 20000
+    },
+    {
+      "ports": {
+        "from": 5046,
+        "to": 5046
+      },
+      "registers": {
+        "start": 0,
+        "count": 16
+      },
+      "kind": "delay",
+      "delayMs": 4000,
+      "startOffsetMs": 1020000,
+      "durationMs": 20000
+    },
+    {
+      "ports": {
+        "from": 5023,
+        "to": 5023
+      },
+      "registers": {
+        "start": 0,
+        "count": 16
+      },
+      "kind": "delay",
+      "delayMs": 4000,
+      "startOffsetMs": 1140000,
+      "durationMs": 20000
+    },
+    {
+      "ports": {
+        "from": 5030,
+        "to": 5030
+      },
+      "registers": {
+        "start": 0,
+        "count": 16
+      },
+      "kind": "delay",
+      "delayMs": 4000,
+      "startOffsetMs": 1260000,
+      "durationMs": 20000
+    },
+    {
+      "ports": {
+        "from": 5037,
+        "to": 5037
+      },
+      "registers": {
+        "start": 0,
+        "count": 16
+      },
+      "kind": "delay",
+      "delayMs": 4000,
+      "startOffsetMs": 1380000,
+      "durationMs": 20000
+    },
+    {
+      "ports": {
+        "from": 5044,
+        "to": 5044
+      },
+      "registers": {
+        "start": 0,
+        "count": 16
+      },
+      "kind": "delay",
+      "delayMs": 4000,
+      "startOffsetMs": 1500000,
+      "durationMs": 20000
+    },
+    {
+      "ports": {
+        "from": 5021,
+        "to": 5021
+      },
+      "registers": {
+        "start": 0,
+        "count": 16
+      },
+      "kind": "delay",
+      "delayMs": 4000,
+      "startOffsetMs": 1620000,
+      "durationMs": 20000
+    },
+    {
+      "ports": {
+        "from": 5028,
+        "to": 5028
+      },
+      "registers": {
+        "start": 0,
+        "count": 16
+      },
+      "kind": "delay",
+      "delayMs": 4000,
+      "startOffsetMs": 1740000,
+      "durationMs": 20000
+    },
+    {
+      "ports": {
+        "from": 5035,
+        "to": 5035
+      },
+      "registers": {
+        "start": 0,
+        "count": 16
+      },
+      "kind": "delay",
+      "delayMs": 4000,
+      "startOffsetMs": 1860000,
+      "durationMs": 20000
+    },
+    {
+      "ports": {
+        "from": 5042,
+        "to": 5042
+      },
+      "registers": {
+        "start": 0,
+        "count": 16
+      },
+      "kind": "delay",
+      "delayMs": 4000,
+      "startOffsetMs": 1980000,
+      "durationMs": 20000
+    },
+    {
+      "ports": {
+        "from": 5049,
+        "to": 5049
+      },
+      "registers": {
+        "start": 0,
+        "count": 16
+      },
+      "kind": "delay",
+      "delayMs": 4000,
+      "startOffsetMs": 2100000,
+      "durationMs": 20000
+    },
+    {
+      "ports": {
+        "from": 5026,
+        "to": 5026
+      },
+      "registers": {
+        "start": 0,
+        "count": 16
+      },
+      "kind": "delay",
+      "delayMs": 4000,
+      "startOffsetMs": 2220000,
+      "durationMs": 20000
+    },
+    {
+      "ports": {
+        "from": 5033,
+        "to": 5033
+      },
+      "registers": {
+        "start": 0,
+        "count": 16
+      },
+      "kind": "delay",
+      "delayMs": 4000,
+      "startOffsetMs": 2340000,
+      "durationMs": 20000
+    },
+    {
+      "ports": {
+        "from": 5040,
+        "to": 5040
+      },
+      "registers": {
+        "start": 0,
+        "count": 16
+      },
+      "kind": "delay",
+      "delayMs": 4000,
+      "startOffsetMs": 2460000,
+      "durationMs": 20000
+    },
+    {
+      "ports": {
+        "from": 5047,
+        "to": 5047
+      },
+      "registers": {
+        "start": 0,
+        "count": 16
+      },
+      "kind": "delay",
+      "delayMs": 4000,
+      "startOffsetMs": 2580000,
+      "durationMs": 20000
+    },
+    {
+      "ports": {
+        "from": 5024,
+        "to": 5024
+      },
+      "registers": {
+        "start": 0,
+        "count": 16
+      },
+      "kind": "delay",
+      "delayMs": 4000,
+      "startOffsetMs": 2700000,
+      "durationMs": 20000
+    },
+    {
+      "ports": {
+        "from": 5031,
+        "to": 5031
+      },
+      "registers": {
+        "start": 0,
+        "count": 16
+      },
+      "kind": "delay",
+      "delayMs": 4000,
+      "startOffsetMs": 2820000,
+      "durationMs": 20000
+    },
+    {
+      "ports": {
+        "from": 5038,
+        "to": 5038
+      },
+      "registers": {
+        "start": 0,
+        "count": 16
+      },
+      "kind": "delay",
+      "delayMs": 4000,
+      "startOffsetMs": 2940000,
+      "durationMs": 20000
+    },
+    {
+      "ports": {
+        "from": 5045,
+        "to": 5045
+      },
+      "registers": {
+        "start": 0,
+        "count": 16
+      },
+      "kind": "delay",
+      "delayMs": 4000,
+      "startOffsetMs": 3060000,
+      "durationMs": 20000
+    },
+    {
+      "ports": {
+        "from": 5022,
+        "to": 5022
+      },
+      "registers": {
+        "start": 0,
+        "count": 16
+      },
+      "kind": "delay",
+      "delayMs": 4000,
+      "startOffsetMs": 3180000,
+      "durationMs": 20000
+    },
+    {
+      "ports": {
+        "from": 5029,
+        "to": 5029
+      },
+      "registers": {
+        "start": 0,
+        "count": 16
+      },
+      "kind": "delay",
+      "delayMs": 4000,
+      "startOffsetMs": 3300000,
+      "durationMs": 20000
+    },
+    {
+      "ports": {
+        "from": 5036,
+        "to": 5036
+      },
+      "registers": {
+        "start": 0,
+        "count": 16
+      },
+      "kind": "delay",
+      "delayMs": 4000,
+      "startOffsetMs": 3420000,
+      "durationMs": 20000
+    },
+    {
+      "ports": {
+        "from": 5043,
+        "to": 5043
+      },
+      "registers": {
+        "start": 0,
+        "count": 16
+      },
+      "kind": "delay",
+      "delayMs": 4000,
+      "startOffsetMs": 3540000,
+      "durationMs": 20000
+    },
+    {
+      "ports": {
+        "from": 5020,
+        "to": 5020
+      },
+      "registers": {
+        "start": 0,
+        "count": 16
+      },
+      "kind": "delay",
+      "delayMs": 4000,
+      "startOffsetMs": 3660000,
+      "durationMs": 20000
+    },
+    {
+      "ports": {
+        "from": 5027,
+        "to": 5027
+      },
+      "registers": {
+        "start": 0,
+        "count": 16
+      },
+      "kind": "delay",
+      "delayMs": 4000,
+      "startOffsetMs": 3780000,
+      "durationMs": 20000
+    },
+    {
+      "ports": {
+        "from": 5034,
+        "to": 5034
+      },
+      "registers": {
+        "start": 0,
+        "count": 16
+      },
+      "kind": "delay",
+      "delayMs": 4000,
+      "startOffsetMs": 3900000,
+      "durationMs": 20000
+    },
+    {
+      "ports": {
+        "from": 5041,
+        "to": 5041
+      },
+      "registers": {
+        "start": 0,
+        "count": 16
+      },
+      "kind": "delay",
+      "delayMs": 4000,
+      "startOffsetMs": 4020000,
+      "durationMs": 20000
+    },
+    {
+      "ports": {
+        "from": 5048,
+        "to": 5048
+      },
+      "registers": {
+        "start": 0,
+        "count": 16
+      },
+      "kind": "delay",
+      "delayMs": 4000,
+      "startOffsetMs": 4140000,
+      "durationMs": 20000
+    },
+    {
+      "ports": {
+        "from": 5025,
+        "to": 5025
+      },
+      "registers": {
+        "start": 0,
+        "count": 16
+      },
+      "kind": "delay",
+      "delayMs": 4000,
+      "startOffsetMs": 4260000,
+      "durationMs": 20000
+    },
+    {
+      "ports": {
+        "from": 5032,
+        "to": 5032
+      },
+      "registers": {
+        "start": 0,
+        "count": 16
+      },
+      "kind": "delay",
+      "delayMs": 4000,
+      "startOffsetMs": 4380000,
+      "durationMs": 20000
+    },
+    {
+      "ports": {
+        "from": 5039,
+        "to": 5039
+      },
+      "registers": {
+        "start": 0,
+        "count": 16
+      },
+      "kind": "delay",
+      "delayMs": 4000,
+      "startOffsetMs": 4500000,
+      "durationMs": 20000
+    },
+    {
+      "ports": {
+        "from": 5046,
+        "to": 5046
+      },
+      "registers": {
+        "start": 0,
+        "count": 16
+      },
+      "kind": "delay",
+      "delayMs": 4000,
+      "startOffsetMs": 4620000,
+      "durationMs": 20000
+    },
+    {
+      "ports": {
+        "from": 5023,
+        "to": 5023
+      },
+      "registers": {
+        "start": 0,
+        "count": 16
+      },
+      "kind": "delay",
+      "delayMs": 4000,
+      "startOffsetMs": 4740000,
+      "durationMs": 20000
+    },
+    {
+      "ports": {
+        "from": 5030,
+        "to": 5030
+      },
+      "registers": {
+        "start": 0,
+        "count": 16
+      },
+      "kind": "delay",
+      "delayMs": 4000,
+      "startOffsetMs": 4860000,
+      "durationMs": 20000
+    },
+    {
+      "ports": {
+        "from": 5037,
+        "to": 5037
+      },
+      "registers": {
+        "start": 0,
+        "count": 16
+      },
+      "kind": "delay",
+      "delayMs": 4000,
+      "startOffsetMs": 4980000,
+      "durationMs": 20000
+    },
+    {
+      "ports": {
+        "from": 5044,
+        "to": 5044
+      },
+      "registers": {
+        "start": 0,
+        "count": 16
+      },
+      "kind": "delay",
+      "delayMs": 4000,
+      "startOffsetMs": 5100000,
+      "durationMs": 20000
+    },
+    {
+      "ports": {
+        "from": 5021,
+        "to": 5021
+      },
+      "registers": {
+        "start": 0,
+        "count": 16
+      },
+      "kind": "delay",
+      "delayMs": 4000,
+      "startOffsetMs": 5220000,
+      "durationMs": 20000
+    },
+    {
+      "ports": {
+        "from": 5028,
+        "to": 5028
+      },
+      "registers": {
+        "start": 0,
+        "count": 16
+      },
+      "kind": "delay",
+      "delayMs": 4000,
+      "startOffsetMs": 5340000,
+      "durationMs": 20000
+    }
+  ]
+}

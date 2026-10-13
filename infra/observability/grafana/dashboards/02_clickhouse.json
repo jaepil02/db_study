@@ -226,7 +226,7 @@
     {
       "type": "timeseries",
       "title": "초당 삽입 행",
-      "description": "서버가 받은 삽입 행(ch_inserted_rows_total) 대 적재 경로가 쓴 행(rows_inserted) — 차가 벌어지면 적재 경로 밖 삽입(모드 D · 롤업)이 섞였다.",
+      "description": "서버가 받은 삽입 행(ch_inserted_rows_total) 대 적재 경로가 쓴 행(rows_inserted) — 차가 벌어지면 적재 경로 밖 삽입(롤업 등)이 섞였다.",
       "datasource": {
         "type": "prometheus",
         "uid": "db-study-prometheus"

@@ -1,23 +1,26 @@
 # 부하 실험 프로파일 — Docker 12 GB 이상 · 성능 측정 전용(기본 프로파일)
 # 정본: docs/09_tech_stack/04_local_environment.md §컨테이너 메모리 상한 · docs/05_data_stores/06_redis_memory.md
 services:
+  # PostgreSQL · ClickHouse 메모리는 같게 4.5 GB(사용자 결정 2026-10-12 — 직접 비교 공정). 3.5 GB씩 나누면 ClickHouse가 메모리에 맞춰
+  # 읽기 흐름을 1개로 줄여 대량 집계가 4배 느려졌다(4 GB 2개 · 4.5 GB부터 5 GB와 같은 3개 — 2026-10-12 실측) — 그 문턱에 맞춘다(합 7 → 9 GB)
   postgres:
-    mem_limit: 2g
+    mem_limit: 4608m
     volumes:
       - ../postgres/profile-load.conf:/etc/postgresql/profile.conf:ro
 
   clickhouse:
-    mem_limit: 5g
+    mem_limit: 4608m
 
+  # Redis 메모리 한도 10 GB까지(사용자 결정 2026-10-12 — 옛 2 GB) · 컨테이너 상한은 다른 프로파일처럼 maxmemory + 512 MB
   redis:
-    mem_limit: 2560m
+    mem_limit: 10752m
     command:
       - redis-server
       - /usr/local/etc/redis/redis.conf
       - --requirepass
       - ${REDIS_PASSWORD:?REDIS_PASSWORD 필요}
       - --maxmemory
-      - 2gb
+      - 10gb
 
   api:
     mem_limit: 2g
@@ -27,21 +30,3 @@ services:
       # V8 힙 상한은 컨테이너 상한보다 낮게 — OOM Killer보다 GC 압박이 먼저 신호를 낸다(04_architecture/03)
       NODE_OPTIONS: --max-old-space-size=1536
       UV_THREADPOOL_SIZE: "8"
-
-  # 생성기 전용 프로세스(profile datagen) — MAXLEN(적체 임계의 분모)이 프로파일에서 나온다 · 메모리 상한은 프로파일 표 밖(04_architecture/03 잠정 배치)
-  datagen:
-    environment:
-      MEMORY_PROFILE: load
-      WORKER_POOL_SIZE: "2"
-
-  # 모드 D 전용(datagen-d) — extends는 이 덮어쓰기 파일의 datagen 값을 물려받지 않아 같은 값을 따로 준다
-  datagen-d:
-    environment:
-      MEMORY_PROFILE: load
-      WORKER_POOL_SIZE: "2"
-
-  # 역방향 대조 실행기(oltp-lab · EXP-40~44) — 도구 컨테이너 · 워커 1(실행기는 워커 풀을 쓰지 않는다)
-  oltp-lab:
-    environment:
-      MEMORY_PROFILE: load
-      WORKER_POOL_SIZE: "1"

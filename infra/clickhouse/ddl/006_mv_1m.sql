@@ -1,4 +1,4 @@
--- 007 — 연쇄 입구 mv_tag_1m(정본 docs/05_data_stores/04_clickhouse_rollup.md §tag_1m · mv_tag_1m · bad_cnt는 품질 2 · 4만)
+-- 006 — 연쇄 입구 mv_tag_1m(정본 docs/05_data_stores/04_clickhouse_rollup.md §tag_1m · mv_tag_1m · bad_cnt는 품질 2 · 4만)
 CREATE MATERIALIZED VIEW IF NOT EXISTS plc.mv_tag_1m TO plc.tag_1m AS
 SELECT
     toStartOfMinute(ts)                AS bucket,

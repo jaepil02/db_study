@@ -7,12 +7,13 @@ name: db_study
 
 services:
   postgres:
-    # 파생 이미지 — 공식 18.6-alpine + pg_partman(S3 · 버전 고정표) · infra/postgres/Dockerfile
+    # 파생 이미지 — 공식 18.6-alpine + pg_partman(S3) + TimescaleDB(ADR-32 · 버전 고정표) · infra/postgres/Dockerfile
     build:
       context: ../postgres
       args:
         PG_PARTMAN_VERSION: "5.5.0"
-    image: db_study-postgres:18.6-partman5.5.0
+        TIMESCALEDB_VERSION: "2.30.2"
+    image: db_study-postgres:18.6-partman5.5.0-ts2.30.2
     restart: unless-stopped
     command: ["postgres", "-c", "config_file=/etc/postgresql/postgresql.conf"]
     environment:
@@ -31,8 +32,9 @@ services:
       timeout: 3s
       retries: 10
       start_period: 10s
-    cpu_shares: 1024
-    cpuset: "9-10"
+    # CPU는 ClickHouse와 같게 — 4코어 · 같은 가중(직접 비교의 대량 집계가 코어 수에 비례하므로 · 사용자 결정 2026-10-12)
+    cpu_shares: 2048
+    cpuset: "9-12"
 
   clickhouse:
     image: clickhouse/clickhouse-server:26.8.10.6
@@ -116,7 +118,7 @@ services:
       REDIS_PUBSUB_FANOUT: ${REDIS_PUBSUB_FANOUT:-on}
       WS_THROTTLE_MS: ${WS_THROTTLE_MS:-100}
       INGEST_IDEMPOTENCY: ${INGEST_IDEMPOTENCY:-on}
-      CONTROL_TABLE_ENABLED: ${CONTROL_TABLE_ENABLED:-off}
+      CONTROL_TABLE_ENABLED: ${CONTROL_TABLE_ENABLED:-gated}
       COLLECTOR_DEADBAND: ${COLLECTOR_DEADBAND:-off}
       LATEST_VALUE_WRITER: ${LATEST_VALUE_WRITER:-ingest}
       # SW-12 — 업무 쓰기 경로(stream 기본 · direct는 EXP-46 비교용 옛 경로 · 02_features/13)
@@ -126,13 +128,8 @@ services:
       INGEST_BATCH_PLAN: ${INGEST_BATCH_PLAN:-A}
       GEN_PROFILE: ${GEN_PROFILE:-SINE}
       SIM_FAULT_PLAN: ${SIM_FAULT_PLAN:-}
-      # 인증 전 알람 확인 행위자(09_tech_stack/04 · 07_api/07 §인증 전 확인 행위자 판정) — 기본 없음 · 없으면 확인만 401
-      ALARM_ACK_ACTOR_EMAIL: ${ALARM_ACK_ACTOR_EMAIL:-}
       INGEST_LAB_FAULT: ${INGEST_LAB_FAULT:-}
-      # S5 — 모드 C 부하 주입 표면 게이트(스위치가 아님 · 07_api/09 · 기본 false · true면 기동 경고 1줄)
-      DATAGEN_BULK_ENABLED: ${DATAGEN_BULK_ENABLED:-false}
       # 센서 자동 생성 게이트(스위치가 아님 · 09_tech_stack/04) — 로컬 기본 off(사용자 결정 2026-10-03 · 직접 보내 보기만 센서 데이터를 보낸다)
-      # 실험 러너는 on — scripts/lab/s3/_lib.sh(s4 · s5가 상속) · s2 러너 3개는 각자 export
       SENSOR_AUTOGEN: ${SENSOR_AUTOGEN:-off}
       TZ: UTC
       # MEMORY_PROFILE · WORKER_POOL_SIZE · NODE_OPTIONS · UV_THREADPOOL_SIZE는 프로파일 덮어쓰기 파일이 준다 — 상한과 이름이 한 파일에서 나온다
@@ -159,61 +156,6 @@ services:
     cpu_shares: 1536
     cpuset: "0-4"
 
-  # 생성기 전용 프로세스(APP_ROLE=datagen · 모드 B — S3 당김) — 측정 대상과 CPU를 나누지 않게 11-12(k6 공유 · 04_architecture/03 잠정 행)
-  # up에 포함되지 않는다(profile datagen) — 실험 러너가 run으로만 부른다: docker compose --profile datagen run --rm datagen node dist/mode-b.js …
-  datagen:
-    profiles: ["datagen"]
-    image: db_study-api:${COMMIT_HASH:-dev}
-    environment:
-      APP_ROLE: datagen
-      POSTGRES_URL: ${POSTGRES_URL:?POSTGRES_URL 필요}
-      REDIS_URL: ${REDIS_URL:?REDIS_URL 필요}
-      # 스위치 11 — api와 같은 값을 받는다: 모드 B 출력의 switches가 측정 기록 4요소이고 조합 제약 #2 · #8 · #9 검사가 이 값을 본다(검수 D3)
-      REDIS_STREAM_BUFFER: ${REDIS_STREAM_BUFFER:-on}
-      REDIS_LATEST_CACHE: ${REDIS_LATEST_CACHE:-on}
-      REDIS_QUERY_CACHE: ${REDIS_QUERY_CACHE:-on}
-      CACHE_KEY_TIME_SNAP: ${CACHE_KEY_TIME_SNAP:-on}
-      CACHE_STAMPEDE_LOCK: ${CACHE_STAMPEDE_LOCK:-on}
-      REDIS_PUBSUB_FANOUT: ${REDIS_PUBSUB_FANOUT:-on}
-      WS_THROTTLE_MS: ${WS_THROTTLE_MS:-100}
-      INGEST_IDEMPOTENCY: ${INGEST_IDEMPOTENCY:-on}
-      CONTROL_TABLE_ENABLED: ${CONTROL_TABLE_ENABLED:-off}
-      COLLECTOR_DEADBAND: ${COLLECTOR_DEADBAND:-off}
-      LATEST_VALUE_WRITER: ${LATEST_VALUE_WRITER:-ingest}
-      INGEST_BATCH_PLAN: ${INGEST_BATCH_PLAN:-A}
-      CAPACITY_TIER: ${CAPACITY_TIER:-}
-      GEN_PROFILE: ${GEN_PROFILE:-SINE}
-      TZ: UTC
-    depends_on:
-      redis:
-        condition: service_healthy
-      postgres:
-        condition: service_healthy
-    cpu_shares: 512
-    cpuset: "11-12"
-
-  # 모드 D(GEN-08 · GEN-10 · S5) 전용 — datagen과 같은 이미지 · 환경에 ClickHouse 접속과 app_owner 비밀번호만 더한다.
-  # app_owner(DDL 소유자) 비밀은 과거 일 파티션 생성 · ⑧ 비우기 · 대조군 정리에만 쓴다 — 모드 B가 도는 datagen에는 싣지 않는다(최소 권한 · 12_security/02).
-  # 격자 러너가 run으로만 부른다: docker compose --profile datagen-d run --rm --no-deps datagen-d node dist/mode-d.js …
-  datagen-d:
-    extends:
-      service: datagen
-    # extends는 profiles를 합친다 — !override로 datagen 프로파일에서 빼 owner 비밀이 --profile datagen up에 딸려 뜨지 않게 한다(검수 N1)
-    profiles: !override ["datagen-d"]
-    environment:
-      CLICKHOUSE_URL: ${CLICKHOUSE_URL:?CLICKHOUSE_URL 필요}
-      APP_OWNER_PASSWORD: ${APP_OWNER_PASSWORD:?APP_OWNER_PASSWORD 필요}
-
-  # 역방향 대조 실행기(EXP-40~44 · S5) 전용 — datagen과 같은 이미지 · 환경에 ClickHouse 접속만 더한다(app_owner 비밀은 싣지 않는다 · 업무 테이블 쓰기는 app_rw 권한 안).
-  # 측정 경로에 앱이 끼지 않게 도구 CPU 11-12에서 저장소에 직접 붙는다(05_data_stores/10 §실험의 모양 측정 경로 행).
-  # 오케스트레이터가 run으로만 부른다: docker compose --profile oltp-lab run --rm --no-deps oltp-lab node dist/oltp-lab.js …
-  oltp-lab:
-    extends:
-      service: datagen
-    profiles: !override ["oltp-lab"]
-    environment:
-      CLICKHOUSE_URL: ${CLICKHOUSE_URL:?CLICKHOUSE_URL 필요}
-
   # 관측 스택(observability 프로파일 · S5) — 구성원 prometheus · grafana 2(09_tech_stack/03 · ADR-20) · 기본 기동에 포함되지 않는다
   # 정밀 측정 세션은 이 프로파일을 끈다(10_observability/03 §관측 부하 규칙) · CPU 13(측정 대상 · 부하 도구 밖 — 04_architecture/03)
   prometheus:
@@ -224,8 +166,6 @@ services:
       - --config.file=/etc/prometheus/prometheus.yml
       - --storage.tsdb.path=/prometheus
       - --storage.tsdb.retention.time=7d
-      # k6 원격 쓰기 수신(10_observability/03 §관측 부하 규칙 — 탐색 세션만)
-      - --web.enable-remote-write-receiver
     volumes:
       - ../observability/prometheus:/etc/prometheus:ro
       - promdata:/prometheus
