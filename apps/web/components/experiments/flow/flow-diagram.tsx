@@ -2,8 +2,11 @@
 // /monitoring 흐름도(화면의 주인공 · Redis 기둥 · 조회 줄) — 정본 docs/08_screen/08_evidence_screens.md §EXP-FLOW
 // 노드 12 = 어디서 오나 3(공장 센서 · 사람의 업무 요청 · 사람의 조회 요청) + Redis 기둥 칸 5(① 센서 대기줄 · ② 지금 값 · ③ 업무 대기줄 · ④ 옛 사본 지움 · 결과 알림 · ⑤ 조회 사본)
 //   + 누가 처리하나 2(모아서 저장 · 하나씩 처리) + 진짜 DB 2(ClickHouse · PostgreSQL). Redis는 서버와 DB 사이 한 기둥이다(목적지처럼 오른쪽에 두지 않는다).
-// 조회 줄은 처리기를 거치지 않고(api가 직접 Redis를 먼저 본다) flow 프레임 요약이 없어 점이 없다 — 선 굵기 · 숫자(메트릭 5초 차분)로만.
-// 점 하나가 flow 프레임의 요약 하나(실제 묶음 · 실제 요청)이고, 단계마다 머무는 시간의 비율이 그 요약의 실제 단계 ms 비율이다(보기 좋게 느리게).
+// 조회 줄은 처리기를 거치지 않는다(api가 직접 Redis를 먼저 본다). 조회는 요청마다 flow 프레임 요약이 없어 메트릭 5초 차분의 갈래 비율
+// (바로 응답 · ClickHouse까지 · PostgreSQL까지)대로 점을 뽑아 선만 태운다(초당 상한 lib/flow READ_DOTS_MAX_PER_SEC · 다리 시간은 고정).
+// 그 밖의 점 하나는 flow 프레임의 요약 하나(실제 묶음 · 실제 요청)이고, 단계마다 머무는 시간의 비율이 그 요약의 실제 단계 ms 비율이다(보기 좋게 느리게).
+// 업무 점은 PostgreSQL에서 COMMIT 응답 선을 타고 하나씩 처리로 돌아온 뒤 "저장한 뒤" → ④ → "결과 받음" 선으로 간다(diagram-layout BIZ_BENDS).
+// 비교 실험 중인 묶음은 처리기에서 점 둘로 갈라진다 — ClickHouse로 가는 본 점 · 같은 순간 사본 선을 타고 PostgreSQL로 가는 사본 점(lib/flow batchPlan).
 // 선 굵기 = 초당 양 · 꺼진 길(스위치로 끈 길)은 그리지 않는다 — 각주가 이름을 댄다. 셸 WS가 끊기면 점 애니메이션을 멈춘다.
 // 요약이 오지 않으면 점도 없다 — 멈춘 그림이 곧 멈춘 적재다. 좌표 · 라벨 자리와 그 겹침 근거는 diagram-layout.ts(검사 test/flow-layout.test.ts).
 // 움직임 줄이기(prefers-reduced-motion: reduce)면 점이 움직이지 않는다 — 가장 오래 머무는 자리(lib/flow restNode)에 나타났다 사라진다.
@@ -22,16 +25,24 @@ import {
   edgeWidth,
   type FlowRates,
   type FlowSwitchFlags,
+  newReadPicker,
   OUTCOME_MARK,
+  pickReadKind,
   planProgress,
+  type ReadDotPlan,
+  type ReadKind,
   type ReadRates,
+  readDotPlan,
   restNode,
 } from '../../../lib/flow';
 import type { FlowBatchSummaryBody, FlowBizSummaryBody } from '../../../lib/shared';
 import { STORE, type StoreKey } from '../../ui/store';
 import {
   BATCH_AT,
+  BATCH_BENDS,
   BIZ_AT,
+  BIZ_BENDS,
+  BIZ_DOT_R,
   BIZ_NOTE,
   BOX,
   type BoxId,
@@ -57,6 +68,13 @@ import {
   PILLAR_FOOT_Y,
   PILLAR_HEAD_Y,
   type Pt,
+  pointAlong,
+  READ_DOT_R,
+  READ_REST,
+  READ_ROUTES,
+  type ReadLeg,
+  readPos,
+  routeMs,
   VIEW_H,
   VIEW_W,
 } from './diagram-layout';
@@ -89,7 +107,17 @@ type Dot =
       plan: DotPlan<BizNode>;
       mark: BizMark | null;
       biz: FlowBizSummaryBody;
+    }
+  | {
+      id: number;
+      kind: 'read';
+      born: number;
+      read: ReadKind;
+      route: readonly ReadLeg[];
+      totalMs: number;
     };
+
+const dotTotalMs = (d: Dot): number => (d.kind === 'read' ? d.totalMs : d.plan.totalMs);
 
 export class DotEngine {
   clock = 0;
@@ -98,10 +126,39 @@ export class DotEngine {
   dots: Dot[] = [];
   private seq = 0;
 
+  /** 조회 점 계획(메트릭이 바뀔 때마다 setReads) · 다음 점까지 쌓인 몫 · 갈래 고르기 상태 */
+  private read: ReadDotPlan | null = null;
+  private readCarry = 0;
+  private readPick = newReadPicker();
+
   tick(real: number): void {
-    if (!this.paused && this.lastReal !== null) this.clock += real - this.lastReal;
+    const dt = !this.paused && this.lastReal !== null ? real - this.lastReal : 0;
+    this.clock += dt;
     this.lastReal = real;
-    this.dots = this.dots.filter((d) => this.clock - d.born <= d.plan.totalMs + LINGER_MS);
+    // 조회 점 — 초당 perSec개(한 번에 하나까지 · 탭이 숨었다 돌아와도 몰아 내지 않는다)
+    if (this.read && dt > 0) {
+      this.readCarry = Math.min(this.readCarry + (dt / 1000) * this.read.perSec, 1);
+      if (this.readCarry >= 1) {
+        this.readCarry -= 1;
+        this.addRead(pickReadKind(this.readPick, this.read.shares));
+      }
+    }
+    this.dots = this.dots.filter((d) => this.clock - d.born <= dotTotalMs(d) + LINGER_MS);
+  }
+
+  /** 조회 줄 숫자(메트릭 5초 차분) — 조회가 없거나 모르면 점을 멈추고 갈래 고르기를 처음부터 */
+  setReads(rr: ReadRates | null): void {
+    this.read = readDotPlan(rr);
+    if (!this.read) {
+      this.readCarry = 0;
+      this.readPick = newReadPicker();
+    }
+  }
+
+  private addRead(read: ReadKind): void {
+    const route = READ_ROUTES[read];
+    this.seq += 1;
+    this.push({ id: this.seq, kind: 'read', born: this.clock, read, route, totalMs: routeMs(route) });
   }
 
   private push(d: Dot): void {
@@ -109,19 +166,22 @@ export class DotEngine {
     if (this.dots.length > MAX_DOTS) this.dots.splice(0, this.dots.length - MAX_DOTS);
   }
 
-  /** 한 프레임의 배치들 — 요약 시각(at) 차만큼 출발을 벌린다(최대 250 ms · 병합 창 하나) */
+  /**
+   * 한 프레임의 배치들 — 요약 시각(at) 차만큼 출발을 벌린다(최대 250 ms · 병합 창 하나).
+   * 비교 실험 중인 배치는 사본 점을 하나 더 — 본 점이 처리기를 떠나는 순간 처리기에서 PostgreSQL로 출발한다(lib/flow batchPlan).
+   */
   addBatches(batches: readonly FlowBatchSummaryBody[]): void {
     const t0 = Math.min(...batches.map((b) => b.at));
     for (const b of batches) {
-      const plan = batchPlan(b);
+      const { copy, ...plan } = batchPlan(b);
+      const born = this.clock + Math.min(b.at - t0, 250);
+      const r = batchDotRadius(b.rows);
       this.seq += 1;
-      this.push({
-        id: this.seq,
-        kind: 'batch',
-        born: this.clock + Math.min(b.at - t0, 250),
-        plan,
-        r: batchDotRadius(b.rows),
-      });
+      this.push({ id: this.seq, kind: 'batch', born, plan, r });
+      if (copy) {
+        this.seq += 1;
+        this.push({ id: this.seq, kind: 'batch', born: born + copy.delayMs, plan: copy.plan, r });
+      }
     }
   }
 
@@ -142,12 +202,18 @@ export class DotEngine {
   }
 }
 
-function dotPos<Nd extends string>(plan: DotPlan<Nd>, elapsed: number, at: Record<Nd, Pt>, still: boolean) {
+/** 점의 지금 자리 — 다리 사이는 곧게 · bends에 그 다리(`${출발}>${도착}`)가 있으면 꺾는 자리를 지나 길이 비율대로 */
+function dotPos<Nd extends string>(
+  plan: DotPlan<Nd>,
+  elapsed: number,
+  at: Record<Nd, Pt>,
+  still: boolean,
+  bends: Readonly<Record<string, readonly Pt[]>> = {},
+) {
   if (still) return { ...at[restNode(plan)], done: elapsed >= plan.totalMs };
   const p = planProgress(plan, elapsed);
-  const a = at[p.from];
-  const b = at[p.to];
-  return { x: a.x + (b.x - a.x) * p.frac, y: a.y + (b.y - a.y) * p.frac, done: p.done };
+  const pos = pointAlong([at[p.from], ...(bends[`${p.from}>${p.to}`] ?? []), at[p.to]], p.frac);
+  return { ...pos, done: p.done };
 }
 
 /** 움직임 줄이기 설정 — 바뀌면 바로 따른다 */
@@ -314,6 +380,11 @@ export function FlowDiagram(p: DiagramProps) {
   const raf = useRef<number | null>(null);
   const still = useReducedMotion();
 
+  // 조회 점은 메트릭 조회 비율로 뽑는다 — 골격(숫자 없음)이면 내지 않는다
+  useEffect(() => {
+    engine.setReads(skeleton ? null : p.reads);
+  }, [engine, skeleton, p.reads]);
+
   useEffect(() => {
     const step = (t: number) => {
       const before = engine.dots.length;
@@ -461,12 +532,13 @@ export function FlowDiagram(p: DiagramProps) {
           <Edge id="biz-stream" width={w(r?.commandsWriter)} label={lbl(r?.commandsWriter, '건')} />
           <Edge id="biz-worker" width={w(r?.commandsWriter)} />
           <Edge id="biz-pg" width={w(r?.applied)} label="업무 기록" />
+          <Edge id="biz-commit" width={w(r?.applied)} label="COMMIT 응답" />
           <Edge id="biz-notice" width={w(p.invalidation)} label="저장한 뒤" />
           <Edge id="biz-reply" label="결과 받음" />
         </>
       )}
 
-      {/* 조회 길(§9) — 굵기 = 조회 건/초(메트릭 5초 차분) · 점 없음 · 처리기를 거치지 않는다 */}
+      {/* 조회 길(§9) — 굵기 = 조회 건/초(메트릭 5초 차분) · 점은 갈래 비율대로 뽑는다 · 처리기를 거치지 않는다 */}
       <Edge id="read-ask" width={rw(rd?.requests)} label={rd ? edgeRate(rd.requests, '건') : null} />
       <Edge id="read-answer" width={rw(rd?.requests)} label="응답" />
       <Edge id="read-miss" width={rw(missSum)} label={p.readMissLabel} end={false} both />
@@ -497,19 +569,35 @@ export function FlowDiagram(p: DiagramProps) {
       {engine.dots.map((d) => {
         const elapsed = engine.clock - d.born;
         if (elapsed < 0) return null;
+        if (d.kind === 'read') {
+          const pos = still
+            ? { at: READ_REST[d.read], hidden: false, done: elapsed >= d.totalMs }
+            : readPos(d.route, elapsed);
+          return pos.done || pos.hidden ? null : (
+            <circle
+              key={d.id}
+              data-read={d.read}
+              cx={pos.at.x}
+              cy={pos.at.y}
+              r={READ_DOT_R}
+              fill="#0e7490"
+              fillOpacity={0.85}
+            />
+          );
+        }
         if (d.kind === 'batch') {
-          const pos = dotPos(d.plan, elapsed, BATCH_AT, still);
+          const pos = dotPos(d.plan, elapsed, BATCH_AT, still, BATCH_BENDS);
           return pos.done ? null : (
             <circle key={d.id} cx={pos.x} cy={pos.y} r={d.r} fill="#334155" fillOpacity={0.7} />
           );
         }
-        const pos = dotPos(d.plan, elapsed, BIZ_AT, still);
+        const pos = dotPos(d.plan, elapsed, BIZ_AT, still, BIZ_BENDS);
         const markAt = d.mark ? arriveAt(d.plan, d.mark.at) : null;
         const showMark = d.mark && markAt !== null && elapsed >= markAt;
         const mc: Pt | null = d.mark ? markSpot(d.mark.at) : null;
         return (
           <g key={d.id}>
-            {!pos.done && <circle cx={pos.x} cy={pos.y} r={4} fill="#7c3aed" fillOpacity={0.85} />}
+            {!pos.done && <circle cx={pos.x} cy={pos.y} r={BIZ_DOT_R} fill="#7c3aed" fillOpacity={0.85} />}
             {showMark && d.mark && mc && <BizMarkView mark={d.mark} at={mc} />}
           </g>
         );

@@ -90,7 +90,7 @@ async function fetchFlowMetrics(): Promise<FlowMetricsPoll> {
 
 export const FLOW_TITLE = '데이터가 Redis를 거쳐 어디로 가는지 실시간으로 보기';
 export const FLOW_LEAD =
-  '공장 센서 데이터와 업무 데이터가 Redis 대기줄을 거쳐, 각자에게 맞는 DB로 나뉘어 저장되는 모습이에요. 움직이는 점 하나가 실제 데이터 묶음 하나예요.';
+  '공장 센서 데이터와 업무 데이터가 Redis 대기줄을 거쳐, 각자에게 맞는 DB로 나뉘어 저장되는 모습이에요. 움직이는 점 하나가 실제 묶음 · 요청 하나예요(조회 점은 실제 비율대로).';
 
 /**
  * 흐름도 알림 한 줄 — 직접 보내 보기 실행 상태(running · stopping이면 꺼짐 안내를 숨긴다)가 필요해 RunProvider 안에서 그린다

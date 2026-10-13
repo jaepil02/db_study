@@ -2,7 +2,8 @@
 // 정본 docs/08_screen/08_evidence_screens.md §EXP-FLOW — Redis를 "서버와 DB 사이 한 기둥"으로 그린다. 오른쪽 저장 열은 진짜 DB 2(ClickHouse · PostgreSQL)뿐.
 // §9 — 세 번째 줄 "조회 요청": 조회 요청 → 기둥 ⑤ 조회 사본(캐시) → 있으면 바로 응답 · 없으면 ClickHouse · PostgreSQL에서 읽어 와 ⑤에 사본 담고 응답.
 //   조회는 워커가 처리하지 않는다(api가 직접 Redis를 먼저 본다) — 조회 줄에는 "누가 처리하나" 노드가 없고, DB로 가는 선은 처리기 노드 아래로 지난다.
-//   조회는 flow 프레임 요약이 없어 점을 그리지 않는다(선 굵기 · 숫자로만) — 조회 줄 노드에는 점 길을 비워 두지 않는다.
+//   조회는 요청마다 flow 프레임 요약이 없어 실제 비율(바로 응답 · DB까지)대로 뽑은 점이 선만 탄다(READ_ROUTES) — 조회 줄 노드에는
+//   점 길을 비워 두지 않는다(점은 ⑤ 가장자리 안쪽 글자 밖 · DB 가장자리에서 돌아서고, ⑤ 안을 가로지르는 동안은 숨는다).
 // 노드 12 = 어디서 오나 3 + Redis 기둥 칸 5(① 센서 대기줄 · ② 지금 값 · ③ 업무 대기줄 · ④ 옛 사본 지움 · 결과 알림 · ⑤ 조회 사본) + 누가 처리하나 2 + DB 2.
 // 브라우저 없이 겹침을 막으려고 글자 폭을 보수적으로 어림하는 함수(textWidth)와 상자 계산(labelBox · nodeTextBoxes)을 함께 두고,
 // test/flow-layout.test.ts가 최악의 문구(6자리 초당 값 · 10억 행 누적)로 라벨 ↔ 노드 · 라벨 ↔ 라벨 · 노드 글자 ↔ 점 자리의 겹침 0을 검사한다.
@@ -22,6 +23,7 @@
 //    ClickHouse는 PostgreSQL 오른쪽 통로(x 1105 — ClickHouse가 PostgreSQL보다 38 넓다)를 타고 올라 바닥 가장자리로 든다(한 번 꺾임 · 오른쪽 끝을 도는 우회선 없음).
 //    ⑤ 쪽 끝에도 화살촉 — "읽어 와 사본 담기"(가고 오는 길을 선 하나로).
 // ⑨ 대기줄 없이 바로 저장(비교 실험)은 업무 점 길(y 259)을 곧게 지난다 — 꺼진 칸(점선) 위로 그려 "거치지 않고 지나감"을 보인다(점도 같은 직선).
+import type { ReadKind } from '../../../lib/flow';
 
 export interface Pt {
   x: number;
@@ -233,6 +235,7 @@ export type EdgeId =
   | 'biz-stream'
   | 'biz-worker'
   | 'biz-pg'
+  | 'biz-commit'
   | 'biz-notice'
   | 'biz-reply'
   | 'biz-direct'
@@ -250,6 +253,41 @@ const BACK_X = W.x + 24;
 const COPY_X = W.x + W.w - 30;
 /** 처리기 → ②(지금 값) 되돌아가는 가로선 높이 */
 const LATEST_Y = 150;
+
+/**
+ * 점이 두 자리 사이를 곧게 가지 않고 꺾어 가는 다리 — 키 `${출발}>${도착}`(lib/flow BatchNode) · 값은 사이의 꺾는 자리.
+ * 사본 점(처리기 → PostgreSQL)은 처리기 점 길을 따라 사본 선이 내려오는 x까지 간 뒤 사본 선 위를 따라 내려와 PostgreSQL로 든다 —
+ * 곧게 가면 ClickHouse 선 아래 빈 곳을 비스듬히 가로질러 "어느 선을 탄 점인지"가 안 보인다.
+ * 지금 값 쓰기(XACK 뒤 → ②)는 처리기 점 길을 따라 "지금 값 씀" 선이 내려오는 x까지 간 뒤 그 선을 타고 ② 오른쪽 가장자리로 든다.
+ */
+export const BATCH_BENDS: Readonly<Record<string, readonly Pt[]>> = {
+  'worker>pgCopy': [
+    { x: COPY_X, y: LANE_A },
+    { x: COPY_X, y: COPY_IN_Y },
+  ],
+  'xack>latest': [
+    { x: BACK_X, y: LANE_A },
+    { x: BACK_X, y: LATEST_Y },
+    { x: PILLAR_R, y: LATEST_Y },
+  ],
+};
+
+/** 꺾은 길(자리 둘 이상) 위에서 길이 비율 frac(0~1)인 자리 — 길이가 0이면 첫 자리 */
+export function pointAlong(pts: readonly Pt[], frac: number): Pt {
+  const seg = pts.slice(1).map((b, i) => Math.hypot(b.x - (pts[i] as Pt).x, b.y - (pts[i] as Pt).y));
+  const total = seg.reduce((a, l) => a + l, 0);
+  let d = Math.min(Math.max(frac, 0), 1) * total;
+  for (let i = 0; i < seg.length; i++) {
+    const l = seg[i] as number;
+    if (d <= l && l > 0) {
+      const a = pts[i] as Pt;
+      const b = pts[i + 1] as Pt;
+      return { x: a.x + ((b.x - a.x) * d) / l, y: a.y + ((b.y - a.y) * d) / l };
+    }
+    d -= l;
+  }
+  return { ...(pts[total > 0 ? pts.length - 1 : 0] as Pt) };
+}
 /** ④ → 업무 요청 · 처리기 → ④ 가로선 높이 */
 const REPLY_Y = 324;
 /** 조회 줄 — 조회 요청 → ⑤(묻기) · ⑤ ↔ DB 줄기 높이 · ⑤ → 조회 요청(응답) */
@@ -257,6 +295,36 @@ const ASK_Y = 374;
 const ANSWER_Y = 404;
 /** ⑤ ↔ DB 줄기가 PostgreSQL 바닥으로 갈라지는 x — PostgreSQL 가운데 */
 const READ_PG_X = BOX.pg.x + BOX.pg.w / 2;
+/**
+ * COMMIT 응답 선(PostgreSQL → 하나씩 처리) — PostgreSQL 왼쪽 가장자리에서 나와 처리기 아래를 지나 처리기 바닥으로 든다.
+ * 가로선 높이는 대기줄 없이 바로 저장 라벨(처리기 바로 아래 두 줄) 밑 · 드는 x는 그 라벨 왼쪽 끝보다 왼쪽(선 굵기 상한 포함)이다.
+ */
+const COMMIT_Y = 310;
+const COMMIT_X = W.x + W.w - 48;
+
+/**
+ * 업무 점이 선을 타고 꺾어 가는 다리 — 키 `${출발}>${도착}`(lib/flow BizNode) · 값은 사이의 꺾는 자리(BATCH_BENDS와 같은 꼴).
+ * PostgreSQL → 하나씩 처리는 COMMIT 응답 선 · 하나씩 처리 → ④는 "저장한 뒤" 선(옛 사본 지움이 없으면 ④ 점 길을 지나 결과 알림까지) ·
+ * ④ → 업무 요청은 "결과 받음" 선. 대기줄 없이 바로 저장(SW-12 direct)의 다리는 꺾지 않는다(전과 같다).
+ */
+const NOTICE_BENDS: readonly Pt[] = [
+  { x: BACK_X, y: LANE_B },
+  { x: BACK_X, y: REPLY_Y },
+  { x: PILLAR_R, y: REPLY_Y },
+];
+export const BIZ_BENDS: Readonly<Record<string, readonly Pt[]>> = {
+  'pgTx>bizWorker': [
+    { x: BIZ_AT.pgTx.x, y: COMMIT_Y },
+    { x: COMMIT_X, y: COMMIT_Y },
+    { x: COMMIT_X, y: LANE_B },
+  ],
+  'bizWorker>cache': NOTICE_BENDS,
+  'bizWorker>result': [...NOTICE_BENDS, BIZ_AT.cache],
+  'result>api': [
+    { x: BOX.reply.x, y: REPLY_Y },
+    { x: laneX('bizSrc'), y: REPLY_Y },
+  ],
+};
 
 export const EDGE: Record<EdgeId, { path: Pt[]; label: LabelSpot | null }> = {
   // 센서 줄 — 점 길(y 103)을 따라 · 공장 센서 → ① → 모아서 저장
@@ -289,7 +357,8 @@ export const EDGE: Record<EdgeId, { path: Pt[]; label: LabelSpot | null }> = {
       { x: BACK_X, y: LATEST_Y },
       { x: PILLAR_R, y: LATEST_Y },
     ],
-    label: { x: (PILLAR.x + PILLAR.w + BACK_X) / 2, y: LATEST_Y - 9, align: 'middle' },
+    // 라벨은 선에서 11 위 — 선을 타는 배치 점(반지름 상한 7)이 글자 상자를 가리지 않게
+    label: { x: (PILLAR.x + PILLAR.w + BACK_X) / 2, y: LATEST_Y - 11, align: 'middle' },
   },
   // 비교용 사본(SW-09 on일 때만 그린다) — 라벨은 선 아래(업무 처리 노드 오른쪽 통로)
   'worker-pg-copy': {
@@ -321,6 +390,15 @@ export const EDGE: Record<EdgeId, { path: Pt[]; label: LabelSpot | null }> = {
       { x: DB_X, y: LANE_B },
     ],
     label: { x: DB_X - 6, y: LANE_B - 9, align: 'end' },
+  },
+  // COMMIT 응답 — 트랜잭션을 연 워커가 COMMIT 응답을 받는다(저장 뒤 일은 워커가 한다 · 라벨은 선 아래 — 위는 바로 저장 라벨 자리)
+  'biz-commit': {
+    path: [
+      { x: DB_X, y: COMMIT_Y },
+      { x: COMMIT_X, y: COMMIT_Y },
+      { x: COMMIT_X, y: BOX.bizWorker.y + BOX.bizWorker.h },
+    ],
+    label: { x: DB_X - 6, y: COMMIT_Y + 16, align: 'end' },
   },
   // 저장한 뒤 기둥 ④ — 옛 사본 지움 · 결과 알림(06_pipeline/07 §적용 단계 ⑤ → ⑥ → ⑦)
   'biz-notice': {
@@ -388,6 +466,96 @@ export const EDGE: Record<EdgeId, { path: Pt[]; label: LabelSpot | null }> = {
     label: null,
   },
 };
+
+// ── 조회 점 길 — 조회 요청 → ⑤ → (있으면) 응답 · (없으면) ⑤ ↔ DB 줄기를 타고 DB에 닿았다 돌아와 ⑤에 사본 담고 응답 ──
+// 조회는 요청마다 단계 ms가 없어 다리마다 고정 화면 시간이다(속도는 보기용 · DB까지 가는 다리는 PostgreSQL · ClickHouse가 같은 시간 —
+// 선 길이 차로 어느 DB가 빠르다고 읽히지 않게). ⑤ 안을 가로지르는 동안은 숨긴다(칸 가운데 글자 위를 지나지 않게).
+
+/** 업무 점 반지름(고정) · 조회 점 반지름 — 업무 점보다 조금 작다 */
+export const BIZ_DOT_R = 4;
+export const READ_DOT_R = 3.5;
+/** 조회 점 다리별 화면 시간(ms) */
+export const READ_MS = {
+  hop: 500,
+  look: 150,
+  turn: 200,
+  cross: 150,
+  db: 1400,
+  dbStay: 250,
+  store: 150,
+} as const;
+/** ⑤ 안에서 점이 머무는 x — 왼쪽 · 오른쪽 가장자리에서 10 안쪽(칸 글자는 가운데라 닿지 않는다) */
+const READ_IN_X = BOX.readCache.x + 10;
+const READ_OUT_X = BOX.readCache.x + BOX.readCache.w - 10;
+
+/** 조회 점 다리 — 꺾은 길(pts)을 ms 동안 길이 비율대로 · hidden이면 그리지 않는다 */
+export interface ReadLeg {
+  pts: readonly Pt[];
+  ms: number;
+  hidden?: true;
+}
+
+const stay = (p: Pt, ms: number): ReadLeg => ({ pts: [p, p], ms });
+const ASK_IN: Pt = { x: READ_IN_X, y: ASK_Y };
+const ANSWER_IN: Pt = { x: READ_IN_X, y: ANSWER_Y };
+const MISS_OUT: Pt = { x: READ_OUT_X, y: ASK_Y };
+/** ⑤ → DB 가장자리 — 그려진 줄기(read-miss) + 갈래(read-pg · read-ch) 그대로 */
+const toDb = (branch: 'read-pg' | 'read-ch'): Pt[] => [
+  MISS_OUT,
+  ...EDGE['read-miss'].path,
+  ...EDGE[branch].path.slice(1),
+];
+
+function missRoute(branch: 'read-pg' | 'read-ch'): ReadLeg[] {
+  const out = toDb(branch);
+  const at = out[out.length - 1] as Pt;
+  return [
+    { pts: [EDGE['read-ask'].path[0] as Pt, ASK_IN], ms: READ_MS.hop },
+    stay(ASK_IN, READ_MS.look),
+    { pts: [ASK_IN, MISS_OUT], ms: READ_MS.cross, hidden: true },
+    { pts: out, ms: READ_MS.db },
+    stay(at, READ_MS.dbStay),
+    { pts: [...out].reverse(), ms: READ_MS.db },
+    stay(MISS_OUT, READ_MS.store),
+    { pts: [MISS_OUT, ANSWER_IN], ms: READ_MS.cross, hidden: true },
+    { pts: [ANSWER_IN, EDGE['read-answer'].path[1] as Pt], ms: READ_MS.hop },
+  ];
+}
+
+/** 갈래마다 조회 점 길 — hit: 묻기 선 → ⑤ 왼쪽 → 응답 선 · ch · pg: ⑤를 지나 줄기를 타고 DB에 닿았다 돌아와 사본 담고 응답 선 */
+export const READ_ROUTES: Record<ReadKind, readonly ReadLeg[]> = {
+  hit: [
+    { pts: [EDGE['read-ask'].path[0] as Pt, ASK_IN], ms: READ_MS.hop },
+    stay(ASK_IN, READ_MS.look),
+    { pts: [ASK_IN, ANSWER_IN], ms: READ_MS.turn },
+    { pts: [ANSWER_IN, EDGE['read-answer'].path[1] as Pt], ms: READ_MS.hop },
+  ],
+  ch: missRoute('read-ch'),
+  pg: missRoute('read-pg'),
+};
+
+/** 움직임 줄이기 — 조회 점이 머무는 한 자리(hit은 ⑤ 왼쪽 · DB까지는 DB 가장자리) */
+export const READ_REST: Record<ReadKind, Pt> = {
+  hit: ASK_IN,
+  ch: EDGE['read-ch'].path[EDGE['read-ch'].path.length - 1] as Pt,
+  pg: EDGE['read-pg'].path[EDGE['read-pg'].path.length - 1] as Pt,
+};
+
+export const routeMs = (route: readonly ReadLeg[]): number => route.reduce((a, l) => a + l.ms, 0);
+
+/** 조회 점의 지금 자리 — 경과(화면 ms)의 다리 · 그 다리 안 길이 비율 자리 · 숨김 · 끝남 */
+export function readPos(
+  route: readonly ReadLeg[],
+  elapsed: number,
+): { at: Pt; hidden: boolean; done: boolean } {
+  let t = Math.max(elapsed, 0);
+  for (const leg of route) {
+    if (t < leg.ms) return { at: pointAlong(leg.pts, t / leg.ms), hidden: leg.hidden === true, done: false };
+    t -= leg.ms;
+  }
+  const last = route[route.length - 1];
+  return { at: last ? (last.pts[last.pts.length - 1] as Pt) : { x: 0, y: 0 }, hidden: false, done: true };
+}
 
 /** 간선 굵기 상한 — 통로 안 나란한 선(간격 ≥ 18)이 서로 붙지 않는 값 */
 export const EDGE_W_MAX = 6;

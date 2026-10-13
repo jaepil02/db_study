@@ -11,7 +11,10 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
 import {
   BATCH_AT,
+  BATCH_BENDS,
   BIZ_AT,
+  BIZ_BENDS,
+  BIZ_DOT_R,
   BIZ_NOTE,
   BOX,
   type Box,
@@ -42,6 +45,13 @@ import {
   PILLAR_FOOT_Y,
   PILLAR_HEAD_Y,
   type Pt,
+  pointAlong,
+  READ_DOT_R,
+  READ_MS,
+  READ_REST,
+  READ_ROUTES,
+  readPos,
+  routeMs,
   textWidth,
   VIEW_H,
   VIEW_W,
@@ -72,7 +82,7 @@ import {
   workerLines,
 } from '../components/experiments/flow/node-lines';
 import type { FlowMetrics, FlowRates, FlowSwitchFlags, ReadRates } from '../lib/flow';
-import { batchDotRadius, DUPLICATE_MARK, edgeWidth, OUTCOME_MARK } from '../lib/flow';
+import { batchDotRadius, DUPLICATE_MARK, edgeWidth, OUTCOME_MARK, READ_KINDS } from '../lib/flow';
 
 const BIG = 999_999;
 const rates: FlowRates = {
@@ -151,6 +161,7 @@ const WORST_LABELS: Partial<Record<EdgeId, string[][]>> = {
   'worker-pg-copy': [['비교용 사본', edgeRate(BIG, '개') as string], ['비교용 사본']],
   'biz-stream': [[edgeRate(BIG, '건') as string]],
   'biz-pg': [['업무 기록']],
+  'biz-commit': [['COMMIT 응답']],
   'biz-notice': [['저장한 뒤']],
   'biz-reply': [['결과 받음']],
   'biz-direct': [['대기줄 없이 바로 저장', '(비교 실험)']],
@@ -275,7 +286,7 @@ describe('흐름도 배치 — 조회 줄(§9.2)', () => {
       }
     }
   });
-  it('조회 줄 노드에는 점 자리가 없다(조회는 점 없이 숫자로만)', () => {
+  it('배치 · 업무 점 자리는 조회 줄 노드 안에 없다(조회 점은 선만 탄다)', () => {
     for (const [name, p] of DOT_SPOTS)
       for (const id of ['readSrc', 'readCache'] as const)
         expect(inside({ ...p, w: 0, h: 0 }, BOX[id]), `${name} ↔ ${id}`).toBe(false);
@@ -339,6 +350,7 @@ const DRAWN_BASE: EdgeId[] = [
   'biz-stream',
   'biz-worker',
   'biz-pg',
+  'biz-commit',
   'biz-notice',
   'biz-reply',
   'read-ask',
@@ -347,7 +359,14 @@ const DRAWN_BASE: EdgeId[] = [
   'read-pg',
   'read-ch',
 ];
-const BIZ_QUEUE_EDGES: EdgeId[] = ['biz-stream', 'biz-worker', 'biz-pg', 'biz-notice', 'biz-reply'];
+const BIZ_QUEUE_EDGES: EdgeId[] = [
+  'biz-stream',
+  'biz-worker',
+  'biz-pg',
+  'biz-commit',
+  'biz-notice',
+  'biz-reply',
+];
 const DRAWN_SETS: [string, EdgeId[]][] = [
   ['기본(비교용 사본 꺼짐)', DRAWN_BASE],
   ['비교용 사본 켬', [...DRAWN_BASE, 'worker-pg-copy']],
@@ -371,6 +390,47 @@ describe('흐름도 배치 — 선 교차(다듬기 §2.3)', () => {
     expect(c.length).toBeLessThan(BEFORE[name] ?? 0);
   });
 });
+
+/** 배치 점 길 — 다리 사이에 꺾는 자리(BATCH_BENDS)를 끼운 자리 목록 */
+function batchRoute(nodes: readonly (keyof typeof BATCH_AT)[]): Pt[] {
+  const out: Pt[] = [BATCH_AT[nodes[0] as keyof typeof BATCH_AT]];
+  for (let i = 1; i < nodes.length; i++)
+    out.push(
+      ...(BATCH_BENDS[`${nodes[i - 1]}>${nodes[i]}`] ?? []),
+      BATCH_AT[nodes[i] as keyof typeof BATCH_AT],
+    );
+  return out;
+}
+/** 업무 점 길 — 다리 사이에 꺾는 자리(BIZ_BENDS)를 끼운 자리 목록 */
+function bizRoute(nodes: readonly (keyof typeof BIZ_AT)[]): Pt[] {
+  const out: Pt[] = [BIZ_AT[nodes[0] as keyof typeof BIZ_AT]];
+  for (let i = 1; i < nodes.length; i++)
+    out.push(...(BIZ_BENDS[`${nodes[i - 1]}>${nodes[i]}`] ?? []), BIZ_AT[nodes[i] as keyof typeof BIZ_AT]);
+  return out;
+}
+/** 대기줄을 거치는 업무 점 길 셋 — lib/flow bizPlan 다리 순서(ok · 거절 · 저장 없이 이미 처리됨 · 시간 초과) */
+const BIZ_ROUTES: [string, Pt[]][] = [
+  ['업무', bizRoute(['api', 'bizStream', 'bizWorker', 'pgTx', 'bizWorker', 'cache', 'result', 'api'])],
+  ['업무 거절', bizRoute(['api', 'bizStream', 'bizWorker', 'pgTx', 'bizWorker', 'result', 'api'])],
+  ['업무 저장 없이', bizRoute(['api', 'bizStream', 'bizWorker', 'result', 'api'])],
+];
+/** 조회 점이 보이는 다리마다의 꺾은 길(⑤ 안을 가로지르는 숨은 다리는 뺀다 — 다리끼리 이어 붙이지 않는다) */
+function readLegs(kind: (typeof READ_KINDS)[number]): Pt[][] {
+  return READ_ROUTES[kind].filter((l) => !l.hidden).map((l) => [...l.pts]);
+}
+/** 꺾은 길의 토막마다 고르게 51점 — 점 상자 겹침 검사용 */
+function samples(pts: readonly Pt[], gap?: (i: number) => boolean): Pt[] {
+  const out: Pt[] = [];
+  for (let i = 1; i < pts.length; i++) {
+    if (gap?.(i)) continue;
+    const a = pts[i - 1] as Pt;
+    const b = pts[i] as Pt;
+    for (let k = 0; k <= 50; k++)
+      out.push({ x: a.x + ((b.x - a.x) * k) / 50, y: a.y + ((b.y - a.y) * k) / 50 });
+  }
+  return out;
+}
+const boxAt = (p: Pt, r: number): Box => ({ x: p.x - r, y: p.y - r, w: 2 * r, h: 2 * r });
 
 describe('흐름도 배치 — 노드 글자', () => {
   const worst = worstNodeLines();
@@ -403,18 +463,17 @@ describe('흐름도 배치 — 노드 글자', () => {
     for (const [name, p] of DOT_SPOTS)
       for (const [fid, b] of FIXED_TEXT) expect(overlaps(dotBox(p), b), `${name} ↔ ${fid}`).toBe(false);
   });
-  it('점이 지나가는 길(멈춤 자리 사이 직선)도 노드 글자 · 고정 글자를 가로지르지 않는다', () => {
-    // 배치 ⑧ 순서 전부(대조군 사본 포함) · 업무 명령 경로 · 대기줄 없이 바로 저장 — lib/flow batchPlan · bizPlan의 다리 순서
+  it('점이 지나가는 길(멈춤 자리 사이 · 꺾는 자리 포함)도 노드 글자 · 고정 글자를 가로지르지 않는다', () => {
+    // 배치 ⑧ 순서(본 점 · 처리기에서 갈라지는 사본 점) · 업무 명령 경로(COMMIT 응답 · 저장한 뒤 · 결과 받음 선) · 대기줄 없이 바로 저장 ·
+    // 조회 갈래마다 보이는 다리 — lib/flow batchPlan · bizPlan의 다리 순서 · diagram-layout READ_ROUTES. 배치 · 업무는 반지름 상한, 조회는 조회 점 반지름
     const routes: [string, Pt[]][] = [
-      [
-        '배치',
-        (['src', 'stream', 'worker', 'ch', 'pgCopy', 'xack', 'latest'] as const).map((k) => BATCH_AT[k]),
-      ],
-      [
-        '업무',
-        (['api', 'bizStream', 'bizWorker', 'pgTx', 'cache', 'result', 'api'] as const).map((k) => BIZ_AT[k]),
-      ],
-      ['업무 바로 저장', (['api', 'pgTx', 'cache', 'result', 'api'] as const).map((k) => BIZ_AT[k])],
+      ['배치', batchRoute(['src', 'stream', 'worker', 'ch', 'xack', 'latest'])],
+      ['배치 사본', [BATCH_AT.worker, ...(BATCH_BENDS['worker>pgCopy'] ?? []), BATCH_AT.pgCopy]],
+      ...BIZ_ROUTES,
+      ['업무 바로 저장', bizRoute(['api', 'pgTx', 'cache', 'result', 'api'])],
+      ...READ_KINDS.flatMap((k) =>
+        readLegs(k).map((pts, i) => [`조회 ${k} 다리 ${i}`, pts] as [string, Pt[]]),
+      ),
     ];
     const texts: [string, Box][] = [
       ...FIXED_TEXT,
@@ -425,18 +484,41 @@ describe('흐름도 배치 — 노드 글자', () => {
       ),
     ];
     for (const [name, pts] of routes)
-      for (let i = 1; i < pts.length; i++) {
-        const a = pts[i - 1] as Pt;
-        const b = pts[i] as Pt;
-        for (let k = 0; k <= 50; k++) {
-          const p = { x: a.x + ((b.x - a.x) * k) / 50, y: a.y + ((b.y - a.y) * k) / 50 };
-          for (const [tid, t] of texts)
-            expect(
-              overlaps(dotBox(p), t),
-              `${name} 다리 ${i} (${p.x.toFixed(0)}, ${p.y.toFixed(0)}) ↔ ${tid}`,
-            ).toBe(false);
-        }
-      }
+      for (const p of samples(pts))
+        for (const [tid, t] of texts)
+          expect(
+            overlaps(name.startsWith('조회') ? boxAt(p, READ_DOT_R) : dotBox(p), t),
+            `${name} (${p.x.toFixed(0)}, ${p.y.toFixed(0)}) ↔ ${tid}`,
+          ).toBe(false);
+  });
+  it('사본 점은 처리기 점 길에서 사본 선으로 내려와 그 선 위를 타고 PostgreSQL로 든다', () => {
+    const copy = EDGE['worker-pg-copy'].path;
+    const [turn, down] = BATCH_BENDS['worker>pgCopy'] ?? [];
+    // 처리기 점 길(본 점과 같은 높이)에서 사본 선이 내려오는 x로
+    expect(turn).toEqual({ x: copy[0]?.x, y: BATCH_AT.worker.y });
+    // 사본 선이 꺾이는 자리 · PostgreSQL에 드는 높이 그대로
+    expect(down).toEqual(copy[1]);
+    expect(BATCH_AT.pgCopy.y).toBe(copy[2]?.y);
+  });
+  it('꺾은 길 위 자리 — 길이 비율대로(꺾는 자리를 지난다)', () => {
+    const pts = [
+      { x: 0, y: 0 },
+      { x: 10, y: 0 },
+      { x: 10, y: 30 },
+    ];
+    expect(pointAlong(pts, 0)).toEqual({ x: 0, y: 0 });
+    expect(pointAlong(pts, 0.25)).toEqual({ x: 10, y: 0 });
+    expect(pointAlong(pts, 0.5)).toEqual({ x: 10, y: 10 });
+    expect(pointAlong(pts, 1)).toEqual({ x: 10, y: 30 });
+    expect(
+      pointAlong(
+        [
+          { x: 3, y: 4 },
+          { x: 3, y: 4 },
+        ],
+        0.7,
+      ),
+    ).toEqual({ x: 3, y: 4 });
   });
   it('점 반지름 · 간선 굵기 상한', () => {
     expect(batchDotRadius(1e12)).toBeLessThanOrEqual(DOT_R_MAX);
@@ -500,6 +582,7 @@ describe('흐름도 배치 — 간선 라벨', () => {
       ['biz-reply', BOX.bizSrc, pillarL],
       ['worker-pg-copy', BOX.worker, BOX.ch],
       ['biz-pg', BOX.worker, BOX.ch],
+      ['biz-commit', BOX.bizWorker, BOX.pg],
       // 대기줄 없이 바로 저장 라벨은 꺼진 업무 처리 노드 바로 아래 — 처리 열 왼쪽 가장자리 ~ PostgreSQL 사이
       ['biz-direct', { x: BOX.bizWorker.x, w: 0 }, BOX.pg],
       ['read-ask', BOX.readSrc, pillarL],
@@ -1020,4 +1103,153 @@ describe('두 줄 칸 — 1440 · 1280에서 두 줄 안(R3 · Pretendard 실측
       expect(keepAllLines(NO_BIZ_TEXT, inner - labelCol - 8, PRETENDARD[400], 12)).toBeLessThanOrEqual(2);
     },
   );
+});
+
+describe('흐름도 점 길 — 업무 점은 COMMIT 응답 · 저장한 뒤 · 결과 받음 선을, 조회 점은 조회 선을 탄다', () => {
+  const pathOf = (id: EdgeId) => EDGE[id].path;
+  const bottom = (b: Box) => b.y + b.h;
+  const labelBoxes: [string, Box][] = (Object.entries(WORST_LABELS) as [EdgeId, string[][]][]).flatMap(
+    ([id, variants]) => {
+      const spot = EDGE[id].label;
+      return spot ? variants.map((l) => [id, labelBox(spot, l)] as [string, Box]) : [];
+    },
+  );
+
+  it('PostgreSQL → 하나씩 처리는 COMMIT 응답 선 위 — PostgreSQL 왼쪽 가장자리에서 나와 처리기 바닥으로 든다', () => {
+    const line = pathOf('biz-commit');
+    const [down, across, up] = BIZ_BENDS['pgTx>bizWorker'] ?? [];
+    expect(line[0]?.x).toBe(BOX.pg.x);
+    expect(line[2]?.y).toBe(bottom(BOX.bizWorker));
+    // 점은 PostgreSQL 안 점 자리에서 선 높이로 내려와 선을 그대로 타고(꺾는 자리 같음) 처리기 점 길로 오른다
+    expect(down).toEqual({ x: BIZ_AT.pgTx.x, y: line[0]?.y });
+    expect(across).toEqual(line[1]);
+    expect(up).toEqual({ x: line[2]?.x, y: LANE_B });
+    expect(BIZ_AT.pgTx.x).toBeGreaterThan(BOX.pg.x);
+  });
+
+  it('모아서 저장 → ② 지금 값은 "지금 값 씀" 선 그대로 — 처리기 점 길에서 선이 내려오는 x로 가 선을 타고 ② 오른쪽 가장자리로', () => {
+    const line = pathOf('worker-latest');
+    const bends = BATCH_BENDS['xack>latest'] ?? [];
+    expect(bends[0]).toEqual({ x: line[0]?.x, y: BATCH_AT.xack.y });
+    expect(bends.slice(1)).toEqual(line.slice(1));
+    expect(line[line.length - 1]?.x).toBe(BOX.latest.x + BOX.latest.w);
+    // 선을 타는 배치 점(반지름 상한)이 어느 간선 라벨도 가리지 않는다
+    for (const p of samples([BATCH_AT.xack, ...bends, BATCH_AT.latest]))
+      for (const [lid, b] of labelBoxes)
+        expect(overlaps(dotBox(p), b), `(${p.x.toFixed(0)}, ${p.y.toFixed(0)}) ↔ 라벨 ${lid}`).toBe(false);
+  });
+
+  it('하나씩 처리 → ④는 "저장한 뒤" 선 · ④ → 업무 요청은 "결과 받음" 선 그대로', () => {
+    const notice = pathOf('biz-notice');
+    const bends = BIZ_BENDS['bizWorker>cache'] ?? [];
+    expect(bends[0]).toEqual({ x: notice[0]?.x, y: LANE_B });
+    expect(bends.slice(1)).toEqual(notice.slice(1));
+    // 옛 사본 지움이 없으면(거절 · 이미 처리됨 · 시간 초과) 같은 선으로 ④에 들어 점 길을 지나 결과 알림까지
+    expect(BIZ_BENDS['bizWorker>result']).toEqual([...bends, BIZ_AT.cache]);
+    const reply = pathOf('biz-reply');
+    expect(BIZ_BENDS['result>api']).toEqual(reply.slice(0, 2));
+    expect(reply[2]?.x).toBe(BIZ_AT.api.x);
+  });
+
+  it('업무 · 조회 점(실제 반지름)은 지나가며 어느 간선 라벨도 가리지 않는다', () => {
+    const runs: [string, Pt[], number][] = [
+      ...BIZ_ROUTES.map(([n, pts]) => [n, pts, BIZ_DOT_R] as [string, Pt[], number]),
+      ...READ_KINDS.flatMap((k) =>
+        readLegs(k).map((pts, i) => [`조회 ${k} 다리 ${i}`, pts, READ_DOT_R] as [string, Pt[], number]),
+      ),
+    ];
+    for (const [name, pts, r] of runs)
+      for (const p of samples(pts))
+        for (const [lid, b] of labelBoxes)
+          expect(
+            overlaps(boxAt(p, r), b),
+            `${name} (${p.x.toFixed(0)}, ${p.y.toFixed(0)}) ↔ 라벨 ${lid}`,
+          ).toBe(false);
+  });
+
+  it('조회 점 — 묻기 선으로 ⑤에 들고 응답 선으로 나온다 · ⑤ 안을 가로지르는 다리만 숨는다', () => {
+    const cache = BOX.readCache;
+    for (const k of READ_KINDS) {
+      const route = READ_ROUTES[k];
+      const first = route[0]?.pts ?? [];
+      const last = route[route.length - 1]?.pts ?? [];
+      expect(first[0]).toEqual(pathOf('read-ask')[0]);
+      expect(first.every((p) => p.y === pathOf('read-ask')[0]?.y)).toBe(true);
+      expect(last.at(-1)).toEqual(pathOf('read-answer').at(-1));
+      expect(last.every((p) => p.y === pathOf('read-answer')[0]?.y)).toBe(true);
+      for (const leg of route.filter((l) => l.hidden))
+        for (const p of leg.pts) expect(inside({ ...p, w: 0, h: 0 }, cache), `${k} 숨은 다리`).toBe(true);
+    }
+    // 있으면 바로 응답 — ⑤ 오른쪽으로 나가지 않는다
+    for (const leg of READ_ROUTES.hit) for (const p of leg.pts) expect(p.x).toBeLessThan(cache.x + cache.w);
+    expect(READ_ROUTES.hit.some((l) => l.hidden)).toBe(false);
+  });
+
+  it.each([
+    ['pg', 'read-pg', BOX.pg],
+    ['ch', 'read-ch', BOX.ch],
+  ] as const)(
+    '조회 점 %s — 줄기 · 갈래 선을 그대로 타고 DB 가장자리에 닿았다 같은 길로 돌아온다',
+    (k, branch, db) => {
+      const legs = READ_ROUTES[k].filter((l) => !l.hidden && l.pts.length > 2);
+      const [out, back] = legs;
+      const line = [...pathOf('read-miss'), ...pathOf(branch).slice(1)];
+      expect(out?.pts.slice(1)).toEqual(line);
+      expect(back?.pts).toEqual([...(out?.pts ?? [])].reverse());
+      const end = line[line.length - 1] as Pt;
+      expect(end.y).toBe(bottom(db));
+      expect(READ_REST[k]).toEqual(end);
+      // ⑤ 오른쪽 가장자리 안쪽에서 줄기로 나간다(줄기 시작 = ⑤ 오른쪽 가장자리)
+      expect(out?.pts[0]?.y).toBe(line[0]?.y);
+      expect(out?.pts[0]?.x).toBeLessThan(line[0]?.x ?? 0);
+    },
+  );
+
+  it('조회 점 다리 시간 — DB까지는 PostgreSQL · ClickHouse가 같다(선 길이로 빠르기를 말하지 않는다) · DB까지가 바로 응답보다 길다', () => {
+    expect(routeMs(READ_ROUTES.pg)).toBe(routeMs(READ_ROUTES.ch));
+    expect(routeMs(READ_ROUTES.pg)).toBeGreaterThan(routeMs(READ_ROUTES.hit));
+    const db = (k: 'pg' | 'ch') => READ_ROUTES[k].filter((l) => l.ms === READ_MS.db);
+    expect(db('pg')).toHaveLength(2);
+    expect(db('ch')).toHaveLength(2);
+  });
+
+  it('조회 점 자리 — 처음은 묻기 선 시작 · ⑤를 가로지르는 동안 숨음 · 끝나면 done', () => {
+    const route = READ_ROUTES.pg;
+    expect(readPos(route, 0)).toEqual({ at: pathOf('read-ask')[0], hidden: false, done: false });
+    const crossAt = READ_MS.hop + READ_MS.look + READ_MS.cross / 2;
+    expect(readPos(route, crossAt).hidden).toBe(true);
+    expect(readPos(route, routeMs(route)).done).toBe(true);
+    // 줄기를 타는 동안 자리 — 줄기 높이 그대로
+    expect(readPos(route, READ_MS.hop + READ_MS.look + READ_MS.cross + 1).at.y).toBe(
+      pathOf('read-miss')[0]?.y,
+    );
+  });
+
+  it('점 엔진 — 조회 점을 초당 상한까지 갈래 몫 그대로 낸다 · 끊김(멈춤) · 조회 없음이면 내지 않는다', () => {
+    const engine = new DotEngine();
+    engine.setReads({ requests: 10, hit: 6, chMiss: 2, pgMiss: 2, bypass: 0, error: 0, latestPoints: null });
+    const seen = new Map<number, string>();
+    const collect = () => {
+      for (const d of engine.dots) if (d.kind === 'read' && !seen.has(d.id)) seen.set(d.id, d.read);
+    };
+    for (let t = 0; t <= 10_000; t += 125) {
+      engine.tick(t);
+      collect();
+    }
+    // 실제 10건/초 → 상한 2개/초 · 10초 = 20개 · 몫 0.6 · 0.2 · 0.2
+    const kinds = [...seen.values()];
+    expect(kinds).toHaveLength(20);
+    expect(kinds.filter((k) => k === 'hit')).toHaveLength(12);
+    expect(kinds.filter((k) => k === 'ch')).toHaveLength(4);
+    expect(kinds.filter((k) => k === 'pg')).toHaveLength(4);
+    engine.paused = true;
+    for (let t = 10_125; t <= 15_000; t += 125) engine.tick(t);
+    collect();
+    expect(seen.size).toBe(20);
+    engine.paused = false;
+    engine.setReads(null);
+    for (let t = 15_125; t <= 20_000; t += 125) engine.tick(t);
+    collect();
+    expect(seen.size).toBe(20);
+  });
 });

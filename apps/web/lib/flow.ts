@@ -120,11 +120,20 @@ function finish<N extends string>(start: N, raw: Leg<N>[], realTotal: number): D
   return { start, legs, scale, totalMs: legs.reduce((a, l) => a + l.ms, 0) };
 }
 
+/** 배치 점 계획 — 본 점(ClickHouse 갈래) + 비교 실험 중이면 사본 점(PostgreSQL 갈래) */
+export interface BatchPlan extends DotPlan<BatchNode> {
+  /** 사본 점 — 본 점이 처리기를 떠나는 순간(본 점 출발 뒤 delayMs) 처리기에서 함께 출발해 PostgreSQL로 · 사본이 없으면 null */
+  copy: { delayMs: number; plan: DotPlan<BatchNode> } | null;
+}
+
 /**
- * 배치 점 — 스트림 대기 → 디코드 → CH 삽입 → PG COPY → XACK → 최신값(⑧ 순서) · null 단계는 건너뛴다.
+ * 배치 점 — 스트림 대기 → 디코드 → 처리기에서 두 갈래(CH 삽입 · 비교 실험 중이면 PG COPY) → XACK → 최신값 · null 단계는 건너뛴다.
+ * 두 갈래는 같은 순간 출발한다(사용자 결정 2026-10-13 — 같은 묶음이 두 DB로 갈라져 들어감을 보인다). 실제 처리기는 CH 삽입이
+ * 성공한 뒤 COPY를 시작하지만(apps/api ingest/flusher.ts) 그림은 순서 대신 갈래를 보인다. XACK는 COPY 뒤라 COPY가 더 길면
+ * 본 점이 ClickHouse에서 기다렸다 XACK로 간다. 배율은 두 갈래가 겹친 시간(긴 갈래만)으로 정한다.
  * 스트림 대기는 발생원 → Stream → 워커 두 다리에 반씩 나눈다(단계 합은 그대로).
  */
-export function batchPlan(b: FlowBatchSummaryBody): DotPlan<BatchNode> {
+export function batchPlan(b: FlowBatchSummaryBody): BatchPlan {
   const s = b.stages;
   const legs: Leg<BatchNode>[] = [];
   if (s.streamWaitMs !== null) {
@@ -134,11 +143,31 @@ export function batchPlan(b: FlowBatchSummaryBody): DotPlan<BatchNode> {
     legs.push({ to: 'worker', ms: 0, stage: null });
   }
   if (s.decodeMs !== null) legs.push({ to: 'worker', ms: s.decodeMs, stage: 'decodeMs' });
+  const departRaw = legs.reduce((a, l) => a + l.ms, 0);
   if (s.chInsertMs !== null) legs.push({ to: 'ch', ms: s.chInsertMs, stage: 'chInsertMs' });
-  if (s.controlCopyMs !== null) legs.push({ to: 'pgCopy', ms: s.controlCopyMs, stage: 'controlCopyMs' });
+  const wait = (s.controlCopyMs ?? 0) - (s.chInsertMs ?? 0);
+  if (wait > 0) legs.push({ to: s.chInsertMs !== null ? 'ch' : 'worker', ms: wait, stage: null });
   legs.push({ to: 'xack', ms: 0, stage: null });
   if (s.latestWriteMs !== null) legs.push({ to: 'latest', ms: s.latestWriteMs, stage: 'latestWriteMs' });
-  return finish('src', legs, sumStages(s));
+  const main = finish<BatchNode>(
+    'src',
+    legs,
+    legs.reduce((a, l) => a + l.ms, 0),
+  );
+  if (s.controlCopyMs === null) return { ...main, copy: null };
+  const copyMs = s.controlCopyMs * main.scale;
+  return {
+    ...main,
+    copy: {
+      delayMs: departRaw * main.scale,
+      plan: {
+        start: 'worker',
+        legs: [{ to: 'pgCopy', ms: copyMs, stage: 'controlCopyMs' }],
+        scale: main.scale,
+        totalMs: copyMs,
+      },
+    },
+  };
 }
 
 export interface BizMark {
@@ -150,7 +179,16 @@ export interface BizMark {
 }
 
 /**
- * 업무 점 — api → stream:biz:cmd → 워커 → PG 트랜잭션 → cache DEL · ch:cacheinv → biz:result · ch:bizreply → api 응답.
+ * 잰 적 없는 다리의 화면 시간 — 결과 알림(ch:bizreply)을 받은 api가 결과 키를 읽어 사람에게 응답하는 길.
+ * 흐름 요약에 이 단계 ms가 없어(replyMs는 워커의 결과 SET + 알림까지) 배율 밖 고정값으로 "결과 받음" 선을 타는 모습만 보인다.
+ */
+export const BIZ_REPLY_HOP_MS = 400;
+
+/**
+ * 업무 점 — api → stream:biz:cmd → 워커 → PG 트랜잭션 → COMMIT 응답으로 워커 → cache DEL · ch:cacheinv → biz:result · ch:bizreply → api 응답
+ * (apps/api biz-worker.ts ③~⑦ · stream-biz-writer.ts ⑧). 저장 뒤 일은 워커가 하므로 점은 PostgreSQL에서 워커로 돌아온 뒤 ④로 간다.
+ * txMs는 워커가 잰 BEGIN → COMMIT 응답이라 가는 다리 · 돌아오는 다리에 반씩 · replyMs(결과 SET + 알림)는 ④ 안 결과 알림 다리에 전부 ·
+ * 알림을 받은 api가 응답하는 다리는 잰 값이 없어 BIZ_REPLY_HOP_MS(배율 밖).
  * 흐름도(diagram-layout BIZ_AT)에서 cache · result는 둘 다 Redis 기둥 ④ 칸(옛 사본 지움 → 결과 알림)의 점 길 위다(오른쪽 → 왼쪽).
  * duplicate · expired는 트랜잭션을 건너뛰고(↺ · ⌛), rejected는 트랜잭션 노드에서 ✕, failed는 같은 노드에서 ⚠(txMs null이어도 들른다).
  * role api-direct(SW-12 direct)는 스트림 · 워커 · 결과 알림을 건너뛰고 api에서 곧바로 트랜잭션으로 간다 — 무효화는 ④ 칸 점 길을
@@ -177,7 +215,12 @@ export function bizPlan(b: FlowBizSummaryBody): DotPlan<BizNode> & { mark: BizMa
   } else if (outcome === 'expired') {
     mark = { symbol: OUTCOME_MARK.expired, at: direct ? 'api' : 'bizWorker', code: null };
   } else if (s.txMs !== null || outcome === 'failed') {
-    legs.push({ to: 'pgTx', ms: s.txMs ?? 0, stage: s.txMs === null ? null : 'txMs' });
+    const stage = s.txMs === null ? null : 'txMs';
+    if (direct) legs.push({ to: 'pgTx', ms: s.txMs ?? 0, stage });
+    else {
+      legs.push({ to: 'pgTx', ms: (s.txMs ?? 0) / 2, stage });
+      legs.push({ to: 'bizWorker', ms: (s.txMs ?? 0) / 2, stage });
+    }
     if (outcome === 'rejected' || outcome === 'failed') {
       mark = { symbol: OUTCOME_MARK[outcome], at: 'pgTx', code: b.result };
     }
@@ -188,14 +231,18 @@ export function bizPlan(b: FlowBizSummaryBody): DotPlan<BizNode> & { mark: BizMa
       legs.push({ to: 'result', ms: s.invalidateMs / 2, stage: 'invalidateMs' });
     } else legs.push({ to: 'cache', ms: s.invalidateMs, stage: 'invalidateMs' });
   }
-  if (!direct && s.replyMs !== null) {
-    legs.push({ to: 'result', ms: s.replyMs / 2, stage: 'replyMs' });
-    legs.push({ to: 'api', ms: s.replyMs / 2, stage: 'replyMs' });
-  } else {
-    if (!direct) legs.push({ to: 'result', ms: 0, stage: null });
+  if (direct) {
     legs.push({ to: 'api', ms: 0, stage: null });
+    return { ...finish<BizNode>('api', legs, sumStages(s)), mark };
   }
-  return { ...finish<BizNode>('api', legs, sumStages(s)), mark };
+  legs.push({ to: 'result', ms: s.replyMs ?? 0, stage: s.replyMs === null ? null : 'replyMs' });
+  const plan = finish<BizNode>('api', legs, sumStages(s));
+  return {
+    ...plan,
+    legs: [...plan.legs, { to: 'api', ms: BIZ_REPLY_HOP_MS, stage: null }],
+    totalMs: plan.totalMs + BIZ_REPLY_HOP_MS,
+    mark,
+  };
 }
 
 /** 점의 현재 자리 — 경과(화면 ms)에서 몇 번째 다리의 어디쯤인가 · 끝났으면 done */
@@ -1034,6 +1081,62 @@ export function readShare(part: number | null, rr: Pick<ReadRates, 'requests'>):
   return (part / rr.requests) * 100;
 }
 
+// ── 조회 점 — 조회는 요청마다 요약이 없어(메트릭 5초 차분뿐) 점을 실제 비율대로 뽑는다 ──
+
+/** 조회 점의 갈래 — Redis 사본으로 바로 응답 · 없어서 ClickHouse까지 · 없어서 PostgreSQL까지 */
+export type ReadKind = 'hit' | 'ch' | 'pg';
+export const READ_KINDS: readonly ReadKind[] = ['hit', 'ch', 'pg'];
+/** 조회 점 상한(초당) — 실제 조회가 이보다 많으면 점 하나가 여러 건을 대신한다(갈래 비율만 맞춘다) */
+export const READ_DOTS_MAX_PER_SEC = 2;
+
+export interface ReadDotPlan {
+  /** 초당 점 수 — 실제 조회 건/초(Redis 읽기 실패 제외) · 상한 READ_DOTS_MAX_PER_SEC */
+  perSec: number;
+  /** 갈래 몫(합 1) — hit · chMiss · pgMiss 건/초의 비 */
+  shares: Record<ReadKind, number>;
+}
+
+/** 조회 점 계획 — 조회가 없거나(0) 모르면 null(점을 만들지 않는다) */
+export function readDotPlan(rr: ReadRates | null): ReadDotPlan | null {
+  if (!rr) return null;
+  const n = { hit: rr.hit ?? 0, ch: rr.chMiss ?? 0, pg: rr.pgMiss ?? 0 };
+  const total = n.hit + n.ch + n.pg;
+  if (!(total > 0)) return null;
+  return {
+    perSec: Math.min(total, READ_DOTS_MAX_PER_SEC),
+    shares: { hit: n.hit / total, ch: n.ch / total, pg: n.pg / total },
+  };
+}
+
+/** 갈래 고르기 상태 — 지금까지 받아야 할 몫(want)과 실제로 낸 수(got) */
+export interface ReadPicker {
+  want: Record<ReadKind, number>;
+  got: Record<ReadKind, number>;
+}
+export const newReadPicker = (): ReadPicker => ({
+  want: { hit: 0, ch: 0, pg: 0 },
+  got: { hit: 0, ch: 0, pg: 0 },
+});
+
+/**
+ * 다음 조회 점의 갈래 — 몫을 쌓고(want += shares) 가장 모자란 갈래를 낸다(동률은 hit · ClickHouse · PostgreSQL 순).
+ * 무작위가 아니라서 몫이 그대로면 점 N개 안에서 갈래마다 N × 몫과 1개 넘게 벌어지지 않는다 — 화면의 % 와 점의 비율이 맞는다.
+ */
+export function pickReadKind(p: ReadPicker, shares: Record<ReadKind, number>): ReadKind {
+  let best: ReadKind = 'hit';
+  let gap = Number.NEGATIVE_INFINITY;
+  for (const k of READ_KINDS) {
+    p.want[k] += shares[k];
+    const g = p.want[k] - p.got[k];
+    if (g > gap) {
+      gap = g;
+      best = k;
+    }
+  }
+  p.got[best] += 1;
+  return best;
+}
+
 /**
  * 센서 대기줄(Stream)로 들어가는 생성 모드 — run(라이브 flow 실행)뿐이다.
  * A는 레지스터만 갱신하고 행은 Collector가 폴링해 만든다(points_emitted가 그 수 — 10_observability/01 §무손실 차 S2 판정) — 더하면 두 번 센다.
@@ -1183,11 +1286,12 @@ export function durationText(ms: number | null | undefined): string {
 /**
  * 움직임 줄이기(prefers-reduced-motion) — 점을 움직이지 않고 한 자리에 멈춰 보인다: 그 점이 가장 오래 머무는 다리의 도착 노드.
  * 대기줄이 밀리면 ① 대기줄 · 평소엔 ClickHouse 저장 · 업무는 트랜잭션처럼 "시간이 어디서 갔나"가 그 자리다(단계 ms 원천 그대로).
- * 모든 다리가 0이면 출발 노드.
+ * 잰 단계가 없는 다리(본 점의 COPY 기다림 · api 응답 고정 다리)는 고르지 않는다 · 모든 다리가 0이면 출발 노드.
  */
 export function restNode<N extends string>(plan: DotPlan<N>): N {
   let best: Leg<N> | null = null;
-  for (const leg of plan.legs) if (leg.ms > 0 && (best === null || leg.ms > best.ms)) best = leg;
+  for (const leg of plan.legs)
+    if (leg.stage !== null && leg.ms > 0 && (best === null || leg.ms > best.ms)) best = leg;
   return best ? best.to : plan.start;
 }
 

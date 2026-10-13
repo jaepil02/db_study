@@ -39,6 +39,7 @@ import {
   applyFlowFrame,
   arriveAt,
   BATCH_STAGES,
+  BIZ_REPLY_HOP_MS,
   batchPlan,
   batchStageAverages,
   bizOutcome,
@@ -57,9 +58,14 @@ import {
   invalidationRate,
   isAckFrame,
   maxBackpressure,
+  newReadPicker,
   noSummary,
+  pickReadKind,
   planProgress,
   plcRawLag,
+  READ_DOTS_MAX_PER_SEC,
+  type ReadKind,
+  readDotPlan,
   readRates,
   readShare,
   restNode,
@@ -474,21 +480,44 @@ describe('totals — 간선 굵기 · 초당 값 · 재기동', () => {
 });
 
 describe('점 계획 — 단계 순서 · 배율', () => {
-  it('배치 점은 ⑧ 순서 그대로 · null 단계는 건너뛴다 · XACK는 대조군 뒤 최신값 앞', () => {
+  it('배치 점은 ⑧ 순서 그대로 · null 단계는 건너뛴다 · 비교 실험이 아니면 사본 점이 없다', () => {
     const p = batchPlan(batch(1));
     expect(p.legs.map((l) => l.to)).toEqual(['stream', 'worker', 'worker', 'ch', 'xack', 'latest']);
-    const withCopy = batchPlan(
-      batch(1, {
-        stages: {
-          streamWaitMs: 1,
-          decodeMs: 1,
-          chInsertMs: 1,
-          controlCopyMs: 1,
-          latestWriteMs: null,
-        },
-      }),
-    );
-    expect(withCopy.legs.map((l) => l.to)).toEqual(['stream', 'worker', 'worker', 'ch', 'pgCopy', 'xack']);
+    expect(p.copy).toBeNull();
+  });
+
+  it('비교 실험 중 — 처리기에서 두 갈래가 같은 순간 출발(본 점 ClickHouse · 사본 점 PostgreSQL)', () => {
+    const stages = { streamWaitMs: 10, decodeMs: 2, chInsertMs: 60, controlCopyMs: 40, latestWriteMs: 3 };
+    const p = batchPlan(batch(1, { stages }));
+    // 본 점은 ClickHouse를 거쳐 XACK로 — PostgreSQL에 들르지 않는다
+    expect(p.legs.map((l) => l.to)).toEqual(['stream', 'worker', 'worker', 'ch', 'xack', 'latest']);
+    expect(p.copy?.plan.start).toBe('worker');
+    expect(p.copy?.plan.legs.map((l) => [l.to, l.stage])).toEqual([['pgCopy', 'controlCopyMs']]);
+    // 출발 시각 = 본 점이 처리기를 떠나는 시각(스트림 대기 + 디코드)
+    expect(p.copy?.delayMs).toBeCloseTo((10 + 2) * p.scale);
+    expect(arriveAt(p, 'ch')).toBeCloseTo((10 + 2 + 60) * p.scale);
+    // 두 갈래는 같은 배율 — 비율은 실제 단계 ms 그대로
+    expect(p.copy?.plan.scale).toBe(p.scale);
+    expect(p.copy?.plan.totalMs).toBeCloseTo(40 * p.scale);
+    // 배율은 겹친 시간(긴 갈래만)으로 — 10 + 2 + 60 + 3 = 75 ms
+    expect(p.scale).toBeCloseTo(1500 / 75);
+  });
+
+  it('비교 실험 중 — PostgreSQL 갈래가 더 길면 본 점이 ClickHouse에서 기다렸다 XACK로 간다(XACK는 COPY 뒤)', () => {
+    const stages = { streamWaitMs: 10, decodeMs: 2, chInsertMs: 60, controlCopyMs: 150, latestWriteMs: 3 };
+    const p = batchPlan(batch(1, { stages }));
+    expect(p.legs.map((l) => [l.to, l.stage])).toEqual([
+      ['stream', 'streamWaitMs'],
+      ['worker', 'streamWaitMs'],
+      ['worker', 'decodeMs'],
+      ['ch', 'chInsertMs'],
+      ['ch', null],
+      ['xack', null],
+      ['latest', 'latestWriteMs'],
+    ]);
+    const copyEnd = (p.copy?.delayMs ?? 0) + (p.copy?.plan.totalMs ?? 0);
+    expect(arriveAt(p, 'xack')).toBeCloseTo(copyEnd);
+    expect(p.scale).toBeCloseTo(1500 / (10 + 2 + 150 + 3));
   });
 
   it('배율 — 1.5초보다 짧으면 한 배율로 늘리고 비율은 유지', () => {
@@ -519,10 +548,27 @@ describe('점 계획 — 단계 순서 · 배율', () => {
     expect(arriveAt(p, 'pgCopy')).toBeNull();
   });
 
-  it('업무 점 ok — 대기 → 트랜잭션 → 무효화 → 결과 → 응답', () => {
+  it('업무 점 ok — 대기 → 트랜잭션(PostgreSQL 갔다 COMMIT 응답으로 워커) → 무효화 → 결과 알림 → 응답', () => {
     const p = bizPlan(biz(1));
-    expect(p.legs.map((l) => l.to)).toEqual(['bizStream', 'bizWorker', 'pgTx', 'cache', 'result', 'api']);
+    expect(p.legs.map((l) => [l.to, l.stage])).toEqual([
+      ['bizStream', 'queueWaitMs'],
+      ['bizWorker', 'queueWaitMs'],
+      ['pgTx', 'txMs'],
+      ['bizWorker', 'txMs'],
+      ['cache', 'invalidateMs'],
+      ['result', 'replyMs'],
+      ['api', null],
+    ]);
     expect(p.mark).toBeNull();
+    // 단계 ms 그대로(배율만 곱한다) — 트랜잭션은 가는 길 · COMMIT 응답에 반씩 · 결과 알림(replyMs)은 ④ 안 다리에 전부
+    const ms = p.legs.map((l) => l.ms / p.scale);
+    expect(ms.slice(0, 6)).toEqual([1, 1, 2.1, 2.1, 1.1, 0.6].map((v) => expect.closeTo(v, 9)));
+    // 배율은 잰 단계 합(2 + 4.2 + 1.1 + 0.6 = 7.9 ms)으로 · 알림을 받은 api가 응답하는 다리는 잰 값이 없어 배율 밖 고정
+    expect(p.scale).toBeCloseTo(1500 / 7.9);
+    expect(p.legs.at(-1)?.ms).toBe(BIZ_REPLY_HOP_MS);
+    expect(p.totalMs).toBeCloseTo(1500 + BIZ_REPLY_HOP_MS);
+    // 마지막 다리(고정)는 ④ 결과 알림 → 업무 요청
+    expect(planProgress(p, p.totalMs - 1)).toMatchObject({ from: 'result', to: 'api', done: false });
   });
 
   it('결과 분류 — ok · expired · failed(common.postgres_unavailable) · 그 밖 오류 코드는 rejected', () => {
@@ -540,6 +586,15 @@ describe('점 계획 — 단계 순서 · 배율', () => {
       }),
     );
     expect(rej.mark).toEqual({ symbol: '✕', at: 'pgTx', code: 'master.scale_change_forbidden' });
+    // 거절(롤백)도 응답은 워커가 받는다 — 옛 사본 지움 없이 ④ 결과 알림으로
+    expect(rej.legs.map((l) => l.to)).toEqual([
+      'bizStream',
+      'bizWorker',
+      'pgTx',
+      'bizWorker',
+      'result',
+      'api',
+    ]);
     const failed = bizPlan(
       biz(2, {
         result: 'common.postgres_unavailable',
@@ -552,7 +607,7 @@ describe('점 계획 — 단계 순서 · 배율', () => {
       biz(3, { duplicate: true, stages: { queueWaitMs: 1, txMs: null, invalidateMs: null, replyMs: 1 } }),
     );
     expect(dup.mark?.symbol).toBe('↺');
-    expect(dup.legs.map((l) => l.to)).not.toContain('pgTx');
+    expect(dup.legs.map((l) => l.to)).toEqual(['bizStream', 'bizWorker', 'result', 'api']);
     const exp = bizPlan(
       biz(4, { result: 'expired', stages: { queueWaitMs: 9, txMs: null, invalidateMs: null, replyMs: 1 } }),
     );
@@ -583,6 +638,12 @@ describe('점 계획 — 단계 순서 · 배율', () => {
       'stream',
     );
     expect(restNode(bizPlan(biz(1)))).toBe('pgTx');
+    // 잰 단계가 없는 다리(api 응답 고정 다리)는 길어도 고르지 않는다
+    expect(
+      restNode(
+        bizPlan(biz(2, { stages: { queueWaitMs: null, txMs: null, invalidateMs: null, replyMs: 1 } })),
+      ),
+    ).toBe('result');
     const empty = batchPlan(
       batch(1, {
         stages: {
@@ -595,6 +656,50 @@ describe('점 계획 — 단계 순서 · 배율', () => {
       }),
     );
     expect(restNode(empty)).toBe('src');
+  });
+});
+
+describe('조회 점 — 갈래 비율대로 뽑는다(조회는 요청마다 요약이 없다)', () => {
+  const rr = (hit: number | null, chMiss: number | null, pgMiss: number | null, error = 0) => ({
+    requests: (hit ?? 0) + (chMiss ?? 0) + (pgMiss ?? 0) + error,
+    hit,
+    chMiss,
+    bypass: 0,
+    pgMiss,
+    error,
+    latestPoints: null,
+  });
+
+  it('초당 점 수 = 실제 조회 건/초(Redis 읽기 실패 제외) · 상한 · 갈래 몫은 hit · ClickHouse · PostgreSQL의 비', () => {
+    expect(readDotPlan(rr(0.3, 0.1, 0.1))).toEqual({
+      perSec: 0.5,
+      shares: { hit: 0.6, ch: 0.2, pg: 0.2 },
+    });
+    expect(readDotPlan(rr(15, 3, 2, 7))?.perSec).toBe(READ_DOTS_MAX_PER_SEC);
+    expect(readDotPlan(rr(15, 3, 2, 7))?.shares).toEqual({ hit: 0.75, ch: 0.15, pg: 0.1 });
+  });
+
+  it('조회가 없거나(0) 모르면 점을 만들지 않는다', () => {
+    expect(readDotPlan(null)).toBeNull();
+    expect(readDotPlan(rr(0, 0, 0))).toBeNull();
+    expect(readDotPlan(rr(null, null, null))).toBeNull();
+  });
+
+  it('갈래 고르기는 몫을 그대로 따른다 — 점 N개 안에서 갈래마다 N × 몫과 1개 넘게 벌어지지 않는다', () => {
+    const shares = { hit: 0.75, ch: 0.15, pg: 0.1 };
+    const p = newReadPicker();
+    const got: Record<ReadKind, number> = { hit: 0, ch: 0, pg: 0 };
+    for (let n = 1; n <= 200; n++) {
+      got[pickReadKind(p, shares)] += 1;
+      for (const k of ['hit', 'ch', 'pg'] as const) expect(Math.abs(got[k] - n * shares[k])).toBeLessThan(1);
+    }
+    expect(got).toEqual({ hit: 150, ch: 30, pg: 20 });
+  });
+
+  it('갈래 고르기 — 몫이 0인 갈래는 나오지 않는다 · 동률은 hit 먼저', () => {
+    const p = newReadPicker();
+    const seq = Array.from({ length: 4 }, () => pickReadKind(p, { hit: 0.5, ch: 0, pg: 0.5 }));
+    expect(seq).toEqual(['hit', 'pg', 'hit', 'pg']);
   });
 });
 
@@ -1279,7 +1384,7 @@ describe('화면 문구 — 쉬운 말 · 숫자는 크게 읽히게(설계 §4 
     expect(footnoteText([])).not.toContain(GATED_COPY_NOTE);
     expect(footnoteText(['PostgreSQL 비교용 사본'])).toContain('지금 꺼진 길: PostgreSQL 비교용 사본');
     expect(footnoteText([])).not.toContain('꺼진 길');
-    expect(footnoteText([])).toContain('조회는 점 없이 숫자로만');
+    expect(footnoteText([])).toContain('조회 점은 실제 비율대로');
     expect(footnoteText(['PostgreSQL 비교용 사본'])).not.toMatch(FORBIDDEN);
     // 표지는 그린 기호 + 쉬운 말 — 유니코드 기호는 글자로 쓰지 않는다(그리기 검사 test/flow-layout.test.ts)
     expect(markText({ symbol: '✕' })).toBe('거절됨');

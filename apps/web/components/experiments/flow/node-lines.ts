@@ -19,6 +19,7 @@ import {
   DUPLICATE_MARK,
   durationText,
   OUTCOME_MARK,
+  READ_DOTS_MAX_PER_SEC,
   readShare,
   workAndWait,
 } from '../../../lib/flow';
@@ -175,7 +176,7 @@ export function replyLines(r: FlowRates | null, direct: boolean): NodeLine[] {
 }
 
 // ── 조회 줄(설계 §9.2 — 조회 요청 → ⑤ 조회 사본 → 있으면 바로 · 없으면 DB에서 읽어 와 사본 담기) ──
-// 숫자는 모두 /metrics 5초 차분(lib/flow readRates). 조회는 점이 없다 — 선 굵기 · 숫자로만.
+// 숫자는 모두 /metrics 5초 차분(lib/flow readRates). 조회 점은 요청마다가 아니라 그 갈래 비율대로 뽑는다(lib/flow readDotPlan).
 
 /** 비율 — 정수 %(0보다 크지만 1 미만은 "1% 미만") · 모르면 "—%" */
 export function pctText(v: number | null): string {
@@ -203,6 +204,7 @@ export function readSrcTip(rr: ReadRates | null): string {
   return [
     '초당 건수 = 센서 시계열 + 센서 지금 값 + 업무 목록(설비 목록) 조회 요청 — 숫자는 메트릭 5s 차분',
     '조회는 처리기(워커)를 거치지 않아요 — api가 직접 Redis를 먼저 봐요',
+    `점은 실제 비율(바로 응답 · DB까지)대로 뽑아 초당 ${READ_DOTS_MAX_PER_SEC}개까지만 보여요 — 점 하나가 조회 하나는 아니에요`,
     rr && rr.latestPoints !== null && rr.latestPoints > 0
       ? `지금 값 조회가 돌려준 점 초당 ${perSecText(rr.latestPoints)}개(요청 수가 아니에요)`
       : null,
@@ -540,7 +542,7 @@ export const GATED_COPY_NOTE = 'PostgreSQL 비교 사본 길은 직접 비교 �
 /** 각주 한 줄 — 점 속도 · 숫자의 뜻 · 지금 꺼진 길(흐름도에는 그리지 않는다) · 비교 실험 중에만 보이는 길 */
 export function footnoteText(off: readonly string[], gatedCopyHidden = false): string {
   return [
-    '점은 보기 좋게 느리게 움직여요(조회는 점 없이 숫자로만) · 숫자는 실제 값(최근 10s 평균 · 조회는 5s · 지연은 중간값)',
+    '점은 보기 좋게 느리게 움직여요(조회 점은 실제 비율대로) · 숫자는 실제 값(최근 10s 평균 · 조회는 5s · 지연은 중간값)',
     off.length > 0 ? `지금 꺼진 길: ${off.join(' · ')}` : null,
     gatedCopyHidden ? GATED_COPY_NOTE : null,
     '관찰용 화면이에요(기록 아님)',

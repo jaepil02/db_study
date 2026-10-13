@@ -157,6 +157,8 @@ test('한 장 화면 — 실시간 연결됨 · 설비 가동 꺼짐 안내(off)
   // 업무 줄 옆 한 줄 — 세 줄(<text> 셋)이라 textContent는 줄 사이 공백 없이 이어진다
   await expect(diagram.getByTestId('flow-biz-note')).toContainText('업무 데이터는ClickHouse로 보내지 않아요');
   await expect(diagram.locator('[data-edge="biz-reply"]')).toContainText('결과 받음');
+  // 업무 점은 PostgreSQL에서 COMMIT 응답 선을 타고 하나씩 처리로 돌아온다
+  await expect(diagram.locator('[data-edge="biz-commit"]')).toContainText('COMMIT 응답');
   await expect(diagram.locator('[data-edge][data-off]')).toHaveCount(0);
   // 조회 줄(§9.2) — 조회 요청 → ⑤ → 응답 · ⑤ ↔ ClickHouse · PostgreSQL(처리기를 거치지 않는다) · 조회가 없으면 보내 보라는 한 줄
   for (const id of ['read-ask', 'read-answer', 'read-miss', 'read-pg', 'read-ch'])
@@ -183,7 +185,7 @@ test('한 장 화면 — 실시간 연결됨 · 설비 가동 꺼짐 안내(off)
   for (const t of times)
     expect(t, '사람이 읽는 시간 단위').toMatch(/^(\d+(\.\d)?ms|\d+\.\d초|\d+분 \d+초|\d+시간 \d+분|—)$/);
   await expect(page.getByTestId('flow-footnote')).toContainText('점은 보기 좋게 느리게 움직여요');
-  await expect(page.getByTestId('flow-footnote')).toContainText('조회는 점 없이 숫자로만');
+  await expect(page.getByTestId('flow-footnote')).toContainText('조회 점은 실제 비율대로');
   for (const id of ['flow-headline', 'flow-diagram', 'flow-why', 'flow-compare', 'flow-footnote'])
     await expect(page.getByTestId(id)).toBeInViewport({ ratio: 1 });
 
